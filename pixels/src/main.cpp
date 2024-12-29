@@ -1,11 +1,15 @@
 /*todo:
 verlet integration?
 forces
-mass
-center of mass
+	mass
+	center of mass
 torques
-moment of inertia
-rot_acc
+	moment of inertia
+	rot_acc
+slicing
+	impl bresenhams
+saving/loading
+	.obj-esque parsing?
 */
 
 #include "common/myPixelGameEngine.h"
@@ -43,6 +47,7 @@ float random(float b=1, float a=0) {
 constexpr float Pi=3.1415927f;
 
 //thanks wikipedia + pattern recognition
+//NOTE: this returns t and u, NOT the point.
 vf2d lineLineIntersection(
 	const vf2d& a, const vf2d& b,
 	const vf2d& c, const vf2d& d) {
@@ -53,6 +58,7 @@ vf2d lineLineIntersection(
 	)/ab.cross(cd);
 }
 
+//could make this faster with scanline rasterization...
 PixelSet pixelsetFromOutline(const std::vector<vf2d>& outline) {
 	//get bounds of outline
 	AABB box;
@@ -70,7 +76,7 @@ PixelSet pixelsetFromOutline(const std::vector<vf2d>& outline) {
 	for(int i=0; i<w; i++) {
 		for(int j=0; j<h; j++) {
 			//is it inside the outline
-			vf2d pos=p.localToWorld(i, j);
+			vf2d pos=p.localToWorld(vf2d(i, j));
 
 			//deterministic, but less artifacting
 			float angle=random(2*Pi);
@@ -94,6 +100,7 @@ PixelSet pixelsetFromOutline(const std::vector<vf2d>& outline) {
 	p.compress();
 	p.updateTypes();
 	p.updateMeshes();
+	p.updateMass();
 
 	return p;
 }
@@ -119,13 +126,17 @@ struct PixelGame : MyPixelGameEngine {
 	std::vector<vf2d> addition;
 	float addition_timer=0;
 
+	//given screen bounds, place ALL pixelsets randomly
+	//such that their bounds lie inside the screen
 	void placeRandom() {
 		for(const auto& p:pixelsets) {
 			p->rot=random(2*Pi);
-			p->updateRot();
 
 			//aabb needs cossin
+			p->updateRot();
 			AABB box=p->getAABB();
+
+			//easier to just offset based on where it already is
 			p->pos.x+=random(-box.min.x, ScreenWidth()-box.max.x);
 			p->pos.y+=random(-box.min.y, ScreenHeight()-box.max.y);
 		}
@@ -144,6 +155,7 @@ struct PixelGame : MyPixelGameEngine {
 			}
 			thing->updateTypes();
 			thing->updateMeshes();
+			thing->updateMass();
 
 			thing->scale=20;
 
@@ -164,6 +176,7 @@ struct PixelGame : MyPixelGameEngine {
 			thing->compress();
 			thing->updateTypes();
 			thing->updateMeshes();
+			thing->updateMass();
 
 			thing->scale=8;
 
@@ -173,7 +186,7 @@ struct PixelGame : MyPixelGameEngine {
 		{//make triangle
 			const int w=56, h=44;
 
-			//rasterize it
+			//rasterize it??
 			olc::Sprite tri(w, h);
 			SetDrawTarget(&tri);
 			Clear(olc::BLACK);
@@ -190,6 +203,7 @@ struct PixelGame : MyPixelGameEngine {
 			thing->compress();
 			thing->updateTypes();
 			thing->updateMeshes();
+			thing->updateMass();
 
 			thing->scale=5;
 
@@ -233,7 +247,7 @@ struct PixelGame : MyPixelGameEngine {
 
 					//are local coords valid?
 					vf2d ij=p->worldToLocal(mouse_pos);
-					int i=ij.x, j=ij.y;
+					int i=std::floor(ij.x), j=std::floor(ij.y);
 					if(!p->inRangeX(i)||!p->inRangeY(j)) continue;
 
 					//is the block solid?
@@ -341,6 +355,7 @@ struct PixelGame : MyPixelGameEngine {
 						p->compress();
 						p->updateTypes();
 						p->updateMeshes();
+						p->updateMass();
 						std::cout<<"sliced pixelset\n";
 					}
 				}
@@ -349,19 +364,19 @@ struct PixelGame : MyPixelGameEngine {
 			//remove objects
 			if(GetKey(olc::Key::DEL).bPressed) {
 				for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
-					
+
 					//is mouse in bounds?
 					const auto& p=*it;
 					if(p->getAABB().contains(mouse_pos)) {
-					
+
 						//are local coords valid?
 						vf2d ij=p->worldToLocal(mouse_pos);
 						int i=ij.x, j=ij.y;
 						if(p->inRangeX(i)&&p->inRangeY(j)) {
-							
+
 							//is the block solid?
 							if((*p)(i, j)!=PixelSet::Empty) {
-								
+
 								//deallocate and remove
 								delete p;
 								it=pixelsets.erase(it);
@@ -485,22 +500,22 @@ struct PixelGame : MyPixelGameEngine {
 			if(show_grids) {
 				//draw "vertical" ticks
 				for(int i=0; i<=p->getW(); i++) {
-					DrawLineDecal(p->localToWorld(i, 0), p->localToWorld(i, p->getH()), olc::DARK_GREY);
+					DrawLineDecal(p->localToWorld(vf2d(i, 0)), p->localToWorld(vf2d(i, p->getH())), olc::DARK_GREY);
 				}
 
 				//draw "horizontal" ticks
 				for(int j=0; j<=p->getH(); j++) {
-					DrawLineDecal(p->localToWorld(0, j), p->localToWorld(p->getW(), j), olc::DARK_GREY);
+					DrawLineDecal(p->localToWorld(vf2d(0, j)), p->localToWorld(vf2d(p->getW(), j)), olc::DARK_GREY);
 				}
 
 				//draw axes
-				DrawThickLine(p->localToWorld(-1, 0), p->localToWorld(p->getW()+1, 0), 1, olc::BLACK);
-				DrawThickLine(p->localToWorld(0, -1), p->localToWorld(0, p->getH()+1), 1, olc::BLACK);
+				DrawThickLine(p->localToWorld(vf2d(-1, 0)), p->localToWorld(vf2d(p->getW()+1, 0)), 1, olc::BLACK);
+				DrawThickLine(p->localToWorld(vf2d(0, -1)), p->localToWorld(vf2d(0, p->getH()+1)), 1, olc::BLACK);
 			}
 
 			//render meshes
 			for(const auto& m:p->meshes) {
-				vf2d pos=p->localToWorld(m.i, m.j);
+				vf2d pos=p->localToWorld(vf2d(m.i, m.j));
 				vf2d size(p->scale*m.w, p->scale*m.h);
 				DrawRotatedDecal(pos, getRectDecal(), p->rot, {0, 0}, size, m.col);
 			}
@@ -511,7 +526,7 @@ struct PixelGame : MyPixelGameEngine {
 				for(int j=0; j<p->getH(); j++) {
 					if(!p->colliding[p->ix(i, j)]) continue;
 
-					vf2d pos=p->localToWorld(i, j);
+					vf2d pos=p->localToWorld(vf2d(i, j));
 					vf2d size(p->scale, p->scale);
 					DrawRotatedDecal(pos, getRectDecal(), p->rot, {0, 0}, size, olc::RED);
 				}
@@ -522,15 +537,34 @@ struct PixelGame : MyPixelGameEngine {
 			if(p->getAABB().contains(mouse_pos)) {
 				//are local coords valid?
 				vf2d ij=p->worldToLocal(mouse_pos);
-				int i=ij.x, j=ij.y;
+				int i=std::floor(ij.x), j=std::floor(ij.y);
 				if(p->inRangeX(i)&&p->inRangeY(j)) {
 					//is the block solid?
 					if((*p)(i, j)!=PixelSet::Empty) {
-						vf2d pos=p->localToWorld(i, j);
+						vf2d pos=p->localToWorld(vf2d(i, j));
 						vf2d size(p->scale, p->scale);
 						DrawRotatedDecal(pos, getRectDecal(), p->rot, {0, 0}, size, olc::GREEN);
 					}
 				}
+			}
+
+			//show center of mass
+			{
+				vf2d moment_sum;
+				float mass_sum=0;
+				for(int i=0; i<p->getW(); i++) {
+					for(int j=0; j<p->getH(); j++) {
+						if((*p)(i, j)==PixelSet::Empty) continue;
+
+						float mass=1;
+						mass_sum+=mass;
+
+						moment_sum+=mass*vf2d(.5f+i, .5f+j);
+					}
+				}
+				vf2d ctr=moment_sum/mass_sum;
+				vf2d pos=p->localToWorld(ctr);
+				FillCircleDecal(pos, 5, olc::MAGENTA);
 			}
 #pragma endregion
 		}

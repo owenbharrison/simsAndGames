@@ -45,6 +45,9 @@ public:
 
 	std::vector<Mesh> meshes;
 
+	float total_mass=0;
+	vf2d center_of_mass;
+
 	PixelSet() : PixelSet(1, 1) {}
 
 	PixelSet(int _w, int _h) : w(_w), h(_h) {
@@ -75,13 +78,13 @@ public:
 	}
 
 	//getters
+	int getW() const { return w; }
+	int getH() const { return h; }
+
 	bool inRangeX(int i) const { return i>=0&&i<w; }
 	bool inRangeY(int j) const { return j>=0&&j<h; }
 
 	int ix(int i, int j) const { return i+w*j; }
-
-	int getW() const { return w; }
-	int getH() const { return h; }
 
 	const byte& operator()(int i, int j) const { return grid[ix(i, j)]; }
 	byte& operator()(int i, int j) { return grid[ix(i, j)]; }
@@ -107,53 +110,34 @@ public:
 			}
 
 			//rotate point and fit in box
-			box.fitToEnclose(localToWorld(i, j));
+			box.fitToEnclose(localToWorld(vf2d(i, j)));
 		}
 		return box;
 	}
 
-	vf2d localToWorld(int i, int j) const {
+	vf2d localToWorld(const vf2d& p) const {
 		//order of rotate then scale doesnt matter.
-		vf2d scaled(scale*i, scale*j);
+		vf2d scaled=scale*p;
 		vf2d rotated(
-		cossin.x*scaled.x-cossin.y*scaled.y,
-		cossin.y*scaled.x+cossin.x*scaled.y
+			cossin.x*scaled.x-cossin.y*scaled.y,
+			cossin.y*scaled.x+cossin.x*scaled.y
 		);
 		//translate
 		return pos+rotated;
 	}
 
 	//inverse of rotation matrix is its transpose!
-	vf2d worldToLocal(const vf2d& p) {
+	vf2d worldToLocal(const vf2d& p) const {
 		//undo transformations...
 		vf2d rotated=p-pos;
 		vf2d scaled(
-		cossin.x*rotated.x+cossin.y*rotated.y,
-		cossin.x*rotated.y-cossin.y*rotated.x
+			cossin.x*rotated.x+cossin.y*rotated.y,
+			cossin.x*rotated.y-cossin.y*rotated.x
 		);
 		return scaled/scale;
 	}
 
-	void applyForce(const vf2d& f) {
-		acc+=f;
-	}
-
-	void updateRot() {
-		//precompute trig
-		cossin={std::cosf(rot), std::sinf(rot)};
-	}
-
-	void update(float dt) {
-		//euler explicit?
-		vel+=acc*dt;
-		pos+=vel*dt;
-
-		//reset forces
-		acc={0, 0};
-
-		updateRot();
-	}
-
+#pragma region DESTRUCTION
 	//think of this as a trim whitespace function
 	void compress() {
 		//uhh
@@ -194,7 +178,7 @@ public:
 			operator=(p);
 
 			//retranslate based on minimum
-			pos=localToWorld(i_min, j_min);
+			pos=localToWorld(vf2d(i_min, j_min));
 		}
 	}
 
@@ -216,35 +200,20 @@ public:
 		}
 	}
 
-	//check MY edges against THEIR everything
-	void collide(PixelSet& p) {
-		//check bounding boxes
-		if(!getAABB().overlaps(p.getAABB())) return;
+	void updateMass() {
+		center_of_mass={0, 0};
+		total_mass=0;
+		for(int i=0; i<p->getW(); i++) {
+			for(int j=0; j<p->getH(); j++) {
+				if((*p)(i, j)==PixelSet::Empty) continue;
 
-		//for each of MY blocks
-		for(int i=0; i<w; i++) {
-			for(int j=0; j<h; j++) {
-				//skip if not edge
-				if(grid[ix(i, j)]!=PixelSet::Edge) continue;
+				float mass=1;
+				total_mass+=mass;
 
-				//my block in world space
-				vf2d my_world=localToWorld(i, j);
-
-				//my block in their space
-				vf2d my_in_their=p.worldToLocal(my_world);
-
-				//is it a valid position?
-				int pi=my_in_their.x, pj=my_in_their.y;
-				if(!p.inRangeX(pi)||!p.inRangeY(pj)) continue;
-
-				//is there anything there?
-				if(p(pi, pj)==Empty) continue;
-
-				//update flags
-				p.colliding[p.ix(pi, pj)]=true;
-				colliding[ix(i, j)]=true;
+				center_of_mass+=mass*vf2d(.5f+i, .5f+j);
 			}
 		}
+		center_of_mass/=total_mass;
 	}
 
 	void clearMeshes() {
@@ -306,6 +275,62 @@ public:
 		}
 		delete[] meshed;
 	}
+
+	void slice(const vf2d& a, const vf2d& b) {}
+#pragma endregion
+
+#pragma region PHYSICS
+	void applyForce(const vf2d& f) {
+		acc+=f;
+	}
+
+	void updateRot() {
+		//precompute trig
+		cossin={std::cosf(rot), std::sinf(rot)};
+	}
+
+	void update(float dt) {
+		//euler explicit?
+		vel+=acc*dt;
+		pos+=vel*dt;
+
+		//reset forces
+		acc={0, 0};
+
+		updateRot();
+	}
+
+	//check MY edges against THEIR everything
+	void collide(PixelSet& p) {
+		//check bounding boxes
+		if(!getAABB().overlaps(p.getAABB())) return;
+
+		//for each of MY blocks
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//skip if not edge
+				if(grid[ix(i, j)]!=PixelSet::Edge) continue;
+
+				//my block in world space
+				vf2d my_world=localToWorld(vf2d(i, j));
+
+				//my block in their space
+				vf2d my_in_their=p.worldToLocal(my_world);
+
+				//is it a valid position?
+				int pi=std::floor(my_in_their.x), pj=std::floor(my_in_their.y);
+				if(!p.inRangeX(pi)||!p.inRangeY(pj)) continue;
+
+				//is there anything there?
+				if(p(pi, pj)==Empty) continue;
+
+				//update flags
+				p.colliding[p.ix(pi, pj)]=true;
+				colliding[ix(i, j)]=true;
+			}
+		}
+	}
+#pragma endregion
 };
 
 void PixelSet::copyFrom(const PixelSet& p) {
