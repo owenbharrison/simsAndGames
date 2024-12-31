@@ -22,6 +22,30 @@ typedef unsigned char byte;
 
 #include "aabb.h"
 
+//clever default param placement:
+//random()=0-1
+//random(a)=0-a
+//random(a, b)=a-b
+float random(float b=1, float a=0) {
+	static const float rand_max=RAND_MAX;
+	float t=rand()/rand_max;
+	return a+t*(b-a);
+}
+
+constexpr float Pi=3.1415927f;
+
+//thanks wikipedia + pattern recognition
+//NOTE: this returns t and u, NOT the point.
+vf2d lineLineIntersection(
+	const vf2d& a, const vf2d& b,
+	const vf2d& c, const vf2d& d) {
+	vf2d ab=a-b, ac=a-c, cd=c-d;
+	return vf2d(
+		ac.cross(cd),
+		ac.cross(ab)
+	)/ab.cross(cd);
+}
+
 class PixelSet {
 	int w, h;
 
@@ -39,7 +63,6 @@ public:
 
 	vf2d pos, vel, acc;
 	float rot=0;
-	//this is causing annoying issues...
 	vf2d cossin;
 	float scale=1;
 
@@ -48,6 +71,7 @@ public:
 	float total_mass=0;
 	vf2d center_of_mass;
 
+#pragma region CONSTRUCTION
 	PixelSet() : PixelSet(1, 1) {}
 
 	PixelSet(int _w, int _h) : w(_w), h(_h) {
@@ -77,6 +101,54 @@ public:
 		return *this;
 	}
 
+	//could make this faster with scanline rasterization...
+	static PixelSet fromOutline(const std::vector<vf2d>& outline) {
+		//get bounds of outline
+		AABB box;
+		for(const auto& o:outline) box.fitToEnclose(o);
+
+		//determine spacing
+		vf2d size=box.max-box.min;
+		const float scale=5;
+		int w=1+size.x/scale, h=1+size.y/scale;
+
+		//for every point
+		PixelSet p(w, h);
+		p.pos=box.min;
+		p.scale=scale;
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//is it inside the outline
+				vf2d pos=p.localToWorld(vf2d(i, j));
+
+				//deterministic, but less artifacting
+				float angle=random(2*Pi);
+				vf2d dir(std::cosf(angle), std::sinf(angle));
+
+				//polygon raycast algorithm
+				int num=0;
+				for(int k=0; k<outline.size(); k++) {
+					const auto& a=outline[k];
+					const auto& b=outline[(k+1)%outline.size()];
+					vf2d tu=lineLineIntersection(a, b, pos, pos+dir);
+					if(tu.x>0&&tu.x<1&&tu.y>0) num++;
+				}
+
+				//odd? inside!
+				p(i, j)=num%2;
+			}
+		}
+
+		//should this be encapsulated into a function?
+		p.compress();
+		p.updateTypes();
+		p.updateMeshes();
+		p.updateMass();
+
+		return p;
+	}
+#pragma endregion
+
 	//getters
 	int getW() const { return w; }
 	int getH() const { return h; }
@@ -89,6 +161,7 @@ public:
 	const byte& operator()(int i, int j) const { return grid[ix(i, j)]; }
 	byte& operator()(int i, int j) { return grid[ix(i, j)]; }
 
+	//helpers?
 	bool empty() const {
 		for(int i=0; i<w*h; i++) {
 			if(grid[i]!=Empty) return false;
@@ -96,7 +169,6 @@ public:
 		return true;
 	}
 
-	//helpers?
 	AABB getAABB() const {
 		AABB box;
 
@@ -203,9 +275,9 @@ public:
 	void updateMass() {
 		center_of_mass={0, 0};
 		total_mass=0;
-		for(int i=0; i<p->getW(); i++) {
-			for(int j=0; j<p->getH(); j++) {
-				if((*p)(i, j)==PixelSet::Empty) continue;
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				if(grid[ix(i, j)]==PixelSet::Empty) continue;
 
 				float mass=1;
 				total_mass+=mass;
@@ -216,6 +288,7 @@ public:
 		center_of_mass/=total_mass;
 	}
 
+	//should mesh stuff be in a graphics region?
 	void clearMeshes() {
 		meshes.clear();
 	}
@@ -276,7 +349,65 @@ public:
 		delete[] meshed;
 	}
 
-	void slice(const vf2d& a, const vf2d& b) {}
+	//cohen sutherland clipping
+	bool clip(int& x1, int& y1, int& x2, int& y2) {
+		static constexpr int INSIDE=0b0000,
+			LEFT=0b0001,
+			RIGHT=0b0010,
+			BOTTOM=0b0100,
+			TOP=0b1000;
+		auto getCode=[this] (int x, int y) {
+			int code=INSIDE;
+			if(x<0) code|=LEFT;
+			else if(x>w) code|=RIGHT;
+			if(y<0) code|=BOTTOM;
+			else if(y>h) code|=TOP;
+			return code;
+		};
+
+		int c1=getCode(x1, y1),
+			c2=getCode(x2, y2);
+
+		//iteratively clip
+		while(true) {
+			//entirely inside
+			if(!(c1|c2)) return true;
+			//entirely outside
+			else if(c1&c2) return false;
+			else {
+				int c3=c2>c1?c2:c1;
+				int nx=0, ny=0;
+				//interpolate to find new intersections
+				if(c3&TOP) nx=x1+(x2-x1)*(h-y1)/(y2-y1), ny=h;
+				else if(c3&BOTTOM) nx=x1+(x2-x1)*(0-y1)/(y2-y1), ny=0;
+				else if(c3&RIGHT) nx=w, ny=y1+(y2-y1)*(w-x1)/(x2-x1);
+				else if(c3&LEFT) nx=0, ny=y1+(y2-y1)*(0-x1)/(x2-x1);
+				if(c3==c1) x1=nx, y1=ny, c1=getCode(x1, y1);
+				else x2=nx, y2=ny, c2=getCode(x2, y2);
+			}
+		}
+		return true;
+	}
+
+	//bresenhams line drawing algorithm
+	//to rasterize empties along segment
+	//returns whether anything happened
+	bool slice(vf2d s1, vf2d s2) {
+		//find bounds of segment
+		AABB seg_box;
+		seg_box.fitToEnclose(s1);
+		seg_box.fitToEnclose(s2);
+		if(!seg_box.overlaps(getAABB())) return false;
+
+		//convert points to my space
+		s1=worldToLocal(s1);
+		int x1=std::floor(s1.x), y1=std::floor(s1.y);
+		s2=worldToLocal(s2);
+		int x2=std::floor(s2.x), y2=std::floor(s2.y);
+
+		//clip segment about w, h: is it valid?
+		if(!clip(x1, y1, x2, y2)) return false;
+	}
 #pragma endregion
 
 #pragma region PHYSICS

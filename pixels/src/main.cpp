@@ -16,7 +16,6 @@ saving/loading
 using olc::vf2d;
 using olc::vi2d;
 
-#include "aabb.h"
 #include "pixel_set.h"
 
 std::ostream& operator<<(std::ostream& o, const PixelSet& ps) {
@@ -32,77 +31,6 @@ std::ostream& operator<<(std::ostream& o, const PixelSet& ps) {
 		o<<'\n';
 	}
 	return o;
-}
-
-//clever default param placement:
-//random()=0-1
-//random(a)=0-a
-//random(a, b)=a-b
-float random(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
-}
-
-constexpr float Pi=3.1415927f;
-
-//thanks wikipedia + pattern recognition
-//NOTE: this returns t and u, NOT the point.
-vf2d lineLineIntersection(
-	const vf2d& a, const vf2d& b,
-	const vf2d& c, const vf2d& d) {
-	vf2d ab=a-b, ac=a-c, cd=c-d;
-	return vf2d(
-		ac.cross(cd),
-		ac.cross(ab)
-	)/ab.cross(cd);
-}
-
-//could make this faster with scanline rasterization...
-PixelSet pixelsetFromOutline(const std::vector<vf2d>& outline) {
-	//get bounds of outline
-	AABB box;
-	for(const auto& o:outline) box.fitToEnclose(o);
-
-	//determine spacing
-	vf2d size=box.max-box.min;
-	const float scale=5;
-	int w=1+size.x/scale, h=1+size.y/scale;
-
-	//for every point
-	PixelSet p(w, h);
-	p.pos=box.min;
-	p.scale=scale;
-	for(int i=0; i<w; i++) {
-		for(int j=0; j<h; j++) {
-			//is it inside the outline
-			vf2d pos=p.localToWorld(vf2d(i, j));
-
-			//deterministic, but less artifacting
-			float angle=random(2*Pi);
-			vf2d dir(std::cosf(angle), std::sinf(angle));
-
-			//polygon raycast algorithm
-			int num=0;
-			for(int k=0; k<outline.size(); k++) {
-				const auto& a=outline[k];
-				const auto& b=outline[(k+1)%outline.size()];
-				vf2d tu=lineLineIntersection(a, b, pos, pos+dir);
-				if(tu.x>0&&tu.x<1&&tu.y>0) num++;
-			}
-
-			//odd? inside!
-			p(i, j)=num%2;
-		}
-	}
-
-	//should this be encapsulated into a function?
-	p.compress();
-	p.updateTypes();
-	p.updateMeshes();
-	p.updateMass();
-
-	return p;
 }
 
 struct PixelGame : MyPixelGameEngine {
@@ -290,7 +218,7 @@ struct PixelGame : MyPixelGameEngine {
 			addition_timer-=dt;
 			if(a_key.bReleased) {
 				if(addition.size()>=3) {
-					PixelSet* thing=new PixelSet(pixelsetFromOutline(addition));
+					PixelSet* thing=new PixelSet(PixelSet::fromOutline(addition));
 
 					pixelsets.emplace_back(thing);
 
