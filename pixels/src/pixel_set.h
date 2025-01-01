@@ -76,7 +76,11 @@ public:
 
 	PixelSet(int _w, int _h) : w(_w), h(_h) {
 		grid=new byte[w*h];
+		memset(grid, false, sizeof(byte)*w*h);
+
 		colliding=new bool[w*h];
+		memset(colliding, false, sizeof(bool)*w*h);
+
 		updateRot();
 	}
 
@@ -139,11 +143,10 @@ public:
 			}
 		}
 
-		//should this be encapsulated into a function?
-		p.compress();
+		//should these be encapsulated into a function?
 		p.updateTypes();
-		p.updateMeshes();
 		p.updateMass();
+		p.updateMeshes();
 
 		return p;
 	}
@@ -157,6 +160,7 @@ public:
 	bool inRangeY(int j) const { return j>=0&&j<h; }
 
 	int ix(int i, int j) const { return i+w*j; }
+	void inv_ix(int k, int& i, int& j) const { i=k%w, j=k/w; }
 
 	const byte& operator()(int i, int j) const { return grid[ix(i, j)]; }
 	byte& operator()(int i, int j) { return grid[ix(i, j)]; }
@@ -169,7 +173,7 @@ public:
 		return true;
 	}
 
-	AABB getAABB() const {
+	[[nodiscard]] AABB getAABB() const {
 		AABB box;
 
 		//for each corner point
@@ -210,50 +214,6 @@ public:
 	}
 
 #pragma region DESTRUCTION
-	//think of this as a trim whitespace function
-	void compress() {
-		//uhh
-		if(empty()) return;
-
-		//find bounds of solids:
-		int i_min=w-1, j_min=h-1;
-		int i_max=0, j_max=0;
-
-		//for every solid block
-		for(int i=0; i<w; i++) {
-			for(int j=0; j<h; j++) {
-				if(grid[ix(i, j)]==Empty) continue;
-
-				//update bounds
-				if(i<i_min) i_min=i;
-				if(j<j_min) j_min=j;
-				if(i>i_max) i_max=i;
-				if(j>j_max) j_max=j;
-			}
-		}
-
-		//is compression warranted?
-		if(i_min!=0||j_min!=0||i_max!=w-1||j_max!=h-1) {
-			//copy to smaller grid
-			PixelSet p(1+i_max-i_min, 1+j_max-j_min);
-			p.pos=pos;
-			p.rot=rot;
-			p.cossin=cossin;
-			p.scale=scale;
-			for(int i=0; i<p.getW(); i++) {
-				for(int j=0; j<p.getH(); j++) {
-					p(i, j)=grid[ix(i_min+i, j_min+j)];
-				}
-			}
-
-			//update self
-			operator=(p);
-
-			//retranslate based on minimum
-			pos=localToWorld(vf2d(i_min, j_min));
-		}
-	}
-
 	//edge detection for collision routine
 	void updateTypes() {
 		for(int i=0; i<w; i++) {
@@ -272,6 +232,7 @@ public:
 		}
 	}
 
+	//center of mass using moments
 	void updateMass() {
 		center_of_mass={0, 0};
 		total_mass=0;
@@ -349,8 +310,8 @@ public:
 		delete[] meshed;
 	}
 
-	//cohen sutherland clipping
-	bool clip(int& x1, int& y1, int& x2, int& y2) {
+	//https://en.wikipedia.org/wiki/Cohen-Sutherland_algorithm
+	[[nodiscard]] bool clip(int& x1, int& y1, int& x2, int& y2) {
 		static constexpr int INSIDE=0b0000,
 			LEFT=0b0001,
 			RIGHT=0b0010,
@@ -392,11 +353,13 @@ public:
 	//bresenhams line drawing algorithm
 	//to rasterize empties along segment
 	//returns whether anything happened
-	bool slice(vf2d s1, vf2d s2) {
+	//https://en.wikipedia.org/wiki/Bresenham's_line_algorithm
+	[[nodiscard]] bool slice(vf2d s1, vf2d s2) {
 		//find bounds of segment
 		AABB seg_box;
 		seg_box.fitToEnclose(s1);
 		seg_box.fitToEnclose(s2);
+		//make sure they overlap
 		if(!seg_box.overlaps(getAABB())) return false;
 
 		//convert points to my space
@@ -407,6 +370,130 @@ public:
 
 		//clip segment about w, h: is it valid?
 		if(!clip(x1, y1, x2, y2)) return false;
+
+		//rasterize EMPTY line
+		auto edit=[this] (int x, int y) {
+			if(inRangeX(x)&&inRangeY(y)) {
+				grid[ix(x, y)]=PixelSet::Empty;
+			}
+		};
+
+		int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
+		dx=x2-x1; dy=y2-y1;
+
+		dx1=abs(dx), dy1=abs(dy);
+		px=2*dy1-dx1, py=2*dx1-dy1;
+		if(dy1<=dx1) {
+			if(dx>=0) x=x1, y=y1, xe=x2;
+			else x=x2, y=y2, xe=x1;
+
+			edit(x, y);
+
+			for(i=0; x<xe; i++) {
+				x++;
+				if(px<0) px+=2*dy1;
+				else {
+					if((dx<0&&dy<0)||(dx>0&&dy>0)) y++;
+					else y--;
+					px+=2*(dy1-dx1);
+				}
+				edit(x, y);
+			}
+		} else {
+			if(dy>=0) x=x1, y=y1, ye=y2;
+			else x=x2, y=y2, ye=y1;
+
+			edit(x, y);
+
+			for(i=0; y<ye; i++) {
+				y++;
+				if(py<=0) py+=2*dx1;
+				else {
+					if((dx<0&&dy<0)||(dx>0&&dy>0)) x++;
+					else x--;
+					py+=2*(dx1-dy1);
+				}
+				edit(x, y);
+			}
+		}
+		return true;
+	}
+
+	//call this after destruction to see
+	//how many new pixelsets to split into
+	[[nodiscard]] std::list<PixelSet> floodfill() const {
+		bool* filled=new bool[w*h];
+		memset(filled, false, sizeof(bool)*w*h);
+
+		std::vector<int> blob;
+		//recursive auto needs to be passed itself
+		auto fill=[this, &filled, &blob] (auto self, int i, int j) {
+			int k=ix(i, j);
+			//dont fill air or refill
+			if(grid[k]==PixelSet::Empty||filled[k]) return;
+
+			//update fill grid
+			filled[k]=true;
+			//store it
+			blob.emplace_back(k);
+
+			//update neighbors if in range
+			if(i>0) self(self, i-1, j);
+			if(j>0) self(self, i, j-1);
+			if(i<w-1) self(self, i+1, j);
+			if(j<h-1) self(self, i, j+1);
+		};
+
+		std::list<PixelSet> pixelsets;
+		
+		//floodfill with each block
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont fill air or refill
+				int k=ix(i, j);
+				if(grid[k]==PixelSet::Empty||filled[k]) continue;
+
+				//floodfill
+				blob.clear();
+				fill(fill, i, j);
+
+				//construct new pixelset
+				int i_min=w-1, j_min=h-1;
+				int i_max=0, j_max=0;
+				for(const auto& b:blob) {
+					//undo flattening
+					int bi, bj;
+					inv_ix(b, bi, bj);
+					//update bounds
+					if(bi<i_min) i_min=bi;
+					if(bj<j_min) j_min=bj;
+					if(bi>i_max) i_max=bi;
+					if(bj>j_max) j_max=bj;
+				}
+				PixelSet p(1+i_max-i_min, 1+j_max-j_min);
+				//update pos to reflect translation
+				p.pos=localToWorld(vf2d(i_min, j_min));
+				//copy over transforms and dynamics
+				p.vel=vel;
+				p.rot=rot;
+				p.cossin=cossin;
+				p.scale=scale;
+				for(const auto& b:blob) {
+					//undo flattening
+					int bi, bj;
+					inv_ix(b, bi, bj);
+					p(bi-i_min, bj-j_min)=true;
+				}
+				p.updateTypes();
+				p.updateMass();
+				p.updateMeshes();
+				pixelsets.emplace_back(p);
+			}
+		}
+
+		delete[] filled;
+
+		return pixelsets;
 	}
 #pragma endregion
 
@@ -470,9 +557,7 @@ void PixelSet::copyFrom(const PixelSet& p) {
 	grid=new byte[w*h];
 	colliding=new bool[w*h];
 	memcpy(grid, p.grid, sizeof(byte)*w*h);
-	//copying of meshed not necessary
 
-	//not sure if i need ALL of these, but whetever
 	pos=p.pos;
 	vel=p.vel;
 	acc=p.acc;
@@ -481,6 +566,8 @@ void PixelSet::copyFrom(const PixelSet& p) {
 	cossin=p.cossin;
 
 	scale=p.scale;
+
+	meshes=p.meshes;
 }
 
 void PixelSet::clear() {

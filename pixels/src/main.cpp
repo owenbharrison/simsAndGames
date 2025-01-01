@@ -47,6 +47,7 @@ struct PixelGame : MyPixelGameEngine {
 	bool show_bounds=false;
 	bool show_wireframes=false;
 	bool show_grids=false;
+	bool show_mass=false;
 
 	vf2d drag_start;
 	PixelSet* drag_set=nullptr;
@@ -101,7 +102,6 @@ struct PixelGame : MyPixelGameEngine {
 					(*thing)(x, y)=dx*dx+dy*dy<r_sq;
 				}
 			}
-			thing->compress();
 			thing->updateTypes();
 			thing->updateMeshes();
 			thing->updateMass();
@@ -128,7 +128,6 @@ struct PixelGame : MyPixelGameEngine {
 					(*thing)(i, j)=tri.GetPixel(i, j).r>0;
 				}
 			}
-			thing->compress();
 			thing->updateTypes();
 			thing->updateMeshes();
 			thing->updateMass();
@@ -228,69 +227,33 @@ struct PixelGame : MyPixelGameEngine {
 			}
 
 			//slice objects
-			//THIS DOESNT ALWAYS WORK
-			//implement bresenhams
-			//clip segment against local space
 			if(GetKey(olc::Key::S).bHeld) {
 				AABB seg_box;
 				seg_box.fitToEnclose(prev_mouse_pos);
 				seg_box.fitToEnclose(mouse_pos);
 
 				//check every pixelset
-				for(const auto& p:pixelsets) {
+				for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
+					const auto& p=*it;
+					if(p->slice(prev_mouse_pos, mouse_pos)) {
+						//get new pixelsets
+						std::list<PixelSet> split=p->floodfill();
+						
+						//deallocate and remove
+						delete p;
+						it=pixelsets.erase(it);
 
-					//is mouse in bounds?
-					if(!seg_box.overlaps(p->getAABB())) continue;
-
-					//convert segment to pixelset space
-					vf2d s0=p->worldToLocal(prev_mouse_pos);
-					vf2d s1=p->worldToLocal(mouse_pos);
-
-					//check all blocks against it
-					bool edited=false;
-					for(int i=0; i<p->getW(); i++) {
-						for(int j=0; j<p->getH(); j++) {
-							//skip air
-							if((*p)(i, j)==PixelSet::Empty) continue;
-
-							//find corners of box
-							vf2d v0(i, j), v3(1+i, 1+j);
-							vf2d v1(1+i, j), v2(i, 1+j);
-
-							//check each edge
-							bool hit=false;
-							for(int p=0; p<4; p++) {
-								vf2d a, b;
-								switch(p) {
-									case 0: a=v0, b=v1; break;
-									case 1: a=v1, b=v2; break;
-									case 2: a=v2, b=v3; break;
-									case 3: a=v3, b=v0; break;
-								}
-								vf2d tu=lineLineIntersection(a, b, s0, s1);
-								if(tu.x>0&&tu.x<1&&tu.y>0&&tu.y<1) {
-									hit=true;
-									break;
-								}
-							}
-							if(hit) {
-								(*p)(i, j)=PixelSet::Empty;
-								edited=true;
-							}
+						//allocate all new
+						for(const auto& s:split) {
+							pixelsets.emplace_front(new PixelSet(s));
 						}
-					}
-					if(edited) {
-						p->compress();
-						p->updateTypes();
-						p->updateMeshes();
-						p->updateMass();
 						std::cout<<"sliced pixelset\n";
-					}
+					} else it++;
 				}
 			}
 
 			//remove objects
-			if(GetKey(olc::Key::DEL).bPressed) {
+			if(GetKey(olc::Key::X).bPressed) {
 				for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
 
 					//is mouse in bounds?
@@ -326,6 +289,7 @@ struct PixelGame : MyPixelGameEngine {
 			if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 			if(GetKey(olc::Key::W).bPressed) show_wireframes^=true;
 			if(GetKey(olc::Key::G).bPressed) show_grids^=true;
+			if(GetKey(olc::Key::M).bPressed) show_mass^=true;
 		}
 
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
@@ -477,7 +441,7 @@ struct PixelGame : MyPixelGameEngine {
 			}
 
 			//show center of mass
-			{
+			if(show_mass) {
 				vf2d moment_sum;
 				float mass_sum=0;
 				for(int i=0; i<p->getW(); i++) {
@@ -492,7 +456,7 @@ struct PixelGame : MyPixelGameEngine {
 				}
 				vf2d ctr=moment_sum/mass_sum;
 				vf2d pos=p->localToWorld(ctr);
-				FillCircleDecal(pos, 5, olc::MAGENTA);
+				FillCircleDecal(pos, p->scale, olc::MAGENTA);
 			}
 #pragma endregion
 		}
