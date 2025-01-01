@@ -5,8 +5,6 @@ VisualStudioVersion = 17.10.35122.118
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jellyCarClone", "jellyCarClone\jellyCarClone.vcxproj", "{EC28B612-10C1-474A-BC23-3904E9AB6414}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "a_star_nav", "a_star_nav\a_star_nav.vcxproj", "{B0BD6253-86EA-44A7-AB31-BE86E4C31537}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jelly_car", "jelly_car\jelly_car.vcxproj", "{12323690-BC12-4382-859B-CDBBE6758BE0}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "testing", "testing\testing.vcxproj", "{ABF008F1-BF34-494F-B85B-8EA15F08ECC3}"
@@ -33,14 +31,6 @@ Global
 		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Release|x64.Build.0 = Release|x64
 		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Release|x86.ActiveCfg = Release|Win32
 		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Release|x86.Build.0 = Release|Win32
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Debug|x64.ActiveCfg = Debug|x64
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Debug|x64.Build.0 = Debug|x64
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Debug|x86.ActiveCfg = Debug|Win32
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Debug|x86.Build.0 = Debug|Win32
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Release|x64.ActiveCfg = Release|x64
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Release|x64.Build.0 = Release|x64
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Release|x86.ActiveCfg = Release|Win32
-		{B0BD6253-86EA-44A7-AB31-BE86E4C31537}.Release|x86.Build.0 = Release|Win32
 		{12323690-BC12-4382-859B-CDBBE6758BE0}.Debug|x64.ActiveCfg = Debug|x64
 		{12323690-BC12-4382-859B-CDBBE6758BE0}.Debug|x64.Build.0 = Debug|x64
 		{12323690-BC12-4382-859B-CDBBE6758BE0}.Debug|x86.ActiveCfg = Debug|Win32
