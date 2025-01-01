@@ -1,4 +1,5 @@
 //impl BVH
+//impl 3d bresenhams? 3body problem slicing?
 
 #define OLC_PGE_APPLICATION
 #include "common/olcPixelGameEngine.h"
@@ -35,6 +36,7 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 
 #include "voxel_set.h"
 
+#pragma region CONVERSIONS
 //HOW CAN I MAKE THIS SMALLER??
 [[nodiscard]] Mesh voxelsToMesh(const VoxelSet& v) {
 	Mesh m;
@@ -554,7 +556,6 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 	return e.dot(d);
 }
 
-
 [[nodiscard]] VoxelSet meshToVoxels(const Mesh& m, float resolution) {
 	//find mesh bounds
 	AABB3 box=m.getAABB();
@@ -591,6 +592,7 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 
 	return v;
 }
+#pragma endregion
 
 vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
