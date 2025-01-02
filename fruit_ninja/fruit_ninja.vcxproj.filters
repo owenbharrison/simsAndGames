@@ -27,4 +27,21 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Media Include="res\explode.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="res\game_over.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="res\slice1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="res\slice2.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="res\throw.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+  </ItemGroup>
 </Project>

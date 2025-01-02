@@ -69,6 +69,9 @@ struct Message {
 	}
 };
 
+#define OLC_SOUNDWAVE
+#include "common/olcSoundWaveEngine.h"
+
 struct FruitNinja : olc::PixelGameEngine {
 	FruitNinja() {
 		sAppName="Fruit Ninja";
@@ -100,12 +103,34 @@ struct FruitNinja : olc::PixelGameEngine {
 
 	std::list<Message*> messages;
 
+	olc::sound::WaveEngine sound_engine;
+	olc::sound::Wave throw_sound, slice1_sound, slice2_sound;
+
 	bool OnUserCreate() override {
 		srand(time(0));
 
 		gravity={0, 64};
 
 		screen_bounds={{0, 0}, GetScreenSize()};
+
+		//sounds
+		sound_engine.InitialiseAudio();
+		sound_engine.SetOutputVolume(.8f);
+
+		if(!throw_sound.LoadAudioWaveform("res/throw.wav")) {
+			std::cout<<"couldn't load audio\n";
+			return false;
+		}
+
+		if(!slice1_sound.LoadAudioWaveform("res/slice1.wav")) {
+			std::cout<<"couldn't load audio\n";
+			return false;
+		}
+
+		if(!slice2_sound.LoadAudioWaveform("res/slice2.wav")) {
+			std::cout<<"couldn't load audio\n";
+			return false;
+		}
 
 		return true;
 	}
@@ -247,6 +272,10 @@ struct FruitNinja : olc::PixelGameEngine {
 						//add new at front to avoid reslice
 						fruits.emplace_front(new Fruit(fa));
 						fruits.emplace_front(new Fruit(fb));
+
+						//play a noise
+						if(random()<.5f) sound_engine.PlayWaveform(&slice1_sound);
+						else sound_engine.PlayWaveform(&slice2_sound);
 					} else it++;
 				}
 
@@ -306,6 +335,8 @@ struct FruitNinja : olc::PixelGameEngine {
 
 			//add the sucker
 			fruits.emplace_back(new Fruit(f));
+
+			sound_engine.PlayWaveform(&throw_sound);
 		}
 		throw_timer-=dt;
 
