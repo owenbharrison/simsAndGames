@@ -34,6 +34,11 @@ float random(float b=1, float a=0) {
 
 constexpr float Pi=3.1415927f;
 
+//polar to cartesian helper
+vf2d polar(float r, float angle) {
+	return {r*std::cosf(angle), r*std::sinf(angle)};
+}
+
 //thanks wikipedia + pattern recognition
 //NOTE: this returns t and u, NOT the point.
 vf2d lineLineIntersection(
@@ -61,15 +66,17 @@ public:
 		Edge
 	};
 
-	vf2d pos, vel, acc;
-	float rot=0;
+	vf2d pos, old_pos, forces;
+	float total_mass=1;
+	vf2d center_of_mass;
+
+	float rot=0, old_rot=0, torques=0;
 	vf2d cossin;
+	float moment_of_inertia=1;
+
 	float scale=1;
 
 	std::vector<Mesh> meshes;
-
-	float total_mass=0;
-	vf2d center_of_mass;
 
 #pragma region CONSTRUCTION
 	PixelSet() : PixelSet(1, 1) {}
@@ -106,20 +113,20 @@ public:
 	}
 
 	//could make this faster with scanline rasterization...
-	static PixelSet fromOutline(const std::vector<vf2d>& outline) {
+	static PixelSet fromOutline(const std::vector<vf2d>& outline, float resolution) {
 		//get bounds of outline
 		AABB box;
 		for(const auto& o:outline) box.fitToEnclose(o);
 
 		//determine spacing
 		vf2d size=box.max-box.min;
-		const float scale=5;
-		int w=1+size.x/scale, h=1+size.y/scale;
+		int w=1+size.x/resolution, h=1+size.y/resolution;
 
 		//for every point
 		PixelSet p(w, h);
 		p.pos=box.min;
-		p.scale=scale;
+		p.old_pos=p.pos;
+		p.scale=resolution;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//is it inside the outline
@@ -127,7 +134,7 @@ public:
 
 				//deterministic, but less artifacting
 				float angle=random(2*Pi);
-				vf2d dir(std::cosf(angle), std::sinf(angle));
+				vf2d dir=polar(1, angle);
 
 				//polygon raycast algorithm
 				int num=0;
@@ -143,10 +150,10 @@ public:
 			}
 		}
 
-		//should these be encapsulated into a function?
 		p.updateTypes();
-		p.updateMass();
 		p.updateMeshes();
+		p.updateMass();
+		p.updateInertia();
 
 		return p;
 	}
@@ -230,84 +237,6 @@ public:
 				t=left||right||up||down?Edge:Normal;
 			}
 		}
-	}
-
-	//center of mass using moments
-	void updateMass() {
-		center_of_mass={0, 0};
-		total_mass=0;
-		for(int i=0; i<w; i++) {
-			for(int j=0; j<h; j++) {
-				if(grid[ix(i, j)]==PixelSet::Empty) continue;
-
-				float mass=1;
-				total_mass+=mass;
-
-				center_of_mass+=mass*vf2d(.5f+i, .5f+j);
-			}
-		}
-		center_of_mass/=total_mass;
-	}
-
-	//should mesh stuff be in a graphics region?
-	void clearMeshes() {
-		meshes.clear();
-	}
-
-	void updateMeshes() {
-		clearMeshes();
-
-		bool* meshed=new bool[w*h];
-		memset(meshed, false, sizeof(bool)*w*h);
-		for(int i=0; i<w; i++) {
-			for(int j=0; j<h; j++) {
-				//dont mesh air
-				const auto& curr=grid[ix(i, j)];
-				if(curr==PixelSet::Empty) continue;
-
-				//dont remesh
-				if(meshed[ix(i, j)]) continue;
-
-				//greedy meshing!
-
-				//combine rows
-				int ext_w=1;
-				for(int i_=1+i; i_<w; i_++, ext_w++) {
-					//only mesh similar and dont remesh
-					if(grid[ix(i_, j)]!=curr||meshed[ix(i_, j)]) break;
-				}
-
-				//combine entire columns
-				int ext_h=1;
-				for(int j_=1+j; j_<h; j_++, ext_h++) {
-					bool able=true;
-					for(int i_=0; i_<ext_w; i_++) {
-						//only mesh similar and dont remesh
-						if(grid[ix(i+i_, j_)]!=curr||meshed[ix(i+i_, j_)]) {
-							able=false;
-							break;
-						}
-					}
-					if(!able) break;
-				}
-
-				//set meshed
-				for(int i_=0; i_<ext_w; i_++) {
-					for(int j_=0; j_<ext_h; j_++) {
-						meshed[ix(i+i_, j+j_)]=true;
-					}
-				}
-
-				//triangulate
-				olc::Pixel col;
-				switch(curr) {
-					case PixelSet::Normal: col=olc::WHITE; break;
-					case PixelSet::Edge: col=olc::BLUE; break;
-				}
-				meshes.emplace_back(i, j, ext_w, ext_h, col);
-			}
-		}
-		delete[] meshed;
 	}
 
 	//https://en.wikipedia.org/wiki/Cohen-Sutherland_algorithm
@@ -444,8 +373,11 @@ public:
 			if(j<h-1) self(self, i, j+1);
 		};
 
+		vf2d vel=pos-old_pos;
+		float rot_vel=rot-old_rot;
+
 		std::list<PixelSet> pixelsets;
-		
+
 		//floodfill with each block
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
@@ -474,9 +406,11 @@ public:
 				//update pos to reflect translation
 				p.pos=localToWorld(vf2d(i_min, j_min));
 				//copy over transforms and dynamics
-				p.vel=vel;
+				p.old_pos=p.pos-vel;
 				p.rot=rot;
+				p.old_rot=p.rot-rot_vel;
 				p.cossin=cossin;
+				p.old_rot=old_rot;
 				p.scale=scale;
 				for(const auto& b:blob) {
 					//undo flattening
@@ -485,8 +419,9 @@ public:
 					p(bi-i_min, bj-j_min)=true;
 				}
 				p.updateTypes();
-				p.updateMass();
 				p.updateMeshes();
+				p.updateMass();
+				p.updateInertia();
 				pixelsets.emplace_back(p);
 			}
 		}
@@ -497,25 +432,148 @@ public:
 	}
 #pragma endregion
 
+#pragma region GRAPHICS
+	//should mesh stuff be in a graphics region?
+	void clearMeshes() {
+		meshes.clear();
+	}
+
+	//greedy meshing!
+	void updateMeshes() {
+		clearMeshes();
+
+		//store which blocks have been meshed
+		bool* meshed=new bool[w*h];
+		memset(meshed, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont mesh air
+				const auto& curr=grid[ix(i, j)];
+				if(curr==PixelSet::Empty) continue;
+
+				//dont remesh
+				if(meshed[ix(i, j)]) continue;
+
+				//combine into row
+				int ext_w=1;
+				for(int i_=1+i; i_<w; i_++, ext_w++) {
+					//only mesh similar and dont remesh
+					if(grid[ix(i_, j)]!=curr||meshed[ix(i_, j)]) break;
+				}
+
+				//combine entire rows
+				int ext_h=1;
+				for(int j_=1+j; j_<h; j_++, ext_h++) {
+					bool able=true;
+					for(int i_=0; i_<ext_w; i_++) {
+						//only mesh similar and dont remesh
+						if(grid[ix(i+i_, j_)]!=curr||meshed[ix(i+i_, j_)]) {
+							able=false;
+							break;
+						}
+					}
+					if(!able) break;
+				}
+
+				//set meshed
+				for(int i_=0; i_<ext_w; i_++) {
+					for(int j_=0; j_<ext_h; j_++) {
+						meshed[ix(i+i_, j+j_)]=true;
+					}
+				}
+
+				//triangulate
+				olc::Pixel col;
+				switch(curr) {
+					case PixelSet::Normal: col=olc::WHITE; break;
+					case PixelSet::Edge: col=olc::BLUE; break;
+				}
+				meshes.emplace_back(i, j, ext_w, ext_h, col);
+			}
+		}
+		delete[] meshed;
+	}
+#pragma endregion
+
 #pragma region PHYSICS
-	void applyForce(const vf2d& f) {
-		acc+=f;
+	void applyForce(const vf2d& f, const vf2d& p) {
+		//update translational forces
+		forces+=f;
+
+		//torque based on pivot dist
+		vf2d r=worldToLocal(p)-center_of_mass;
+		torques+=r.cross(f);
+	}
+
+	//center of mass using moments
+	void updateMass() {
+		center_of_mass={0, 0};
+		total_mass=0;
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//only incorporate solid blocks
+				if(grid[ix(i, j)]==PixelSet::Empty) continue;
+
+				//sum of masses
+				float mass=1;
+				total_mass+=mass;
+
+				//sum of moments
+				center_of_mass+=mass*vf2d(.5f+i, .5f+j);
+			}
+		}
+		//com = total moment / total mass
+		center_of_mass/=total_mass;
+	}
+
+	//this should be called after updatemass
+	void updateInertia() {
+		moment_of_inertia=0;
+		int num=0;
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//only incorporate solid blocks
+				if(grid[ix(i, j)]==PixelSet::Empty) continue;
+
+				//I=mr^2
+				vf2d sub=vf2d(.5f+i, .5f+j)-center_of_mass;
+				//mass const, so we pull it out
+				moment_of_inertia+=sub.dot(sub);
+				num++;
+			}
+		}
+		//multiply by INDIVIDUAL masses
+		moment_of_inertia*=total_mass/num;
 	}
 
 	void updateRot() {
 		//precompute trig
-		cossin={std::cosf(rot), std::sinf(rot)};
+		cossin=polar(1, rot);
 	}
 
 	void update(float dt) {
-		//euler explicit?
-		vel+=acc*dt;
-		pos+=vel*dt;
+		//store vel and update oldpos
+		vf2d vel=pos-old_pos;
+		old_pos=pos;
+
+		//verlet integration
+		vf2d acc=forces/total_mass;
+		pos+=vel+acc*dt*dt;
 
 		//reset forces
-		acc={0, 0};
+		forces={0, 0};
 
+		//store rotvel and update oldrot
+		float rot_vel=rot-old_rot;
+		old_rot=rot;
+
+		//verlet integration
+		float rot_acc=torques/moment_of_inertia;
+		rot+=rot_vel+rot_acc*dt*dt;
 		updateRot();
+
+		//reset torques
+		torques=0;
 	}
 
 	//check MY edges against THEIR everything
@@ -558,15 +616,25 @@ void PixelSet::copyFrom(const PixelSet& p) {
 	colliding=new bool[w*h];
 	memcpy(grid, p.grid, sizeof(byte)*w*h);
 
+	//positions
 	pos=p.pos;
-	vel=p.vel;
-	acc=p.acc;
+	old_pos=p.old_pos;
+	forces=p.forces;
 
+	//masses
+	total_mass=p.total_mass;
+	center_of_mass=p.center_of_mass;
+
+	//rotations
 	rot=p.rot;
+	old_rot=p.old_rot;
+	torques=p.torques;
 	cossin=p.cossin;
 
+	//scale
 	scale=p.scale;
 
+	//graphics
 	meshes=p.meshes;
 }
 

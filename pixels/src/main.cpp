@@ -1,10 +1,10 @@
 /*todo:
 verlet integration?
 forces
-	mass
-	center of mass
+	total_mass
+	center_of_mass
 torques
-	moment of inertia
+	moment_of_inertia
 	rot_acc
 slicing
 	impl bresenhams
@@ -60,6 +60,7 @@ struct PixelGame : MyPixelGameEngine {
 	void placeRandom() {
 		for(const auto& p:pixelsets) {
 			p->rot=random(2*Pi);
+			p->old_rot=p->rot;
 
 			//aabb needs cossin
 			p->updateRot();
@@ -68,13 +69,15 @@ struct PixelGame : MyPixelGameEngine {
 			//easier to just offset based on where it already is
 			p->pos.x+=random(-box.min.x, ScreenWidth()-box.max.x);
 			p->pos.y+=random(-box.min.y, ScreenHeight()-box.max.y);
+			//reset vel	
+			p->old_pos=p->pos;
 		}
 	}
 
 	bool on_init() override {
 		srand(time(0));
 
-		gravity={0, 0};
+		gravity={0, 32};
 
 #pragma region CONSTRUCTION
 		{//make floor
@@ -85,6 +88,7 @@ struct PixelGame : MyPixelGameEngine {
 			thing->updateTypes();
 			thing->updateMeshes();
 			thing->updateMass();
+			thing->updateInertia();
 
 			thing->scale=20;
 
@@ -105,6 +109,7 @@ struct PixelGame : MyPixelGameEngine {
 			thing->updateTypes();
 			thing->updateMeshes();
 			thing->updateMass();
+			thing->updateInertia();
 
 			thing->scale=8;
 
@@ -131,6 +136,7 @@ struct PixelGame : MyPixelGameEngine {
 			thing->updateTypes();
 			thing->updateMeshes();
 			thing->updateMass();
+			thing->updateInertia();
 
 			thing->scale=5;
 
@@ -140,7 +146,7 @@ struct PixelGame : MyPixelGameEngine {
 
 		placeRandom();
 
-		ConsoleCaptureStdOut(true);
+		//ConsoleCaptureStdOut(true);
 
 		return true;
 	}
@@ -186,7 +192,11 @@ struct PixelGame : MyPixelGameEngine {
 			}
 			if(left_mouse.bHeld) {
 				//update dragset pos
-				if(drag_set) drag_set->pos+=mouse_pos-drag_start;
+				if(drag_set) {
+					drag_set->pos+=mouse_pos-drag_start;
+					//reset vel?
+					drag_set->old_pos=drag_set->pos;
+				}
 				drag_start=mouse_pos;
 			}
 			if(left_mouse.bReleased) {
@@ -217,17 +227,17 @@ struct PixelGame : MyPixelGameEngine {
 			addition_timer-=dt;
 			if(a_key.bReleased) {
 				if(addition.size()>=3) {
-					PixelSet* thing=new PixelSet(PixelSet::fromOutline(addition));
+					float resolution=random(3, 8);
+					PixelSet* thing=new PixelSet(PixelSet::fromOutline(addition, resolution));
 
 					pixelsets.emplace_back(thing);
-
-					std::cout<<"added "<<thing->getW()<<'x'<<thing->getH()<<" pixelset\n";
 				}
 				addition.clear();
 			}
 
 			//slice objects
-			if(GetKey(olc::Key::S).bHeld) {
+			const auto s_key=GetKey(olc::Key::S);
+			if(s_key.bHeld) {
 				AABB seg_box;
 				seg_box.fitToEnclose(prev_mouse_pos);
 				seg_box.fitToEnclose(mouse_pos);
@@ -238,7 +248,7 @@ struct PixelGame : MyPixelGameEngine {
 					if(p->slice(prev_mouse_pos, mouse_pos)) {
 						//get new pixelsets
 						std::list<PixelSet> split=p->floodfill();
-						
+
 						//deallocate and remove
 						delete p;
 						it=pixelsets.erase(it);
@@ -247,7 +257,6 @@ struct PixelGame : MyPixelGameEngine {
 						for(const auto& s:split) {
 							pixelsets.emplace_front(new PixelSet(s));
 						}
-						std::cout<<"sliced pixelset\n";
 					} else it++;
 				}
 			}
@@ -267,12 +276,9 @@ struct PixelGame : MyPixelGameEngine {
 
 							//is the block solid?
 							if((*p)(i, j)!=PixelSet::Empty) {
-
 								//deallocate and remove
 								delete p;
 								it=pixelsets.erase(it);
-								std::cout<<"removed pixelset\n";
-
 								continue;
 							}
 						}
@@ -284,6 +290,19 @@ struct PixelGame : MyPixelGameEngine {
 
 			//randomize rotations
 			if(GetKey(olc::Key::R).bPressed) placeRandom();
+
+			//random impulses
+			if(GetKey(olc::Key::I).bPressed) {
+				for(const auto& p:pixelsets) {
+					float mag=p->total_mass*random(20, 100);
+					float angle=random(2*Pi);
+					vf2d force=polar(mag, angle);
+					int i=rand()%p->getW();
+					int j=rand()%p->getH();
+					vf2d pos=p->localToWorld(vf2d(.5f+i, .5f+j));
+					p->applyForce(force, pos);
+				}
+			}
 
 			//visual toggles with xor
 			if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
@@ -298,7 +317,7 @@ struct PixelGame : MyPixelGameEngine {
 #pragma region PHYSICS
 		//dynamics
 		for(const auto& p:pixelsets) {
-			p->applyForce(gravity);
+			p->applyForce(p->total_mass*gravity, p->localToWorld(p->center_of_mass));
 			p->update(dt);
 		}
 
@@ -442,24 +461,13 @@ struct PixelGame : MyPixelGameEngine {
 
 			//show center of mass
 			if(show_mass) {
-				vf2d moment_sum;
-				float mass_sum=0;
-				for(int i=0; i<p->getW(); i++) {
-					for(int j=0; j<p->getH(); j++) {
-						if((*p)(i, j)==PixelSet::Empty) continue;
-
-						float mass=1;
-						mass_sum+=mass;
-
-						moment_sum+=mass*vf2d(.5f+i, .5f+j);
-					}
-				}
-				vf2d ctr=moment_sum/mass_sum;
-				vf2d pos=p->localToWorld(ctr);
+				vf2d pos=p->localToWorld(p->center_of_mass);
 				FillCircleDecal(pos, p->scale, olc::MAGENTA);
 			}
 #pragma endregion
 		}
+
+		DrawLineDecal(prev_mouse_pos, mouse_pos);
 
 		return true;
 	}
@@ -467,7 +475,7 @@ struct PixelGame : MyPixelGameEngine {
 
 int main() {
 	PixelGame t;
-	if(t.Construct(800, 640, 1, 1, false, true)) t.Start();
+	if(t.Construct(800, 640, 1, 1, false, false)) t.Start();
 
 	return 0;
 }
