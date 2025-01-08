@@ -78,6 +78,8 @@ public:
 
 	std::vector<Mesh> meshes;
 
+	olc::Pixel col=olc::WHITE;
+
 #pragma region CONSTRUCTION
 	PixelSet() : PixelSet(1, 1) {}
 
@@ -417,6 +419,7 @@ public:
 				p.cossin=cossin;
 				p.old_rot=old_rot;
 				p.scale=scale;
+				p.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
 				for(const auto& b:blob) {
 					//undo flattening
 					int bi, bj;
@@ -424,7 +427,6 @@ public:
 					p(bi-i_min, bj-j_min)=true;
 				}
 				p.updateTypes();
-				p.updateMeshes();
 				p.updateMass();
 				//update pos to reflect translation
 				//this.localToWorld(i_min, j_min)=p.localToWorld(0, 0)
@@ -436,6 +438,10 @@ public:
 		}
 
 		delete[] filled;
+
+		//dont recolor if not split
+		if(pixelsets.size()==1) pixelsets.front().col=col;
+		for(auto& p:pixelsets) p.updateMeshes();
 
 		return pixelsets;
 	}
@@ -467,7 +473,7 @@ public:
 				int ext_w=1;
 				for(int i_=1+i; i_<w; i_++, ext_w++) {
 					//only mesh similar and dont remesh
-					if(grid[ix(i_, j)]!=curr||meshed[ix(i_, j)]) break;
+					if(grid[ix(i_, j)]==PixelSet::Empty||meshed[ix(i_, j)]) break;
 				}
 
 				//combine entire rows
@@ -476,7 +482,7 @@ public:
 					bool able=true;
 					for(int i_=0; i_<ext_w; i_++) {
 						//only mesh similar and dont remesh
-						if(grid[ix(i+i_, j_)]!=curr||meshed[ix(i+i_, j_)]) {
+						if(grid[ix(i+i_, j_)]==PixelSet::Empty||meshed[ix(i+i_, j_)]) {
 							able=false;
 							break;
 						}
@@ -492,11 +498,6 @@ public:
 				}
 
 				//triangulate
-				olc::Pixel col;
-				switch(curr) {
-					case PixelSet::Normal: col=olc::WHITE; break;
-					case PixelSet::Edge: col=olc::BLUE; break;
-				}
 				meshes.emplace_back(i, j, ext_w, ext_h, col);
 			}
 		}
@@ -645,6 +646,7 @@ void PixelSet::copyFrom(const PixelSet& p) {
 
 	//graphics
 	meshes=p.meshes;
+	col=p.col;
 }
 
 void PixelSet::clear() {
