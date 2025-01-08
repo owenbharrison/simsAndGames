@@ -55,9 +55,8 @@ struct PixelGame : MyPixelGameEngine {
 	std::vector<vf2d> addition;
 	float addition_timer=0;
 
-	//given screen bounds, place ALL pixelsets randomly
-	//such that their bounds lie inside the screen
-	void placeRandom() {
+	//place pixelsets such that their bounds lie inside the screen
+	void placeAllRandomly() {
 		for(const auto& p:pixelsets) {
 			p->rot=random(2*Pi);
 			p->old_rot=p->rot;
@@ -77,7 +76,7 @@ struct PixelGame : MyPixelGameEngine {
 	bool on_init() override {
 		srand(time(0));
 
-		gravity={0, 32};
+		gravity={0, 0};
 
 #pragma region CONSTRUCTION
 		{//make floor
@@ -116,37 +115,27 @@ struct PixelGame : MyPixelGameEngine {
 			pixelsets.push_back(thing);
 		}
 
-		{//make triangle
-			const int w=56, h=44;
-
-			//rasterize it??
-			olc::Sprite tri(w, h);
-			SetDrawTarget(&tri);
-			Clear(olc::BLACK);
-			FillTriangle(w/2, 0, w-1, h-1, 0, h-1, olc::WHITE);
-			SetDrawTarget(nullptr);
-
-			//copy over data
-			PixelSet* thing=new PixelSet(w, h);
-			for(int i=0; i<w; i++) {
-				for(int j=0; j<h; j++) {
-					(*thing)(i, j)=tri.GetPixel(i, j).r>0;
-				}
+		{//make ngon
+			float rad=random(120, 240);
+			std::vector<vf2d> pts;
+			for(int i=0; i<3; i++) {
+				float angle=2*Pi*i/3;
+				pts.emplace_back(polar(rad, angle));
 			}
+
+			PixelSet* thing=new PixelSet(PixelSet::fromOutline(pts, 5));
 			thing->updateTypes();
 			thing->updateMeshes();
 			thing->updateMass();
 			thing->updateInertia();
 
-			thing->scale=5;
-
 			pixelsets.push_back(thing);
 		}
 #pragma endregion
 
-		placeRandom();
+		placeAllRandomly();
 
-		//ConsoleCaptureStdOut(true);
+		ConsoleCaptureStdOut(true);
 
 		return true;
 	}
@@ -227,7 +216,7 @@ struct PixelGame : MyPixelGameEngine {
 			addition_timer-=dt;
 			if(a_key.bReleased) {
 				if(addition.size()>=3) {
-					float resolution=random(3, 8);
+					float resolution=random(2, 10);
 					PixelSet* thing=new PixelSet(PixelSet::fromOutline(addition, resolution));
 
 					pixelsets.emplace_back(thing);
@@ -289,22 +278,9 @@ struct PixelGame : MyPixelGameEngine {
 			}
 
 			//randomize rotations
-			if(GetKey(olc::Key::R).bPressed) placeRandom();
+			if(GetKey(olc::Key::R).bPressed) placeAllRandomly();
 
-			//random impulses
-			if(GetKey(olc::Key::I).bPressed) {
-				for(const auto& p:pixelsets) {
-					float mag=p->total_mass*random(20, 100);
-					float angle=random(2*Pi);
-					vf2d force=polar(mag, angle);
-					int i=rand()%p->getW();
-					int j=rand()%p->getH();
-					vf2d pos=p->localToWorld(vf2d(.5f+i, .5f+j));
-					p->applyForce(force, pos);
-				}
-			}
-
-			//visual toggles with xor
+			//visual toggles with xor_equal
 			if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 			if(GetKey(olc::Key::W).bPressed) show_wireframes^=true;
 			if(GetKey(olc::Key::G).bPressed) show_grids^=true;
@@ -349,12 +325,12 @@ struct PixelGame : MyPixelGameEngine {
 			ConsoleClear();
 		}
 
-		if(cmd=="reset") {
+		else if(cmd=="reset") {
 			std::cout<<"removed "<<pixelsets.size()<<" pixelsets\n";
 			reset();
 		}
 
-		if(cmd=="count") {
+		else if(cmd=="count") {
 			int num=pixelsets.size();
 			std::cout<<"there ";
 			std::cout<<(num==1?"is ":"are ");
@@ -362,6 +338,20 @@ struct PixelGame : MyPixelGameEngine {
 			std::cout<<" pixelset";
 			if(num!=1) std::cout<<'s';
 			std::cout<<'\n';
+		}
+
+		else if(cmd=="usage") {
+			int num=0, total=0;
+			for(const auto& p:pixelsets) {
+				for(int i=0; i<p->getW(); i++) {
+					for(int j=0; j<p->getH(); j++) {
+						if((*p)(i, j)!=PixelSet::Empty) num++;
+						total++;
+					}
+				}
+			}
+			int pct=100.f*num/total;
+			std::cout<<pct<<"% usage\n";
 		}
 
 		return true;
@@ -462,6 +452,7 @@ struct PixelGame : MyPixelGameEngine {
 			//show center of mass
 			if(show_mass) {
 				vf2d pos=p->localToWorld(p->center_of_mass);
+
 				FillCircleDecal(pos, p->scale, olc::MAGENTA);
 			}
 #pragma endregion

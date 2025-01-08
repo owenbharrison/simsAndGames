@@ -125,7 +125,6 @@ public:
 		//for every point
 		PixelSet p(w, h);
 		p.pos=box.min;
-		p.old_pos=p.pos;
 		p.scale=resolution;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
@@ -153,6 +152,8 @@ public:
 		p.updateTypes();
 		p.updateMeshes();
 		p.updateMass();
+		p.pos=p.localToWorld(vf2d(p.getW(), p.getH()));
+		p.old_pos=p.pos;
 		p.updateInertia();
 
 		return p;
@@ -200,7 +201,7 @@ public:
 
 	vf2d localToWorld(const vf2d& p) const {
 		//order of rotate then scale doesnt matter.
-		vf2d scaled=scale*p;
+		vf2d scaled=scale*(p-center_of_mass);
 		vf2d rotated(
 			cossin.x*scaled.x-cossin.y*scaled.y,
 			cossin.y*scaled.x+cossin.x*scaled.y
@@ -217,7 +218,7 @@ public:
 			cossin.x*rotated.x+cossin.y*rotated.y,
 			cossin.x*rotated.y-cossin.y*rotated.x
 		);
-		return scaled/scale;
+		return scaled/scale+center_of_mass;
 	}
 
 #pragma region DESTRUCTION
@@ -301,9 +302,14 @@ public:
 		if(!clip(x1, y1, x2, y2)) return false;
 
 		//rasterize EMPTY line
-		auto edit=[this] (int x, int y) {
+		bool edited=false;
+		auto edit=[this, &edited] (int x, int y) {
 			if(inRangeX(x)&&inRangeY(y)) {
-				grid[ix(x, y)]=PixelSet::Empty;
+				auto& curr=grid[ix(x, y)];
+				if(curr!=PixelSet::Empty) {
+					curr=PixelSet::Empty;
+					edited=true;
+				}
 			}
 		};
 
@@ -345,7 +351,7 @@ public:
 				edit(x, y);
 			}
 		}
-		return true;
+		return edited;
 	}
 
 	//call this after destruction to see
@@ -388,6 +394,8 @@ public:
 				//floodfill
 				blob.clear();
 				fill(fill, i, j);
+				//just making sure...
+				if(blob.empty()) continue;
 
 				//construct new pixelset
 				int i_min=w-1, j_min=h-1;
@@ -403,10 +411,7 @@ public:
 					if(bj>j_max) j_max=bj;
 				}
 				PixelSet p(1+i_max-i_min, 1+j_max-j_min);
-				//update pos to reflect translation
-				p.pos=localToWorld(vf2d(i_min, j_min));
 				//copy over transforms and dynamics
-				p.old_pos=p.pos-vel;
 				p.rot=rot;
 				p.old_rot=p.rot-rot_vel;
 				p.cossin=cossin;
@@ -421,6 +426,10 @@ public:
 				p.updateTypes();
 				p.updateMeshes();
 				p.updateMass();
+				//update pos to reflect translation
+				//this.localToWorld(i_min, j_min)=p.localToWorld(0, 0)
+				p.pos=localToWorld(p.center_of_mass+vf2d(i_min, j_min));
+				p.old_pos=p.pos-vel;
 				p.updateInertia();
 				pixelsets.emplace_back(p);
 			}
@@ -501,7 +510,7 @@ public:
 		forces+=f;
 
 		//torque based on pivot dist
-		vf2d r=worldToLocal(p)-center_of_mass;
+		vf2d r=p-localToWorld(center_of_mass);
 		torques+=r.cross(f);
 	}
 
@@ -509,13 +518,13 @@ public:
 	void updateMass() {
 		center_of_mass={0, 0};
 		total_mass=0;
+		const float mass=scale*scale;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//only incorporate solid blocks
 				if(grid[ix(i, j)]==PixelSet::Empty) continue;
 
 				//sum of masses
-				float mass=1;
 				total_mass+=mass;
 
 				//sum of moments
@@ -527,9 +536,10 @@ public:
 	}
 
 	//this should be called after updatemass
+	//also this is in local space
+	//should it be in world space?
 	void updateInertia() {
 		moment_of_inertia=0;
-		int num=0;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//only incorporate solid blocks
@@ -539,11 +549,10 @@ public:
 				vf2d sub=vf2d(.5f+i, .5f+j)-center_of_mass;
 				//mass const, so we pull it out
 				moment_of_inertia+=sub.dot(sub);
-				num++;
 			}
 		}
 		//multiply by INDIVIDUAL masses
-		moment_of_inertia*=total_mass/num;
+		moment_of_inertia*=scale*scale;
 	}
 
 	void updateRot() {
