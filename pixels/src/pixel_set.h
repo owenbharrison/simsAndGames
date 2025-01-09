@@ -9,6 +9,7 @@ impl polygon to PixelSet
 #ifndef PIXELSET_CLASS_H
 #define PIXELSET_CLASS_H
 
+
 struct Mesh {
 	int i=0, j=0, w=0, h=0;
 	olc::Pixel col;
@@ -21,6 +22,8 @@ struct Mesh {
 typedef unsigned char byte;
 
 #include "aabb.h"
+
+#include <stack>
 
 //clever default param placement:
 //random()=0-1
@@ -78,7 +81,7 @@ public:
 
 	std::vector<Mesh> meshes;
 
-	olc::Pixel col=olc::WHITE;
+	olc::Pixel col=olc::DARK_GREY;
 
 #pragma region CONSTRUCTION
 	PixelSet() : PixelSet(1, 1) {}
@@ -154,7 +157,7 @@ public:
 		p.updateTypes();
 		p.updateMeshes();
 		p.updateMass();
-		p.pos=p.localToWorld(vf2d(p.getW(), p.getH()));
+		p.pos+=box.min-p.getAABB().min;
 		p.old_pos=p.pos;
 		p.updateInertia();
 
@@ -358,44 +361,51 @@ public:
 
 	//call this after destruction to see
 	//how many new pixelsets to split into
-	[[nodiscard]] std::list<PixelSet> floodfill() const {
+	//basically a parts detection algorithm
+	[[nodiscard]] std::vector<PixelSet> floodfill() const {
+		//store which weve visited
 		bool* filled=new bool[w*h];
 		memset(filled, false, sizeof(bool)*w*h);
 
+		//store current part
 		std::vector<int> blob;
-		//recursive auto needs to be passed itself
-		auto fill=[this, &filled, &blob] (auto self, int i, int j) {
-			int k=ix(i, j);
-			//dont fill air or refill
-			if(grid[k]==PixelSet::Empty||filled[k]) return;
 
-			//update fill grid
-			filled[k]=true;
-			//store it
-			blob.emplace_back(k);
-
-			//update neighbors if in range
-			if(i>0) self(self, i-1, j);
-			if(j>0) self(self, i, j-1);
-			if(i<w-1) self(self, i+1, j);
-			if(j<h-1) self(self, i, j+1);
-		};
-
+		//dynamics info
 		vf2d vel=pos-old_pos;
 		float rot_vel=rot-old_rot;
 
-		std::list<PixelSet> pixelsets;
+		//store each part
+		std::vector<PixelSet> pixelsets;
 
-		//floodfill with each block
+		//for every block
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
-				//dont fill air or refill
-				int k=ix(i, j);
-				if(grid[k]==PixelSet::Empty||filled[k]) continue;
-
-				//floodfill
 				blob.clear();
-				fill(fill, i, j);
+
+				//iterative floodfill
+				std::stack<int> queue;
+				queue.push(ix(i, j));
+				while(queue.size()) {
+					int c=queue.top();
+					queue.pop();
+
+					//dont fill air or refill
+					if(grid[c]==PixelSet::Empty||filled[c]) continue;
+
+					//update fill grid
+					filled[c]=true;
+					//store it
+					blob.emplace_back(c);
+
+					//update neighbors if in range
+					int ci, cj;
+					inv_ix(c, ci, cj);
+					if(ci>0) queue.push(ix(ci-1, cj));
+					if(cj>0) queue.push(ix(ci, cj-1));
+					if(ci<w-1) queue.push(ix(ci+1, cj));
+					if(cj<h-1) queue.push(ix(ci, cj+1));
+				}
+
 				//just making sure...
 				if(blob.empty()) continue;
 
@@ -436,7 +446,6 @@ public:
 				pixelsets.emplace_back(p);
 			}
 		}
-
 		delete[] filled;
 
 		//dont recolor if not split
@@ -511,7 +520,7 @@ public:
 		forces+=f;
 
 		//torque based on pivot dist
-		vf2d r=p-localToWorld(center_of_mass);
+		vf2d r=p-pos;
 		torques+=r.cross(f);
 	}
 
@@ -537,8 +546,7 @@ public:
 	}
 
 	//this should be called after updatemass
-	//also this is in local space
-	//should it be in world space?
+	//is this correct?
 	void updateInertia() {
 		moment_of_inertia=0;
 		for(int i=0; i<w; i++) {
@@ -547,7 +555,7 @@ public:
 				if(grid[ix(i, j)]==PixelSet::Empty) continue;
 
 				//I=mr^2
-				vf2d sub=vf2d(.5f+i, .5f+j)-center_of_mass;
+				vf2d sub=localToWorld(vf2d(.5f+i, .5f+j))-pos;
 				//mass const, so we pull it out
 				moment_of_inertia+=sub.dot(sub);
 			}
@@ -638,8 +646,9 @@ void PixelSet::copyFrom(const PixelSet& p) {
 	//rotations
 	rot=p.rot;
 	old_rot=p.old_rot;
-	torques=p.torques;
 	cossin=p.cossin;
+	torques=p.torques;
+	moment_of_inertia=p.moment_of_inertia;
 
 	//scale
 	scale=p.scale;

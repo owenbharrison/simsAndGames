@@ -86,10 +86,10 @@ struct PixelGame : MyPixelGameEngine {
 			}
 			thing->updateTypes();
 			thing->updateMeshes();
-			thing->updateMass();
-			thing->updateInertia();
 
 			thing->scale=20;
+			thing->updateMass();
+			thing->updateInertia();
 
 			pixelsets.push_back(thing);
 		}
@@ -107,10 +107,10 @@ struct PixelGame : MyPixelGameEngine {
 			}
 			thing->updateTypes();
 			thing->updateMeshes();
-			thing->updateMass();
-			thing->updateInertia();
 
 			thing->scale=8;
+			thing->updateMass();
+			thing->updateInertia();
 
 			pixelsets.push_back(thing);
 		}
@@ -236,7 +236,7 @@ struct PixelGame : MyPixelGameEngine {
 					const auto& p=*it;
 					if(p->slice(prev_mouse_pos, mouse_pos)) {
 						//get new pixelsets
-						std::list<PixelSet> split=p->floodfill();
+						auto split=p->floodfill();
 
 						//deallocate and remove
 						delete p;
@@ -359,7 +359,7 @@ struct PixelGame : MyPixelGameEngine {
 
 	bool on_render() override {
 		//draw grey background
-		Clear(olc::GREY);
+		Clear(olc::WHITE);
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
 
 		//show addition
@@ -368,7 +368,7 @@ struct PixelGame : MyPixelGameEngine {
 			for(int i=0; i<addition.size(); i++) {
 				const auto& a=addition[i];
 				const auto& b=addition[(i+1)%addition.size()];
-				DrawThickLine(a, b, 1, olc::CYAN);
+				DrawThickLine(a, b, 1, olc::BLUE);
 			}
 		}
 
@@ -452,8 +452,15 @@ struct PixelGame : MyPixelGameEngine {
 			//show center of mass
 			if(show_mass) {
 				vf2d pos=p->localToWorld(p->center_of_mass);
-
 				FillCircleDecal(pos, p->scale, olc::MAGENTA);
+
+				//show mass string
+				auto mass_str=std::to_string(int(p->total_mass));
+				DrawStringDecal(pos, mass_str, olc::BLACK);
+
+				//show inertia string
+				auto inertia_str=std::to_string(int(p->moment_of_inertia));
+				DrawStringDecal(pos+vf2d(0, 8), inertia_str, olc::BLACK);
 			}
 #pragma endregion
 		}
