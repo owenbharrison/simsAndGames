@@ -9,16 +9,6 @@ impl polygon to PixelSet
 #ifndef PIXELSET_CLASS_H
 #define PIXELSET_CLASS_H
 
-
-struct Mesh {
-	int i=0, j=0, w=0, h=0;
-	olc::Pixel col;
-
-	Mesh() {}
-
-	Mesh(int i_, int j_, int w_, int h_, olc::Pixel c) : i(i_), j(j_), w(w_), h(h_), col(c) {}
-};
-
 typedef unsigned char byte;
 
 #include "aabb.h"
@@ -38,8 +28,8 @@ float random(float b=1, float a=0) {
 constexpr float Pi=3.1415927f;
 
 //polar to cartesian helper
-vf2d polar(float r, float angle) {
-	return {r*std::cosf(angle), r*std::sinf(angle)};
+vf2d polar(float rad, float angle) {
+	return {rad*std::cosf(angle), rad*std::sinf(angle)};
 }
 
 //thanks wikipedia + pattern recognition
@@ -64,7 +54,7 @@ public:
 	bool* colliding=nullptr;
 
 	enum {
-		Empty,
+		Empty=0,
 		Normal,
 		Edge
 	};
@@ -79,7 +69,27 @@ public:
 
 	float scale=1;
 
+	struct Mesh {
+		int i=0, j=0, w=0, h=0;
+		olc::Pixel col=olc::WHITE;
+
+		Mesh() {}
+
+		Mesh(int i_, int j_, int w_, int h_, olc::Pixel c) : i(i_), j(j_), w(w_), h(h_), col(c) {}
+	};
 	std::vector<Mesh> meshes;
+
+	struct Outline {
+		int i=0, j=0;
+		bool vert=false;
+		int sz=0;
+		olc::Pixel col=olc::WHITE;
+
+		Outline() {}
+
+		Outline(int i_, int j_, bool v, int s, olc::Pixel c) : i(i_), j(j_), vert(v), sz(s), col(c) {}
+	};
+	std::vector<Outline> outlines;
 
 	olc::Pixel col=olc::DARK_GREY;
 
@@ -118,10 +128,10 @@ public:
 	}
 
 	//could make this faster with scanline rasterization...
-	static PixelSet fromOutline(const std::vector<vf2d>& outline, float resolution) {
-		//get bounds of outline
+	static PixelSet fromPolygon(const std::vector<vf2d>& polygon, float resolution) {
+		//get bounds of polygon
 		AABB box;
-		for(const auto& o:outline) box.fitToEnclose(o);
+		for(const auto& p:polygon) box.fitToEnclose(p);
 
 		//determine spacing
 		vf2d size=box.max-box.min;
@@ -133,7 +143,7 @@ public:
 		p.scale=resolution;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
-				//is it inside the outline
+				//is it inside the polygon
 				vf2d pos=p.localToWorld(vf2d(i, j));
 
 				//deterministic, but less artifacting
@@ -142,9 +152,9 @@ public:
 
 				//polygon raycast algorithm
 				int num=0;
-				for(int k=0; k<outline.size(); k++) {
-					const auto& a=outline[k];
-					const auto& b=outline[(k+1)%outline.size()];
+				for(int k=0; k<polygon.size(); k++) {
+					const auto& a=polygon[k];
+					const auto& b=polygon[(k+1)%polygon.size()];
 					vf2d tu=lineLineIntersection(a, b, pos, pos+dir);
 					if(tu.x>0&&tu.x<1&&tu.y>0) num++;
 				}
@@ -156,6 +166,8 @@ public:
 
 		p.updateTypes();
 		p.updateMeshes();
+		p.updateOutlines();
+
 		p.updateMass();
 		p.pos+=box.min-p.getAABB().min;
 		p.old_pos=p.pos;
@@ -360,7 +372,7 @@ public:
 	}
 
 	//call this after destruction to see
-	//how many new pixelsets to split into
+	//	how many new pixelsets to split into
 	//basically a parts detection algorithm
 	[[nodiscard]] std::vector<PixelSet> floodfill() const {
 		//store which weve visited
@@ -410,8 +422,8 @@ public:
 				if(blob.empty()) continue;
 
 				//construct new pixelset
-				int i_min=w-1, j_min=h-1;
-				int i_max=0, j_max=0;
+				int i_min=w, j_min=h;
+				int i_max=-1, j_max=-1;
 				for(const auto& b:blob) {
 					//undo flattening
 					int bi, bj;
@@ -427,7 +439,6 @@ public:
 				p.rot=rot;
 				p.old_rot=p.rot-rot_vel;
 				p.cossin=cossin;
-				p.old_rot=old_rot;
 				p.scale=scale;
 				p.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
 				for(const auto& b:blob) {
@@ -450,14 +461,16 @@ public:
 
 		//dont recolor if not split
 		if(pixelsets.size()==1) pixelsets.front().col=col;
-		for(auto& p:pixelsets) p.updateMeshes();
+		for(auto& p:pixelsets) {
+			p.updateMeshes();
+			p.updateOutlines();
+		}
 
 		return pixelsets;
 	}
 #pragma endregion
 
 #pragma region GRAPHICS
-	//should mesh stuff be in a graphics region?
 	void clearMeshes() {
 		meshes.clear();
 	}
@@ -512,6 +525,173 @@ public:
 		}
 		delete[] meshed;
 	}
+
+	void clearOutlines() {
+		outlines.clear();
+	}
+
+	//how to make this smaller?
+	void updateOutlines() {
+		clearOutlines();
+		
+		bool* to_line=new bool[w*h];
+		bool* lined=new bool[w*h];
+
+#pragma region TOP
+		//which edges should we consider?
+		memset(to_line, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont line air
+				int k=ix(i, j);
+				if(grid[k]==PixelSet::Empty) continue;
+
+				//place line on edge or boundary
+				if(j==0||grid[ix(i, j-1)]==PixelSet::Empty) to_line[k]=true;
+			}
+		}
+
+		//greedy lining
+		memset(lined, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont reline
+				int k=ix(i, j);
+				if(!to_line[k]||lined[k]) continue;
+
+				//combine
+				int ext=1;
+				for(int i_=1+i; i_<w; i_++, ext++) {
+					//should we or have we lined?
+					int k_=ix(i_, j);
+					if(!to_line[k_]||lined[k_]) break;
+					//set lined
+					lined[k_]=true;
+				}
+
+				//add line
+				outlines.emplace_back(i, j, false, ext, olc::RED);
+			}
+		}
+#pragma endregion
+
+#pragma region LEFT
+		//which edges should we consider?
+		memset(to_line, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont line air
+				int k=ix(i, j);
+				if(grid[k]==PixelSet::Empty) continue;
+
+				//place line on edge or boundary
+				if(i==0||grid[ix(i-1, j)]==PixelSet::Empty) to_line[k]=true;
+			}
+		}
+
+		//greedy lining
+		memset(lined, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont reline
+				int k=ix(i, j);
+				if(!to_line[k]||lined[k]) continue;
+
+				//combine
+				int ext=1;
+				for(int j_=1+j; j_<h; j_++, ext++) {
+					//should we or have we lined?
+					int k_=ix(i, j_);
+					if(!to_line[k_]||lined[k_]) break;
+					//set lined
+					lined[k_]=true;
+				}
+
+				//add line
+				outlines.emplace_back(i, j, true, ext, olc::BLUE);
+			}
+		}
+#pragma endregion
+
+#pragma region BOTTOM
+		//which edges should we consider?
+		memset(to_line, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont line air
+				int k=ix(i, j);
+				if(grid[k]==PixelSet::Empty) continue;
+
+				//place line on edge or boundary
+				if(j==h-1||grid[ix(i, j+1)]==PixelSet::Empty) to_line[k]=true;
+			}
+		}
+
+		//greedy lining
+		memset(lined, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont reline
+				int k=ix(i, j);
+				if(!to_line[k]||lined[k]) continue;
+
+				//combine
+				int ext=1;
+				for(int i_=1+i; i_<w; i_++, ext++) {
+					//should we or have we lined?
+					int k_=ix(i_, j);
+					if(!to_line[k_]||lined[k_]) break;
+					//set lined
+					lined[k_]=true;
+				}
+
+				//add line
+				outlines.emplace_back(i, j+1, false, ext, olc::YELLOW);
+			}
+		}
+#pragma endregion
+
+#pragma region RIGHT
+		//which edges should we consider?
+		memset(to_line, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont line air
+				int k=ix(i, j);
+				if(grid[k]==PixelSet::Empty) continue;
+
+				//place line on edge or boundary
+				if(i==w-1||grid[ix(i+1, j)]==PixelSet::Empty) to_line[k]=true;
+			}
+		}
+
+		//greedy lining
+		memset(lined, false, sizeof(bool)*w*h);
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				//dont reline
+				int k=ix(i, j);
+				if(!to_line[k]||lined[k]) continue;
+
+				//combine
+				int ext=1;
+				for(int j_=1+j; j_<h; j_++, ext++) {
+					//should we or have we lined?
+					int k_=ix(i, j_);
+					if(!to_line[k_]||lined[k_]) break;
+					//set lined
+					lined[k_]=true;
+				}
+
+				//add line
+				outlines.emplace_back(i+1, j, true, ext, olc::GREEN);
+			}
+		}
+#pragma endregion
+
+		delete[] to_line;
+		delete[] lined;
+	}
 #pragma endregion
 
 #pragma region PHYSICS
@@ -546,9 +726,9 @@ public:
 	}
 
 	//this should be called after updatemass
-	//is this correct?
 	void updateInertia() {
-		moment_of_inertia=0;
+		//make sure NOT zero
+		moment_of_inertia=1e-6f;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//only incorporate solid blocks
@@ -556,11 +736,10 @@ public:
 
 				//I=mr^2
 				vf2d sub=localToWorld(vf2d(.5f+i, .5f+j))-pos;
-				//mass const, so we pull it out
 				moment_of_inertia+=sub.dot(sub);
 			}
 		}
-		//multiply by INDIVIDUAL masses
+		//mass const, so we pull it out
 		moment_of_inertia*=scale*scale;
 	}
 
@@ -605,10 +784,10 @@ public:
 				//skip if not edge
 				if(grid[ix(i, j)]!=PixelSet::Edge) continue;
 
-				//my block in world space
-				vf2d my_world=localToWorld(vf2d(i, j));
+				//center of MY block in world space
+				vf2d my_world=localToWorld(vf2d(.5f+i, .5f+j));
 
-				//my block in their space
+				//my block in THEIR space
 				vf2d my_in_their=p.worldToLocal(my_world);
 
 				//is it a valid position?
@@ -619,8 +798,8 @@ public:
 				if(p(pi, pj)==Empty) continue;
 
 				//update flags
-				p.colliding[p.ix(pi, pj)]=true;
 				colliding[ix(i, j)]=true;
+				p.colliding[p.ix(pi, pj)]=true;
 			}
 		}
 	}
@@ -655,6 +834,7 @@ void PixelSet::copyFrom(const PixelSet& p) {
 
 	//graphics
 	meshes=p.meshes;
+	outlines=p.outlines;
 	col=p.col;
 }
 
@@ -663,5 +843,6 @@ void PixelSet::clear() {
 	delete[] colliding;
 
 	clearMeshes();
+	clearOutlines();
 }
 #endif//PIXELSET_CLASS_H

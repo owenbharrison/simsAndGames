@@ -1,15 +1,16 @@
 /*todo:
-verlet integration?
-forces
-	total_mass
-	center_of_mass
-torques
-	moment_of_inertia
-	rot_acc
-slicing
-	impl bresenhams
 saving/loading
-	.obj-esque parsing?
+	.obj-esque parsing
+physics
+	collisions
+		SAT
+	sounds?
+graphics
+	add outlines
+	add transformed view
+	add particles
+	add textures
+	add more debug views
 */
 
 #include "common/myPixelGameEngine.h"
@@ -18,12 +19,13 @@ using olc::vi2d;
 
 #include "pixel_set.h"
 
-std::ostream& operator<<(std::ostream& o, const PixelSet& ps) {
-	for(int j=0; j<ps.getH(); j++) {
-		for(int i=0; i<ps.getW(); i++) {
+//debugging
+std::ostream& operator<<(std::ostream& o, const PixelSet& p) {
+	for(int j=0; j<p.getH(); j++) {
+		for(int i=0; i<p.getW(); i++) {
 			//dont print empty
-			const auto& p=ps(i, j);
-			if(p!=PixelSet::Empty) o<<int(p);
+			const auto& c=p(i, j);
+			if(c!=PixelSet::Empty) o<<int(c);
 			else o<<' ';
 
 			o<<' ';
@@ -48,6 +50,7 @@ struct PixelGame : MyPixelGameEngine {
 	bool show_wireframes=false;
 	bool show_grids=false;
 	bool show_mass=false;
+	bool show_outlines=true;
 
 	vf2d drag_start;
 	PixelSet* drag_set=nullptr;
@@ -82,10 +85,11 @@ struct PixelGame : MyPixelGameEngine {
 		{//make floor
 			PixelSet* thing=new PixelSet(12, 3);
 			for(int i=0; i<thing->getW()*thing->getH(); i++) {
-				thing->grid[i]=PixelSet::Normal;
+				thing->grid[i]=true;
 			}
 			thing->updateTypes();
 			thing->updateMeshes();
+			thing->updateOutlines();
 
 			thing->scale=20;
 			thing->updateMass();
@@ -107,6 +111,7 @@ struct PixelGame : MyPixelGameEngine {
 			}
 			thing->updateTypes();
 			thing->updateMeshes();
+			thing->updateOutlines();
 
 			thing->scale=8;
 			thing->updateMass();
@@ -123,9 +128,11 @@ struct PixelGame : MyPixelGameEngine {
 				pts.emplace_back(polar(rad, angle));
 			}
 
-			PixelSet* thing=new PixelSet(PixelSet::fromOutline(pts, 5));
+			PixelSet* thing=new PixelSet(PixelSet::fromPolygon(pts, 5));
 			thing->updateTypes();
 			thing->updateMeshes();
+			thing->updateOutlines();
+
 			thing->updateMass();
 			thing->updateInertia();
 
@@ -216,8 +223,8 @@ struct PixelGame : MyPixelGameEngine {
 			addition_timer-=dt;
 			if(a_key.bReleased) {
 				if(addition.size()>=3) {
-					float resolution=random(2, 10);
-					PixelSet* thing=new PixelSet(PixelSet::fromOutline(addition, resolution));
+					float resolution=random(2, 15);
+					PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, resolution));
 
 					pixelsets.emplace_back(thing);
 				}
@@ -285,6 +292,7 @@ struct PixelGame : MyPixelGameEngine {
 			if(GetKey(olc::Key::W).bPressed) show_wireframes^=true;
 			if(GetKey(olc::Key::G).bPressed) show_grids^=true;
 			if(GetKey(olc::Key::M).bPressed) show_mass^=true;
+			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
 		}
 
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
@@ -421,6 +429,14 @@ struct PixelGame : MyPixelGameEngine {
 				DrawRotatedDecal(pos, getRectDecal(), p->rot, {0, 0}, size, m.col);
 			}
 
+			//render outlines
+			if(show_outlines) for(const auto& o:p->outlines) {
+				vf2d st(o.i, o.j), en=st;
+				if(o.vert) en.y+=o.sz;
+				else en.x+=o.sz;
+				DrawThickLine(p->localToWorld(st), p->localToWorld(en), 1, o.col);
+			}
+
 #pragma region EXPERIMENTAL
 			//render colliding pixels
 			for(int i=0; i<p->getW(); i++) {
@@ -464,8 +480,6 @@ struct PixelGame : MyPixelGameEngine {
 			}
 #pragma endregion
 		}
-
-		DrawLineDecal(prev_mouse_pos, mouse_pos);
 
 		return true;
 	}
