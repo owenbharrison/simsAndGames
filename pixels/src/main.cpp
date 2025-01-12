@@ -52,6 +52,8 @@ struct PixelGame : MyPixelGameEngine {
 	bool show_mass=false;
 	bool show_outlines=true;
 
+	bool to_time=false;
+
 	vf2d drag_start;
 	PixelSet* drag_set=nullptr;
 
@@ -159,10 +161,13 @@ struct PixelGame : MyPixelGameEngine {
 	}
 
 	bool on_update(float dt) override {
+		auto timer_start=std::chrono::steady_clock::now();
+		
 		prev_mouse_pos=mouse_pos;
 		mouse_pos=GetMousePos();
 
 #pragma region USER INPUT
+		//only allow input when console NOT open
 		if(!IsConsoleShowing()) {
 			//mouse grabbing
 			const auto left_mouse=GetMouse(olc::Mouse::LEFT);
@@ -295,6 +300,7 @@ struct PixelGame : MyPixelGameEngine {
 			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
 		}
 
+		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
 #pragma endregion
 
@@ -321,6 +327,12 @@ struct PixelGame : MyPixelGameEngine {
 			}
 		}
 #pragma endregion
+
+		if(to_time) {
+			auto timer_end=std::chrono::steady_clock::now();
+			auto dur=std::chrono::duration_cast<std::chrono::microseconds>(timer_end-timer_start);
+			std::cout<<"update: "<<dur.count()<<"us\n";
+		}
 
 		return true;
 	}
@@ -362,10 +374,19 @@ struct PixelGame : MyPixelGameEngine {
 			std::cout<<pct<<"% usage\n";
 		}
 
+		else if(cmd=="time") to_time=true;
+
+		else {
+			std::cout<<"unknown command.\n";
+			return false;
+		}
+
 		return true;
 	}
 
 	bool on_render() override {
+		auto timer_start=std::chrono::steady_clock::now();
+
 		//draw grey background
 		Clear(olc::WHITE);
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
@@ -476,9 +497,17 @@ struct PixelGame : MyPixelGameEngine {
 
 				//show inertia string
 				auto inertia_str=std::to_string(int(p->moment_of_inertia));
-				DrawStringDecal(pos+vf2d(0, 8), inertia_str, olc::BLACK);
+				DrawStringDecal(pos+vf2d(0, 10), inertia_str, olc::BLACK);
 			}
 #pragma endregion
+		}
+
+		if(to_time) {
+			auto timer_end=std::chrono::steady_clock::now();
+			auto dur=std::chrono::duration_cast<std::chrono::microseconds>(timer_end-timer_start);
+			std::cout<<"render: "<<dur.count()<<"us\n";
+
+			to_time=false;
 		}
 
 		return true;
