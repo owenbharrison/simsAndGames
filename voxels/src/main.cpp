@@ -46,8 +46,7 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 	byte* to_mesh=nullptr;
 	bool* meshed=nullptr;
 
-	//slice thru X
-#if 1
+#pragma region SLICE THRU X
 	to_mesh=new byte[h*d];
 	meshed=new bool[h*d];
 	auto jk_ix=[h] (int j, int k) { return j+h*k; };
@@ -190,17 +189,16 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 
 	delete[] to_mesh;
 	delete[] meshed;
-	#endif
+#pragma endregion
 
-	//slice thru Y
-#if 1
+#pragma region SLICE THRU Y
 	to_mesh=new byte[d*w];
 	meshed=new bool[d*w];
 	auto ki_ix=[d] (int k, int i) { return k+d*i; };
 
 	for(int j=0; j<h; j++) {
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(byte)* d* w);
+		memset(to_mesh, VoxelSet::Empty, sizeof(byte)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				const auto& curr=v(i, j, k);
@@ -268,7 +266,7 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(bool)* d* w);
+		memset(to_mesh, VoxelSet::Empty, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				const auto& curr=v(i, j, k);
@@ -336,10 +334,9 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 
 	delete[] to_mesh;
 	delete[] meshed;
-#endif
+#pragma endregion
 
-	//slice thru Z
-#if 1
+#pragma region SLICE THRU Z
 	to_mesh=new byte[w*h];
 	meshed=new bool[w*h];
 	auto ij_ix=[w] (int i, int j) { return i+w*j; };
@@ -414,7 +411,7 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(byte)* w* h);
+		memset(to_mesh, VoxelSet::Empty, sizeof(byte)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				const auto& curr=v(i, j, k);
@@ -482,7 +479,7 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 
 	delete[] to_mesh;
 	delete[] meshed;
-#endif
+#pragma endregion
 
 	//transform and scale
 	for(auto& t:m.triangles) {
@@ -528,18 +525,18 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 
 	//row vectors
 	vf3d f=vf3d(
-	a.z*c.y-c.z*a.y,
-	a.x*c.z-c.x*a.z,
-	a.y*c.x-c.y*a.x
+		a.z*c.y-c.z*a.y,
+		a.x*c.z-c.x*a.z,
+		a.y*c.x-c.y*a.x
 	)/det;
 	float u=f.dot(d);
 	//out of range
 	if(u<0||u>1) return -1;
 
 	vf3d g=vf3d(
-	a.y*b.z-b.y*a.z,
-	a.z*b.x-b.z*a.x,
-	a.x*b.y-b.x*a.y
+		a.y*b.z-b.y*a.z,
+		a.z*b.x-b.z*a.x,
+		a.x*b.y-b.x*a.y
 	)/det;
 	float v=g.dot(d);
 	//out of range
@@ -903,17 +900,17 @@ struct VoxelGame : olc::PixelGameEngine {
 			//finally!
 			for(const auto& t:tri_queue) {
 				FillTriangleDecal(
-				vf2d(t.p[0].x, t.p[0].y),
-				vf2d(t.p[1].x, t.p[1].y),
-				vf2d(t.p[2].x, t.p[2].y),
-				t.col
-				);
-				if(show_outlines) {
-					DrawTriangleDecal(
 					vf2d(t.p[0].x, t.p[0].y),
 					vf2d(t.p[1].x, t.p[1].y),
 					vf2d(t.p[2].x, t.p[2].y),
-					olc::BLACK
+					t.col
+				);
+				if(show_outlines) {
+					DrawTriangleDecal(
+						vf2d(t.p[0].x, t.p[0].y),
+						vf2d(t.p[1].x, t.p[1].y),
+						vf2d(t.p[2].x, t.p[2].y),
+						olc::BLACK
 					);
 				}
 			}
