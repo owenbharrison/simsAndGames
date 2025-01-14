@@ -1,8 +1,18 @@
 #pragma once
 #ifndef MAP_CLASS_H
 
+#include <cmath>
+#include <vector>
+
 #include "tile.h"
 #include "mesh.h"
+
+float randFloat(float a=1, float b=0) {
+	static const float rand_max=RAND_MAX;
+
+	float t=rand()/rand_max;
+	return a+t*(b-a);
+}
 
 //impl chunking...
 
@@ -109,7 +119,7 @@ struct Map {
 			float y=0;
 			float freq=1, amp=.5f;
 			for(int j=0; j<8; j++) {
-				y+=amp*sinf(offset+freq*x);
+				y+=amp*std::sinf(offset+freq*x);
 				freq*=2, amp/=2;
 			}
 
@@ -223,7 +233,7 @@ struct Map {
 					bool down_left=side_left&&!btm_edge&&(type-getType(tiles[ix(i-1, j+1)])>0);
 					bool down_right=side_right&&!btm_edge&&(type-getType(tiles[ix(i+1, j+1)])>0);
 					//choose random if both
-					if(down_left&&down_right) down_right=!(down_left=random()<.5f);
+					if(down_left&&down_right) down_right=!(down_left=randFloat()<.5f);
 					if(down_left) {
 						swaps.emplace_back(k, ix(i-1, j+1));
 						continue;
@@ -237,7 +247,7 @@ struct Map {
 				//THEN ADJACENT
 				if(props&TileProps::MoveSide) {
 					//choose random if both
-					if(side_left&&side_right) side_right=!(side_left=random()<.5f);
+					if(side_left&&side_right) side_right=!(side_left=randFloat()<.5f);
 					if(side_left) {
 						swaps.emplace_back(k, ix(i-1, j));
 						continue;

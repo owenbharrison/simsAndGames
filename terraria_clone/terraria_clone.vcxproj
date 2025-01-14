@@ -78,6 +78,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <AdditionalIncludeDirectories>$(SolutionDir)common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -94,6 +95,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <AdditionalIncludeDirectories>$(SolutionDir)common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -110,6 +112,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <AdditionalIncludeDirectories>$(SolutionDir)common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -126,6 +129,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <AdditionalIncludeDirectories>$(SolutionDir)common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -141,19 +145,18 @@
     <ClInclude Include="src\entity.h" />
     <ClInclude Include="src\map.h" />
     <ClInclude Include="src\mesh.h" />
-    <ClInclude Include="src\olcPixelGameEngine.h" />
-    <ClInclude Include="src\olcSoundWaveEngine.h" />
     <ClInclude Include="src\spritesheet.h" />
     <ClInclude Include="src\tile.h" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\background.jpg" />
+    <Image Include="assets\player.png" />
+    <Image Include="assets\player_anim.png" />
+    <Image Include="assets\spritesheet.png" />
     <Image Include="res\background.jpg" />
     <Image Include="res\player.png" />
     <Image Include="res\player_anim.png" />
     <Image Include="res\spritesheet.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Media Include="res\obsidian.wav" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

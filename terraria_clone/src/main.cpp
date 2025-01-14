@@ -51,16 +51,7 @@
 */
 
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
-
-#define OLC_SOUNDWAVE
-#include "olcSoundWaveEngine.h"
-
-template<typename T>
-olc::v2d_generic<T> operator+(const olc::v2d_generic<T>& a, T b) { return a+olc::v2d_generic<T>(b, b); }
-template<typename T>
-olc::v2d_generic<T> operator-(const olc::v2d_generic<T>& a, T b) { return a+(-b); }
-#pragma endregion
+#include "common/olcPixelGameEngine.h"
 
 //remaps value in one range to the other
 float remap(float x, float a, float b, float c, float d) {
@@ -68,13 +59,6 @@ float remap(float x, float a, float b, float c, float d) {
 	float t=(x-a)/(b-a);
 	//convert to 0-1 to c-d
 	return c+t*(d-c);
-}
-
-float random(float a=1, float b=0) {
-	static const float rand_max=RAND_MAX;
-
-	float t=rand()/rand_max;
-	return a+t*(b-a);
 }
 
 #include "tile.h"
@@ -96,14 +80,11 @@ struct Game : olc::PixelGameEngine {
 	olc::Sprite* background_sprite=nullptr;
 	olc::Decal* background_decal=nullptr;
 
-	olc::sound::WaveEngine sound_engine;
-	olc::sound::Wave obsidian_noise;
-
 	//encapsulate.
 	Entity player;
 	olc::Sprite* player_anim_sprite=nullptr;
 	olc::Decal* player_anim_decal=nullptr;
-	size_t player_anim_width, player_anim_height, player_anim_num;
+	size_t player_anim_width=0, player_anim_height=0, player_anim_num=0;
 	float player_anim_timer=0;
 	size_t player_anim_frame=0;
 
@@ -133,29 +114,22 @@ struct Game : olc::PixelGameEngine {
 
 		//based on aspect ratio, setup world dimensions.
 		//change this later to be like 5000x1400 with chunking.
-		int width=40;
+		int width=80;
 		int height=float(width)*ScreenHeight()/ScreenWidth();
 		map=new Map(width, height);
 
 		//background photo
-		background_sprite=new olc::Sprite("res/background.jpg");
+		background_sprite=new olc::Sprite("assets/background.png");
 		background_decal=new olc::Decal(background_sprite);
 
-		//init audio
-		sound_engine.InitialiseAudio();
-		sound_engine.SetOutputVolume(.5f);
-		obsidian_noise.LoadAudioWaveform("res/obsidian.wav");
-
 		//player init
-		player=Entity({0, 0}, {1.5, 2.5}, "res/player.png");
+		player=Entity({0, 0}, {1.5, 2.5}, "assets/player.png");
 		player.walk_speed=5;
 		placeEntity(player);
-		player_anim_sprite=new olc::Sprite("res/spritesheet.png");
+		player_anim_sprite=new olc::Sprite("assets/spritesheet.png");
 		player_anim_decal=new olc::Decal(player_anim_sprite);
 		player_anim_width=9, player_anim_height=8;
 		player_anim_num=player_anim_width*player_anim_height/4;
-
-		ShowWindow(GetConsoleWindow(), SW_MINIMIZE);
 
 		return true;
 	}
@@ -178,7 +152,7 @@ struct Game : olc::PixelGameEngine {
 
 		//random terrain?
 		if(GetKey(olc::Key::ENTER).bPressed||GetKey(olc::Key::RETURN).bPressed) {
-			map->generateTerrain(random(10000));
+			map->generateTerrain(randFloat(10000));
 			placeEntity(player);
 			to_construct=true;
 		}
@@ -235,8 +209,6 @@ struct Game : olc::PixelGameEngine {
 
 		//this should happen instantaneously.
 		if(map->combineLiquids()) {
-			//i dont know if ill keep this...
-			sound_engine.PlayWaveform(&obsidian_noise);
 			to_construct=true;
 		}
 
@@ -406,7 +378,7 @@ struct Game : olc::PixelGameEngine {
 int main() {
 	Game g;
 	int width=1000;
-	if(g.Construct(width, width*9/16, 1, 1, false, true, false, true)) g.Start();
+	if(g.Construct(width, width*9/16, 1, 1, false, true)) g.Start();
 
 	return 0;
 }
