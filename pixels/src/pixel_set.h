@@ -570,7 +570,7 @@ public:
 				}
 
 				//add line
-				outlines.emplace_back(i, j, false, ext, olc::RED);
+				outlines.emplace_back(i, j, false, ext, olc::BLACK);
 			}
 		}
 #pragma endregion
@@ -608,7 +608,7 @@ public:
 				}
 
 				//add line
-				outlines.emplace_back(i, j, true, ext, olc::BLUE);
+				outlines.emplace_back(i, j, true, ext, olc::BLACK);
 			}
 		}
 #pragma endregion
@@ -646,7 +646,7 @@ public:
 				}
 
 				//add line
-				outlines.emplace_back(i, j+1, false, ext, olc::YELLOW);
+				outlines.emplace_back(i, j+1, false, ext, olc::BLACK);
 			}
 		}
 #pragma endregion
@@ -684,7 +684,7 @@ public:
 				}
 
 				//add line
-				outlines.emplace_back(i+1, j, true, ext, olc::GREEN);
+				outlines.emplace_back(i+1, j, true, ext, olc::BLACK);
 			}
 		}
 #pragma endregion

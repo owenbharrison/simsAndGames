@@ -57,6 +57,9 @@ struct PixelGame : MyPixelGameEngine {
 	vf2d drag_start;
 	PixelSet* drag_set=nullptr;
 
+	vf2d spring_offset;
+	PixelSet* spring_set=nullptr;
+
 	std::vector<vf2d> addition;
 	float addition_timer=0;
 
@@ -150,6 +153,9 @@ struct PixelGame : MyPixelGameEngine {
 	}
 
 	void reset() {
+		spring_set=nullptr;
+		drag_set=nullptr;
+
 		for(const auto& p:pixelsets) delete p;
 		pixelsets.clear();
 	}
@@ -162,7 +168,7 @@ struct PixelGame : MyPixelGameEngine {
 
 	bool on_update(float dt) override {
 		auto timer_start=std::chrono::steady_clock::now();
-		
+
 		prev_mouse_pos=mouse_pos;
 		mouse_pos=GetMousePos();
 
@@ -205,6 +211,37 @@ struct PixelGame : MyPixelGameEngine {
 				drag_set=nullptr;
 			}
 
+			const auto right_mouse=GetMouse(olc::Mouse::RIGHT);
+			if(right_mouse.bPressed) {
+				spring_set=nullptr;
+				for(const auto& p:pixelsets) {
+					//is mouse in pixelset bounds?
+					if(!p->getAABB().contains(mouse_pos)) continue;
+
+					//is local point in bounds?
+					vf2d ij=p->worldToLocal(mouse_pos);
+					int i=std::floor(ij.x), j=std::floor(ij.y);
+					if(!p->inRangeX(i)||!p->inRangeY(j)) continue;
+
+					//ensure local coordinate a solid block
+					if((*p)(i, j)==PixelSet::Empty) continue;
+
+					//store the offset and the pixelset
+					spring_offset=ij;
+					spring_set=p;
+					break;
+				}
+			}
+			if(right_mouse.bHeld) {
+				if(spring_set) {
+					//F=kx
+					vf2d spr_pos=spring_set->localToWorld(spring_offset);
+					vf2d sub=mouse_pos-spr_pos;
+					spring_set->applyForce(spring_set->total_mass*sub, spr_pos);
+				}
+			}
+			if(right_mouse.bReleased) spring_set=nullptr;
+
 			//add objects
 			const auto a_key=GetKey(olc::Key::A);
 			if(a_key.bPressed) addition.clear();
@@ -239,6 +276,9 @@ struct PixelGame : MyPixelGameEngine {
 			//slice objects
 			const auto s_key=GetKey(olc::Key::S);
 			if(s_key.bHeld) {
+				drag_set=nullptr;
+				spring_set=nullptr;
+
 				AABB seg_box;
 				seg_box.fitToEnclose(prev_mouse_pos);
 				seg_box.fitToEnclose(mouse_pos);
@@ -264,6 +304,9 @@ struct PixelGame : MyPixelGameEngine {
 
 			//remove objects
 			if(GetKey(olc::Key::X).bPressed) {
+				drag_set=nullptr;
+				spring_set=nullptr;
+
 				for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
 
 					//is mouse in bounds?
@@ -302,6 +345,9 @@ struct PixelGame : MyPixelGameEngine {
 
 		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
+
+		//close application
+		if(GetKey(olc::Key::END).bPressed) return false;
 #pragma endregion
 
 #pragma region PHYSICS
@@ -311,7 +357,7 @@ struct PixelGame : MyPixelGameEngine {
 			p->update(dt);
 		}
 
-		//clear collide display
+		//clear colliding displays
 		for(const auto& p:pixelsets) {
 			memset(p->colliding, false, sizeof(bool)*p->getW()*p->getH());
 		}
@@ -341,9 +387,7 @@ struct PixelGame : MyPixelGameEngine {
 		std::stringstream line_str(line);
 		std::string cmd; line_str>>cmd;
 
-		if(cmd=="clear") {
-			ConsoleClear();
-		}
+		if(cmd=="clear") ConsoleClear();
 
 		else if(cmd=="reset") {
 			std::cout<<"removed "<<pixelsets.size()<<" pixelsets\n";
@@ -361,25 +405,25 @@ struct PixelGame : MyPixelGameEngine {
 		}
 
 		else if(cmd=="usage") {
-			int num=0, total=0;
-			for(const auto& p:pixelsets) {
-				for(int i=0; i<p->getW(); i++) {
-					for(int j=0; j<p->getH(); j++) {
-						if((*p)(i, j)!=PixelSet::Empty) num++;
-						total++;
+			if(pixelsets.empty()) std::cout<<"n/a\n";
+			else {
+				int num=0, total=0;
+				for(const auto& p:pixelsets) {
+					for(int i=0; i<p->getW(); i++) {
+						for(int j=0; j<p->getH(); j++) {
+							if((*p)(i, j)!=PixelSet::Empty) num++;
+							total++;
+						}
 					}
 				}
+				int pct=100.f*num/total;
+				std::cout<<pct<<"% usage\n";
 			}
-			int pct=100.f*num/total;
-			std::cout<<pct<<"% usage\n";
 		}
 
 		else if(cmd=="time") to_time=true;
 
-		else {
-			std::cout<<"unknown command.\n";
-			return false;
-		}
+		else std::cout<<"unknown command.\n";
 
 		return true;
 	}
@@ -500,6 +544,13 @@ struct PixelGame : MyPixelGameEngine {
 				DrawStringDecal(pos+vf2d(0, 10), inertia_str, olc::BLACK);
 			}
 #pragma endregion
+		}
+
+		//show spring set
+		if(spring_set) {
+			vf2d spr_pos=spring_set->localToWorld(spring_offset);
+			DrawThickLine(mouse_pos, spr_pos, 1, olc::CYAN);
+			FillCircleDecal(spr_pos, .5f*spring_set->scale, olc::CYAN);
 		}
 
 		if(to_time) {
