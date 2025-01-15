@@ -158,6 +158,8 @@ struct PixelGame : olc::PixelGameEngine {
 
 		placeAllRandomly();
 
+		std::cout<<"Press ESC for integrated console.\n"
+			"  then type help for help.\n";
 		ConsoleCaptureStdOut(true);
 
 		//make some primitives to draw with
@@ -208,6 +210,8 @@ struct PixelGame : olc::PixelGameEngine {
 		std::stringstream line_str(line);
 		std::string cmd; line_str>>cmd;
 
+		//if only there was a string switch statement :(
+
 		if(cmd=="clear") ConsoleClear();
 
 		else if(cmd=="reset") {
@@ -244,7 +248,40 @@ struct PixelGame : olc::PixelGameEngine {
 
 		else if(cmd=="time") to_time=true;
 
-		else std::cout<<"unknown command.\n";
+		else if(cmd=="keybinds") {
+			std::cout<<"useful keybinds:\n"
+				"  A    drag while making a shape to add a new pixelset\n"
+				"  S    drag to slice thru pixelsets\n"
+				"  X    delete pixelset\n"
+				"  R    place all pixelsets randomly\n"
+				"  B    toggle bounding box view\n"
+				"  W    toggle wireframe view\n"
+				"  G    toggle local grids view\n"
+				"  M    toggle mass view\n"
+				"  O    toggle outline view\n"
+				"  P    toggle physics update\n"
+				" ESC   toggle integrated console\n";
+		}
+
+		else if(cmd=="mousebinds") {
+			std::cout<<"useful mousebinds:\n"
+				"  LEFT     drag to move pixelsets\n"
+				"  RIGHT    apply spring force to pixelset\n"
+				"  MIDDLE   scroll to zoom, drag to pan\n";
+		}
+
+		else if(cmd=="help") {
+			std::cout<<"useful commands:\n"
+				"  clear        clears the screen\n"
+				"  reset        removes all pixelsets\n"
+				"  count        how many pixelsets are there?\n"
+				"  usage        % space used for all allocated pixelsets\n"
+				"  time         times immediate next update and render loop\n"
+				"  keybinds     which keys to press for this program?\n"
+				"  mousebinds   which buttons to press for this program?\n";
+		}
+
+		else std::cout<<"unknown command. type help for list of commands.\n";
 
 		return true;
 	}
@@ -467,9 +504,6 @@ struct PixelGame : olc::PixelGameEngine {
 
 		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
-
-		//close application
-		if(GetKey(olc::Key::END).bPressed) return false;
 #pragma endregion
 
 #pragma region PHYSICS
