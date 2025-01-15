@@ -28,19 +28,19 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Media Include="res\explode.wav">
+    <Media Include="assets\explode.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="res\game_over.wav">
+    <Media Include="assets\game_over.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="res\slice1.wav">
+    <Media Include="assets\slice1.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="res\slice2.wav">
+    <Media Include="assets\slice2.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="res\throw.wav">
+    <Media Include="assets\throw.wav">
       <Filter>Resource Files</Filter>
     </Media>
   </ItemGroup>

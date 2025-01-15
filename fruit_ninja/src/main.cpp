@@ -117,17 +117,17 @@ struct FruitNinja : olc::PixelGameEngine {
 		sound_engine.InitialiseAudio();
 		sound_engine.SetOutputVolume(.8f);
 
-		if(!throw_sound.LoadAudioWaveform("res/throw.wav")) {
+		if(!throw_sound.LoadAudioWaveform("assets/throw.wav")) {
 			std::cout<<"couldn't load audio\n";
 			return false;
 		}
 
-		if(!slice1_sound.LoadAudioWaveform("res/slice1.wav")) {
+		if(!slice1_sound.LoadAudioWaveform("assets/slice1.wav")) {
 			std::cout<<"couldn't load audio\n";
 			return false;
 		}
 
-		if(!slice2_sound.LoadAudioWaveform("res/slice2.wav")) {
+		if(!slice2_sound.LoadAudioWaveform("assets/slice2.wav")) {
 			std::cout<<"couldn't load audio\n";
 			return false;
 		}
