@@ -91,7 +91,7 @@ public:
 	};
 	std::vector<Outline> outlines;
 
-	olc::Pixel col=olc::DARK_GREY;
+	olc::Pixel col=olc::WHITE;
 
 #pragma region CONSTRUCTION
 	PixelSet() : PixelSet(1, 1) {}
