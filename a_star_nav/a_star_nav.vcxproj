@@ -146,12 +146,12 @@
     <None Include="roundabout.nav" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="res\arrow.png" />
-    <Image Include="res\background.png" />
-    <Image Include="res\background2.png" />
-    <Image Include="res\background3.png" />
-    <Image Include="res\boulder.png" />
-    <Image Include="res\paris.png" />
+    <Image Include="assets\arrow.png" />
+    <Image Include="assets\background.png" />
+    <Image Include="assets\background2.png" />
+    <Image Include="assets\background3.png" />
+    <Image Include="assets\boulder.png" />
+    <Image Include="assets\paris.png" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\graph.h" />

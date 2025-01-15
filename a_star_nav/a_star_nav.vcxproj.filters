@@ -22,22 +22,22 @@
     <None Include="map.nav" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="res\arrow.png">
+    <Image Include="assets\arrow.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="res\background.png">
+    <Image Include="assets\background.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="res\background2.png">
+    <Image Include="assets\background2.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="res\background3.png">
+    <Image Include="assets\background3.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="res\boulder.png">
+    <Image Include="assets\boulder.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="res\paris.png">
+    <Image Include="assets\paris.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

@@ -89,7 +89,7 @@ struct AStarDemo : public MyPixelGameEngine {
 	bool show_ids=false;
 
 	bool on_init() override {
-		arrow_sprite=new olc::Sprite("res/arrow.png");
+		arrow_sprite=new olc::Sprite("assets/arrow.png");
 		arrow_decal=new olc::Decal(arrow_sprite);
 
 		tv.Initialise(GetScreenSize());
@@ -259,7 +259,7 @@ struct AStarDemo : public MyPixelGameEngine {
 					show_background^=true;
 					//load on first press
 					if(show_background&&!background_sprite) {
-						background_sprite=new olc::Sprite("res/boulder.png");
+						background_sprite=new olc::Sprite("assets/boulder.png");
 						background_decal=new olc::Decal(background_sprite);
 					}
 				}
