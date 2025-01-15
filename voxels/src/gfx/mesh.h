@@ -1,3 +1,5 @@
+//implement BVH to optimize ray intersections
+
 #pragma once
 #ifndef MESH_STRUCT_H
 #define MESH_STRUCT_H

@@ -15,19 +15,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="res\axis.txt" />
-    <Text Include="res\teapot.txt" />
-    <Text Include="res\video_ship.txt" />
-    <Text Include="res\torus.txt" />
-    <Text Include="res\airplane.txt" />
-    <Text Include="res\bike.txt" />
-    <Text Include="res\car.txt" />
-    <Text Include="res\digger.txt" />
-    <Text Include="res\house.txt" />
-    <Text Include="res\motorcycle.txt" />
-    <Text Include="res\table.txt" />
-    <Text Include="res\mountains.txt" />
-    <Text Include="res\dragon.txt" />
+    <Text Include="assets\axis.txt" />
+    <Text Include="assets\teapot.txt" />
+    <Text Include="assets\video_ship.txt" />
+    <Text Include="assets\torus.txt" />
+    <Text Include="assets\airplane.txt" />
+    <Text Include="assets\bike.txt" />
+    <Text Include="assets\car.txt" />
+    <Text Include="assets\digger.txt" />
+    <Text Include="assets\house.txt" />
+    <Text Include="assets\motorcycle.txt" />
+    <Text Include="assets\table.txt" />
+    <Text Include="assets\mountains.txt" />
+    <Text Include="assets\dragon.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -51,6 +51,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\math\mat4.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\conversions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,3 +1,8 @@
+//implement slice-like triangle OR plane rasterization
+//implement floodfilling
+//implement rotations and local <-> world conversions
+//implement center of mass
+
 #pragma once
 #ifndef VOXELSET_CLASS_H
 #define VOXELSET_CLASS_H
@@ -12,7 +17,7 @@ public:
 	byte* grid=nullptr;
 
 	enum {
-		Empty,
+		Empty=0,
 		Inner,
 		Surface,
 		Edge,
