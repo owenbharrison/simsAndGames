@@ -149,7 +149,7 @@
     <ClInclude Include="src\tile.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\background.jpg" />
+    <Image Include="assets\background.png" />
     <Image Include="assets\player.png" />
     <Image Include="assets\player_anim.png" />
     <Image Include="assets\spritesheet.png" />

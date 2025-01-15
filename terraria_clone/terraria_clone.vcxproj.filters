@@ -52,13 +52,13 @@
     <Image Include="assets\spritesheet.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\background.jpg">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\player.png">
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\player_anim.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\background.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
