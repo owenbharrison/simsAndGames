@@ -1,6 +1,4 @@
 /*todo:
-saving/loading
-	.obj-esque parsing
 physics
 	collisions
 		SAT
@@ -8,6 +6,7 @@ physics
 graphics
 	add particles
 	add textures
+add more pixelset constructors...
 */
 
 #define OLC_PGE_APPLICATION
@@ -19,43 +18,32 @@ using olc::vf2d;
 
 #include "pixel_set.h"
 
-//debugging
-std::ostream& operator<<(std::ostream& o, const PixelSet& p) {
-	for(int j=0; j<p.getH(); j++) {
-		for(int i=0; i<p.getW(); i++) {
-			//dont print empty
-			const auto& c=p(i, j);
-			if(c!=PixelSet::Empty) o<<int(c);
-			else o<<' ';
-
-			o<<' ';
-		}
-		o<<'\n';
-	}
-	return o;
-}
-
 struct PixelGame : olc::PixelGameEngine {
 	PixelGame() {
 		sAppName="Testing";
 	}
 
+	//helpful positions
 	vf2d scr_mouse_pos;
 	vf2d wld_mouse_pos;
 	vf2d prev_wld_mouse_pos;
-	vf2d gravity;
 
 	std::list<PixelSet*> pixelsets;
 
+	vf2d gravity;
+
+	//UI toggles
 	bool show_bounds=false;
 	bool show_wireframes=false;
 	bool show_grids=false;
 	bool show_mass=false;
 	bool show_outlines=true;
+
 	bool update_phys=true;
 
 	bool to_time=false;
 
+	//user input things
 	vf2d drag_start;
 	PixelSet* drag_set=nullptr;
 
@@ -65,6 +53,7 @@ struct PixelGame : olc::PixelGameEngine {
 	std::vector<vf2d> addition;
 	float addition_timer=0;
 
+	//primitive render helpers
 	olc::Sprite* rect_sprite=nullptr;
 	olc::Decal* rect_decal=nullptr;
 	olc::Sprite* circle_sprite=nullptr;
@@ -93,69 +82,6 @@ struct PixelGame : olc::PixelGameEngine {
 	bool OnUserCreate() override {
 		srand(time(0));
 
-		gravity={0, 0};
-
-#pragma region CONSTRUCTION
-		{//make floor
-			PixelSet* thing=new PixelSet(12, 3);
-			for(int i=0; i<thing->getW()*thing->getH(); i++) {
-				thing->grid[i]=true;
-			}
-			thing->updateTypes();
-			thing->updateMeshes();
-			thing->updateOutlines();
-
-			thing->scale=20;
-			thing->updateMass();
-			thing->updateInertia();
-
-			pixelsets.push_back(thing);
-		}
-
-		{//make ball
-			const int sz=16;
-			PixelSet* thing=new PixelSet(sz, sz);
-			float r=.5f*sz, r_sq=r*r;
-			for(int x=0; x<sz; x++) {
-				float dx=x-.5f*sz;
-				for(int y=0; y<sz; y++) {
-					float dy=y-.5f*sz;
-					(*thing)(x, y)=dx*dx+dy*dy<r_sq;
-				}
-			}
-			thing->updateTypes();
-			thing->updateMeshes();
-			thing->updateOutlines();
-
-			thing->scale=8;
-			thing->updateMass();
-			thing->updateInertia();
-
-			pixelsets.push_back(thing);
-		}
-
-		{//make ngon
-			float rad=random(120, 240);
-			std::vector<vf2d> pts;
-			for(int i=0; i<3; i++) {
-				float angle=2*Pi*i/3;
-				pts.emplace_back(polar(rad, angle));
-			}
-
-			PixelSet* thing=new PixelSet(PixelSet::fromPolygon(pts, 5));
-			thing->updateTypes();
-			thing->updateMeshes();
-			thing->updateOutlines();
-
-			thing->updateMass();
-			thing->updateInertia();
-
-			pixelsets.push_back(thing);
-		}
-#pragma endregion
-
-		placeAllRandomly();
-
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
 		ConsoleCaptureStdOut(true);
@@ -177,9 +103,74 @@ struct PixelGame : olc::PixelGameEngine {
 		}
 		circle_decal=new olc::Decal(circle_sprite);
 
+		//setup transforms
 		tv.Initialise(GetScreenSize());
-		tv.SetScaleExtents({.5f, .5f}, {100, 100});
+		tv.SetScaleExtents({.33f, .33f}, {60, 60});
 		tv.EnableScaleClamp(true);
+
+#pragma region DEFAULT OBJECTS
+		{//make floor
+			PixelSet* thing=new PixelSet(15, 3);
+			for(int i=0; i<thing->getW()*thing->getH(); i++) {
+				thing->grid[i]=true;
+			}
+			thing->updateTypes();
+			thing->updateMeshes();
+			thing->updateOutlines();
+
+			thing->scale=24;
+			thing->updateMass();
+			thing->updateInertia();
+
+			pixelsets.push_back(thing);
+		}
+
+		{//make ball
+			const int sz=19;
+			PixelSet* thing=new PixelSet(sz, sz);
+			float r=.5f*sz, r_sq=r*r;
+			for(int x=0; x<sz; x++) {
+				float dx=x-.5f*sz;
+				for(int y=0; y<sz; y++) {
+					float dy=y-.5f*sz;
+					(*thing)(x, y)=dx*dx+dy*dy<r_sq;
+				}
+			}
+			thing->updateTypes();
+			thing->updateMeshes();
+			thing->updateOutlines();
+
+			thing->scale=6;
+			thing->updateMass();
+			thing->updateInertia();
+
+			pixelsets.push_back(thing);
+		}
+
+		{//make triangle
+			float rad=random(120, 240);
+			std::vector<vf2d> pts;
+			for(int i=0; i<3; i++) {
+				float angle=2*Pi*i/3;
+				pts.emplace_back(polar(rad, angle));
+			}
+
+			PixelSet* thing=new PixelSet(PixelSet::fromPolygon(pts, 10));
+			thing->updateTypes();
+			thing->updateMeshes();
+			thing->updateOutlines();
+
+			thing->updateMass();
+			thing->updateInertia();
+
+			pixelsets.push_back(thing);
+		}
+#pragma endregion
+
+		placeAllRandomly();
+
+		//eventually ill change this when collisions work :D
+		gravity={0, 0};
 
 		return true;
 	}
@@ -204,71 +195,227 @@ struct PixelGame : olc::PixelGameEngine {
 		return true;
 	}
 
+#pragma region COMMANDS
+	void resetCommand() {
+		//english + logic = grammar :D
+		int num=pixelsets.size();
+		std::cout<<"removed ";
+		std::cout<<num;
+		std::cout<<" pixelset";
+		if(num!=1) std::cout<<'s';
+		std::cout<<'\n';
+
+		reset();
+	}
+
+	void countCommand() {
+		//english + logic = grammar :D
+		int num=pixelsets.size();
+		std::cout<<"there ";
+		std::cout<<(num==1?"is ":"are ");
+		std::cout<<num;
+		std::cout<<" pixelset";
+		if(num!=1) std::cout<<'s';
+		std::cout<<'\n';
+	}
+
+	bool usageCommand() {
+		if(pixelsets.empty()) {
+			std::cout<<"n/a\n";
+
+			return false;
+		}
+
+		//how many solid blocks for total allocated?
+		int num=0, total=0;
+		for(const auto& p:pixelsets) {
+			for(int i=0; i<p->getW(); i++) {
+				for(int j=0; j<p->getH(); j++) {
+					if((*p)(i, j)!=PixelSet::Empty) num++;
+					total++;
+				}
+			}
+		}
+		int pct=100.f*num/total;
+		std::cout<<pct<<"% usage\n";
+
+		return true;
+	}
+
+	bool exportCommand(std::stringstream& line_str) {
+		std::string filename;
+		line_str>>filename;
+		if(filename.empty()) {
+			std::cout<<"no filename. try using:\n"
+				"  export <filename>\n";
+
+			return false;
+		}
+
+		std::ofstream file_out(filename);
+		if(file_out.fail()) {
+			std::cout<<"invalid filename.\n";
+
+			return false;
+		}
+
+		//print pixelsets line by line
+		for(const auto& p:pixelsets) {
+			//properties
+			file_out<<"p "
+				<<p->pos.x<<' '<<p->pos.y<<' '
+				<<p->rot<<' '
+				<<p->scale<<' '
+				<<p->col.r<<' '<<p->col.g<<' '<<p->col.b<<' '
+				<<p->getW()<<' '<<p->getH()<<'\n';
+			//grid
+			for(int j=0; j<p->getH(); j++) {
+				for(int i=0; i<p->getW(); i++) {
+					file_out<<((*p)(i, j)!=PixelSet::Empty);
+				}
+				file_out<<'\n';
+			}
+		}
+		file_out.close();
+
+		std::cout<<"successfully exported to: "<<filename<<'\n';
+
+		return true;
+	}
+
+	bool importCommand(std::stringstream& line_str) {
+		std::string filename;
+		line_str>>filename;
+		if(filename.empty()) {
+			std::cout<<"no filename. try using:\n"
+				"  import <filename>\n";
+
+			return false;
+		}
+
+		std::ifstream file_in(filename);
+		if(file_in.fail()) {
+			std::cout<<"invalid filename.\n";
+
+			return false;
+		}
+
+		reset();
+
+		//parse file line by line
+		std::string line;
+		while(std::getline(file_in, line)) {
+			std::stringstream line_str(line);
+			std::string type; line_str>>type;
+			if(type=="p") {
+				//read in data
+				vf2d pos;
+				line_str>>pos.x>>pos.y;
+				float rot, scale;
+				line_str>>rot>>scale;
+				olc::Pixel col;
+				line_str>>col.r>>col.g>>col.b;
+				int w, h;
+				line_str>>w>>h;
+
+				//set transforms
+				PixelSet p(w, h);
+				p.pos=pos, p.old_pos=p.pos;
+				p.rot=rot, p.old_rot=p.rot;
+				p.scale=scale;
+				p.col=col;
+
+				//read h lines
+				for(int j=0; j<h; j++) {
+					std::getline(file_in, line);
+					line_str.clear(), line_str<<line;
+					//read w "bits"
+					for(int i=0; i<w; i++) {
+						p(i, j)=line[i]=='1';
+					}
+				}
+
+				p.updateTypes();
+				p.updateMeshes();
+				p.updateOutlines();
+
+				p.updateMass();
+				p.updateInertia();
+
+				pixelsets.emplace_back(new PixelSet(p));
+			}
+		}
+
+		std::cout<<"successfully imported from: "<<filename<<'\n';
+
+		return true;
+	}
+
+	//not sure how olc::PixelGameEngine handles this return value...
 	bool OnConsoleCommand(const std::string& line) override {
 		std::stringstream line_str(line);
 		std::string cmd; line_str>>cmd;
 
 		//if only there was a string switch statement :(
 
-		if(cmd=="clear") ConsoleClear();
+		if(cmd=="clear") {
+			ConsoleClear();
 
-		else if(cmd=="reset") {
-			std::cout<<"removed "<<pixelsets.size()<<" pixelsets\n";
-			reset();
+			return true;
 		}
 
-		else if(cmd=="count") {
-			int num=pixelsets.size();
-			std::cout<<"there ";
-			std::cout<<(num==1?"is ":"are ");
-			std::cout<<num;
-			std::cout<<" pixelset";
-			if(num!=1) std::cout<<'s';
-			std::cout<<'\n';
+		if(cmd=="reset") {
+			resetCommand();
+
+			return true;
 		}
 
-		else if(cmd=="usage") {
-			if(pixelsets.empty()) std::cout<<"n/a\n";
-			else {
-				int num=0, total=0;
-				for(const auto& p:pixelsets) {
-					for(int i=0; i<p->getW(); i++) {
-						for(int j=0; j<p->getH(); j++) {
-							if((*p)(i, j)!=PixelSet::Empty) num++;
-							total++;
-						}
-					}
-				}
-				int pct=100.f*num/total;
-				std::cout<<pct<<"% usage\n";
-			}
+		if(cmd=="count") {
+			countCommand();
+
+			return true;
 		}
 
-		else if(cmd=="time") to_time=true;
+		if(cmd=="usage") return usageCommand();
 
-		else if(cmd=="keybinds") {
+		if(cmd=="time") {
+			to_time=true;
+
+			return true;
+		}
+
+		if(cmd=="export") return exportCommand(line_str);
+
+		if(cmd=="import") return importCommand(line_str);
+
+		if(cmd=="keybinds") {
 			std::cout<<"useful keybinds:\n"
-				"  A    drag while making a shape to add a new pixelset\n"
-				"  S    drag to slice thru pixelsets\n"
-				"  X    delete pixelset\n"
-				"  R    place all pixelsets randomly\n"
-				"  B    toggle bounding box view\n"
-				"  W    toggle wireframe view\n"
-				"  G    toggle local grids view\n"
-				"  M    toggle mass view\n"
-				"  O    toggle outline view\n"
-				"  P    toggle physics update\n"
-				" ESC   toggle integrated console\n";
+				"  A      drag while making a shape to add a new pixelset\n"
+				"  S      drag to slice thru pixelsets\n"
+				"  X      delete pixelset\n"
+				"  R      place all pixelsets randomly\n"
+				"  B      toggle bounding box view\n"
+				"  W      toggle wireframe view\n"
+				"  G      toggle local grids view\n"
+				"  M      toggle mass view\n"
+				"  O      toggle outline view\n"
+				"  P      toggle physics update\n"
+				"  ESC    toggle integrated console\n"
+				"  HOME   reset zoom and pan\n";
+
+			return true;
 		}
 
-		else if(cmd=="mousebinds") {
+		if(cmd=="mousebinds") {
 			std::cout<<"useful mousebinds:\n"
 				"  LEFT     drag to move pixelsets\n"
 				"  RIGHT    apply spring force to pixelset\n"
 				"  MIDDLE   scroll to zoom, drag to pan\n";
+
+			return true;
 		}
 
-		else if(cmd=="help") {
+		if(cmd=="help") {
 			std::cout<<"useful commands:\n"
 				"  clear        clears the screen\n"
 				"  reset        removes all pixelsets\n"
@@ -277,14 +424,16 @@ struct PixelGame : olc::PixelGameEngine {
 				"  time         times immediate next update and render loop\n"
 				"  keybinds     which keys to press for this program?\n"
 				"  mousebinds   which buttons to press for this program?\n";
+
+			return true;
 		}
 
-		else std::cout<<"unknown command. type help for list of commands.\n";
-
-		return true;
+		std::cout<<"unknown command. type help for list of commands.\n";
+		return false;
 	}
+#pragma endregion
 
-#pragma region HELPERS
+#pragma region RENDER HELPERS
 	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col=olc::WHITE) {
 		olc::vf2d sub=b-a;
 		float len=sub.mag();
@@ -397,6 +546,7 @@ struct PixelGame : olc::PixelGameEngine {
 					//F=kx
 					vf2d spr_pos=spring_set->localToWorld(spring_offset);
 					vf2d sub=wld_mouse_pos-spr_pos;
+					//spring force proportional to pixelset mass
 					spring_set->applyForce(spring_set->total_mass*sub, spr_pos);
 				}
 			}
@@ -424,9 +574,11 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 			addition_timer-=dt;
 			if(a_key.bReleased) {
+				//ensure its a polygon
 				if(addition.size()>=3) {
-					float resolution=random(1, 10);
-					PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, resolution));
+					//choose random scale
+					float scale=random(1, 10);
+					PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, scale));
 
 					pixelsets.emplace_back(thing);
 				}
@@ -438,10 +590,6 @@ struct PixelGame : olc::PixelGameEngine {
 			if(s_key.bHeld) {
 				drag_set=nullptr;
 				spring_set=nullptr;
-
-				AABB seg_box;
-				seg_box.fitToEnclose(prev_wld_mouse_pos);
-				seg_box.fitToEnclose(wld_mouse_pos);
 
 				//check every pixelset
 				for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
@@ -550,7 +698,8 @@ struct PixelGame : olc::PixelGameEngine {
 		Clear(olc::Pixel(0, 100, 255));
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
 
-		if(true) {
+		//show world grid
+		{
 			const auto grid_spacing=50;
 
 			//screen bounds in world space, snap to nearest
@@ -602,12 +751,17 @@ struct PixelGame : olc::PixelGameEngine {
 					}
 				}
 
+				const float rad=.25f*p->scale;
 				vf2d v1(box.max.x, box.min.y);
 				vf2d v2(box.min.x, box.max.y);
-				tvDrawThickLine(box.min, v1, 1, col);
-				tvDrawThickLine(v1, box.max, 1, col);
-				tvDrawThickLine(box.max, v2, 1, col);
-				tvDrawThickLine(v2, box.min, 1, col);
+				tvDrawThickLine(box.min, v1, rad, col);
+				tvFillCircleDecal(box.min, rad, col);
+				tvDrawThickLine(v1, box.max, rad, col);
+				tvFillCircleDecal(v1, rad, col);
+				tvDrawThickLine(box.max, v2, rad, col);
+				tvFillCircleDecal(box.max, rad, col);
+				tvDrawThickLine(v2, box.min, rad, col);
+				tvFillCircleDecal(v2, rad, col);
 			}
 
 			//show local grid
@@ -636,7 +790,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 			//render outlines
 			if(show_outlines) {
-				const float amt=.1f;
+				const float amt=.17f;
 				for(const auto& o:p->outlines) {
 					vf2d st(o.i, o.j), en=st;
 					if(o.vert) st.y-=amt, en.y+=amt+o.sz;

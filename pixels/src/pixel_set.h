@@ -128,19 +128,19 @@ public:
 	}
 
 	//could make this faster with scanline rasterization...
-	static PixelSet fromPolygon(const std::vector<vf2d>& polygon, float resolution) {
+	static PixelSet fromPolygon(const std::vector<vf2d>& polygon, float scale) {
 		//get bounds of polygon
 		AABB box;
 		for(const auto& p:polygon) box.fitToEnclose(p);
 
 		//determine spacing
 		vf2d size=box.max-box.min;
-		int w=1+size.x/resolution, h=1+size.y/resolution;
+		int w=1+size.x/scale, h=1+size.y/scale;
 
 		//for every point
 		PixelSet p(w, h);
 		p.pos=box.min;
-		p.scale=resolution;
+		p.scale=scale;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//is it inside the polygon
