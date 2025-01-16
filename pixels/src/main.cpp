@@ -6,10 +6,8 @@ physics
 		SAT
 	sounds?
 graphics
-	add transformed view
 	add particles
 	add textures
-	add more debug views
 */
 
 #define OLC_PGE_APPLICATION
@@ -294,7 +292,11 @@ struct PixelGame : olc::PixelGameEngine {
 			if(GetMouse(olc::Mouse::MIDDLE).bPressed) tv.StartPan(scr_mouse_pos);
 			if(GetMouse(olc::Mouse::MIDDLE).bHeld) tv.UpdatePan(scr_mouse_pos);
 			if(GetMouse(olc::Mouse::MIDDLE).bReleased) tv.EndPan(scr_mouse_pos);
-			
+			if(GetKey(olc::Key::HOME).bPressed) {
+				tv.SetWorldOffset({0, 0});
+				tv.SetWorldScale({1, 1});
+			}
+
 			//mouse grabbing
 			const auto left_mouse=GetMouse(olc::Mouse::LEFT);
 			if(left_mouse.bPressed) {
@@ -386,7 +388,7 @@ struct PixelGame : olc::PixelGameEngine {
 			addition_timer-=dt;
 			if(a_key.bReleased) {
 				if(addition.size()>=3) {
-					float resolution=random(2, 15);
+					float resolution=random(1, 10);
 					PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, resolution));
 
 					pixelsets.emplace_back(thing);
@@ -515,7 +517,7 @@ struct PixelGame : olc::PixelGameEngine {
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
 
 		if(true) {
-			const auto grid_spacing=10;
+			const auto grid_spacing=50;
 
 			//screen bounds in world space, snap to nearest
 			vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
@@ -526,7 +528,7 @@ struct PixelGame : olc::PixelGameEngine {
 			for(int i=i_s; i<=i_e; i++) {
 				float x=grid_spacing*i;
 				vf2d top{x, tl.y}, btm{x, br.y};
-				if(i%10==0) tvDrawThickLine(top, btm, 1, olc::GREY);
+				if(i%5==0) tvDrawThickLine(top, btm, 3, olc::GREY);
 				else tv.DrawLineDecal(top, btm, olc::GREY);
 			}
 
@@ -534,7 +536,7 @@ struct PixelGame : olc::PixelGameEngine {
 			for(int j=j_s; j<=j_e; j++) {
 				float y=grid_spacing*j;
 				vf2d lft{tl.x, y}, rgt{br.x, y};
-				if(j%10==0) tvDrawThickLine(lft, rgt, 1, olc::GREY);
+				if(j%5==0) tvDrawThickLine(lft, rgt, 3, olc::GREY);
 				else tv.DrawLineDecal(lft, rgt, olc::GREY);
 			}
 		}
