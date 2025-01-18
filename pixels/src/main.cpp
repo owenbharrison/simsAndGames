@@ -266,7 +266,7 @@ struct PixelGame : olc::PixelGameEngine {
 				<<p->pos.x<<' '<<p->pos.y<<' '
 				<<p->rot<<' '
 				<<p->scale<<' '
-				<<p->col.r<<' '<<p->col.g<<' '<<p->col.b<<' '
+				<<int(p->col.r)<<' '<<int(p->col.g)<<' '<<int(p->col.b)<<' '
 				<<p->getW()<<' '<<p->getH()<<'\n';
 			//grid
 			for(int j=0; j<p->getH(); j++) {
@@ -313,8 +313,8 @@ struct PixelGame : olc::PixelGameEngine {
 				line_str>>pos.x>>pos.y;
 				float rot, scale;
 				line_str>>rot>>scale;
-				olc::Pixel col;
-				line_str>>col.r>>col.g>>col.b;
+				int r, g, b;
+				line_str>>r>>g>>b;
 				int w, h;
 				line_str>>w>>h;
 
@@ -323,7 +323,7 @@ struct PixelGame : olc::PixelGameEngine {
 				p.pos=pos, p.old_pos=p.pos;
 				p.rot=rot, p.old_rot=p.rot;
 				p.scale=scale;
-				p.col=col;
+				p.col=olc::Pixel(r, g, b);
 
 				//read h lines
 				for(int j=0; j<h; j++) {
@@ -422,6 +422,8 @@ struct PixelGame : olc::PixelGameEngine {
 				"  count        how many pixelsets are there?\n"
 				"  usage        % space used for all allocated pixelsets\n"
 				"  time         times immediate next update and render loop\n"
+				"  export       exports pixelsets to specified file\n"
+				"  import       imports pixelsets from specified file\n"
 				"  keybinds     which keys to press for this program?\n"
 				"  mousebinds   which buttons to press for this program?\n";
 
@@ -764,7 +766,7 @@ struct PixelGame : olc::PixelGameEngine {
 				tvFillCircleDecal(v2, rad, col);
 			}
 
-			//show local grid
+			//show local grids
 			if(show_grids) {
 				//draw "vertical" ticks
 				for(int i=0; i<=p->getW(); i++) {
@@ -777,8 +779,8 @@ struct PixelGame : olc::PixelGameEngine {
 				}
 
 				//draw axes
-				tvDrawThickLine(p->localToWorld(vf2d(-1, 0)), p->localToWorld(vf2d(p->getW()+1, 0)), 1, olc::BLACK);
-				tvDrawThickLine(p->localToWorld(vf2d(0, -1)), p->localToWorld(vf2d(0, p->getH()+1)), 1, olc::BLACK);
+				tvDrawThickLine(p->localToWorld(vf2d(-1, 0)), p->localToWorld(vf2d(p->getW()+1, 0)), .13f*p->scale, olc::BLACK);
+				tvDrawThickLine(p->localToWorld(vf2d(0, -1)), p->localToWorld(vf2d(0, p->getH()+1)), .13f*p->scale, olc::BLACK);
 			}
 
 			//render meshes
