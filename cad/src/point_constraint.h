@@ -42,7 +42,7 @@ struct VerticalConstraint : public PointConstraint {
 };
 
 #define HORIZ_CST 2
-struct HorizontalConstraint : public PointConstraint {
+struct HorizontalConstraint : PointConstraint {
 	HorizontalConstraint(vf2d* a_, vf2d* b_) { id=HORIZ_CST, a=a_, b=b_; }
 
 	HorizontalConstraint* clone() const override {
@@ -57,7 +57,7 @@ struct HorizontalConstraint : public PointConstraint {
 
 #define LINE_CST 3
 struct LineConstraint : public PointConstraint {
-	float curr=0;
+	float length=0;
 
 	LineConstraint(vf2d* a_, vf2d* b_) {
 		id=LINE_CST, a=a_, b=b_;
@@ -69,7 +69,7 @@ struct LineConstraint : public PointConstraint {
 	}
 
 	void update() {
-		curr=(*a-*b).mag();
+		length=(*a-*b).mag();
 	}
 
 	void solve() override {
@@ -79,7 +79,7 @@ struct LineConstraint : public PointConstraint {
 		if(mag<epsilon) return;
 
 		vf2d norm=sub/mag;
-		float diff=(curr-mag)/2;
+		float diff=(length-mag)/2;
 		*a+=diff*norm;
 		*b-=diff*norm;
 	}

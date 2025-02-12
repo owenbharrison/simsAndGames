@@ -226,7 +226,7 @@ struct Example : olc::PixelGameEngine {
 			ref_lines.clear();
 		}
 
-		//add point constraints
+		//add vertical constraint
 		if(GetKey(olc::Key::V).bPressed) {
 			for(auto ait=ref_pts.begin(); ait!=ref_pts.end(); ait++) {
 				for(auto bit=std::next(ait); bit!=ref_pts.end(); bit++) {
@@ -238,6 +238,7 @@ struct Example : olc::PixelGameEngine {
 			}
 		}
 
+		//add horizontal constraint
 		if(GetKey(olc::Key::H).bPressed) {
 			for(auto ait=ref_pts.begin(); ait!=ref_pts.end(); ait++) {
 				for(auto bit=std::next(ait); bit!=ref_pts.end(); bit++) {
@@ -249,6 +250,7 @@ struct Example : olc::PixelGameEngine {
 			}
 		}
 
+		//add line
 		if(GetKey(olc::Key::L).bPressed) {
 			size_t num=ref_pts.size();
 			if(ref_pts.size()==2) {
@@ -261,7 +263,7 @@ struct Example : olc::PixelGameEngine {
 			}
 		}
 
-		//add equal constraints
+		//add equal constraint
 		if(GetKey(olc::Key::E).bPressed) {
 			for(auto ait=ref_lines.begin(); ait!=ref_lines.end(); ait++) {
 				for(auto bit=std::next(ait); bit!=ref_lines.end(); bit++) {
@@ -270,6 +272,21 @@ struct Example : olc::PixelGameEngine {
 						geom_constraints.emplace_back(equal);
 					} else std::cout<<"constraint already exists.\n";
 				}
+			}
+		}
+
+		//add angle constraint
+		if(GetKey(olc::Key::D).bPressed) {
+			int num=ref_lines.size();
+			if(num==2) {
+				GeometryConstraint* angle=new AngleConstraint(ref_lines.front(), ref_lines.back());
+				if(unique(angle)) {
+					geom_constraints.emplace_back(angle);
+				} else std::cout<<"constraint already exists.\n";
+			} else {
+				std::cout<<"cannot dimension "<<num<<" lines";
+				if(num!=1) std::cout<<'s';
+				std::cout<<'\n';
 			}
 		}
 

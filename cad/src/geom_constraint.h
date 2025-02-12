@@ -1,8 +1,19 @@
 #pragma once
-#ifndef LINE_CONSTRAINT_H
-#define LINE_CONSTRAINT_H
+#ifndef GEOM_CONSTRAINT_H
+#define GEOM_CONSTRAINT_H
 
 #include "point_constraint.h"
+
+#include <cmath>
+
+//rotation matrix
+vf2d rotate(const vf2d& v, float f) {
+	float c=std::cosf(f), s=std::sinf(f);
+	return {
+		v.x*c-v.y*s,
+		v.x*s+v.y*c
+	};
+}
 
 struct GeometryConstraint {
 protected:
@@ -30,10 +41,7 @@ public:
 };
 
 #define EQUAL_CST 1
-class EqualConstraint : public GeometryConstraint {
-	EqualConstraint();
-
-public:
+struct EqualConstraint : GeometryConstraint {
 	EqualConstraint(LineConstraint* a_, LineConstraint* b_) { id=EQUAL_CST, a=a_, b=b_; }
 
 	EqualConstraint* clone() const override {
@@ -41,10 +49,52 @@ public:
 	}
 
 	void solve() override {
-		float& len_a=a->curr;
-		float& len_b=b->curr;
+		float& len_a=a->length;
+		float& len_b=b->length;
 		float mid=(len_a+len_b)/2;
 		len_a=len_b=mid;
 	}
 };
-#endif//LINE_CONSTRAINT_H
+
+#define ANGLE_CST 2
+struct AngleConstraint : GeometryConstraint {
+	float angle=0;
+
+	AngleConstraint(LineConstraint* a_, LineConstraint* b_) {
+		id=ANGLE_CST, a=a_, b=b_;
+		update();
+	}
+
+	AngleConstraint* clone() const override {
+		return new AngleConstraint(*this);
+	}
+
+	void update() {
+		vf2d ba=*a->b-*a->a;
+		vf2d cd=*b->b-*b->a;
+		//convert to degrees later.
+		angle=std::acosf(ba.dot(cd)/ba.mag()/cd.mag());
+	}
+
+	void solve() override {
+		vf2d& p_a=*a->a;
+		vf2d& p_b=*a->b;
+		vf2d& p_c=*b->a;
+		vf2d& p_d=*b->b;
+		//get current angle
+		vf2d ab=p_b-p_a;
+		vf2d cd=p_d-p_c;
+		float curr=std::acosf(ab.dot(cd)/ab.mag()/cd.mag());
+		//where do they need to be?
+		float diff=(angle-curr)/2;
+		//rot a,b about their mid
+		vf2d m_ab=(p_a+p_b)/2;
+		p_a=m_ab+rotate(p_a-m_ab, -diff);
+		p_b=m_ab+rotate(p_b-m_ab, -diff);
+		//rot c,d about their mid
+		vf2d m_cd=(p_c+p_d)/2;
+		p_c=m_cd+rotate(p_c-m_cd, diff);
+		p_d=m_cd+rotate(p_d-m_cd, diff);
+	}
+};
+#endif//GEOM_CONSTRAINT_H
