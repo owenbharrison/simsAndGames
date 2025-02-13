@@ -34,6 +34,7 @@ struct Example : olc::PixelGameEngine {
 
 	//points to work with
 	const float rad=2;
+	const float select_rad=2*rad;
 	vf2d* drag_pt=nullptr;
 	std::list<vf2d*> points;
 
@@ -67,20 +68,167 @@ struct Example : olc::PixelGameEngine {
 		return true;
 	}
 
-	void solve() {
-		//solve all constraints
-		for(int i=0; i<200; i++) {
-			//dist constraints...
-			for(const auto& c:geom_constraints) c->solve();
-			for(const auto& c:point_constraints) c->solve();
-		}
-	}
-
 	bool OnUserUpdate(float dt) override {
 		mouse_pos=GetMousePos();
 
+#pragma region ADDITION
 		if(GetKey(olc::Key::A).bPressed) points.emplace_back(new vf2d(mouse_pos));
 
+		//add vertical constraint
+		if(GetKey(olc::Key::V).bPressed) {
+			for(auto ait=ref_pts.begin(); ait!=ref_pts.end(); ait++) {
+				for(auto bit=std::next(ait); bit!=ref_pts.end(); bit++) {
+					PointConstraint* vert=new VerticalConstraint(*ait, *bit);
+					if(unique(vert)) {
+						point_constraints.emplace_back(vert);
+					} else delete vert;
+				}
+			}
+		}
+
+		//add horizontal constraint
+		if(GetKey(olc::Key::H).bPressed) {
+			for(auto ait=ref_pts.begin(); ait!=ref_pts.end(); ait++) {
+				for(auto bit=std::next(ait); bit!=ref_pts.end(); bit++) {
+					PointConstraint* horiz=new HorizontalConstraint(*ait, *bit);
+					if(unique(horiz)) {
+						point_constraints.emplace_back(horiz);
+					} else delete horiz;
+				}
+			}
+		}
+
+		//add line
+		if(GetKey(olc::Key::L).bPressed) {
+			//make all possible connections
+			for(auto ait=ref_pts.begin(); ait!=ref_pts.end(); ait++) {
+				for(auto bit=std::next(ait); bit!=ref_pts.end(); bit++) {
+					PointConstraint* line=new LineConstraint(*ait, *bit);
+					if(unique(line)) {
+						point_constraints.emplace_back(line);
+					} else delete line;
+				}
+			}
+		}
+
+		//add equal constraint
+		if(GetKey(olc::Key::E).bPressed) {
+			for(auto ait=ref_lines.begin(); ait!=ref_lines.end(); ait++) {
+				for(auto bit=std::next(ait); bit!=ref_lines.end(); bit++) {
+					GeometryConstraint* equal=new EqualConstraint(*ait, *bit);
+					if(unique(equal)) {
+						geom_constraints.emplace_back(equal);
+					} else delete equal;
+				}
+			}
+		}
+
+		//add angle constraint
+		if(GetKey(olc::Key::D).bPressed) {
+			int num=ref_lines.size();
+			if(num==2) {
+				GeometryConstraint* angle=new AngleConstraint(ref_lines.front(), ref_lines.back());
+				if(unique(angle)) {
+					geom_constraints.emplace_back(angle);
+				} else delete angle;
+			} else {
+				std::cout<<"cannot dimension "<<num<<" lines";
+				if(num!=1) std::cout<<'s';
+				std::cout<<'\n';
+			}
+		}
+#pragma endregion
+
+#pragma region SELECTION
+		//set drag pt to point under mouse
+		const auto drag_action=GetMouse(olc::Mouse::LEFT);
+		if(drag_action.bPressed) {
+			drag_pt=nullptr;
+			for(const auto& p:points) {
+				if((*p-mouse_pos).mag()<select_rad) {
+					drag_pt=p;
+					break;
+				}
+			}
+		}
+		//set to mouse on drag
+		if(drag_action.bHeld) {
+			if(drag_pt) {
+				*drag_pt=mouse_pos;
+				for(const auto& c:point_constraints) {
+					if(c->getID()!=LINE_CST) continue;
+					if(drag_pt!=c->a&&drag_pt!=c->b) continue;
+
+					//is this how you are supposed to do things?
+					dynamic_cast<LineConstraint*>(c)->update();
+				}
+			}
+		}
+		//release
+		if(drag_action.bReleased) drag_pt=nullptr;
+
+		const auto select_action=GetMouse(olc::Mouse::RIGHT);
+		if(select_action.bPressed) {
+			bool pt_selected=false;
+			for(const auto& p:points) {
+				if((*p-mouse_pos).mag()<select_rad) {
+					pt_selected=true;
+
+					bool unique=true;
+					for(auto it=ref_pts.begin(); it!=ref_pts.end(); it++) {
+						if(*it==p) {
+							//unselect
+							ref_pts.erase(it);
+
+							unique=false;
+							break;
+						}
+					}
+					//add if new
+					if(unique) ref_pts.emplace_back(p);
+				}
+			}
+			//ensure no selection overlap	
+			if(!pt_selected) for(const auto& c:point_constraints) {
+				if(c->getID()!=LINE_CST) continue;
+
+				//find closest point on segment
+				vf2d ba=*c->b-*c->a, pa=mouse_pos-*c->a;
+				float t=clamp(pa.dot(ba)/ba.dot(ba), 0, 1);
+				vf2d close_pt=*c->a+t*ba;
+
+				//if t close .5 -> store t
+				//if a pressed, add point + coincedent
+
+				//is it being hovered over?
+				if((close_pt-mouse_pos).mag()<select_rad) {
+					bool unique=true;
+					for(auto it=ref_lines.begin(); it!=ref_lines.end(); it++) {
+						if(*it==c) {
+							//unselect
+							ref_lines.erase(it);
+
+							unique=false;
+							break;
+						}
+					}
+					//add if new
+					if(unique) ref_lines.emplace_back(dynamic_cast<LineConstraint*>(c));
+				}
+			}
+		}
+
+		//clear selection
+		if(GetKey(olc::Key::ESCAPE).bPressed) {
+			ref_pts.clear();
+			ref_lines.clear();
+
+			//exit out early?
+			snip.clear();
+		}
+#pragma endregion
+
+#pragma region REMOVAL
 		const auto snip_action=GetKey(olc::Key::S);
 		if(snip_action.bPressed) {
 			snip.clear();
@@ -141,159 +289,20 @@ struct Example : olc::PixelGameEngine {
 
 			snip.clear();
 		}
+#pragma endregion
 
-		//set drag pt to point under mouse
-		const auto drag_action=GetMouse(olc::Mouse::LEFT);
-		if(drag_action.bPressed) {
-			drag_pt=nullptr;
-			for(const auto& p:points) {
-				if((*p-mouse_pos).mag()<rad) {
-					drag_pt=p;
-					break;
-				}
-			}
+#pragma region UPDATE
+		//solve all constraints
+		for(int i=0; i<200; i++) {
+			//dist constraints...
+			for(const auto& c:geom_constraints) c->solve();
+			for(const auto& c:point_constraints) c->solve();
 		}
-		//set to mouse on drag
-		if(drag_action.bHeld) {
-			if(drag_pt) {
-				*drag_pt=mouse_pos;
-				for(const auto& c:point_constraints) {
-					if(c->getID()!=LINE_CST) continue;
-					if(drag_pt!=c->a&&drag_pt!=c->b) continue;
-
-					//is this how you are supposed to do things?
-					dynamic_cast<LineConstraint*>(c)->update();
-				}
-			}
-		}
-		//release
-		if(drag_action.bReleased) drag_pt=nullptr;
-
-		const auto select_action=GetMouse(olc::Mouse::RIGHT);
-		if(select_action.bPressed) {
-			bool pt_selected=false;
-			for(const auto& p:points) {
-				if((*p-mouse_pos).mag()<rad) {
-					pt_selected=true;
-
-					bool unique=true;
-					for(auto it=ref_pts.begin(); it!=ref_pts.end(); it++) {
-						if(*it==p) {
-							//unselect
-							ref_pts.erase(it);
-
-							unique=false;
-							break;
-						}
-					}
-					//add if new
-					if(unique) ref_pts.emplace_back(p);
-				}
-			}
-			//ensure no selection overlap	
-			if(!pt_selected) for(const auto& c:point_constraints) {
-				if(c->getID()!=LINE_CST) continue;
-
-				//find closest point on segment
-				vf2d ba=*c->b-*c->a, pa=mouse_pos-*c->a;
-				float t=clamp(pa.dot(ba)/ba.dot(ba), 0, 1);
-				vf2d close_pt=*c->a+t*ba;
-
-				//if t close .5 -> store t
-				//if a pressed, add point + coincedent
-
-				//is it being hovered over?
-				if((close_pt-mouse_pos).mag()<rad) {
-					bool unique=true;
-					for(auto it=ref_lines.begin(); it!=ref_lines.end(); it++) {
-						if(*it==c) {
-							//unselect
-							ref_lines.erase(it);
-
-							unique=false;
-							break;
-						}
-					}
-					//add if new
-					if(unique) ref_lines.emplace_back(dynamic_cast<LineConstraint*>(c));
-				}
-			}
-		}
-
-		//clear selection
-		if(GetKey(olc::Key::ESCAPE).bPressed) {
-			ref_pts.clear();
-			ref_lines.clear();
-		}
-
-		//add vertical constraint
-		if(GetKey(olc::Key::V).bPressed) {
-			for(auto ait=ref_pts.begin(); ait!=ref_pts.end(); ait++) {
-				for(auto bit=std::next(ait); bit!=ref_pts.end(); bit++) {
-					PointConstraint* vert=new VerticalConstraint(*ait, *bit);
-					if(unique(vert)) {
-						point_constraints.emplace_back(vert);
-					} else std::cout<<"constraint already exists.\n";
-				}
-			}
-		}
-
-		//add horizontal constraint
-		if(GetKey(olc::Key::H).bPressed) {
-			for(auto ait=ref_pts.begin(); ait!=ref_pts.end(); ait++) {
-				for(auto bit=std::next(ait); bit!=ref_pts.end(); bit++) {
-					PointConstraint* horiz=new HorizontalConstraint(*ait, *bit);
-					if(unique(horiz)) {
-						point_constraints.emplace_back(horiz);
-					} else std::cout<<"constraint already exists.\n";
-				}
-			}
-		}
-
-		//add line
-		if(GetKey(olc::Key::L).bPressed) {
-			size_t num=ref_pts.size();
-			if(ref_pts.size()==2) {
-				auto a=ref_pts.front(), b=ref_pts.back();
-				PointConstraint* line=new LineConstraint(a, b);
-				if(unique(line)) {
-					point_constraints.emplace_back(line);
-					ref_pts.clear();
-				} else std::cout<<"constraint already exists.\n";
-			}
-		}
-
-		//add equal constraint
-		if(GetKey(olc::Key::E).bPressed) {
-			for(auto ait=ref_lines.begin(); ait!=ref_lines.end(); ait++) {
-				for(auto bit=std::next(ait); bit!=ref_lines.end(); bit++) {
-					GeometryConstraint* equal=new EqualConstraint(*ait, *bit);
-					if(unique(equal)) {
-						geom_constraints.emplace_back(equal);
-					} else std::cout<<"constraint already exists.\n";
-				}
-			}
-		}
-
-		//add angle constraint
-		if(GetKey(olc::Key::D).bPressed) {
-			int num=ref_lines.size();
-			if(num==2) {
-				GeometryConstraint* angle=new AngleConstraint(ref_lines.front(), ref_lines.back());
-				if(unique(angle)) {
-					geom_constraints.emplace_back(angle);
-				} else std::cout<<"constraint already exists.\n";
-			} else {
-				std::cout<<"cannot dimension "<<num<<" lines";
-				if(num!=1) std::cout<<'s';
-				std::cout<<'\n';
-			}
-		}
-
-		solve();
+#pragma endregion
 
 		//render
-		Clear(olc::GREY);
+		const olc::Pixel orange(255, 100, 0);
+		Clear(olc::Pixel(200, 200, 200));
 
 		//draw all point constraints
 		//dotted lines?
@@ -307,13 +316,9 @@ struct Example : olc::PixelGameEngine {
 			DrawLine(*c->a, *c->b, col);
 		}
 
-		//draw all line constraints
-		//for(const auto& c:line_constraints) {
-		//}
-
 		//draw selected lines
 		for(const auto& c:ref_lines) {
-			DrawLine(*c->a, *c->b, olc::BLUE);
+			DrawLine(*c->a, *c->b, orange);
 		}
 
 		//render snip
@@ -323,14 +328,14 @@ struct Example : olc::PixelGameEngine {
 			for(const auto& s:snip) {
 				if(is_first) is_first=false;
 				else {
-					DrawLine(prev, s, olc::RED);
+					DrawLine(prev, s, orange);
 
 					//render snip pts
 					for(const auto& c:point_constraints) {
 						vf2d tu=lineLineIntersection(prev, s, *c->a, *c->b);
 						if(tu.x>=0&&tu.x<=1&&tu.y>=0&&tu.y<=1) {
 							vf2d ix=prev+tu.x*(s-prev);
-							FillCircle(ix, rad, olc::DARK_GREY);
+							FillCircle(ix, rad, olc::Pixel(200, 0, 0));
 						}
 					}
 				}
@@ -345,7 +350,7 @@ struct Example : olc::PixelGameEngine {
 
 		//draw selected points
 		for(const auto& r:ref_pts) {
-			DrawCircle(*r, rad, olc::BLUE);
+			DrawCircle(*r, rad, orange);
 		}
 
 		return true;
