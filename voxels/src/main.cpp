@@ -164,8 +164,33 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//move forward, backward
 		vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_curr+=.05f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_curr-=.03f*dt*fb_dir;
+		vf3d fb_delta; bool move=false;
+		if(GetKey(olc::Key::W).bHeld) move=true, fb_delta+=5.f*dt*fb_dir;
+		if(GetKey(olc::Key::S).bHeld) move=true, fb_delta-=3.f*dt*fb_dir;
+		if(move) {
+			//find below triangle
+			float record=INFINITY;
+			const Triangle* said_tri=nullptr;
+			vf3d cam_below=cam_curr-vf3d(0, 1, 0);
+			for(const auto& tri:mesh.triangles) {
+				float t=segIntersectTri(cam_curr, cam_below, tri);
+				if(t>0&&t<record) record=t, said_tri=&tri;
+			}
+			if(said_tri) {
+				//find triangle partials
+				float mx=(said_tri->p[1].y-said_tri->p[0].y)/(said_tri->p[1].x-said_tri->p[0].x);
+				float mz=(said_tri->p[1].y-said_tri->p[0].y)/(said_tri->p[1].z-said_tri->p[0].z);
+				//find slope in walk direction
+				float fb_mag=fb_delta.mag();
+				vf3d walk=fb_delta/fb_mag;
+				float m=mx*walk.x+mz*walk.z;
+				//too steep
+				if(m>1) fb_delta*=0;
+				//move up by slope?
+				else if(m>0) fb_delta.y+=m*fb_mag+dt;
+			}
+		}
+		cam_curr+=fb_delta, cam_prev+=fb_delta;
 
 		//move left, right
 		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
