@@ -46,6 +46,8 @@ public:
 	vf2d cossin{1, 0};
 	float moment_of_inertia=1;
 
+	olc::Pixel col=olc::BLACK;
+
 	Shape() : Shape({0, 0}, 0, 1) {}
 
 	Shape(vf2d ctr, float rad, int n) {

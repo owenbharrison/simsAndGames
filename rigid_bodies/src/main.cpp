@@ -1,3 +1,10 @@
+/*todo
+	store graphics meshes on init
+	store convex collision meshes on init
+		use ear clipping triangulation?
+		how to break concave -> list<convex>?
+*/
+
 #define OLC_PGE_APPLICATION
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
@@ -18,19 +25,49 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 	std::list<vf2d> addition;
 	float addition_timer=0;
 
+	Shape* spring_shape=nullptr;
+	vf2d spring_offset;
+
 	//graphics toggles
 	bool show_bounds=false;
 	bool show_masses=false;
+	bool show_vertexes=false;
+
+	//place shapes such that their bounds lie inside the screen
+	void placeAllRandomly() {
+		for(const auto& s:shapes) {
+			//random rotation
+			s->rot=random(2*Pi);
+			//reset rot vel
+			s->old_rot=s->rot;
+
+			//aabb needs cossin
+			s->updateRot();
+			AABB box=s->getAABB();
+
+			//easier to just offset based on where it already is
+			s->pos.x+=random(-box.min.x, ScreenWidth()-box.max.x);
+			s->pos.y+=random(-box.min.y, ScreenHeight()-box.max.y);
+			//reset vel
+			s->old_pos=s->pos;
+		}
+	}
 
 	bool OnUserCreate() override {
 		srand(time(0));
 
-		shapes.emplace_back(new Shape(.5f*vf2d(ScreenWidth(), ScreenHeight()), 50, 12));
+		shapes.emplace_back(new Shape({0, 0}, 100, 16));
+		shapes.emplace_back(new Shape({0, 0}, 50, 3));
+		shapes.emplace_back(new Shape({0, 0}, 75, 4));
+
+		placeAllRandomly();
 
 		return true;
 	}
 
 	void reset() {
+		spring_shape=nullptr;
+
 		for(const auto& s:shapes) delete s;
 		shapes.clear();
 	}
@@ -48,6 +85,31 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 		//graphics toggles
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 		if(GetKey(olc::Key::M).bPressed) show_masses^=true;
+		if(GetKey(olc::Key::V).bPressed) show_vertexes^=true;
+		if(GetKey(olc::Key::R).bPressed) placeAllRandomly();
+
+		//spring interactivity
+		const auto l_mouse=GetMouse(olc::Mouse::LEFT);
+		if(l_mouse.bPressed) {
+			spring_shape=nullptr;
+			for(const auto& s:shapes) {
+				if(s->contains(mouse_pos)) {
+					spring_shape=s;
+					spring_offset=s->worldToLocal(mouse_pos);
+					break;
+				}
+			}
+		}
+		if(l_mouse.bHeld) {
+			if(spring_shape) {
+				//F=kx
+				vf2d spr_pos=spring_shape->localToWorld(spring_offset);
+				vf2d sub=mouse_pos-spr_pos;
+				//spring force proportional to shape mass
+				spring_shape->applyForce(spring_shape->mass*sub, spr_pos);
+			}
+		}
+		if(l_mouse.bReleased) spring_shape=nullptr;
 
 		//add objects
 		const auto a_key=GetKey(olc::Key::A);
@@ -80,6 +142,8 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 
 		//remove objects
 		if(GetKey(olc::Key::X).bHeld) {
+			spring_shape=nullptr;
+
 			for(auto it=shapes.begin(); it!=shapes.end();) {
 				const auto& s=*it;
 				if(s->contains(mouse_pos)) {
@@ -91,32 +155,101 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 #pragma endregion
 
 #pragma region PHYSICS
+#if 0
 		//seperating axis theorem
-		{
-			//for every shape pair
-			for(auto ait=shapes.begin(); ait!=shapes.end(); ait++) {
-				for(auto bit=std::next(ait); bit!=shapes.end(); bit++) {
-					//get combined list of axes
-					std::list<vf2d> axes;
-					for(int i=0; i<2; i++) {
-						const auto& s=*(i?ait:bit);
-						//find tangents of shape's edges
-						for(int j=0; j<s->getNum(); j++) {
-							const auto& a=s->localToWorld(s->points[j]);
-							const auto& b=s->localToWorld(s->points[(j+1)%s->getNum()]);
-							axes.emplace_back((a-b).norm());
+		for(const auto& s:shapes) s->col=olc::BLACK;
+		
+		//for every shape pair
+		for(auto ait=shapes.begin(); ait!=shapes.end(); ait++) {
+			auto& sa=*ait;
+			for(auto bit=std::next(ait); bit!=shapes.end(); bit++) {
+				auto& sb=*bit;
+
+				//get combined list of axes
+				std::list<vf2d> axes;
+				for(int j=0; j<2; j++) {
+					const auto& s=j?sa:sb;
+					//find tangents of shape's edges
+					for(int i=0; i<s->getNum(); i++) {
+						const auto& a=s->localToWorld(s->points[i]);
+						const auto& b=s->localToWorld(s->points[(i+1)%s->getNum()]);
+						axes.emplace_back((b-a).perp().norm());
+					}
+				}
+				
+				float record=INFINITY;
+
+				//for all axes
+				bool collide=true;
+				for(const auto& axis:axes) {
+					float a_min=INFINITY, a_max=-a_min;
+					float b_min=a_min, b_max=a_max;
+					int a_min_ix, a_max_ix;
+					int b_min_ix, b_max_ix;
+					//for each shape
+					for(int j=0; j<2; j++) {
+						const auto& s=j?sa:sb;
+						float& min=j?a_min:b_min;
+						float& max=j?a_max:b_max;
+						int& min_ix=j?a_min_ix:b_min_ix;
+						int& max_ix=j?a_min_ix:b_max_ix;
+						//project points onto said axis
+						for(int i=0; i<s->getNum(); i++) {
+							vf2d pt=s->localToWorld(s->points[i]);
+							float proj=pt.dot(axis);
+							if(proj<min) min=proj, min_ix=i;
+							if(proj>max) max=proj, max_ix=i;
 						}
 					}
 
-					float a_min=INFINITY, a_max=-a_min;
-					float b_min=a_min, b_max=a_max;
-					//project all points on to each axis
-					for(const auto& x:axes) {
+					//if no separation, objects DONT collide
+					if(a_max<b_min||b_max<a_min) {
+						collide=false;
+						break;
+					}
 
+					float dist=std::min(std::abs(a_max-b_min), std::abs(b_max-a_min));
+					if(dist<record) {
+						record=dist;
 					}
 				}
+			
+				//display whether colliding
+				if(collide) {
+					sa->col=olc::RED;
+					sb->col=olc::RED;
+				}
 			}
+		}
+#endif
+		{
+			struct Contact {
+				Shape* s_a, *s_b;
+				vf2d pt_a, pt_b;
+				vf2d norm;
+				float dist;
+			};
+			for(const auto& sa:shapes) {
+				for(const auto& sb:shapes) {
+					//dont check self
+					if(sb==sa) continue;
 
+					//list of both shapes' edge norms
+					std::list<vf2d> axes;
+					for(int j=0; j<2; j++) {
+						//for both shapes
+						Shape* s=j?sa:sb;
+						for(int i=0; i<s->getNum(); i++) {
+							//perpendicular vector on edge
+							const auto& a=s->localToWorld(s->points[i]);
+							const auto& b=s->localToWorld(s->points[(i+1)%s->getNum()]);
+							axes.emplace_back((a-b).norm().perp());
+						}
+					}
+
+
+				}
+			}
 		}
 
 		for(const auto& s:shapes) {
@@ -144,11 +277,22 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 		for(const auto& s:shapes) {
 			if(show_bounds) {
 				AABB box=s->getAABB();
+				bool overlaps=false;
+				for(const auto& o:shapes) {
+					if(o==s) continue;
+
+					if(box.overlaps(o->getAABB())) {
+						overlaps=true;
+						break;
+					}
+				}
+
 				vf2d tr(box.max.x, box.min.y), bl(box.min.x, box.max.y);
-				DrawLineDecal(box.min, tr, olc::RED);
-				DrawLineDecal(tr, box.max, olc::RED);
-				DrawLineDecal(box.max, bl, olc::RED);
-				DrawLineDecal(bl, box.min, olc::RED);
+				olc::Pixel col=overlaps?olc::RED:olc::GREEN;
+				DrawLineDecal(box.min, tr, col);
+				DrawLineDecal(tr, box.max, col);
+				DrawLineDecal(box.max, bl, col);
+				DrawLineDecal(bl, box.min, col);
 			}
 
 			//fill
@@ -211,7 +355,19 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 				DrawLineDecal(
 					s->localToWorld(a),
 					s->localToWorld(b),
-					olc::BLACK
+					s->col
+				);
+			}
+
+			//vertexes
+			if(show_vertexes) for(int i=0; i<s->getNum(); i++) {
+				const auto& a=s->points[i];
+				auto str=std::to_string(i);
+				vf2d offset(4*str.size(), 4);
+				DrawStringDecal(
+					s->localToWorld(a)-offset,
+					str,
+					olc::BLUE
 				);
 			}
 
@@ -219,6 +375,12 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 				DrawLineDecal(vf2d(s->pos.x-15, s->pos.y), vf2d(s->pos.x+15, s->pos.y), olc::BLACK);
 				DrawLineDecal(vf2d(s->pos.x, s->pos.y-15), vf2d(s->pos.x, s->pos.y+15), olc::BLACK);
 			}
+		}
+
+		//show spring shape
+		if(spring_shape) {
+			vf2d spr_pos=spring_shape->localToWorld(spring_offset);
+			DrawLineDecal(spr_pos, mouse_pos, olc::MAGENTA);
 		}
 #pragma endregion
 
