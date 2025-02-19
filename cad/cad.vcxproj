@@ -142,6 +142,7 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\aabb.h" />
     <ClInclude Include="src\geom_constraint.h" />
     <ClInclude Include="src\point_constraint.h" />
   </ItemGroup>

@@ -6,6 +6,8 @@
 
 #include <cmath>
 
+static constexpr float Epsilon=1e-6f;
+
 //rotation matrix
 vf2d rotate(const vf2d& v, float f) {
 	float c=std::cosf(f), s=std::sinf(f);
@@ -70,10 +72,16 @@ struct AngleConstraint : GeometryConstraint {
 	}
 
 	void update() {
-		vf2d ba=*a->b-*a->a;
+		//sort points
+
+		vf2d ab=*a->b-*a->a;
 		vf2d cd=*b->b-*b->a;
+		float denom=ab.mag()*cd.mag();
+		if(denom<Epsilon) return;
+		float curr=std::acosf(ab.dot(cd)/denom);
+
 		//convert to degrees later.
-		angle=std::acosf(ba.dot(cd)/ba.mag()/cd.mag());
+		angle=std::acosf(ab.dot(cd)/denom);
 	}
 
 	void solve() override {
@@ -84,13 +92,18 @@ struct AngleConstraint : GeometryConstraint {
 		//get current angle
 		vf2d ab=p_b-p_a;
 		vf2d cd=p_d-p_c;
-		float curr=std::acosf(ab.dot(cd)/ab.mag()/cd.mag());
+		float denom=ab.mag()*cd.mag();
+		if(denom<Epsilon) return;
+		float curr=std::acosf(ab.dot(cd)/denom);
+
 		//where do they need to be?
 		float diff=(angle-curr)/2;
+
 		//rot a,b about their mid
 		vf2d m_ab=(p_a+p_b)/2;
 		p_a=m_ab+rotate(p_a-m_ab, -diff);
 		p_b=m_ab+rotate(p_b-m_ab, -diff);
+
 		//rot c,d about their mid
 		vf2d m_cd=(p_c+p_d)/2;
 		p_c=m_cd+rotate(p_c-m_cd, diff);
