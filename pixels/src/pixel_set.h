@@ -468,6 +468,20 @@ public:
 
 		return pixelsets;
 	}
+
+	float raycast(vf2d s1, vf2d s2) {
+		//find bounds of segment
+		AABB seg_box;
+		seg_box.fitToEnclose(s1);
+		seg_box.fitToEnclose(s2);
+		//make sure they overlap
+		if(!seg_box.overlaps(getAABB())) return false;
+		
+		s1=worldToLocal(s1);
+		s2=worldToLocal(s2);
+
+
+	}
 #pragma endregion
 
 #pragma region GRAPHICS

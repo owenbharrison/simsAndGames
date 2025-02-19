@@ -1,11 +1,12 @@
 /*todo:
 physics
 	collisions
-		SAT
+		pen depth = dda from COM to collision
 	sounds?
 graphics
 	add particles
 	add textures
+	remove collision view?
 add more pixelset constructors...
 */
 
@@ -400,6 +401,7 @@ struct PixelGame : olc::PixelGameEngine {
 				"  M      toggle mass view\n"
 				"  O      toggle outline view\n"
 				"  P      toggle physics update\n"
+				"  V      view relative pixel velocity\n"
 				"  ESC    toggle integrated console\n"
 				"  HOME   reset zoom and pan\n";
 
@@ -825,6 +827,23 @@ struct PixelGame : olc::PixelGameEngine {
 						vf2d pos=p->localToWorld(vf2d(i, j));
 						vf2d size(p->scale, p->scale);
 						tv.DrawRotatedDecal(pos, rect_decal, p->rot, {0, 0}, size, olc::GREEN);
+
+						//show relative velocity of hover block
+						if(GetKey(olc::Key::V).bHeld) {
+							tvDrawThickLine(wld_mouse_pos, p->pos, 1, olc::BLACK);
+							tvFillCircleDecal(p->pos, 2.f, olc::BLUE);
+							
+							vf2d lin_vel=(p->pos-p->old_pos)/dt;
+							//mag(V_t)=wr
+							//dir(V_t)=perp(r)
+							//V_t=w*perp(r)
+							vf2d sub=wld_mouse_pos-p->pos;
+							float rot_vel=(p->rot-p->old_rot)/dt;
+							vf2d tang_vel=rot_vel*sub.perp();
+							vf2d vel=lin_vel+tang_vel;
+							tvDrawThickLine(wld_mouse_pos, wld_mouse_pos+vel, 1, olc::GREEN);
+							tvFillCircleDecal(wld_mouse_pos, 2.f, olc::RED);
+						}
 					}
 				}
 			}
@@ -842,7 +861,6 @@ struct PixelGame : olc::PixelGameEngine {
 				auto inertia_str=std::to_string(int(p->moment_of_inertia));
 				tv.DrawStringDecal(pos+vf2d(0, 10), inertia_str, olc::BLACK);
 			}
-#pragma endregion
 		}
 
 		//show spring set
@@ -860,6 +878,7 @@ struct PixelGame : olc::PixelGameEngine {
 			DrawThickLine(br, bl, 3, olc::RED);
 			DrawThickLine(bl, tl, 3, olc::RED);
 		}
+#pragma endregion
 
 		if(to_time) {
 			auto end=std::chrono::steady_clock::now();
