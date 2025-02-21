@@ -46,8 +46,6 @@ struct VoxelGame : olc::PixelGameEngine {
 	Mesh mesh;
 	Mat4 mat_proj;
 
-	vf3d cam_prev, cam_curr, cam_acc;
-
 	vf3d cam_pos;
 	float cam_yaw=0;
 	float cam_pitch=0;
@@ -59,31 +57,26 @@ struct VoxelGame : olc::PixelGameEngine {
 
 	bool OnUserCreate() override {
 		mat_proj=Mat4::makeProj(90.f, float(ScreenHeight())/ScreenWidth(), .1f, 1000.f);
+		
+		auto time0=std::chrono::steady_clock::now();
+		Mesh m_teapot=Mesh::loadFromOBJ("assets/teapot.txt");
+		m_teapot.normalize(10);
+		auto time1=std::chrono::steady_clock::now();
+		auto dur0=std::chrono::duration_cast<std::chrono::microseconds>(time1-time0).count();
+		std::cout<<"load mesh: "<<dur0<<"us ("<<dur0/1000.f<<"ms)\n";
 
-		using namespace std::chrono;
-		auto load_start=high_resolution_clock::now();
-		Mesh dragon=Mesh::loadFromOBJ("assets/mountains.txt");
-		auto load_end=high_resolution_clock::now();
-		dragon.normalize(100);
-		auto load_dur=duration_cast<microseconds>(load_end-load_start);
-		std::cout<<"load: "<<load_dur.count()<<"us\n";
-		mesh=dragon;
+		auto time2=std::chrono::steady_clock::now();
+		VoxelSet v_teapot=meshToVoxels(m_teapot, .5f);
+		v_teapot.updateTypes();
+		auto time3=std::chrono::steady_clock::now();
+		auto dur1=std::chrono::duration_cast<std::chrono::microseconds>(time3-time2).count();
+		std::cout<<"voxelize: "<<dur1<<"us ("<<dur1/1000.f<<"ms)\n";
 
-		/*
-		auto voxel_start=high_resolution_clock::now();
-		VoxelSet v=meshToVoxels(dragon, .2f);
-		auto voxel_end=high_resolution_clock::now();
-		v.updateTypes();
-		auto voxel_dur=duration_cast<microseconds>(voxel_end-voxel_start);
-		std::cout<<"voxel: "<<voxel_dur.count()<<"us\n";
-
-		auto mesh_start=high_resolution_clock::now();
-		mesh=voxelsToMesh(v);
-		auto mesh_end=high_resolution_clock::now();
-		mesh.normalize(10);
-		auto mesh_dur=duration_cast<microseconds>(mesh_end-mesh_start);
-		std::cout<<"mesh: "<<mesh_dur.count()<<"us\n";
-		*/
+		auto time4=std::chrono::steady_clock::now();
+		mesh=voxelsToMesh(v_teapot);
+		auto time5=std::chrono::steady_clock::now();
+		auto dur2=std::chrono::duration_cast<std::chrono::microseconds>(time5-time4).count();
+		std::cout<<"remesh: "<<dur2<<"us ("<<dur2/1000.f<<"ms)\n";
 
 		light_pos=cam_pos;
 
@@ -142,10 +135,6 @@ struct VoxelGame : olc::PixelGameEngine {
 
 #pragma region MOVEMENT
 		//add mouse later
-		if(GetKey(olc::Key::R).bPressed) {
-			cam_prev={0, 0, 0};
-			cam_curr={0, 0, 0};
-		}
 
 		//look up,down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
@@ -157,109 +146,26 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
 		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
 
-		//jumping
-		if(GetKey(olc::Key::SPACE).bHeld) {
-			cam_prev.y=cam_curr.y-.1f;
-		}
+		//move up, down
+		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 		//move forward, backward
 		vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
-		vf3d fb_delta; bool move=false;
-		if(GetKey(olc::Key::W).bHeld) move=true, fb_delta+=5.f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) move=true, fb_delta-=3.f*dt*fb_dir;
-		if(move) {
-			//find below triangle
-			float record=INFINITY;
-			const Triangle* said_tri=nullptr;
-			vf3d cam_below=cam_curr-vf3d(0, 1, 0);
-			for(const auto& tri:mesh.triangles) {
-				float t=segIntersectTri(cam_curr, cam_below, tri);
-				if(t>0&&t<record) record=t, said_tri=&tri;
-			}
-			if(said_tri) {
-				//find triangle partials
-				float mx=(said_tri->p[1].y-said_tri->p[0].y)/(said_tri->p[1].x-said_tri->p[0].x);
-				float mz=(said_tri->p[1].y-said_tri->p[0].y)/(said_tri->p[1].z-said_tri->p[0].z);
-				//find slope in walk direction
-				float fb_mag=fb_delta.mag();
-				vf3d walk=fb_delta/fb_mag;
-				float m=mx*walk.x+mz*walk.z;
-				//too steep
-				if(m>1) fb_delta*=0;
-				//move up by slope?
-				else if(m>0) fb_delta.y+=m*fb_mag+dt;
-			}
-		}
-		cam_curr+=fb_delta, cam_prev+=fb_delta;
+		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
 		//move left, right
 		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_curr+=.04f*dt*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_curr-=.04f*dt*lr_dir;
+		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
 
-		if(GetKey(olc::Key::ENTER).bHeld) light_pos=cam_curr;
+		if(GetKey(olc::Key::ENTER).bHeld) light_pos=cam_pos;
 
 		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
-
-		if(GetKey(olc::Key::HOME).bPressed) {
-			//math things
-			//aabb things...
-		}
-#pragma endregion
-
-#pragma region PHYSICS
-		{
-			//apply forces
-			//gravity
-			cam_acc+={0, -9.8, 0};
-
-			//update position storing
-			vf3d cam_vel=cam_curr-cam_prev;
-			cam_prev=cam_curr;
-
-			//verlet integration
-			cam_curr+=cam_vel+cam_acc*dt*dt;
-
-			//reset forces
-			cam_acc={0, 0, 0};
-		}
-#pragma endregion
-
-#pragma region COLLISION
-		{
-			//first find bounds of movement
-			AABB3 seg_box;
-			seg_box.fitToEnclose(cam_prev);
-			seg_box.fitToEnclose(cam_curr);
-
-			vf3d cam_vel=cam_curr-cam_prev;
-
-			//check every tri in mesh
-			for(const auto& tri:mesh.triangles) {
-				//broad phase detection
-				if(!seg_box.overlaps(tri.getAABB())) continue;
-
-				//narrow phase detection
-				float t=segIntersectTri(cam_prev, cam_curr, tri);
-				if(t>0&&t<1) {
-					//linearly interpolate to find point along segment
-					vf3d ix=cam_prev+t*(cam_curr-cam_prev);
-
-					//resolve
-					//slightly above surface
-					cam_curr=ix+vf3d(0, .001f, 0);
-					cam_prev=cam_curr;
-					//cam_curr-reflect(cam_vel, tri.getNorm());
-					break;
-				}
-			}
-		}
 #pragma endregion
 
 #pragma region GEOMETRY AND CLIPPING
-		//elevate camera from feet
-		cam_pos=cam_curr+vf3d(0, 1, 0);
-
 		const vf3d up(0, 1, 0);
 		vf3d look_dir(
 			std::sinf(cam_yaw)*std::cosf(cam_pitch),
