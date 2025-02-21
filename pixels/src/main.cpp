@@ -39,6 +39,7 @@ struct PixelGame : olc::PixelGameEngine {
 	bool show_grids=false;
 	bool show_mass=false;
 	bool show_outlines=true;
+	bool show_ticks=false;
 
 	bool update_phys=true;
 
@@ -247,8 +248,7 @@ struct PixelGame : olc::PixelGameEngine {
 		std::string filename;
 		line_str>>filename;
 		if(filename.empty()) {
-			std::cout<<"no filename. try using:\n"
-				"  export <filename>\n";
+			std::cout<<"no filename. try using:\n  export <filename>\n";
 
 			return false;
 		}
@@ -288,8 +288,7 @@ struct PixelGame : olc::PixelGameEngine {
 		std::string filename;
 		line_str>>filename;
 		if(filename.empty()) {
-			std::cout<<"no filename. try using:\n"
-				"  import <filename>\n";
+			std::cout<<"no filename. try using:\n  import <filename>\n";
 
 			return false;
 		}
@@ -400,6 +399,7 @@ struct PixelGame : olc::PixelGameEngine {
 				"  G      toggle local grids view\n"
 				"  M      toggle mass view\n"
 				"  O      toggle outline view\n"
+				"  T      toggle grid ticks\n"
 				"  P      toggle physics update\n"
 				"  V      view relative pixel velocity\n"
 				"  ESC    toggle integrated console\n"
@@ -438,7 +438,7 @@ struct PixelGame : olc::PixelGameEngine {
 #pragma endregion
 
 #pragma region RENDER HELPERS
-	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col=olc::WHITE) {
+	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
 		olc::vf2d sub=b-a;
 		float len=sub.mag();
 		olc::vf2d tang=(sub/len).perp();
@@ -447,7 +447,7 @@ struct PixelGame : olc::PixelGameEngine {
 		DrawRotatedDecal(a-rad*tang, rect_decal, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void tvDrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col=olc::WHITE) {
+	void tvDrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
 		olc::vf2d sub=b-a;
 		float len=sub.mag();
 		olc::vf2d tang=(sub/len).perp();
@@ -456,7 +456,7 @@ struct PixelGame : olc::PixelGameEngine {
 		tv.DrawRotatedDecal(a-rad*tang, rect_decal, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void tvFillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col=olc::WHITE) {
+	void tvFillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
 		olc::vf2d offset(rad, rad);
 		olc::vf2d scale{2*rad/circle_sprite->width, 2*rad/circle_sprite->width};
 		tv.DrawDecal(pos-offset, circle_decal, scale, col);
@@ -479,9 +479,10 @@ struct PixelGame : olc::PixelGameEngine {
 			if(GetMouseWheel()<0) tv.ZoomAtScreenPos(1/1.07f, scr_mouse_pos);
 
 			//panning
-			if(GetMouse(olc::Mouse::MIDDLE).bPressed) tv.StartPan(scr_mouse_pos);
-			if(GetMouse(olc::Mouse::MIDDLE).bHeld) tv.UpdatePan(scr_mouse_pos);
-			if(GetMouse(olc::Mouse::MIDDLE).bReleased) tv.EndPan(scr_mouse_pos);
+			const auto middle_mouse=GetMouse(olc::Mouse::MIDDLE);
+			if(middle_mouse.bPressed) tv.StartPan(scr_mouse_pos);
+			if(middle_mouse.bHeld) tv.UpdatePan(scr_mouse_pos);
+			if(middle_mouse.bReleased) tv.EndPan(scr_mouse_pos);
 			if(GetKey(olc::Key::HOME).bPressed) {
 				tv.SetWorldOffset({0, 0});
 				tv.SetWorldScale({1, 1});
@@ -654,6 +655,7 @@ struct PixelGame : olc::PixelGameEngine {
 			if(GetKey(olc::Key::M).bPressed) show_mass^=true;
 			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
 			if(GetKey(olc::Key::P).bPressed) update_phys^=true;
+			if(GetKey(olc::Key::T).bPressed) show_ticks^=true;
 		}
 
 		//open and close the integrated console
@@ -715,16 +717,30 @@ struct PixelGame : olc::PixelGameEngine {
 			for(int i=i_s; i<=i_e; i++) {
 				float x=grid_spacing*i;
 				vf2d top{x, tl.y}, btm{x, br.y};
-				if(i%5==0) tvDrawThickLine(top, btm, 3, olc::GREY);
-				else tv.DrawLineDecal(top, btm, olc::GREY);
+				if(i%5==0) {//major tick
+					tvDrawThickLine(top, btm, 3, olc::GREY);
+					if(show_ticks) {
+						auto str=std::to_string(int(x));
+						vf2d offset(4*str.length(), 8);
+						tv.FillRectDecal(btm-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
+						tv.DrawStringDecal(btm-offset, str, olc::BLACK);
+					}
+				} else tv.DrawLineDecal(top, btm, olc::GREY);
 			}
 
 			//horiz
 			for(int j=j_s; j<=j_e; j++) {
 				float y=grid_spacing*j;
 				vf2d lft{tl.x, y}, rgt{br.x, y};
-				if(j%5==0) tvDrawThickLine(lft, rgt, 3, olc::GREY);
-				else tv.DrawLineDecal(lft, rgt, olc::GREY);
+				if(j%5==0) {//major ticks
+					tvDrawThickLine(lft, rgt, 3, olc::GREY);
+					if(show_ticks) {
+						auto str=std::to_string(int(y));
+						vf2d offset(0, 4);
+						tv.FillRectDecal(lft-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
+						tv.DrawStringDecal(lft-offset, str, olc::BLACK);
+					}
+				} else tv.DrawLineDecal(lft, rgt, olc::GREY);
 			}
 		}
 
@@ -772,17 +788,23 @@ struct PixelGame : olc::PixelGameEngine {
 			if(show_grids) {
 				//draw "vertical" ticks
 				for(int i=0; i<=p->getW(); i++) {
-					tv.DrawLineDecal(p->localToWorld(vf2d(i, 0)), p->localToWorld(vf2d(i, p->getH())), olc::DARK_GREY);
+					vf2d btm=p->localToWorld(vf2d(i, 0));
+					vf2d top=p->localToWorld(vf2d(i, p->getH()));
+					tv.DrawLineDecal(btm, top, olc::DARK_GREY);
 				}
 
 				//draw "horizontal" ticks
 				for(int j=0; j<=p->getH(); j++) {
-					tv.DrawLineDecal(p->localToWorld(vf2d(0, j)), p->localToWorld(vf2d(p->getW(), j)), olc::DARK_GREY);
+					vf2d lft=p->localToWorld(vf2d(0, j));
+					vf2d rgt=p->localToWorld(vf2d(p->getW(), j));
+					tv.DrawLineDecal(lft, rgt, olc::DARK_GREY);
 				}
 
 				//draw axes
-				tvDrawThickLine(p->localToWorld(vf2d(-1, 0)), p->localToWorld(vf2d(p->getW()+1, 0)), .13f*p->scale, olc::BLACK);
-				tvDrawThickLine(p->localToWorld(vf2d(0, -1)), p->localToWorld(vf2d(0, p->getH()+1)), .13f*p->scale, olc::BLACK);
+				vf2d xs=p->localToWorld(vf2d(-1, 0)), xe=p->localToWorld(vf2d(p->getW()+1, 0));
+				vf2d ys=p->localToWorld(vf2d(0, -1)), ye=p->localToWorld(vf2d(0, p->getH()+1));
+				tvDrawThickLine(xs, xe, .13f*p->scale, olc::BLACK);
+				tvDrawThickLine(ys, ye, .13f*p->scale, olc::BLACK);
 			}
 
 			//render meshes
@@ -832,7 +854,7 @@ struct PixelGame : olc::PixelGameEngine {
 						if(GetKey(olc::Key::V).bHeld) {
 							tvDrawThickLine(wld_mouse_pos, p->pos, 1, olc::BLACK);
 							tvFillCircleDecal(p->pos, 2.f, olc::BLUE);
-							
+
 							vf2d lin_vel=(p->pos-p->old_pos)/dt;
 							//mag(V_t)=wr
 							//dir(V_t)=perp(r)
@@ -863,6 +885,11 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 		}
 
+		if(GetKey(olc::Key::E).bHeld) {
+			tv.FillRectDecal(wld_mouse_pos, {1, 1});
+		}
+#pragma endregion
+
 		//show spring set
 		if(spring_set) {
 			vf2d spr_pos=spring_set->localToWorld(spring_offset);
@@ -878,7 +905,6 @@ struct PixelGame : olc::PixelGameEngine {
 			DrawThickLine(br, bl, 3, olc::RED);
 			DrawThickLine(bl, tl, 3, olc::RED);
 		}
-#pragma endregion
 
 		if(to_time) {
 			auto end=std::chrono::steady_clock::now();

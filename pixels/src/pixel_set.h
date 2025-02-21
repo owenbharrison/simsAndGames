@@ -264,7 +264,7 @@ public:
 			RIGHT=0b0010,
 			BOTTOM=0b0100,
 			TOP=0b1000;
-		auto getCode=[this] (int x, int y) {
+		auto getCode=[this](int x, int y) {
 			int code=INSIDE;
 			if(x<0) code|=LEFT;
 			else if(x>w) code|=RIGHT;
@@ -320,7 +320,7 @@ public:
 
 		//rasterize EMPTY line
 		bool edited=false;
-		auto edit=[this, &edited] (int x, int y) {
+		auto edit=[this, &edited](int x, int y) {
 			if(inRangeX(x)&&inRangeY(y)) {
 				auto& curr=grid[ix(x, y)];
 				if(curr!=PixelSet::Empty) {
@@ -469,6 +469,7 @@ public:
 		return pixelsets;
 	}
 
+	//dda algorithm
 	float raycast(vf2d s1, vf2d s2) {
 		//find bounds of segment
 		AABB seg_box;
@@ -476,11 +477,9 @@ public:
 		seg_box.fitToEnclose(s2);
 		//make sure they overlap
 		if(!seg_box.overlaps(getAABB())) return false;
-		
+
 		s1=worldToLocal(s1);
 		s2=worldToLocal(s2);
-
-
 	}
 #pragma endregion
 
@@ -547,7 +546,7 @@ public:
 	//how to make this smaller?
 	void updateOutlines() {
 		clearOutlines();
-		
+
 		bool* to_line=new bool[w*h];
 		bool* lined=new bool[w*h];
 
