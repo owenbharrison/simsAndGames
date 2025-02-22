@@ -437,6 +437,210 @@ struct PixelGame : olc::PixelGameEngine {
 	}
 #pragma endregion
 
+	void handleUserInput(float dt) {
+		//zooming
+		if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, scr_mouse_pos);
+		if(GetMouseWheel()<0) tv.ZoomAtScreenPos(1/1.07f, scr_mouse_pos);
+
+		//panning
+		const auto middle_mouse=GetMouse(olc::Mouse::MIDDLE);
+		if(middle_mouse.bPressed) tv.StartPan(scr_mouse_pos);
+		if(middle_mouse.bHeld) tv.UpdatePan(scr_mouse_pos);
+		if(middle_mouse.bReleased) tv.EndPan(scr_mouse_pos);
+		if(GetKey(olc::Key::HOME).bPressed) {
+			tv.SetWorldOffset({0, 0});
+			tv.SetWorldScale({1, 1});
+		}
+
+		//mouse grabbing
+		const auto left_mouse=GetMouse(olc::Mouse::LEFT);
+		if(left_mouse.bPressed) {
+			drag_start=wld_mouse_pos;
+			//which dragset is the mouse on?
+			drag_set=nullptr;
+			for(const auto& p:pixelsets) {
+				//is mouse in bounds?
+				if(!p->getAABB().contains(wld_mouse_pos)) continue;
+
+				//are local coords valid?
+				vf2d ij=p->worldToLocal(wld_mouse_pos);
+				int i=std::floor(ij.x), j=std::floor(ij.y);
+				if(!p->inRangeX(i)||!p->inRangeY(j)) continue;
+
+				//is the block solid?
+				if((*p)(i, j)!=PixelSet::Empty) {
+					drag_set=p;
+					break;
+				}
+			}
+		}
+		if(left_mouse.bHeld) {
+			//update dragset pos
+			if(drag_set) {
+				drag_set->pos+=wld_mouse_pos-drag_start;
+				//reset vel?
+				drag_set->old_pos=drag_set->pos;
+			}
+			drag_start=wld_mouse_pos;
+		}
+		if(left_mouse.bReleased) {
+			//let go of that sucker
+			drag_set=nullptr;
+		}
+
+		//spring interactivity
+		const auto right_mouse=GetMouse(olc::Mouse::RIGHT);
+		if(right_mouse.bPressed) {
+			spring_set=nullptr;
+			for(const auto& p:pixelsets) {
+				//is mouse in pixelset bounds?
+				if(!p->getAABB().contains(wld_mouse_pos)) continue;
+
+				//is local point in bounds?
+				vf2d ij=p->worldToLocal(wld_mouse_pos);
+				int i=std::floor(ij.x), j=std::floor(ij.y);
+				if(!p->inRangeX(i)||!p->inRangeY(j)) continue;
+
+				//ensure local coordinate a solid block
+				if((*p)(i, j)==PixelSet::Empty) continue;
+
+				//store the offset and the pixelset
+				spring_offset=ij;
+				spring_set=p;
+				break;
+			}
+		}
+		if(right_mouse.bHeld) {
+			if(spring_set) {
+				//F=kx
+				vf2d spr_pos=spring_set->localToWorld(spring_offset);
+				vf2d sub=wld_mouse_pos-spr_pos;
+				//spring force proportional to pixelset mass
+				spring_set->applyForce(spring_set->total_mass*sub, spr_pos);
+			}
+		}
+		if(right_mouse.bReleased) spring_set=nullptr;
+
+		//add objects
+		const auto a_key=GetKey(olc::Key::A);
+		if(a_key.bPressed) addition.clear();
+		//every now and then...
+		if(addition_timer<0) {
+			addition_timer=.05f;
+
+			if(a_key.bHeld) {
+				//dont put points too close
+				bool exist=false;
+				for(const auto& a:addition) {
+					if((a-wld_mouse_pos).mag()<1) {
+						exist=true;
+						break;
+					}
+				}
+				//add point to addition
+				if(!exist) addition.emplace_back(wld_mouse_pos);
+			}
+		}
+		addition_timer-=dt;
+		if(a_key.bReleased) {
+			//ensure its a polygon
+			if(addition.size()>=3) {
+				//choose random scale
+				float scale=random(1, 10);
+				PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, scale));
+
+				pixelsets.emplace_back(thing);
+			}
+			addition.clear();
+		}
+
+		//slice objects
+		const auto s_key=GetKey(olc::Key::S);
+		if(s_key.bHeld) {
+			drag_set=nullptr;
+			spring_set=nullptr;
+
+			//check every pixelset
+			for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
+				const auto& p=*it;
+				if(p->slice(prev_wld_mouse_pos, wld_mouse_pos)) {
+					//get new pixelsets
+					auto split=p->floodfill();
+
+					//deallocate and remove
+					delete p;
+					it=pixelsets.erase(it);
+
+					//allocate all new
+					for(const auto& s:split) {
+						pixelsets.emplace_front(new PixelSet(s));
+					}
+				} else it++;
+			}
+		}
+
+		//remove objects
+		if(GetKey(olc::Key::X).bPressed) {
+			drag_set=nullptr;
+			spring_set=nullptr;
+
+			for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
+
+				//is mouse in bounds?
+				const auto& p=*it;
+				if(p->getAABB().contains(wld_mouse_pos)) {
+
+					//are local coords valid?
+					vf2d ij=p->worldToLocal(wld_mouse_pos);
+					int i=ij.x, j=ij.y;
+					if(p->inRangeX(i)&&p->inRangeY(j)) {
+
+						//is the block solid?
+						if((*p)(i, j)!=PixelSet::Empty) {
+							//deallocate and remove
+							delete p;
+							it=pixelsets.erase(it);
+							continue;
+						}
+					}
+				}
+
+				it++;
+			}
+		}
+
+		//randomize rotations
+		if(GetKey(olc::Key::R).bPressed) placeAllRandomly();
+
+		//visual toggles with xor_equal
+		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		if(GetKey(olc::Key::W).bPressed) show_wireframes^=true;
+		if(GetKey(olc::Key::G).bPressed) show_grids^=true;
+		if(GetKey(olc::Key::M).bPressed) show_mass^=true;
+		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+		if(GetKey(olc::Key::P).bPressed) update_phys^=true;
+		if(GetKey(olc::Key::T).bPressed) show_ticks^=true;
+	}
+
+	void handlePhysics(float dt) {
+		//dynamics
+		for(const auto& p:pixelsets) {
+			p->applyForce(p->total_mass*gravity, p->localToWorld(p->center_of_mass));
+			p->update(dt);
+		}
+
+		//for every pixelset
+		for(const auto& p:pixelsets) {
+			//check every other
+			for(const auto& o:pixelsets) {
+				//dont check self
+				if(o==p) continue;
+
+				p->collide(*o);
+			}
+		}
+	}
+
 #pragma region RENDER HELPERS
 	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
 		olc::vf2d sub=b-a;
@@ -461,232 +665,139 @@ struct PixelGame : olc::PixelGameEngine {
 		olc::vf2d scale{2*rad/circle_sprite->width, 2*rad/circle_sprite->width};
 		tv.DrawDecal(pos-offset, circle_decal, scale, col);
 	}
+
+	void renderWorldGrid() {
+		const auto grid_spacing=50;
+
+		//screen bounds in world space, snap to nearest
+		vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
+		int i_s=std::floor(tl.x/grid_spacing), j_s=std::floor(tl.y/grid_spacing);
+		int i_e=std::ceil(br.x/grid_spacing), j_e=std::ceil(br.y/grid_spacing);
+
+		//vert
+		for(int i=i_s; i<=i_e; i++) {
+			float x=grid_spacing*i;
+			vf2d top{x, tl.y}, btm{x, br.y};
+			if(i%5==0) {//major tick
+				tvDrawThickLine(top, btm, 3, olc::GREY);
+				if(show_ticks) {
+					auto str=std::to_string(int(x));
+					vf2d offset(4*str.length(), 8);
+					tv.FillRectDecal(btm-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
+					tv.DrawStringDecal(btm-offset, str, olc::BLACK);
+				}
+			} else tv.DrawLineDecal(top, btm, olc::GREY);
+		}
+
+		//horiz
+		for(int j=j_s; j<=j_e; j++) {
+			float y=grid_spacing*j;
+			vf2d lft{tl.x, y}, rgt{br.x, y};
+			if(j%5==0) {//major ticks
+				tvDrawThickLine(lft, rgt, 3, olc::GREY);
+				if(show_ticks) {
+					auto str=std::to_string(int(y));
+					vf2d offset(0, 4);
+					tv.FillRectDecal(lft-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
+					tv.DrawStringDecal(lft-offset, str, olc::BLACK);
+				}
+			} else tv.DrawLineDecal(lft, rgt, olc::GREY);
+		}
+	}
+
+	void renderPixelSet(const PixelSet& p) {
+		//draw rectangle bounding box
+		if(show_bounds) {
+			//color if it overlaps
+			AABB box=p.getAABB();
+			olc::Pixel col=olc::GREEN;
+			for(const auto& o:pixelsets) {
+				//dont check self
+				if(o==&p) continue;
+
+				if(box.overlaps(o->getAABB())) {
+					col=olc::RED;
+					break;
+				}
+			}
+
+			const float rad=.25f*p.scale;
+			vf2d v1(box.max.x, box.min.y);
+			vf2d v2(box.min.x, box.max.y);
+			tvDrawThickLine(box.min, v1, rad, col);
+			tvFillCircleDecal(box.min, rad, col);
+			tvDrawThickLine(v1, box.max, rad, col);
+			tvFillCircleDecal(v1, rad, col);
+			tvDrawThickLine(box.max, v2, rad, col);
+			tvFillCircleDecal(box.max, rad, col);
+			tvDrawThickLine(v2, box.min, rad, col);
+			tvFillCircleDecal(v2, rad, col);
+		}
+
+		//show local grids
+		if(show_grids) {
+			//draw "vertical" ticks
+			for(int i=0; i<=p.getW(); i++) {
+				vf2d btm=p.localToWorld(vf2d(i, 0));
+				vf2d top=p.localToWorld(vf2d(i, p.getH()));
+				tv.DrawLineDecal(btm, top, olc::DARK_GREY);
+			}
+
+			//draw "horizontal" ticks
+			for(int j=0; j<=p.getH(); j++) {
+				vf2d lft=p.localToWorld(vf2d(0, j));
+				vf2d rgt=p.localToWorld(vf2d(p.getW(), j));
+				tv.DrawLineDecal(lft, rgt, olc::DARK_GREY);
+			}
+
+			//draw axes
+			vf2d xs=p.localToWorld(vf2d(-1, 0)), xe=p.localToWorld(vf2d(p.getW()+1, 0));
+			vf2d ys=p.localToWorld(vf2d(0, -1)), ye=p.localToWorld(vf2d(0, p.getH()+1));
+			tvDrawThickLine(xs, xe, .13f*p.scale, olc::BLACK);
+			tvDrawThickLine(ys, ye, .13f*p.scale, olc::BLACK);
+		}
+
+		//render meshes
+		for(const auto& m:p.meshes) {
+			vf2d pos=p.localToWorld(vf2d(m.i, m.j));
+			vf2d size=p.scale*vf2d(m.w, m.h);
+			tv.DrawRotatedDecal(pos, rect_decal, p.rot, {0, 0}, size, m.col);
+		}
+
+		//render outlines
+		if(show_outlines) {
+			const float amt=.17f;
+			for(const auto& o:p.outlines) {
+				vf2d st(o.i, o.j), en=st;
+				if(o.vert) st.y-=amt, en.y+=amt+o.sz;
+				else st.x-=amt, en.x+=amt+o.sz;
+				tvDrawThickLine(p.localToWorld(st), p.localToWorld(en), amt*p.scale, o.col);
+			}
+		}
+	}
 #pragma endregion
 
 	bool OnUserUpdate(float dt) override {
-#pragma region UPDATE
 		auto physics_start=std::chrono::steady_clock::now();
 
 		prev_wld_mouse_pos=wld_mouse_pos;
 		scr_mouse_pos=GetMousePos();
 		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
 
-#pragma region USER INPUT
-		//only allow input when console NOT open
-		if(!IsConsoleShowing()) {
-			//zooming
-			if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, scr_mouse_pos);
-			if(GetMouseWheel()<0) tv.ZoomAtScreenPos(1/1.07f, scr_mouse_pos);
-
-			//panning
-			const auto middle_mouse=GetMouse(olc::Mouse::MIDDLE);
-			if(middle_mouse.bPressed) tv.StartPan(scr_mouse_pos);
-			if(middle_mouse.bHeld) tv.UpdatePan(scr_mouse_pos);
-			if(middle_mouse.bReleased) tv.EndPan(scr_mouse_pos);
-			if(GetKey(olc::Key::HOME).bPressed) {
-				tv.SetWorldOffset({0, 0});
-				tv.SetWorldScale({1, 1});
-			}
-
-			//mouse grabbing
-			const auto left_mouse=GetMouse(olc::Mouse::LEFT);
-			if(left_mouse.bPressed) {
-				drag_start=wld_mouse_pos;
-				//which dragset is the mouse on?
-				drag_set=nullptr;
-				for(const auto& p:pixelsets) {
-					//is mouse in bounds?
-					if(!p->getAABB().contains(wld_mouse_pos)) continue;
-
-					//are local coords valid?
-					vf2d ij=p->worldToLocal(wld_mouse_pos);
-					int i=std::floor(ij.x), j=std::floor(ij.y);
-					if(!p->inRangeX(i)||!p->inRangeY(j)) continue;
-
-					//is the block solid?
-					if((*p)(i, j)!=PixelSet::Empty) {
-						drag_set=p;
-						break;
-					}
-				}
-			}
-			if(left_mouse.bHeld) {
-				//update dragset pos
-				if(drag_set) {
-					drag_set->pos+=wld_mouse_pos-drag_start;
-					//reset vel?
-					drag_set->old_pos=drag_set->pos;
-				}
-				drag_start=wld_mouse_pos;
-			}
-			if(left_mouse.bReleased) {
-				//let go of that sucker
-				drag_set=nullptr;
-			}
-
-			//spring interactivity
-			const auto right_mouse=GetMouse(olc::Mouse::RIGHT);
-			if(right_mouse.bPressed) {
-				spring_set=nullptr;
-				for(const auto& p:pixelsets) {
-					//is mouse in pixelset bounds?
-					if(!p->getAABB().contains(wld_mouse_pos)) continue;
-
-					//is local point in bounds?
-					vf2d ij=p->worldToLocal(wld_mouse_pos);
-					int i=std::floor(ij.x), j=std::floor(ij.y);
-					if(!p->inRangeX(i)||!p->inRangeY(j)) continue;
-
-					//ensure local coordinate a solid block
-					if((*p)(i, j)==PixelSet::Empty) continue;
-
-					//store the offset and the pixelset
-					spring_offset=ij;
-					spring_set=p;
-					break;
-				}
-			}
-			if(right_mouse.bHeld) {
-				if(spring_set) {
-					//F=kx
-					vf2d spr_pos=spring_set->localToWorld(spring_offset);
-					vf2d sub=wld_mouse_pos-spr_pos;
-					//spring force proportional to pixelset mass
-					spring_set->applyForce(spring_set->total_mass*sub, spr_pos);
-				}
-			}
-			if(right_mouse.bReleased) spring_set=nullptr;
-
-			//add objects
-			const auto a_key=GetKey(olc::Key::A);
-			if(a_key.bPressed) addition.clear();
-			//every now and then...
-			if(addition_timer<0) {
-				addition_timer=.05f;
-
-				if(a_key.bHeld) {
-					//dont put points too close
-					bool exist=false;
-					for(const auto& a:addition) {
-						if((a-wld_mouse_pos).mag()<1) {
-							exist=true;
-							break;
-						}
-					}
-					//add point to addition
-					if(!exist) addition.emplace_back(wld_mouse_pos);
-				}
-			}
-			addition_timer-=dt;
-			if(a_key.bReleased) {
-				//ensure its a polygon
-				if(addition.size()>=3) {
-					//choose random scale
-					float scale=random(1, 10);
-					PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, scale));
-
-					pixelsets.emplace_back(thing);
-				}
-				addition.clear();
-			}
-
-			//slice objects
-			const auto s_key=GetKey(olc::Key::S);
-			if(s_key.bHeld) {
-				drag_set=nullptr;
-				spring_set=nullptr;
-
-				//check every pixelset
-				for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
-					const auto& p=*it;
-					if(p->slice(prev_wld_mouse_pos, wld_mouse_pos)) {
-						//get new pixelsets
-						auto split=p->floodfill();
-
-						//deallocate and remove
-						delete p;
-						it=pixelsets.erase(it);
-
-						//allocate all new
-						for(const auto& s:split) {
-							pixelsets.emplace_front(new PixelSet(s));
-						}
-					} else it++;
-				}
-			}
-
-			//remove objects
-			if(GetKey(olc::Key::X).bPressed) {
-				drag_set=nullptr;
-				spring_set=nullptr;
-
-				for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
-
-					//is mouse in bounds?
-					const auto& p=*it;
-					if(p->getAABB().contains(wld_mouse_pos)) {
-
-						//are local coords valid?
-						vf2d ij=p->worldToLocal(wld_mouse_pos);
-						int i=ij.x, j=ij.y;
-						if(p->inRangeX(i)&&p->inRangeY(j)) {
-
-							//is the block solid?
-							if((*p)(i, j)!=PixelSet::Empty) {
-								//deallocate and remove
-								delete p;
-								it=pixelsets.erase(it);
-								continue;
-							}
-						}
-					}
-
-					it++;
-				}
-			}
-
-			//randomize rotations
-			if(GetKey(olc::Key::R).bPressed) placeAllRandomly();
-
-			//visual toggles with xor_equal
-			if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
-			if(GetKey(olc::Key::W).bPressed) show_wireframes^=true;
-			if(GetKey(olc::Key::G).bPressed) show_grids^=true;
-			if(GetKey(olc::Key::M).bPressed) show_mass^=true;
-			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
-			if(GetKey(olc::Key::P).bPressed) update_phys^=true;
-			if(GetKey(olc::Key::T).bPressed) show_ticks^=true;
-		}
-
 		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
-#pragma endregion
 
-#pragma region PHYSICS
-		if(update_phys) {
-			//dynamics
-			for(const auto& p:pixelsets) {
-				p->applyForce(p->total_mass*gravity, p->localToWorld(p->center_of_mass));
-				p->update(dt);
-			}
-
-			//clear colliding displays
-			for(const auto& p:pixelsets) {
-				memset(p->colliding, false, sizeof(bool)*p->getW()*p->getH());
-			}
-
-			//for every pixelset
-			for(const auto& p:pixelsets) {
-				//check every other
-				for(const auto& o:pixelsets) {
-					//dont check self
-					if(o==p) continue;
-
-					p->collide(*o);
-				}
-			}
+		//only allow input when console NOT open
+		if(!IsConsoleShowing()) handleUserInput(dt);
+		
+		//clear colliding displays
+		for(const auto& p:pixelsets) {
+			memset(p->colliding, false, sizeof(bool)*p->getW()*p->getH());
 		}
-#pragma endregion
+
+		//after import, something looks wrong...
+		//are meshes not updated?
+		if(update_phys) handlePhysics(dt);
 
 		if(to_time) {
 			auto end=std::chrono::steady_clock::now();
@@ -695,7 +806,6 @@ struct PixelGame : olc::PixelGameEngine {
 			auto ms=us/1000.f;
 			std::cout<<"update: "<<us<<"us ("<<ms<<"ms)\n";
 		}
-#pragma endregion
 
 #pragma region RENDER
 		auto render_start=std::chrono::steady_clock::now();
@@ -704,45 +814,7 @@ struct PixelGame : olc::PixelGameEngine {
 		Clear(olc::Pixel(0, 100, 255));
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
 
-		//show world grid
-		{
-			const auto grid_spacing=50;
-
-			//screen bounds in world space, snap to nearest
-			vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
-			int i_s=std::floor(tl.x/grid_spacing), j_s=std::floor(tl.y/grid_spacing);
-			int i_e=std::ceil(br.x/grid_spacing), j_e=std::ceil(br.y/grid_spacing);
-
-			//vert
-			for(int i=i_s; i<=i_e; i++) {
-				float x=grid_spacing*i;
-				vf2d top{x, tl.y}, btm{x, br.y};
-				if(i%5==0) {//major tick
-					tvDrawThickLine(top, btm, 3, olc::GREY);
-					if(show_ticks) {
-						auto str=std::to_string(int(x));
-						vf2d offset(4*str.length(), 8);
-						tv.FillRectDecal(btm-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
-						tv.DrawStringDecal(btm-offset, str, olc::BLACK);
-					}
-				} else tv.DrawLineDecal(top, btm, olc::GREY);
-			}
-
-			//horiz
-			for(int j=j_s; j<=j_e; j++) {
-				float y=grid_spacing*j;
-				vf2d lft{tl.x, y}, rgt{br.x, y};
-				if(j%5==0) {//major ticks
-					tvDrawThickLine(lft, rgt, 3, olc::GREY);
-					if(show_ticks) {
-						auto str=std::to_string(int(y));
-						vf2d offset(0, 4);
-						tv.FillRectDecal(lft-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
-						tv.DrawStringDecal(lft-offset, str, olc::BLACK);
-					}
-				} else tv.DrawLineDecal(lft, rgt, olc::GREY);
-			}
-		}
+		renderWorldGrid();
 
 		//show addition
 		if(addition.size()) {
@@ -756,74 +828,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 		//show all pixelsets
 		for(const auto& p:pixelsets) {
-			//draw rectangle bounding box
-			if(show_bounds) {
-				//color if it overlaps
-				AABB box=p->getAABB();
-				olc::Pixel col=olc::GREEN;
-				for(const auto& o:pixelsets) {
-					//dont check self
-					if(o==p) continue;
-
-					if(box.overlaps(o->getAABB())) {
-						col=olc::RED;
-						break;
-					}
-				}
-
-				const float rad=.25f*p->scale;
-				vf2d v1(box.max.x, box.min.y);
-				vf2d v2(box.min.x, box.max.y);
-				tvDrawThickLine(box.min, v1, rad, col);
-				tvFillCircleDecal(box.min, rad, col);
-				tvDrawThickLine(v1, box.max, rad, col);
-				tvFillCircleDecal(v1, rad, col);
-				tvDrawThickLine(box.max, v2, rad, col);
-				tvFillCircleDecal(box.max, rad, col);
-				tvDrawThickLine(v2, box.min, rad, col);
-				tvFillCircleDecal(v2, rad, col);
-			}
-
-			//show local grids
-			if(show_grids) {
-				//draw "vertical" ticks
-				for(int i=0; i<=p->getW(); i++) {
-					vf2d btm=p->localToWorld(vf2d(i, 0));
-					vf2d top=p->localToWorld(vf2d(i, p->getH()));
-					tv.DrawLineDecal(btm, top, olc::DARK_GREY);
-				}
-
-				//draw "horizontal" ticks
-				for(int j=0; j<=p->getH(); j++) {
-					vf2d lft=p->localToWorld(vf2d(0, j));
-					vf2d rgt=p->localToWorld(vf2d(p->getW(), j));
-					tv.DrawLineDecal(lft, rgt, olc::DARK_GREY);
-				}
-
-				//draw axes
-				vf2d xs=p->localToWorld(vf2d(-1, 0)), xe=p->localToWorld(vf2d(p->getW()+1, 0));
-				vf2d ys=p->localToWorld(vf2d(0, -1)), ye=p->localToWorld(vf2d(0, p->getH()+1));
-				tvDrawThickLine(xs, xe, .13f*p->scale, olc::BLACK);
-				tvDrawThickLine(ys, ye, .13f*p->scale, olc::BLACK);
-			}
-
-			//render meshes
-			for(const auto& m:p->meshes) {
-				vf2d pos=p->localToWorld(vf2d(m.i, m.j));
-				vf2d size(p->scale*m.w, p->scale*m.h);
-				tv.DrawRotatedDecal(pos, rect_decal, p->rot, {0, 0}, size, m.col);
-			}
-
-			//render outlines
-			if(show_outlines) {
-				const float amt=.17f;
-				for(const auto& o:p->outlines) {
-					vf2d st(o.i, o.j), en=st;
-					if(o.vert) st.y-=amt, en.y+=amt+o.sz;
-					else st.x-=amt, en.x+=amt+o.sz;
-					tvDrawThickLine(p->localToWorld(st), p->localToWorld(en), amt*p->scale, o.col);
-				}
-			}
+			renderPixelSet(*p);
 
 #pragma region EXPERIMENTAL
 			//render colliding pixels
@@ -885,10 +890,10 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 		}
 
+		//change size of everything in future to be more "realistic"
 		if(GetKey(olc::Key::E).bHeld) {
 			tv.FillRectDecal(wld_mouse_pos, {1, 1});
 		}
-#pragma endregion
 
 		//show spring set
 		if(spring_set) {
@@ -905,6 +910,7 @@ struct PixelGame : olc::PixelGameEngine {
 			DrawThickLine(br, bl, 3, olc::RED);
 			DrawThickLine(bl, tl, 3, olc::RED);
 		}
+#pragma endregion
 
 		if(to_time) {
 			auto end=std::chrono::steady_clock::now();
