@@ -44,6 +44,12 @@ vf2d lineLineIntersection(
 	)/ab.cross(cd);
 }
 
+//this is alr def in the lib
+//but i want it explicitly stated
+vf2d perp(const vf2d& v) {
+	return {-v.y, v.x};
+}
+
 class PixelSet {
 	int w, h;
 
@@ -264,7 +270,7 @@ public:
 			RIGHT=0b0010,
 			BOTTOM=0b0100,
 			TOP=0b1000;
-		auto getCode=[this](int x, int y) {
+		auto getCode=[this] (int x, int y) {
 			int code=INSIDE;
 			if(x<0) code|=LEFT;
 			else if(x>w) code|=RIGHT;
@@ -273,8 +279,7 @@ public:
 			return code;
 		};
 
-		int c1=getCode(x1, y1),
-			c2=getCode(x2, y2);
+		int c1=getCode(x1, y1), c2=getCode(x2, y2);
 
 		//iteratively clip
 		while(true) {
@@ -320,7 +325,7 @@ public:
 
 		//rasterize EMPTY line
 		bool edited=false;
-		auto edit=[this, &edited](int x, int y) {
+		auto edit=[this, &edited] (int x, int y) {
 			if(inRangeX(x)&&inRangeY(y)) {
 				auto& curr=grid[ix(x, y)];
 				if(curr!=PixelSet::Empty) {
@@ -332,15 +337,12 @@ public:
 
 		int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
 		dx=x2-x1; dy=y2-y1;
-
 		dx1=abs(dx), dy1=abs(dy);
 		px=2*dy1-dx1, py=2*dx1-dy1;
 		if(dy1<=dx1) {
 			if(dx>=0) x=x1, y=y1, xe=x2;
 			else x=x2, y=y2, xe=x1;
-
 			edit(x, y);
-
 			for(i=0; x<xe; i++) {
 				x++;
 				if(px<0) px+=2*dy1;
@@ -354,9 +356,7 @@ public:
 		} else {
 			if(dy>=0) x=x1, y=y1, ye=y2;
 			else x=x2, y=y2, ye=y1;
-
 			edit(x, y);
-
 			for(i=0; y<ye; i++) {
 				y++;
 				if(py<=0) py+=2*dx1;
@@ -382,12 +382,11 @@ public:
 		//store current part
 		std::vector<int> blob;
 
-		//dynamics info
-		vf2d vel=pos-old_pos;
-		float rot_vel=rot-old_rot;
-
 		//store each part
 		std::vector<PixelSet> pixelsets;
+
+		//store dynamics
+		float rot_vel=rot-old_rot;
 
 		//for every block
 		for(int i=0; i<w; i++) {
@@ -421,7 +420,7 @@ public:
 				//just making sure...
 				if(blob.empty()) continue;
 
-				//construct new pixelset
+				//determine part size
 				int i_min=w, j_min=h;
 				int i_max=-1, j_max=-1;
 				for(const auto& b:blob) {
@@ -434,13 +433,9 @@ public:
 					if(bi>i_max) i_max=bi;
 					if(bj>j_max) j_max=bj;
 				}
+
+				//reconstruct part
 				PixelSet p(1+i_max-i_min, 1+j_max-j_min);
-				//copy over transforms and dynamics
-				p.rot=rot;
-				p.old_rot=p.rot-rot_vel;
-				p.cossin=cossin;
-				p.scale=scale;
-				p.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
 				for(const auto& b:blob) {
 					//undo flattening
 					int bi, bj;
@@ -448,19 +443,29 @@ public:
 					p(bi-i_min, bj-j_min)=true;
 				}
 				p.updateTypes();
+				
+				//copy over transforms and dynamics
+				p.rot=rot;
+				p.old_rot=p.rot-rot_vel;
+				p.cossin=cossin;
+				p.scale=scale;
+				p.col=col;
 				p.updateMass();
+
 				//update pos to reflect translation
 				//this.localToWorld(i_min, j_min)=p.localToWorld(0, 0)
 				p.pos=localToWorld(p.center_of_mass+vf2d(i_min, j_min));
-				p.old_pos=p.pos-vel;
+				p.old_pos=p.pos-getRelativeVel(p.pos);
 				p.updateInertia();
 				pixelsets.emplace_back(p);
 			}
 		}
 		delete[] filled;
 
-		//dont recolor if not split
-		if(pixelsets.size()==1) pixelsets.front().col=col;
+		//recolor if split
+		if(pixelsets.size()!=1) for(auto& p:pixelsets) {
+			p.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
+		}
 		for(auto& p:pixelsets) {
 			p.updateMeshes();
 			p.updateOutlines();
@@ -786,6 +791,14 @@ public:
 		torques=0;
 	}
 
+	vf2d getRelativeVel(const vf2d& pt) const {
+		vf2d lin_vel=pos-old_pos;
+		vf2d sub=pt-pos;
+		float rot_vel=rot-old_rot;
+		vf2d ang_vel=rot_vel*perp(sub);
+		return lin_vel+ang_vel;
+	}
+
 	//check MY edges against THEIR everything
 	void collide(PixelSet& p) {
 		//check bounding boxes
@@ -823,8 +836,9 @@ void PixelSet::copyFrom(const PixelSet& p) {
 	//reallocate and copy over grid stuff
 	w=p.w, h=p.h;
 	grid=new byte[w*h];
-	colliding=new bool[w*h];
 	memcpy(grid, p.grid, sizeof(byte)*w*h);
+	colliding=new bool[w*h];
+	memcpy(colliding, p.colliding, sizeof(bool)*w*h);
 
 	//positions
 	pos=p.pos;
@@ -838,8 +852,8 @@ void PixelSet::copyFrom(const PixelSet& p) {
 	//rotations
 	rot=p.rot;
 	old_rot=p.old_rot;
-	cossin=p.cossin;
 	torques=p.torques;
+	cossin=p.cossin;
 	moment_of_inertia=p.moment_of_inertia;
 
 	//scale

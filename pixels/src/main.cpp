@@ -29,8 +29,8 @@ struct PixelGame : olc::PixelGameEngine {
 	vf2d wld_mouse_pos;
 	vf2d prev_wld_mouse_pos;
 
+	//scene data
 	std::list<PixelSet*> pixelsets;
-
 	vf2d gravity;
 
 	//UI toggles
@@ -86,7 +86,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
-		ConsoleCaptureStdOut(true);
+		//ConsoleCaptureStdOut(true);
 
 		//make some primitives to draw with
 		rect_sprite=new olc::Sprite(1, 1);
@@ -197,7 +197,7 @@ struct PixelGame : olc::PixelGameEngine {
 		return true;
 	}
 
-#pragma region COMMANDS
+#pragma region COMMAND HELPERS
 	void resetCommand() {
 		//english + logic = grammar :D
 		int num=pixelsets.size();
@@ -322,6 +322,7 @@ struct PixelGame : olc::PixelGameEngine {
 				PixelSet p(w, h);
 				p.pos=pos, p.old_pos=p.pos;
 				p.rot=rot, p.old_rot=p.rot;
+				p.updateRot();
 				p.scale=scale;
 				p.col=olc::Pixel(r, g, b);
 
@@ -350,6 +351,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 		return true;
 	}
+#pragma endregion
 
 	//not sure how olc::PixelGameEngine handles this return value...
 	bool OnConsoleCommand(const std::string& line) override {
@@ -435,8 +437,8 @@ struct PixelGame : olc::PixelGameEngine {
 		std::cout<<"unknown command. type help for list of commands.\n";
 		return false;
 	}
-#pragma endregion
 
+#pragma region UPDATE HELPERS
 	void handleUserInput(float dt) {
 		//zooming
 		if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, scr_mouse_pos);
@@ -640,23 +642,45 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 		}
 	}
+#pragma endregion
+
+	void update(float dt) {
+		prev_wld_mouse_pos=wld_mouse_pos;
+		scr_mouse_pos=GetMousePos();
+		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
+
+		//open and close the integrated console
+		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
+
+		//only allow input when console NOT open
+		if(!IsConsoleShowing()) handleUserInput(dt);
+
+		//clear colliding displays
+		for(const auto& p:pixelsets) {
+			memset(p->colliding, false, sizeof(bool)*p->getW()*p->getH());
+		}
+
+		//after import, something looks wrong...
+		//are meshes not updated?
+		if(update_phys) handlePhysics(dt);
+	}
 
 #pragma region RENDER HELPERS
 	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
 		olc::vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=(sub/len).perp();
+		olc::vf2d tang=perp(sub/len);
 
-		float angle=atan2f(sub.y, sub.x);
+		float angle=std::atan2f(sub.y, sub.x);
 		DrawRotatedDecal(a-rad*tang, rect_decal, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
 	void tvDrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
 		olc::vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=(sub/len).perp();
+		olc::vf2d tang=perp(sub/len);
 
-		float angle=atan2f(sub.y, sub.x);
+		float angle=std::atan2f(sub.y, sub.x);
 		tv.DrawRotatedDecal(a-rad*tang, rect_decal, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
@@ -667,7 +691,8 @@ struct PixelGame : olc::PixelGameEngine {
 	}
 
 	void renderWorldGrid() {
-		const auto grid_spacing=50;
+		//how can i make these adaptive?
+		float grid_spacing=25;
 
 		//screen bounds in world space, snap to nearest
 		vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
@@ -678,30 +703,45 @@ struct PixelGame : olc::PixelGameEngine {
 		for(int i=i_s; i<=i_e; i++) {
 			float x=grid_spacing*i;
 			vf2d top{x, tl.y}, btm{x, br.y};
-			if(i%5==0) {//major tick
-				tvDrawThickLine(top, btm, 3, olc::GREY);
-				if(show_ticks) {
-					auto str=std::to_string(int(x));
-					vf2d offset(4*str.length(), 8);
-					tv.FillRectDecal(btm-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
-					tv.DrawStringDecal(btm-offset, str, olc::BLACK);
-				}
-			} else tv.DrawLineDecal(top, btm, olc::GREY);
+			//major and minor lines
+			if(i%5==0) tvDrawThickLine(top, btm, 2.5f, olc::GREY);
+			else tv.DrawLineDecal(top, btm, olc::GREY);
 		}
 
 		//horiz
 		for(int j=j_s; j<=j_e; j++) {
 			float y=grid_spacing*j;
 			vf2d lft{tl.x, y}, rgt{br.x, y};
-			if(j%5==0) {//major ticks
-				tvDrawThickLine(lft, rgt, 3, olc::GREY);
-				if(show_ticks) {
+			//major and minor lines
+			if(j%5==0) tvDrawThickLine(lft, rgt, 2.5f, olc::GREY);
+			else tv.DrawLineDecal(lft, rgt, olc::GREY);
+		}
+
+		//show x & y labels
+		if(show_ticks) {
+			//x
+			for(int i=i_s; i<=i_e; i++) {
+				float x=grid_spacing*i;
+				vf2d top{x, tl.y}, btm{x, br.y};
+				if(i%5==0) {//major tick
+					auto str=std::to_string(int(x));
+					vf2d offset(4*str.length(), 0);
+					tv.FillRectDecal(top-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
+					tv.DrawStringDecal(top-offset, str, olc::BLACK);
+				}
+			}
+
+			//y
+			for(int j=j_s; j<=j_e; j++) {
+				float y=grid_spacing*j;
+				vf2d lft{tl.x, y}, rgt{br.x, y};
+				if(j%5==0) {//major ticks
 					auto str=std::to_string(int(y));
 					vf2d offset(0, 4);
 					tv.FillRectDecal(lft-offset-vf2d(1, 1), vf2d(1+8*str.length(), 9));
 					tv.DrawStringDecal(lft-offset, str, olc::BLACK);
 				}
-			} else tv.DrawLineDecal(lft, rgt, olc::GREY);
+			}
 		}
 	}
 
@@ -736,21 +776,21 @@ struct PixelGame : olc::PixelGameEngine {
 
 		//show local grids
 		if(show_grids) {
-			//draw "vertical" ticks
+			//vert lines
 			for(int i=0; i<=p.getW(); i++) {
 				vf2d btm=p.localToWorld(vf2d(i, 0));
 				vf2d top=p.localToWorld(vf2d(i, p.getH()));
 				tv.DrawLineDecal(btm, top, olc::DARK_GREY);
 			}
 
-			//draw "horizontal" ticks
+			//horiz lines
 			for(int j=0; j<=p.getH(); j++) {
 				vf2d lft=p.localToWorld(vf2d(0, j));
 				vf2d rgt=p.localToWorld(vf2d(p.getW(), j));
 				tv.DrawLineDecal(lft, rgt, olc::DARK_GREY);
 			}
 
-			//draw axes
+			//draw x & y axes
 			vf2d xs=p.localToWorld(vf2d(-1, 0)), xe=p.localToWorld(vf2d(p.getW()+1, 0));
 			vf2d ys=p.localToWorld(vf2d(0, -1)), ye=p.localToWorld(vf2d(0, p.getH()+1));
 			tvDrawThickLine(xs, xe, .13f*p.scale, olc::BLACK);
@@ -777,39 +817,7 @@ struct PixelGame : olc::PixelGameEngine {
 	}
 #pragma endregion
 
-	bool OnUserUpdate(float dt) override {
-		auto physics_start=std::chrono::steady_clock::now();
-
-		prev_wld_mouse_pos=wld_mouse_pos;
-		scr_mouse_pos=GetMousePos();
-		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
-
-		//open and close the integrated console
-		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
-
-		//only allow input when console NOT open
-		if(!IsConsoleShowing()) handleUserInput(dt);
-		
-		//clear colliding displays
-		for(const auto& p:pixelsets) {
-			memset(p->colliding, false, sizeof(bool)*p->getW()*p->getH());
-		}
-
-		//after import, something looks wrong...
-		//are meshes not updated?
-		if(update_phys) handlePhysics(dt);
-
-		if(to_time) {
-			auto end=std::chrono::steady_clock::now();
-			auto dur=std::chrono::duration_cast<std::chrono::microseconds>(end-physics_start);
-			auto us=dur.count();
-			auto ms=us/1000.f;
-			std::cout<<"update: "<<us<<"us ("<<ms<<"ms)\n";
-		}
-
-#pragma region RENDER
-		auto render_start=std::chrono::steady_clock::now();
-
+	void render(float dt) {
 		//draw grey background
 		Clear(olc::Pixel(0, 100, 255));
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
@@ -859,15 +867,7 @@ struct PixelGame : olc::PixelGameEngine {
 						if(GetKey(olc::Key::V).bHeld) {
 							tvDrawThickLine(wld_mouse_pos, p->pos, 1, olc::BLACK);
 							tvFillCircleDecal(p->pos, 2.f, olc::BLUE);
-
-							vf2d lin_vel=(p->pos-p->old_pos)/dt;
-							//mag(V_t)=wr
-							//dir(V_t)=perp(r)
-							//V_t=w*perp(r)
-							vf2d sub=wld_mouse_pos-p->pos;
-							float rot_vel=(p->rot-p->old_rot)/dt;
-							vf2d tang_vel=rot_vel*sub.perp();
-							vf2d vel=lin_vel+tang_vel;
+							vf2d vel=p->getRelativeVel(wld_mouse_pos)/dt;
 							tvDrawThickLine(wld_mouse_pos, wld_mouse_pos+vel, 1, olc::GREEN);
 							tvFillCircleDecal(wld_mouse_pos, 2.f, olc::RED);
 						}
@@ -894,6 +894,7 @@ struct PixelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::E).bHeld) {
 			tv.FillRectDecal(wld_mouse_pos, {1, 1});
 		}
+#pragma endregion
 
 		//show spring set
 		if(spring_set) {
@@ -910,8 +911,22 @@ struct PixelGame : olc::PixelGameEngine {
 			DrawThickLine(br, bl, 3, olc::RED);
 			DrawThickLine(bl, tl, 3, olc::RED);
 		}
-#pragma endregion
+	}
 
+	//just a wrapper for timing and logic separation
+	bool OnUserUpdate(float dt) override {
+		auto update_start=std::chrono::steady_clock::now();
+		update(dt);
+		if(to_time) {
+			auto end=std::chrono::steady_clock::now();
+			auto dur=std::chrono::duration_cast<std::chrono::microseconds>(end-update_start);
+			auto us=dur.count();
+			auto ms=us/1000.f;
+			std::cout<<"update: "<<us<<"us ("<<ms<<"ms)\n";
+		}
+
+		auto render_start=std::chrono::steady_clock::now();
+		render(dt);
 		if(to_time) {
 			auto end=std::chrono::steady_clock::now();
 			auto dur=std::chrono::duration_cast<std::chrono::microseconds>(end-render_start);
@@ -921,7 +936,6 @@ struct PixelGame : olc::PixelGameEngine {
 
 			to_time=false;
 		}
-#pragma endregion
 
 		return true;
 	}
@@ -929,7 +943,8 @@ struct PixelGame : olc::PixelGameEngine {
 
 int main() {
 	PixelGame t;
-	if(t.Construct(800, 640, 1, 1, false, true)) t.Start();
+	bool vsync=true;
+	if(t.Construct(800, 640, 1, 1, false, vsync)) t.Start();
 
 	return 0;
 }
