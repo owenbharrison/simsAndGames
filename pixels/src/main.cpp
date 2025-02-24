@@ -435,6 +435,7 @@ struct PixelGame : olc::PixelGameEngine {
 		}
 
 		std::cout<<"unknown command. type help for list of commands.\n";
+
 		return false;
 	}
 

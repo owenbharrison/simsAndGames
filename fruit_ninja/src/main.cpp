@@ -554,6 +554,8 @@ struct FruitNinja : olc::PixelGameEngine {
 
 			reset();
 		}
+		
+		return true;
 	}
 };
 

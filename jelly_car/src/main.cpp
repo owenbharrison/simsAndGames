@@ -224,6 +224,8 @@ struct JellyCarGame : MyPixelGameEngine {
 		}
 
 		else if(cmd=="clear") ConsoleClear();
+
+		return true;
 	}
 
 #pragma region RENDER HELPERS
