@@ -12,7 +12,7 @@ float clamp(const float& x, const float& a, const float& b) {
 
 struct Example : olc::PixelGameEngine {
 	Example() {
-		sAppName="Example";
+		sAppName="Raycasting";
 	}
 
 	float size=0;
@@ -51,7 +51,7 @@ struct Example : olc::PixelGameEngine {
 		return true;
 	}
 
-	#pragma region RENDER HELPERS
+#pragma region RENDER HELPERS
 	void renderGrid() {
 		//vert lines
 		for(int i=0; i<width; i++) {
@@ -95,7 +95,7 @@ struct Example : olc::PixelGameEngine {
 			if(GetKey(olc::Key::K1).bHeld) grid[ix(mi, mj)]=true;
 			if(GetKey(olc::Key::K2).bHeld) grid[ix(mi, mj)]=false;
 		}
-		
+
 		//player movement
 		vf2d player_dir(std::cosf(player_rot), std::sinf(player_rot));
 		if(GetKey(olc::Key::UP).bHeld) player_pos+=60*dt*player_dir;
@@ -160,7 +160,7 @@ struct Example : olc::PixelGameEngine {
 		FillCircle(player_pos, player_rad);
 		DrawCircle(player_pos, player_rad, olc::BLUE);
 		DrawLine(player_pos, player_pos+player_rad*player_dir, olc::BLUE);
-		
+
 		return true;
 	}
 };
