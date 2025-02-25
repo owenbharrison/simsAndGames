@@ -23,5 +23,44 @@
     <Media Include="assets\clack.wav">
       <Filter>Resource Files</Filter>
     </Media>
+    <Media Include="assets\piano\g1s.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\a1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\a1s.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\b1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\c1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\c1s.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\c2.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\d1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\d1s.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\e1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\f1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\f1s.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\piano\g1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
   </ItemGroup>
 </Project>

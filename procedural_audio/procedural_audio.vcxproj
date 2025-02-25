@@ -143,6 +143,19 @@
   </ItemGroup>
   <ItemGroup>
     <Media Include="assets\clack.wav" />
+    <Media Include="assets\piano\a1.wav" />
+    <Media Include="assets\piano\a1s.wav" />
+    <Media Include="assets\piano\b1.wav" />
+    <Media Include="assets\piano\c1.wav" />
+    <Media Include="assets\piano\c1s.wav" />
+    <Media Include="assets\piano\c2.wav" />
+    <Media Include="assets\piano\d1.wav" />
+    <Media Include="assets\piano\d1s.wav" />
+    <Media Include="assets\piano\e1.wav" />
+    <Media Include="assets\piano\f1.wav" />
+    <Media Include="assets\piano\f1s.wav" />
+    <Media Include="assets\piano\g1.wav" />
+    <Media Include="assets\piano\g1s.wav" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
