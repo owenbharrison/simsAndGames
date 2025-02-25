@@ -74,7 +74,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
-		//ConsoleCaptureStdOut(true);
+		ConsoleCaptureStdOut(true);
 
 		//make some primitives to draw with
 		rect_sprite=new olc::Sprite(1, 1);

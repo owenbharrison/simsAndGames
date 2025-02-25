@@ -385,8 +385,6 @@ public:
 		//store each part
 		std::vector<PixelSet> pixelsets;
 
-		//store dynamics
-		float rot_vel=rot-old_rot;
 
 		//for every block
 		for(int i=0; i<w; i++) {
@@ -444,12 +442,10 @@ public:
 				}
 				p.updateTypes();
 				
-				//copy over transforms and dynamics
+				//copy over scale
 				p.rot=rot;
-				p.old_rot=p.rot-rot_vel;
 				p.cossin=cossin;
 				p.scale=scale;
-				p.col=col;
 				p.updateMass();
 
 				//update pos to reflect translation
@@ -457,15 +453,32 @@ public:
 				p.pos=localToWorld(p.center_of_mass+vf2d(i_min, j_min));
 				p.old_pos=p.pos-getRelativeVel(p.pos);
 				p.updateInertia();
+
+				p.col=col;
+
 				pixelsets.emplace_back(p);
 			}
 		}
 		delete[] filled;
+		
+		//update rotations
+		if(pixelsets.size()) {
+			//store dynamics
+			float rot_vel=rot-old_rot;
+
+			//evenly split angular momentum
+			float ind_ang_mom=moment_of_inertia*rot_vel/pixelsets.size();
+			for(auto& p:pixelsets) {
+				p.old_rot=p.rot-ind_ang_mom/p.moment_of_inertia;
+			}
+		}
 
 		//recolor if split
 		if(pixelsets.size()!=1) for(auto& p:pixelsets) {
 			p.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
 		}
+
+		//update graphics
 		for(auto& p:pixelsets) {
 			p.updateMeshes();
 			p.updateOutlines();
