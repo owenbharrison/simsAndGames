@@ -1,15 +1,3 @@
-/*todo:
-physics
-	collisions
-		pen depth = dda from COM to collision
-	sounds?
-graphics
-	add particles
-	add textures
-	remove collision view?
-add more pixelset constructors...
-*/
-
 #define OLC_PGE_APPLICATION
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
@@ -881,13 +869,17 @@ struct PixelGame : olc::PixelGameEngine {
 				vf2d pos=p->localToWorld(p->center_of_mass);
 				tvFillCircleDecal(pos, .5f*p->scale, olc::MAGENTA);
 
+				const float scl=p->scale/8;
+				
 				//show mass string
-				auto mass_str=std::to_string(int(p->total_mass));
-				tv.DrawStringDecal(pos, mass_str, olc::BLACK);
+				auto mass_str="M="+std::to_string(int(p->total_mass));
+				vf2d mass_offset(4*mass_str.length(), 8);
+				tv.DrawStringDecal(pos-scl*mass_offset, mass_str, olc::BLACK, {scl, scl});
 
 				//show inertia string
-				auto inertia_str=std::to_string(int(p->moment_of_inertia));
-				tv.DrawStringDecal(pos+vf2d(0, 10), inertia_str, olc::BLACK);
+				auto inertia_str="I="+std::to_string(int(p->moment_of_inertia));
+				vf2d inertia_offset(4*inertia_str.length(), 0);
+				tv.DrawStringDecal(pos-scl*inertia_offset, inertia_str, olc::BLACK, {scl, scl});
 			}
 		}
 

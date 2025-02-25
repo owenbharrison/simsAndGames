@@ -18,7 +18,6 @@
 - [x] implement verlet integration
 - [x] collision detection
 - [ ] collision response
-- [ ] fix scale
 - [ ] quad tree optimization
 - [ ] procedural sounds
 ## Graphics

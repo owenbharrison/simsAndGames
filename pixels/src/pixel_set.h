@@ -724,19 +724,20 @@ public:
 
 	//center of mass using moments
 	void updateMass() {
+		const float ind_mass=scale*scale;
+
 		center_of_mass={0, 0};
 		total_mass=0;
-		const float mass=scale*scale;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//only incorporate solid blocks
 				if(grid[ix(i, j)]==PixelSet::Empty) continue;
 
 				//sum of masses
-				total_mass+=mass;
+				total_mass+=ind_mass;
 
 				//sum of moments
-				center_of_mass+=mass*vf2d(.5f+i, .5f+j);
+				center_of_mass+=ind_mass*vf2d(.5f+i, .5f+j);
 			}
 		}
 		//com = total moment / total mass
@@ -745,20 +746,21 @@ public:
 
 	//this should be called after updatemass
 	void updateInertia() {
-		//make sure NOT zero
-		moment_of_inertia=1e-6f;
+		const float ind_mass=scale*scale;
+		//I=1/6s^4
+		float ind_moi=ind_mass*ind_mass/6;
+
+		moment_of_inertia=0;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//only incorporate solid blocks
 				if(grid[ix(i, j)]==PixelSet::Empty) continue;
 
-				//I=mr^2
-				vf2d sub=localToWorld(vf2d(.5f+i, .5f+j))-pos;
-				moment_of_inertia+=sub.dot(sub);
+				//I=ind_moi+md^2
+				vf2d sub=pos-localToWorld(vf2d(.5f+i, .5f+j));
+				moment_of_inertia+=ind_moi+ind_mass*sub.dot(sub);
 			}
 		}
-		//mass const, so we pull it out
-		moment_of_inertia*=scale*scale;
 	}
 
 	void updateRot() {
