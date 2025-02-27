@@ -209,7 +209,7 @@ struct Example : olc::PixelGameEngine {
 		else step_j=1, stepped.y=hypot.y*(1+cj-orig.y);
 
 		//walk
-		while(true) {
+		for(int iter=0; iter<1000; iter++) {
 			float dist;
 			if(stepped.x<stepped.y) {
 				ci+=step_i;
@@ -227,6 +227,8 @@ struct Example : olc::PixelGameEngine {
 			//hit block
 			if(grid[ix(ci, cj)]) return dist;
 		}
+
+		return -1;
 	}
 #pragma endregion
 
