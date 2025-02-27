@@ -488,16 +488,62 @@ public:
 	}
 
 	//dda algorithm
-	float raycast(vf2d s1, vf2d s2) {
-		//find bounds of segment
-		AABB seg_box;
-		seg_box.fitToEnclose(s1);
-		seg_box.fitToEnclose(s2);
-		//make sure they overlap
-		if(!seg_box.overlaps(getAABB())) return false;
+	float raycast(vf2d orig, vf2d dir) {
+		//localize orig
+		orig=worldToLocal(orig);
 
-		s1=worldToLocal(s1);
-		s2=worldToLocal(s2);
+		//which tile am i checking?
+		int ci=std::floor(orig.x), cj=std::floor(orig.y);
+
+		//inside tile
+		bool was_inside=inRangeX(ci)&&inRangeY(cj);
+		if(was_inside&&grid[ix(ci, cj)]!=PixelSet::Empty) return 1e-6f;
+		
+		//unrotate dir
+		dir={
+			cossin.x*dir.x+cossin.y*dir.y,
+			cossin.x*dir.y-cossin.y*dir.x
+		};
+
+		//find hypot scale factors
+		vf2d hypot(
+		std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
+		std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
+		);
+
+		//which way am i going
+		vf2d stepped;
+		int step_i=-1, step_j=-1;
+
+		//start conditions
+		if(dir.x<0) stepped.x=hypot.x*(orig.x-ci);
+		else step_i=1, stepped.x=hypot.x*(1+ci-orig.x);
+		if(dir.y<0) stepped.y=hypot.y*(orig.y-cj);
+		else step_j=1, stepped.y=hypot.y*(1+cj-orig.y);
+
+		//walk w/ max iter
+		for(int iter=0; iter<1000; iter++) {
+			float dist;
+			if(stepped.x<stepped.y) {
+				ci+=step_i;
+				dist=stepped.x;
+				stepped.x+=hypot.x;
+			} else {
+				cj+=step_j;
+				dist=stepped.y;
+				stepped.y+=hypot.y;
+			}
+
+			//exit shape?
+			bool inside=inRangeX(ci)&&inRangeY(cj);
+			if(was_inside&&!inside) break;
+			was_inside=inside;
+
+			//hit block?
+			if(inside&&grid[ix(ci, cj)]!=PixelSet::Empty) return scale*dist;
+		}
+
+		return -1;
 	}
 #pragma endregion
 

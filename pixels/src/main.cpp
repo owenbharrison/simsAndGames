@@ -51,6 +51,8 @@ struct PixelGame : olc::PixelGameEngine {
 
 	olc::TransformedView tv;
 
+	vf2d* ray_orig=nullptr;
+
 	//place pixelsets such that their bounds lie inside the screen
 	void placeAllRandomly() {
 		for(const auto& p:pixelsets) {
@@ -374,6 +376,19 @@ struct PixelGame : olc::PixelGameEngine {
 			return true;
 		}
 
+		if(cmd=="cast") {
+			if(ray_orig) {
+				delete ray_orig;
+				ray_orig=nullptr;
+				std::cout<<"raycasting off\n";
+			} else {
+				ray_orig=new vf2d(wld_mouse_pos);
+				std::cout<<"raycasting on\n";
+			}
+
+			return true;
+		}
+
 		if(cmd=="export") return exportCommand(line_str);
 
 		if(cmd=="import") return importCommand(line_str);
@@ -414,6 +429,7 @@ struct PixelGame : olc::PixelGameEngine {
 				"  count        how many pixelsets are there?\n"
 				"  usage        % space used for all allocated pixelsets\n"
 				"  time         times immediate next update and render loop\n"
+				"  cast         casts ray from chosen position to mouse\n"
 				"  export       exports pixelsets to specified file\n"
 				"  import       imports pixelsets from specified file\n"
 				"  keybinds     which keys to press for this program?\n"
@@ -883,9 +899,28 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 		}
 
-		//change size of everything in future to be more "realistic"
-		if(GetKey(olc::Key::E).bHeld) {
-			tv.FillRectDecal(wld_mouse_pos, {1, 1});
+		//raycast test
+		if(ray_orig) {
+			vf2d orig=*ray_orig;
+			vf2d dir=wld_mouse_pos-orig;
+			float mag=dir.mag();
+			if(mag>1e-6f) dir/=mag;
+
+			//find closest shape
+			float record=mag;
+			PixelSet* closest=nullptr;
+			for(const auto& p:pixelsets) {
+				float dist=p->raycast(orig, dir);
+				if(dist>0&&dist<record) closest=p, record=dist;
+			}
+
+			//draw said color ray to shape
+			if(closest) {
+				vf2d ix=orig+record*dir;
+				tvDrawThickLine(orig, ix, 1, closest->col);
+				tvFillCircleDecal(ix, 3, closest->col);
+			} else tvDrawThickLine(orig, wld_mouse_pos, 1, olc::WHITE);
+			tvFillCircleDecal(orig, 3, olc::WHITE);
 		}
 #pragma endregion
 
