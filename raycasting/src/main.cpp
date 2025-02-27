@@ -1,6 +1,9 @@
 #define OLC_PGE_APPLICATION
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
+using olc::vi2d;
+
+#include <stack>
 
 static constexpr float Pi=3.1415927f;
 
@@ -36,9 +39,12 @@ struct Example : olc::PixelGameEngine {
 
 	vf2d mouse_pos;
 	int mi=0, mj=0;
+	float total_dt=0;
 
 	bool show_grid=false;
 	bool show_player=false;
+	bool show_corners=false;
+	bool show_flooded=false;
 
 	vf2d player_pos;
 	float player_rot=0;
@@ -56,6 +62,10 @@ struct Example : olc::PixelGameEngine {
 	olc::Decal* circle_decal=nullptr;
 
 	bool OnUserCreate() override {
+		std::cout<<"Press ESC for integrated console.\n"
+			"  then type help for help.\n";
+		ConsoleCaptureStdOut(true);
+
 		//setup grid spacing
 		cell_size=40;
 		width=ScreenWidth()/cell_size;
@@ -91,6 +101,50 @@ struct Example : olc::PixelGameEngine {
 		}
 
 		return true;
+	}
+
+	bool OnConsoleCommand(const std::string& line) override {
+		std::stringstream line_str(line);
+		std::string cmd; line_str>>cmd;
+
+		if(cmd=="clear") {
+			ConsoleClear();
+
+			return true;
+		}
+
+		if(cmd=="reset") {
+			std::cout<<"resetting grid\n";
+			memset(grid, false, sizeof(bool)*width*height);
+
+			return true;
+		}
+
+		if(cmd=="keybinds") {
+			std::cout<<"useful keybinds:\n"
+				"  P      toggle player\n"
+				"  L      toggle mouse light\n"
+				"  G      toggle grid lines\n"
+				"  F      toggle flooded view\n"
+				"  C      toggle corners view\n"
+				" 1/2     grid set solid/air\n"
+				"ARROWS   move player\n";
+
+			return true;
+		}
+
+		if(cmd=="help") {
+			std::cout<<"useful commands:\n"
+				"  clear     clears the screen\n"
+				"  reset     resets grid\n"
+				" keybinds   which keys to press for this program?\n";
+
+			return true;
+		}
+
+		std::cout<<"unknown command. type help for list of commands.\n";
+
+		return false;
 	}
 
 #pragma region UPDATE HELPERS
@@ -179,33 +233,45 @@ struct Example : olc::PixelGameEngine {
 	void update(float dt) {
 		mouse_pos=GetMousePos();
 
-		//ui toggles
-		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
-		if(GetKey(olc::Key::P).bPressed) show_player^=true;
-		if(GetKey(olc::Key::L).bPressed) hover_light^=true;
+		//player "update"
+		player_dir.x=std::cosf(player_rot);
+		player_dir.y=std::sinf(player_rot);
 
 		//where is mouse in grid?
 		mi=mouse_pos.x/cell_size;
 		mj=mouse_pos.y/cell_size;
-		if(inRangeX(mi)&&inRangeY(mj)) {
-			//toggle cell
-			if(GetKey(olc::Key::K1).bHeld) grid[ix(mi, mj)]=true;
-			if(GetKey(olc::Key::K2).bHeld) grid[ix(mi, mj)]=false;
+
+		//open integrated console
+		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
+
+		//dont allow inputs in console
+		if(!IsConsoleShowing()) {
+			//ui toggles
+			if(GetKey(olc::Key::P).bPressed) show_player^=true;
+			if(GetKey(olc::Key::L).bPressed) hover_light^=true;
+			if(GetKey(olc::Key::G).bPressed) show_grid^=true;
+			if(GetKey(olc::Key::C).bPressed) show_corners^=true;
+			if(GetKey(olc::Key::F).bPressed) show_flooded^=true;
+
+			//set solid/air
+			if(inRangeX(mi)&&inRangeY(mj)) {
+				if(GetKey(olc::Key::K1).bHeld) grid[ix(mi, mj)]=true;
+				if(GetKey(olc::Key::K2).bHeld) grid[ix(mi, mj)]=false;
+			}
+
+			//player movement
+			if(GetKey(olc::Key::UP).bHeld) player_pos+=65*dt*player_dir;
+			if(GetKey(olc::Key::DOWN).bHeld) player_pos-=50*dt*player_dir;
+			if(GetKey(olc::Key::LEFT).bHeld) player_rot-=3*dt;
+			if(GetKey(olc::Key::RIGHT).bHeld) player_rot+=3*dt;
+
+			//move towards mouse
+			if(hover_light) light_pos=mouse_pos;
 		}
 
-		//player movement
-		player_dir.x=std::cosf(player_rot);
-		player_dir.y=std::sinf(player_rot);
-		if(GetKey(olc::Key::UP).bHeld) player_pos+=65*dt*player_dir;
-		if(GetKey(olc::Key::DOWN).bHeld) player_pos-=50*dt*player_dir;
-
-		if(GetKey(olc::Key::LEFT).bHeld) player_rot-=3*dt;
-		if(GetKey(olc::Key::RIGHT).bHeld) player_rot+=3*dt;
-
-		//move towards mouse
-		if(hover_light) light_pos=mouse_pos;
-
 		handleCollisions(player_pos, player_rad);
+
+		total_dt+=dt;
 	}
 
 #pragma region RENDER HELPERS
@@ -254,10 +320,11 @@ struct Example : olc::PixelGameEngine {
 
 	void renderLight() {
 		//draw circles of decreasing brightness eminating from light_pos
-		for(float x=1; x>=0; x-=.033f) {
-			float r=250*x;
-			float shade=1-x;
-			FillCircleDecal(light_pos, r, olc::PixelF(shade, shade, shade));
+		const int num=25;
+		for(int i=0; i<num; i++) {
+			float rad=map(i, 0, num-1, 250, 5);
+			float shade=map(i, 0, num-1, 0, 1);
+			FillCircleDecal(light_pos, rad, olc::PixelF(shade, shade, shade));
 		}
 	}
 
@@ -302,7 +369,7 @@ struct Example : olc::PixelGameEngine {
 		triangulate();
 	}
 
-	void drawPlayerFOV() {
+	void renderPlayerFOV() {
 		//draw fov lines
 		const int num_fov=24;
 		const float max_dist=4.f;
@@ -331,6 +398,124 @@ struct Example : olc::PixelGameEngine {
 		FillCircleDecal(player_pos, player_rad, olc::WHITE);
 		DrawThickLine(player_pos, player_pos+player_rad*player_dir, 2, olc::BLUE);
 	}
+
+	void renderCorners() {
+		typedef unsigned char byte;
+
+		std::vector<vi2d> corners;
+		//for each block
+		for(int i=0; i<width; i++) {
+			for(int j=0; j<height; j++) {
+				//dont check air
+				if(!grid[ix(i, j)]) continue;
+
+				//for each neighbor
+				byte state=0;
+				for(int s=0; s<8; s++) {
+					int ci=i, cj=j;
+					switch(s) {
+						case 0: cj--; break;//top
+						case 1: cj--, ci--; break;//top left
+						case 2: ci--; break;//left
+						case 3: cj++, ci--; break;//bottom left
+						case 4: cj++; break;//bottom
+						case 5: cj++, ci++; break;//bottom right
+						case 6: ci++; break;//right
+						case 7: cj--, ci++; break;//top right
+					}
+					//bitbang if out of range or air
+					if(!inRangeX(ci)||!inRangeY(cj)||!grid[ix(ci, cj)]) state|=1<<s;
+				}
+
+				//mask out what we want
+				byte tl=0b00000111&state;
+				byte bl=0b00011100&state;
+				byte br=0b01110000&state;
+				byte tr=0b11000001&state;
+
+				//surrounded by: 3 air, 1 air, or 2 air
+				if(tl==0b00000111||tl==0b00000010||tl==0b00000101) corners.emplace_back(i, j);
+				if(bl==0b00011100||bl==0b00001000||bl==0b00010100) corners.emplace_back(i, j+1);
+				if(br==0b01110000||br==0b00100000||br==0b01010000) corners.emplace_back(i+1, j+1);
+				if(tr==0b11000001||tr==0b10000000||tr==0b01000001) corners.emplace_back(i+1, j);
+			}
+		}
+
+		//show lines to corners
+		for(const auto& c:corners) {
+			DrawLineDecal(light_pos, cell_size*c, olc::CYAN);
+		}
+
+		//polarsort based about light_pos
+		//left->right
+		vf2d ref=light_pos/cell_size;
+		std::sort(corners.begin(), corners.end(), [ref] (const vi2d& a, const vi2d& b) {
+			//cross product
+			vf2d la=a-ref, lb=b-ref;
+			return la.x*lb.y>la.y*lb.x;
+		});
+
+		//show each corner as a red circle
+		for(int i=0; i<corners.size(); i++) {
+			auto str=std::to_string(i);
+			vf2d offset(4*str.length(), 4);
+			DrawStringDecal(cell_size*corners[i]-offset, str, olc::RED);
+		}
+	}
+
+	//show each shape in a random color
+	void renderShapes() {
+		bool* filled=new bool[width*height];
+		memset(filled, false, sizeof(bool)*width*height);
+
+		typedef std::vector<vi2d> shape;
+
+		//parts detection algorithm
+		shape curr;
+		std::vector<shape> shapes;
+		for(int i=0; i<width; i++) {
+			for(int j=0; j<height; j++) {
+				curr.clear();
+
+				//iterative floodfill
+				std::stack<vi2d> queue;
+				queue.push({i, j});
+				while(queue.size()) {
+					vi2d c=queue.top();
+					queue.pop();
+
+					//dont fill air or refill
+					int k=ix(c.x, c.y);
+					if(!grid[k]||filled[k]) continue;
+
+					//update fill grid
+					filled[k]=true;
+					//store it
+					curr.emplace_back(c);
+
+					//update neighbors if in range
+					if(c.x>0) queue.push({c.x-1, c.y});
+					if(c.y>0) queue.push({c.x, c.y-1});
+					if(c.x<width-1) queue.push({c.x+1, c.y});
+					if(c.y<height-1) queue.push({c.x, c.y+1});
+				}
+
+				//just making sure...
+				if(!curr.empty()) shapes.emplace_back(curr);
+			}
+		}
+
+		delete[] filled;
+
+		//for every shape
+		for(const auto& shp:shapes) {
+			olc::Pixel col(rand()%255, rand()%255, rand()%255);
+			//show all of its blocks
+			for(const auto& b:shp) {
+				FillRectDecal(cell_size*b, {cell_size, cell_size}, col);
+			}
+		}
+	}
 #pragma endregion
 
 	void render(float dt) {
@@ -342,9 +527,15 @@ struct Example : olc::PixelGameEngine {
 
 		if(show_grid) renderGrid();
 
-		if(show_player) drawPlayerFOV();
+		if(show_player) renderPlayerFOV();
 
-		renderCells();
+		if(show_flooded) {
+			srand(2*total_dt);
+			renderShapes();
+		} else renderCells();
+
+		//show corners?
+		if(show_corners) renderCorners();
 
 		//show hover cell
 		if(show_grid) DrawRectDecal(cell_size*vf2d(mi, mj), cell_size*vf2d(1, 1), olc::GREEN);
@@ -364,7 +555,7 @@ struct Example : olc::PixelGameEngine {
 
 int main() {
 	Example demo;
-	bool vsync=false;
+	bool vsync=true;
 	if(demo.Construct(600, 400, 1, 1, false, vsync)) demo.Start();
 
 	return 0;
