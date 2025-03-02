@@ -31,13 +31,13 @@ int main() {
 		}
 
 		//construct filename
-		std::string filename="assets/piano/";
+		std::string filename="assets/";
 		filename+=c, filename+=n;
 		filename+=".wav";
 
 		//load the sucker
 		if(!notes[i].LoadAudioWaveform(filename)) {
-			std::cout<<"error loading sound\n";
+			std::cout<<"error loading "<<filename<<'\n';
 
 			return false;
 		}

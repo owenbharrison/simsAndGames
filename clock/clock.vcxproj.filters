@@ -20,29 +20,61 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\seg_7.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\mod.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg_1.png">
+    <Image Include="assets\seg1.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg_2.png">
+    <Image Include="assets\seg2.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg_3.png">
+    <Image Include="assets\seg3.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg_4.png">
+    <Image Include="assets\seg4.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg_5.png">
+    <Image Include="assets\seg5.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg_6.png">
+    <Image Include="assets\seg6.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\seg0.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="assets\click9.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click0.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click2.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click3.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click4.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click5.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click6.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click7.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\click8.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
   </ItemGroup>
 </Project>

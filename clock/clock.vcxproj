@@ -143,13 +143,25 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\mod.png" />
-    <Image Include="assets\seg_1.png" />
-    <Image Include="assets\seg_2.png" />
-    <Image Include="assets\seg_3.png" />
-    <Image Include="assets\seg_4.png" />
-    <Image Include="assets\seg_5.png" />
-    <Image Include="assets\seg_6.png" />
-    <Image Include="assets\seg_7.png" />
+    <Image Include="assets\seg0.png" />
+    <Image Include="assets\seg1.png" />
+    <Image Include="assets\seg2.png" />
+    <Image Include="assets\seg3.png" />
+    <Image Include="assets\seg4.png" />
+    <Image Include="assets\seg5.png" />
+    <Image Include="assets\seg6.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="assets\click0.wav" />
+    <Media Include="assets\click1.wav" />
+    <Media Include="assets\click2.wav" />
+    <Media Include="assets\click3.wav" />
+    <Media Include="assets\click4.wav" />
+    <Media Include="assets\click5.wav" />
+    <Media Include="assets\click6.wav" />
+    <Media Include="assets\click7.wav" />
+    <Media Include="assets\click8.wav" />
+    <Media Include="assets\click9.wav" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
