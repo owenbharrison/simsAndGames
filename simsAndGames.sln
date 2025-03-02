@@ -27,6 +27,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "raycasting", "raycasting\ra
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "shaders", "shaders\shaders.vcxproj", "{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "clock", "clock\clock.vcxproj", "{568956BF-94D6-4842-9402-9CF4D487FAB4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -131,6 +133,14 @@ Global
 		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Release|x64.Build.0 = Release|x64
 		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Release|x86.ActiveCfg = Release|Win32
 		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Release|x86.Build.0 = Release|Win32
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x64.ActiveCfg = Debug|x64
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x64.Build.0 = Debug|x64
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x86.ActiveCfg = Debug|Win32
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x86.Build.0 = Debug|Win32
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x64.ActiveCfg = Release|x64
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x64.Build.0 = Release|x64
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x86.ActiveCfg = Release|Win32
+		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

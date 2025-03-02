@@ -398,3 +398,5 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+/shaders/assets/chick2.jpg
+/shaders/assets/chick1.jpg
