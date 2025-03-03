@@ -163,6 +163,9 @@
     <Media Include="assets\click8.wav" />
     <Media Include="assets\click9.wav" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\mod_states.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

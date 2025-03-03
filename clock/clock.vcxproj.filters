@@ -77,4 +77,7 @@
       <Filter>Resource Files</Filter>
     </Media>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\mod_states.txt" />
+  </ItemGroup>
 </Project>
