@@ -196,37 +196,33 @@ struct Example : olc::PixelGameEngine {
 		uint8_t hour, minute;
 		getTime(hour, minute);
 
-		//if between 8AM and 10PM: update every min
-		//else: update every hour
-		if((hour>=8&&hour<=22)||minute==0) {
-			//format time
-			uint8_t hh, hl, mh, ml;
-			formatTime(hour, minute, hh, hl, mh, ml);
+		//format time
+		uint8_t hh, hl, mh, ml;
+		formatTime(hour, minute, hh, hl, mh, ml);
 
-			//set if changed
-			bool set_hh=hh!=hour_high;
-			bool set_hl=hl!=hour_low;
-			bool set_mh=mh!=minute_high;
-			bool set_ml=ml!=minute_low;
+		//set if changed
+		bool set_hh=hh!=hour_high;
+		bool set_hl=hl!=hour_low;
+		bool set_mh=mh!=minute_high;
+		bool set_ml=ml!=minute_low;
 
-			//clear old backwards
-			if(set_ml) mod[3].displayDigit(minute_low, false);
-			if(set_mh) mod[2].displayDigit(minute_high, false);
-			if(set_hl) mod[1].displayDigit(hour_low, false);
-			if(set_hh&&hour_high) mod[0].displayDigit(hour_high, false);
+		//clear old backwards
+		if(set_ml) mod[3].displayDigit(minute_low, false);
+		if(set_mh) mod[2].displayDigit(minute_high, false);
+		if(set_hl) mod[1].displayDigit(hour_low, false);
+		if(set_hh&&hour_high) mod[0].displayDigit(hour_high, false);
 
-			//set new
-			hour_high=hh;
-			hour_low=hl;
-			minute_high=mh;
-			minute_low=ml;
+		//set new
+		hour_high=hh;
+		hour_low=hl;
+		minute_high=mh;
+		minute_low=ml;
 
-			//write new
-			if(set_hh&&hour_high) mod[0].displayDigit(hour_high, true);
-			if(set_hl) mod[1].displayDigit(hour_low, true);
-			if(set_mh) mod[2].displayDigit(minute_high, true);
-			if(set_ml) mod[3].displayDigit(minute_low, true);
-		}
+		//write new
+		if(set_hh&&hour_high) mod[0].displayDigit(hour_high, true);
+		if(set_hl) mod[1].displayDigit(hour_low, true);
+		if(set_mh) mod[2].displayDigit(minute_high, true);
+		if(set_ml) mod[3].displayDigit(minute_low, true);
 
 		//this will be off by 5 sec at most(during day)
 		delay(5000);
