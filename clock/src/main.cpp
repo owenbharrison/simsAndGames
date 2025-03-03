@@ -71,6 +71,10 @@ struct Mod {
 	}
 
 	void displayDigit(uint8_t dig, bool onoff) {
+		if(onoff) std::cout<<"writ";
+		else std::cout<<"clear";
+		std::cout<<"ing "<<int(dig)<<'\n';
+
 		//for each step
 		for(uint8_t i=0; i<7; i++) {
 			//get segment
@@ -110,6 +114,8 @@ struct Example : olc::PixelGameEngine {
 
 	//write extended 0
 	void doLoop(uint8_t st, uint8_t en) {
+		std::cout<<"doing loop from "<<int(st)<<" to "<<int(en)<<'\n';
+
 		//write, then clear
 		for(int8_t f=1; f>=0; f--) {
 			int8_t m=st;
@@ -141,8 +147,10 @@ struct Example : olc::PixelGameEngine {
 
 		hour=local_tm.tm_hour;
 		minute=local_tm.tm_min;
+
+		std::cout<<"got time: "<<int(hour)<<':'<<int(minute)<<'\n';
 	}
-	
+
 	//low level formatting
 	uint8_t hour_high=0, hour_low=0, minute_high=0, minute_low=0;
 	void formatTime(uint8_t hour, uint8_t minute, uint8_t& hh, uint8_t& hl, uint8_t& mh, uint8_t& ml) {
@@ -154,10 +162,16 @@ struct Example : olc::PixelGameEngine {
 		hl=hour%10;
 		mh=minute/10;
 		ml=minute%10;
+
+		std::cout<<"  formatted time: ";
+		if(hh) std::cout<<int(hh);
+		else std::cout<<' ';
+		std::cout<<int(hl)<<int(mh)<<int(ml)<<'\n';
 	}
 
 	void clock_setup() {
 		//clear old
+		std::cout<<"clear old\n";
 		for(uint8_t m=0; m<4; m++) {
 			mod[m].clear();
 		}
@@ -167,10 +181,10 @@ struct Example : olc::PixelGameEngine {
 		doLoop(2, 3);
 
 		//init time
+		std::cout<<"init time\n";
 		uint8_t hour, minute;
 		getTime(hour, minute);
 		formatTime(hour, minute, hour_high, hour_low, minute_high, minute_low);
-
 		if(hour_high) mod[0].displayDigit(hour_high, true);
 		mod[1].displayDigit(hour_low, true);
 		mod[2].displayDigit(minute_high, true);
@@ -214,14 +228,15 @@ struct Example : olc::PixelGameEngine {
 			if(set_ml) mod[3].displayDigit(minute_low, true);
 		}
 
-		//this will be off by a second at most
-		delay(1000);
+		//this will be off by 5 sec at most(during day)
+		delay(5000);
 	}
 #pragma endregion 
 
 	bool OnUserCreate() override {
 #pragma region SIMULATION ASSETS
 		//load segment sprites
+		std::cout<<"load segment sprites\n";
 		for(uint8_t s=0; s<7; s++) {
 			std::string file="assets/seg"+std::to_string(s)+".png";
 			seg_spr[s]=new olc::Sprite(file);
@@ -230,6 +245,7 @@ struct Example : olc::PixelGameEngine {
 		mod_sz=vf2d(seg_spr[0]->width, seg_spr[0]->height);
 
 		//load click sounds
+		std::cout<<"load click sounds\n";
 		sound_engine.InitialiseAudio();
 		sound_engine.SetOutputVolume(.7f);
 		for(uint8_t i=0; i<10; i++) {
@@ -240,7 +256,8 @@ struct Example : olc::PixelGameEngine {
 			}
 		}
 
-		//load old states
+		//load module states
+		std::cout<<"load module states\n";
 		std::ifstream file("assets/mod_states.txt");
 		if(file.fail()) {
 			std::cout<<"couldn't load states\n";
@@ -259,6 +276,7 @@ struct Example : olc::PixelGameEngine {
 #pragma endregion
 
 		//init module positions
+		std::cout<<"init module positions\n";
 		float dx=ScreenWidth()/4.f;
 		float x=.5f*dx;
 		float y=.5f*ScreenHeight();
@@ -268,9 +286,10 @@ struct Example : olc::PixelGameEngine {
 		}
 
 		//init module callbacks
+		std::cout<<"init module callbacks\n";
 		auto click_cb=[this] () {
 			//play random segment flip noise
-			int i=rand()%10;
+			uint8_t i=rand()%10;
 			sound_engine.PlayWaveform(&click_sound[i]);
 		};
 		for(uint8_t m=0; m<4; m++) {
@@ -278,6 +297,7 @@ struct Example : olc::PixelGameEngine {
 		}
 
 		//start clock_prog
+		std::cout<<"start clock prog\n";
 		clock_prog=std::thread([&] () {
 			clock_setup();
 			start_loop=true;
@@ -292,6 +312,7 @@ struct Example : olc::PixelGameEngine {
 		clock_prog.join();
 
 		//save module states
+		std::cout<<"save module states\n";
 		std::ofstream file("assets/mod_states.txt");
 		if(file.fail()) {
 			std::cout<<"couldn't save state\n";
@@ -315,16 +336,6 @@ struct Example : olc::PixelGameEngine {
 	}
 
 	bool OnUserUpdate(float dt) override {
-		Clear(olc::GREY);
-
-		//show corresponding digits
-		for(uint8_t m=0; m<4; m++) {
-			FillRectDecal(mod[m].pos, mod_sz, olc::BLACK);
-			for(uint8_t s=0; s<7; s++) {
-				if((1<<s)&mod[m].state) DrawDecal(mod[m].pos, seg_dec[s]);
-			}
-		}
-
 		//if setup over, start loop
 		if(start_loop) {
 			start_loop=false;
@@ -333,6 +344,18 @@ struct Example : olc::PixelGameEngine {
 			clock_prog=std::thread([&] () {
 				while(!stop_clock) clock_loop();
 			});
+		}
+
+		//render
+		Clear(olc::GREY);
+
+		//show modules
+		for(uint8_t m=0; m<4; m++) {
+			//show corresponding segments
+			FillRectDecal(mod[m].pos, mod_sz, olc::BLACK);
+			for(uint8_t s=0; s<7; s++) {
+				if((1<<s)&mod[m].state) DrawDecal(mod[m].pos, seg_dec[s]);
+			}
 		}
 
 		return true;
