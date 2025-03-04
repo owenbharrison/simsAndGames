@@ -71,10 +71,6 @@ struct Mod {
 	}
 
 	void displayDigit(uint8_t dig, bool onoff) {
-		if(onoff) std::cout<<"writ";
-		else std::cout<<"clear";
-		std::cout<<"ing "<<int(dig)<<'\n';
-
 		//for each step
 		for(uint8_t i=0; i<7; i++) {
 			//get segment
@@ -108,14 +104,14 @@ struct Example : olc::PixelGameEngine {
 	//thread & flag
 	std::thread clock_prog;
 	std::atomic<bool> start_loop=false;
+	std::atomic<bool> clock_left=false;
+	std::atomic<bool> clock_right=false;
 
 #pragma region CLOCK PROGRAM
 	Mod mod[4];
 
 	//write extended 0
 	void doLoop(uint8_t st, uint8_t en) {
-		std::cout<<"doing loop from "<<int(st)<<" to "<<int(en)<<'\n';
-
 		//write, then clear
 		for(int8_t f=1; f>=0; f--) {
 			int8_t m=st;
@@ -124,7 +120,6 @@ struct Example : olc::PixelGameEngine {
 				if(f) mod[m].seg_on(s);
 				else mod[m].seg_off(s);
 				delay(segment_write_time);
-				delay(time_between_segments);
 
 				//segment halt logic
 				if(s==0&&m!=en) s--, m++;//top
@@ -147,8 +142,6 @@ struct Example : olc::PixelGameEngine {
 
 		hour=local_tm.tm_hour;
 		minute=local_tm.tm_min;
-
-		std::cout<<"got time: "<<int(hour)<<':'<<int(minute)<<'\n';
 	}
 
 	//low level formatting
@@ -162,11 +155,6 @@ struct Example : olc::PixelGameEngine {
 		hl=hour%10;
 		mh=minute/10;
 		ml=minute%10;
-
-		std::cout<<"  formatted time: ";
-		if(hh) std::cout<<int(hh);
-		else std::cout<<' ';
-		std::cout<<int(hl)<<int(mh)<<int(ml)<<'\n';
 	}
 
 	void clock_setup() {
@@ -177,8 +165,10 @@ struct Example : olc::PixelGameEngine {
 		}
 
 		//fancy loops
+		std::cout<<"do loops\n";
 		doLoop(0, 1);
 		doLoop(2, 3);
+		doLoop(0, 3);
 
 		//init time
 		std::cout<<"init time\n";
@@ -224,8 +214,63 @@ struct Example : olc::PixelGameEngine {
 		if(set_mh) mod[2].displayDigit(minute_high, true);
 		if(set_ml) mod[3].displayDigit(minute_low, true);
 
-		//this will be off by 5 sec at most(during day)
-		delay(5000);
+		//clear to the right
+		if(clock_right) {
+			std::cout<<"clearing right\n";
+			clock_right=false;
+
+			//clear all
+			uint8_t bef[4];
+			const uint8_t pat[7]{5, 4, 0, 6, 3, 1, 2};
+			for(uint8_t m=0; m<4; m++) {
+				bef[m]=mod[m].state;
+				for(uint8_t i=0; i<7; i++) {
+					if((1<<pat[i])&bef[m]) {
+						mod[m].seg_off(pat[i]);
+						delay(segment_write_time);
+					}
+				}
+			}
+
+			//rewrite
+			for(uint8_t m=0; m<4; m++) {
+				for(uint8_t i=0; i<7; i++) {
+					if((1<<pat[i])&bef[m]) {
+						mod[m].seg_on(pat[i]);
+						delay(segment_write_time);
+					}
+				}
+			}
+		}
+
+		//clear to the left
+		if(clock_left) {
+			std::cout<<"clearing left\n";
+			clock_left=false;
+
+			//clear all
+			uint8_t bef[4];
+			const uint8_t pat[7]{2, 1, 3, 6, 0, 4, 5};
+			for(int8_t m=3; m>=0; m--) {
+				bef[m]=mod[m].state;
+				for(uint8_t i=0; i<7; i++) {
+					if((1<<pat[i])&bef[m]) {
+						mod[m].seg_off(pat[i]);
+						delay(segment_write_time);
+					}
+				}
+			}
+
+			//rewrite
+			for(int8_t m=3; m>=0; m--) {
+				for(uint8_t i=0; i<7; i++) {
+					if((1<<pat[i])&bef[m]) {
+						mod[m].seg_on(pat[i]);
+						delay(segment_write_time);
+					}
+				}
+			}
+		}
 	}
 #pragma endregion 
 
@@ -243,7 +288,7 @@ struct Example : olc::PixelGameEngine {
 		//load click sounds
 		std::cout<<"load click sounds\n";
 		sound_engine.InitialiseAudio();
-		sound_engine.SetOutputVolume(.7f);
+		sound_engine.SetOutputVolume(.9f);
 		for(uint8_t i=0; i<10; i++) {
 			std::string file="assets/click"+std::to_string(i)+".wav";
 			if(!click_sound[i].LoadAudioWaveform(file)) {
@@ -341,6 +386,10 @@ struct Example : olc::PixelGameEngine {
 				while(!stop_clock) clock_loop();
 			});
 		}
+
+		//send action
+		if(GetKey(olc::Key::LEFT).bPressed) clock_left=true;
+		if(GetKey(olc::Key::RIGHT).bPressed) clock_right=true;
 
 		//render
 		Clear(olc::GREY);
