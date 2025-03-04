@@ -1,0 +1,39 @@
+//make structure tensor from partial derivative using sobel
+const int sobel[9]=int[9](-1,0,1,-2,0,2,-1,0,1);
+
+int ix(int i, int j) {
+	return i+3*j;
+}
+
+void main() {
+	//left=calc_st
+	if(xUV1.x<.5) {
+		vec2 tex_sz=textureSize(tex1, 0);
+		vec2 uv=vec2(2*xUV1.x, xUV1.y);
+
+		vec3 grad_x=vec3(0), grad_y=vec3(0);
+		for(int i=0; i<3; i++) {
+			for(int j=0; j<3; j++) {
+				vec2 offset_uv=vec2(i-1, j-1)/tex_sz;
+				vec4 col=texture(tex1, uv+offset_uv);
+				grad_x+=sobel[ix(i, j)]*col.rgb;
+				grad_y+=sobel[ix(j, 2-i)]*col.rgb;
+			}
+		}
+		grad_x*=.25;
+		grad_y*=.25;
+
+		//map [-1,1] to [0,1]
+		pix_out=.5+.5*vec4(
+			dot(grad_x, grad_x),
+			dot(grad_x, grad_y),
+			dot(grad_y, grad_y),
+			1
+		);
+	}
+	//right=source
+	else {
+		vec2 uv=vec2(2*(xUV1.x-.5), xUV1.y);
+		pix_out=texture(tex1, uv);
+	}
+}

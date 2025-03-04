@@ -1,0 +1,27 @@
+//line integral convolution
+#define K 8
+
+#define SIGMA 3.1
+
+#define GETDIR(a) normalize(.5+.5*texture(tex1, a).xy)
+
+void main() {
+	vec2 tex_sz=textureSize(tex1, 0);
+	vec2 recip=1/tex_sz;   
+
+	//blur along edge
+	vec2 pt0=.5+xUV1*tex_sz, pt=pt0;
+	vec2 dir0=GETDIR(uv), dir=dir0;
+	vec4 sum=vec4(0);
+	for(int i=-K; i<=K; i++) {
+		//which way are we going?
+		if(i<0) pt-=dir;
+		else if(i==0) pt=pt0, dir=dir0;
+		else pt+=dir;
+
+		//sampling
+		float weight=gaussian(pt-pt0);
+		vec2 pt_uv=recip*pt;
+		vec4 col=texture(tex1, pt_uv);
+	}
+}
