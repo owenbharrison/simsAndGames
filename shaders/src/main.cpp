@@ -30,7 +30,7 @@ struct Demo : public olc::PixelGameEngine {
 	}
 
 	olc::Shade shade;
-	olc::Effect pass1, pass2;
+	olc::Effect pass1, pass2, pass3;
 
 	struct Buffer {
 		olc::Sprite* spr=nullptr;
@@ -45,46 +45,49 @@ struct Demo : public olc::PixelGameEngine {
 	Buffer source, buf_a, buf_b, buf_c;
 
 	bool OnUserCreate() override {
-		//source
-		olc::Sprite* lenna=new olc::Sprite("assets/lenna.png");
-		source.spr=new olc::Sprite(lenna->width/2, lenna->height/2);
-		for(int i=0; i<source.spr->width; i++) {
-			for(int j=0; j<source.spr->height; j++) {
-				source.spr->SetPixel(i, j, lenna->GetPixel(2*i, 2*j));
-			}
-		}
-		delete lenna;
+		//initialize buffers
+		source.spr=new olc::Sprite("assets/london.jpg");
 		source.dec=new olc::Decal(source.spr);
-
-		//1st pass
-		buf_a.spr=new olc::Sprite(source.spr->width, source.spr->height);
+		buf_a.spr=new olc::Sprite(2*source.spr->width, source.spr->height);
 		buf_a.dec=new olc::Decal(buf_a.spr);
-
-		pass1=shade.MakeEffect(loadEffect("fx/test/flip_x.txt"));
+		buf_b.spr=new olc::Sprite(2*source.spr->width, source.spr->height);
+		buf_b.dec=new olc::Decal(buf_b.spr);
+		buf_c.spr=new olc::Sprite(source.spr->width, source.spr->height);
+		buf_c.dec=new olc::Decal(buf_c.spr);
+		
+		//load effect passes
+		pass1=shade.MakeEffect(loadEffect("fx/eeb/calc_st.txt"));
 		if(!pass1.IsOK()) {
 			std::cout<<"pass1 err:\n"<<pass1.GetStatus();
 			return false;
 		}
+		pass2=shade.MakeEffect(loadEffect("fx/eeb/blur_st.txt"));
+		if(!pass2.IsOK()) {
+			std::cout<<"pass2 err:\n"<<pass2.GetStatus();
+			return false;
+		}
+		pass3=shade.MakeEffect(loadEffect("fx/eeb/lic.txt"));
+		if(!pass3.IsOK()) {
+			std::cout<<"pass3 err:\n"<<pass3.GetStatus();
+			return false;
+		}
 
+		//apply them
 		shade.SetSourceDecal(source.dec);
 		shade.SetTargetDecal(buf_a.dec);
 		shade.Start(&pass1);
 		shade.DrawQuad({-1, -1}, {2, 2});
 		shade.End();
 
-		//1st pass
-		buf_b.spr=new olc::Sprite(source.spr->width, source.spr->height);
-		buf_b.dec=new olc::Decal(buf_b.spr);
-
-		pass2=shade.MakeEffect(loadEffect("fx/test/flip_y.txt"));
-		if(!pass2.IsOK()) {
-			std::cout<<"pass2 err:\n"<<pass2.GetStatus();
-			return false;
-		}
-
 		shade.SetSourceDecal(buf_a.dec);
 		shade.SetTargetDecal(buf_b.dec);
 		shade.Start(&pass2);
+		shade.DrawQuad({-1, -1}, {2, 2});
+		shade.End();
+
+		shade.SetSourceDecal(buf_b.dec);
+		shade.SetTargetDecal(buf_c.dec);
+		shade.Start(&pass3);
 		shade.DrawQuad({-1, -1}, {2, 2});
 		shade.End();
 
@@ -98,9 +101,8 @@ struct Demo : public olc::PixelGameEngine {
 	bool OnUserUpdate(float dt) override {
 		Clear(olc::BLACK);
 
-		DrawDecal(vf2d(0, 0), source.dec);
-		DrawDecal(vf2d(0, 200), buf_a.dec);
-		DrawDecal(vf2d(0, 400), buf_b.dec);
+		if(GetKey(olc::Key::SPACE).bHeld) DrawDecal({0, 0}, source.dec);
+		else DrawDecal({0, 0}, buf_c.dec);
 
 		return true;
 	}
@@ -109,7 +111,7 @@ struct Demo : public olc::PixelGameEngine {
 int main() {
 	Demo d;
 	bool vsync=true;
-	if(d.Construct(200, 600, 1, 1, false, vsync)) d.Start();
+	if(d.Construct(700, 400, 1, 1, false, vsync)) d.Start();
 
 	return 0;
 }

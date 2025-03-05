@@ -34,6 +34,9 @@
     <Image Include="assets\chick2.jpg">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\london.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <Text Include="fx\rainbow_edges.txt" />
@@ -45,5 +48,9 @@
     <Text Include="fx\test\invert.txt" />
     <Text Include="fx\test\flip_x.txt" />
     <Text Include="fx\test\flip_y.txt" />
+    <Text Include="fx\test\avg.txt" />
+    <Text Include="fx\eeb_old\blur_st.txt" />
+    <Text Include="fx\eeb_old\calc_st.txt" />
+    <Text Include="fx\eeb_old\lic.txt" />
   </ItemGroup>
 </Project>

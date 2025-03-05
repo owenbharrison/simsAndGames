@@ -20,15 +20,16 @@ void main() {
 				grad_y+=sobel[ix(j, 2-i)]*col.rgb;
 			}
 		}
-		grad_x/=4;
-		grad_y/=4;
+		grad_x*=.25;
+		grad_y*=.25;
 
-		//map [-3,3] to [0,1]
-		pix_out=vec4(.5+vec3(
+		//map [-1,1] to [0,1]
+		pix_out=vec4(
 			dot(grad_x, grad_x),
 			dot(grad_x, grad_y),
-			dot(grad_y, grad_y)
-		)/6, 1);
+			dot(grad_y, grad_y),
+			1
+		);
 	}
 	//right=source
 	else {
