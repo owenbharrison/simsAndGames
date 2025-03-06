@@ -1,0 +1,47 @@
+//blur structure tensor, calc eigenvectors?
+#define K 10
+
+#define PI 3.1415927
+
+#define SIGMA 4.3
+float gaussian(vec2 pos) {
+    float left=1/(2*PI*SIGMA*SIGMA);
+    float right=exp(-dot(pos, pos)/(2*SIGMA*SIGMA));
+    return left*right;
+}
+
+void main() {
+	//left=blur
+	if(xUV1.x<.5) {
+		vec2 tex_sz=textureSize(tex1, 0)/vec2(2, 1);
+
+		vec4 sum=vec4(0);
+		for(int i=-K; i<=K; i++) {
+			for(int j=-K; j<=K; j++) {
+				vec2 offset=vec2(i-1, j-1);
+				float weight=gaussian(offset);
+
+				vec2 offset_uv=offset/tex_sz;
+				vec4 col=texture(tex1, xUV1+offset_uv);
+
+				//undo normalization
+				vec3 efg=6*(col.rgb-.5);
+				sum+=weight*vec4(efg, 1);
+			}
+		}
+		vec3 efg=sum.rgb/sum.a;
+
+		//calc eigenvalues
+		float e=efg.x, f=efg.y, g=efg.z;
+		float sq_disc=sqrt(pow(e-g, 2)+4*f*f);
+		float l1=.5*(e+g+sq_disc);
+		float l2=.5*(e+g-sq_disc);
+
+		//calc eigenvectors
+		vec2 v1=vec2(f, l1-e);//maximal, gradient
+		vec2 v2=vec2(l2-g, f);//minimal, tangent
+		pix_out=vec4(.5+.5*normalize(v2), 0, 1);
+	}
+	//right=source
+	else pix_out=texture(tex1, xUV1);
+}

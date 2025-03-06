@@ -1,0 +1,37 @@
+//line integral convolution
+#define K 10
+
+#define PI 3.1415927
+#define SIGMA 3.4
+float gaussian(vec2 pos) {
+    float left=1/(2*PI*SIGMA*SIGMA);
+    float right=exp(-dot(pos, pos)/(2*SIGMA*SIGMA));
+    return left*right;
+}
+
+vec2 getDir(vec2 uv) {
+	vec4 col=texture(tex1, uv);
+	return normalize(col.xy);
+}
+
+void main() {
+	vec2 tex_sz=textureSize(tex1, 0)/vec2(2, 1);
+
+	vec2 pt0=.5+tex_sz*xUV1, pt=pt0;
+	vec2 dir0=getDir(vec2(.5*xUV1.x, xUV1.y)), dir=dir0;
+	vec4 sum=vec4(0);
+	for(int i=-K; i<=K; i++) {
+		//which way are we going?
+		if(i<0) pt-=dir;
+		else if(i==0) pt=pt0, dir=dir0;
+		else pt+=dir;
+
+		//sampling
+		float weight=gaussian(pt-pt0);
+		vec2 pt_uv=pt/tex_sz;
+		vec4 col=texture(tex1, vec2(.5+.5*pt_uv.x, pt_uv.y));
+		sum+=weight*vec4(col.rgb, 1);
+		dir=getDir(vec2(.5*pt_uv.x, pt_uv.y));
+	}
+	pix_out=sum/sum.a;
+}

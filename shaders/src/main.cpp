@@ -1,8 +1,28 @@
 #define OLC_GFX_OPENGL33
 #define OLC_PGE_APPLICATION
 #include "common/olcPixelGameEngine.h"
+using olc::vf2d;
 
 #include "common/shade_shader.h"
+
+#include <fstream>
+
+olc::EffectConfig loadEffect(const std::string& filename) {
+	//get file
+	std::ifstream file(filename);
+	if(file.fail()) return olc::fx::FX_NORMAL;
+
+	//dump contents into str stream
+	std::stringstream mid;
+	mid<<file.rdbuf();
+
+	return {
+		DEFAULT_VS,
+		mid.str(),
+		1,
+		1
+	};
+}
 
 struct Demo : public olc::PixelGameEngine {
 	Demo() {
@@ -10,81 +30,79 @@ struct Demo : public olc::PixelGameEngine {
 	}
 
 	olc::Shade shade;
-	olc::Effect effect;
+	olc::Effect pass1, pass2, pass3;
 
-	olc::Sprite* source_spr=nullptr;
-	olc::Decal* source_dec=nullptr;
-	olc::Sprite* target_spr=nullptr;
-	olc::Decal* target_dec=nullptr;
+	struct Buffer {
+		olc::Sprite* spr=nullptr;
+		olc::Decal* dec=nullptr;
+
+		~Buffer() {
+			delete spr;
+			delete dec;
+		}
+	};
+
+	Buffer source, buf_a, buf_b, buf_c;
 
 	bool OnUserCreate() override {
-		olc::EffectConfig rainbow_sobel{
-			DEFAULT_VS,
-			//x&y sobel kernel
-			"const int sobel[9]=int[9](-1,0,1,-2,0,2,-1,0,1);\n"
-			//three phase shifted sine waves
-			"const float Pi=3.1415927;\n"
-			"vec3 colorWheel(float angle) {\n"
-			"  return .5+.5*cos(angle+Pi*vec3(0,.667,-.667));\n"
-			"}\n"
-			"void main() {\n"
-			"  vec2 sz=1./vec2(textureSize(tex1, 0));\n"
-			"  vec2 sum=vec2(0);\n"
-					//accumulate convolution
-			"  for(int i=0; i<3; i++) {\n"
-			"    for(int j=0; j<3; j++) {\n"
-			"      vec2 offset_uv=sz*vec2(i, j);\n"
-			"      vec4 col=texture(tex1, xUV1+offset_uv);\n"
-							//luminance formula
-			"      float lum=dot(col.rgb, vec3(.299, .587, .114));\n"
-			"      sum+=lum*vec2(sobel[i+3*j], sobel[j+3*i]);\n"
-			"    }\n"
-			"  }\n"
-			"  float mag=length(sum);\n"
-					//which angle is edge?
-			"  float angle=atan(sum.y, sum.x);\n"
-			"  pix_out=vec4(mag*colorWheel(angle), 1);\n"
-			"}\n",
-			1,
-			1,
-		};
-		effect=shade.MakeEffect(rainbow_sobel);
-		if(!effect.IsOK()) {
-			std::cout<<effect.GetStatus();
-
+		//initialize buffers
+		source.spr=new olc::Sprite("assets/london.jpg");
+		source.dec=new olc::Decal(source.spr);
+		buf_a.spr=new olc::Sprite(2*source.spr->width, source.spr->height);
+		buf_a.dec=new olc::Decal(buf_a.spr);
+		buf_b.spr=new olc::Sprite(2*source.spr->width, source.spr->height);
+		buf_b.dec=new olc::Decal(buf_b.spr);
+		buf_c.spr=new olc::Sprite(source.spr->width, source.spr->height);
+		buf_c.dec=new olc::Decal(buf_c.spr);
+		
+		//load effect passes
+		pass1=shade.MakeEffect(loadEffect("fx/eeb/calc_st.txt"));
+		if(!pass1.IsOK()) {
+			std::cout<<"pass1 err:\n"<<pass1.GetStatus();
+			return false;
+		}
+		pass2=shade.MakeEffect(loadEffect("fx/eeb/blur_st.txt"));
+		if(!pass2.IsOK()) {
+			std::cout<<"pass2 err:\n"<<pass2.GetStatus();
+			return false;
+		}
+		pass3=shade.MakeEffect(loadEffect("fx/eeb/lic.txt"));
+		if(!pass3.IsOK()) {
+			std::cout<<"pass3 err:\n"<<pass3.GetStatus();
 			return false;
 		}
 
-		source_spr=new olc::Sprite("assets/lenna.png");
-		source_dec=new olc::Decal(source_spr);
-		target_spr=new olc::Sprite(source_spr->width, source_spr->height);
-		target_dec=new olc::Decal(target_spr);
+		//apply them
+		shade.SetSourceDecal(source.dec);
+		shade.SetTargetDecal(buf_a.dec);
+		shade.Start(&pass1);
+		shade.DrawQuad({-1, -1}, {2, 2});
+		shade.End();
+
+		shade.SetSourceDecal(buf_a.dec);
+		shade.SetTargetDecal(buf_b.dec);
+		shade.Start(&pass2);
+		shade.DrawQuad({-1, -1}, {2, 2});
+		shade.End();
+
+		shade.SetSourceDecal(buf_b.dec);
+		shade.SetTargetDecal(buf_c.dec);
+		shade.Start(&pass3);
+		shade.DrawQuad({-1, -1}, {2, 2});
+		shade.End();
 
 		return true;
 	}
 
 	bool OnUserDestroy() override {
-		delete source_spr;
-		delete source_dec;
-		delete target_spr;
-		delete target_dec;
-
 		return true;
 	}
 
 	bool OnUserUpdate(float dt) override {
-		shade.Start(&effect);
-		//set ins/outs
-		shade.SetSourceDecal(source_dec);
-		shade.SetTargetDecal(target_dec);
-		//render?
-		shade.DrawDecal({0, 0}, source_dec);
-		shade.End();
+		Clear(olc::BLACK);
 
-		Clear(olc::GREY);
-
-		//show final render.
-		DrawDecal({0, 0}, target_dec);
+		if(GetKey(olc::Key::SPACE).bHeld) DrawDecal({0, 0}, source.dec);
+		else DrawDecal({0, 0}, buf_c.dec);
 
 		return true;
 	}
@@ -92,8 +110,8 @@ struct Demo : public olc::PixelGameEngine {
 
 int main() {
 	Demo d;
-	bool vsync=false;
-	if(d.Construct(400, 400, 1, 1, false, vsync)) d.Start();
+	bool vsync=true;
+	if(d.Construct(700, 400, 1, 1, false, vsync)) d.Start();
 
 	return 0;
 }

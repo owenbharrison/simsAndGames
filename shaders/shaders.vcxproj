@@ -145,7 +145,25 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\chick1.jpg" />
+    <Image Include="assets\chick2.jpg" />
     <Image Include="assets\lenna.png" />
+    <Image Include="assets\london.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="fx\eeb_old\blur_st.txt" />
+    <Text Include="fx\eeb_old\calc_st.txt" />
+    <Text Include="fx\eeb_old\lic.txt" />
+    <Text Include="fx\test\avg.txt" />
+    <Text Include="fx\test\flip_x.txt" />
+    <Text Include="fx\test\flip_y.txt" />
+    <Text Include="fx\test\invert.txt" />
+    <Text Include="fx\test\uv.txt" />
+    <Text Include="fx\eeb\blur_st.txt" />
+    <Text Include="fx\eeb\calc_st.txt" />
+    <Text Include="fx\eeb\lic.txt" />
+    <Text Include="fx\rainbow_edges.txt" />
+    <Text Include="thing.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

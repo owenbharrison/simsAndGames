@@ -1,0 +1,3 @@
+void main() {
+	pix_out=1-texture(tex1, xUV1);
+}
