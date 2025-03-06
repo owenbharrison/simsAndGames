@@ -19,4 +19,8 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\save.txt" />
+    <Text Include="assets\words.txt" />
+  </ItemGroup>
 </Project>
