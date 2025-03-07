@@ -119,12 +119,6 @@ struct WordleGame : olc::PixelGameEngine {
 
 		gravity={0, 32};
 
-		game.target[0]='t';
-		game.target[1]='r';
-		game.target[2]='o';
-		game.target[3]='o';
-		game.target[4]='p';
-
 		return true;
 	}
 
@@ -141,8 +135,6 @@ struct WordleGame : olc::PixelGameEngine {
 	}
 
 	void update(float dt) {
-		const vf2d mouse_pos=GetMousePos();
-
 		if(GetKey(olc::Key::CTRL).bHeld) {
 			const std::string filename="assets/save.txt";
 
