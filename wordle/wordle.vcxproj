@@ -145,6 +145,10 @@
     <Text Include="assets\words.txt" />
     <Text Include="assets\save.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\wordle.h" />
+    <ClInclude Include="src\words.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

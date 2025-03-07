@@ -2,305 +2,135 @@
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
 
-#include <fstream>
-#include <sstream>
-#include <list>
-#include <algorithm>
+#include "wordle.h"
 
 float map(float x, float a, float b, float c, float d) {
 	float t=(x-a)/(b-a);
 	return c+t*(d-c);
 }
 
-//easy to crack, but i just want to make sure
-//the user doesnt accidentally see the target
-int encrypt(char c) {
-	return 3*c;
-}
-char decrypt(int i) {
-	return i/3;
-}
-
-//string full of digits?
-bool isNumber(const std::string& s) {
-	if(s.empty()) return false;
-
-	//if NOT num, bail
-	for(const auto& c:s) {
-		if(c<'0'||c>'9') return false;
-	}
-	return true;
-}
-
-struct Example : olc::PixelGameEngine {
-	Example() {
+struct WordleGame : olc::PixelGameEngine {
+	WordleGame() {
 		sAppName="Wordle";
 	}
+	
+	Wordle game;
 
-	std::list<std::string> words;
-	bool isWord(char word[5]) {
-		//check every word
-		for(const auto& w:words) {
-			//check each letter
-			bool is_word=true;
-			for(int i=0; i<5; i++) {
-				if(word[i]!=w[i]) {
-					is_word=false;
-					break;
-				}
-			}
-			if(is_word) return true;
-		}
-		return false;
-	}
-
-	char target[5];
-	char guesses[6][5];
-	olc::Pixel guesses_col[6][5];
-	int guess_index=0, word_index=0;
-
-	bool show_cursor=true;
+	bool show_cursor=false;
 	float cursor_timer=0;
 
-	enum {
-		PLAYING,
-		WON,
-		LOST
-	};
-
-	int state=PLAYING;
-
-	bool updateColors(int g) {
-		int good=0;
-		for(int i=0; i<5; i++) {
-			char c=guesses[g][i];
-			auto& col=guesses_col[g][i];
-			//if there are n of this letter,
-			int num=0;
-			for(int j=0; j<5; j++) {
-				if(target[j]==c) num++;
-			}
-			//is this the 1->nth occurance?
-			int occur=0;
-			for(int j=0; j<=i; j++) {
-				if(guesses[g][j]==c) occur++;
-			}
-			if(occur<=num) {
-				col=olc::YELLOW;
-				if(target[i]==c) good++, col=olc::GREEN;
-			}
-		}
-		return good==5;
-	}
-
-	void initGuesses() {
-		for(int j=0; j<6; j++) {
-			for(int i=0; i<5; i++) {
-				guesses[j][i]=' ';
-				guesses_col[j][i]=olc::GREY;
-			}
-		}
-		guess_index=0;
-		word_index=0;
-	}
+	olc::Sprite* prim_rect_spr=nullptr;
+	olc::Decal* prim_rect_dec=nullptr;
 
 	bool OnUserCreate() override {
-		initGuesses();
-
-		//load all words
-		std::ifstream file("assets/words.txt");
-		if(file.fail()) {
-			std::cout<<"error loading words\n";
-
-			return false;
-		}
-
-		//read file into list
-		for(std::string line; std::getline(file, line); ) {
-			words.emplace_back(line);
-		}
-		file.close();
-
-		//ask user to load previous game
-		std::cout<<"do you want to resume? [y/n]\n";
-		std::string resp; std::getline(std::cin, resp);
-		if(resp=="y") {
-			std::ifstream file("assets/save.txt");
-			if(file.fail()) {
-				std::cout<<"couldn't load save file\n";
-				goto default_setup;
-			}
-
-			//get target
-			std::string line;
-			std::getline(file, line);
-			std::stringstream line_str(line);
-			int tar=0;
-			for(int d; tar<5&&line_str>>d; tar++) {
-				target[tar]=decrypt(d);
-			}
-			//bail if count is off
-			if(tar!=5) {
-				std::cout<<"invalid target\n";
-				goto default_setup;
-			}
-
-			//load guesses
-			int gue=0;
-			for(; gue<6&&std::getline(file, line); gue++) {
-				int num=line.length();
-				if(num>5) {
-					std::cout<<"invalid guess\n";
-					goto default_setup;
-				}
-				for(int i=0; i<num; i++) {
-					guesses[gue][i]=line[i];
-					word_index=i;
-				}
-			}
-			//bail if count is off
-			if(gue!=6) {
-				std::cout<<"invalid guesslist\n";
-				goto default_setup;
-			}
-
-			//load indexes
-			int idx=0;
-			for(; idx<2&&std::getline(file, line); idx++) {
-				if(!isNumber(line)) {
-					std::cout<<"invalid index\n";
-					goto default_setup;
-				}
-				int val=std::stoi(line);
-				if(idx==0) guess_index=val;
-				else word_index=val;
-			}
-			//bail if count is off
-			if(idx!=2) {
-				std::cout<<"invalid indexlist\n";
-				goto default_setup;
-			}
-
-			//update all colors
-			for(int i=0; i<guess_index; i++) {
-				updateColors(i);
-			}
-
-			file.close();
-			return true;
-		}
-
-default_setup:
-		initGuesses();
+		//primitive to draw with
+		prim_rect_spr=new olc::Sprite(1, 1);
+		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
+		prim_rect_dec=new olc::Decal(prim_rect_spr);
 
 		//choose random word
 		srand(time(0));
-		std::string rand_word;
-		do {
-			auto it=words.begin();
-			std::advance(it, rand()%words.size());
-			rand_word=*it;
-		//ensure its 5 letters
-		} while(rand_word.length()!=5);
+		const char* rand_word=WORDS[rand()%NUM_WORDS];
 
 		//copy into target
-		for(int i=0; i<5; i++) target[i]=rand_word[i];
+		for(int i=0; i<5; i++) game.target[i]=rand_word[i];
 
 		return true;
 	}
 
 	bool OnUserDestroy() override {
-		//save progress
-		if(state==PLAYING) {
-			std::ofstream file("assets/save.txt");
-			if(file.fail()) {
-				std::cout<<"couldn't save progress\n";
-				return true;
-			}
-
-			std::cout<<"saving progress\n";
-
-			//encrypt target
-			for(int i=0; i<5; i++) {
-				file<<encrypt(target[i])<<' ';
-			}
-			file<<'\n';
-
-			//write guesses
-			for(int j=0; j<6; j++) {
-				for(int i=0; i<5; i++) {
-					file<<guesses[j][i];
-				}
-				file<<'\n';
-			}
-
-			//write indexes
-			file<<guess_index<<'\n';
-			file<<word_index<<'\n';
-
-			file.close();
-		}
+		delete prim_rect_dec;
+		delete prim_rect_spr;
 
 		return true;
 	}
 
-	bool OnUserUpdate(float dt) override {
-		Clear(olc::WHITE);
+	void resetCursor() {
+		show_cursor=false;
+		cursor_timer=0;
+	}
 
+	void update(float dt) {
+		if(GetKey(olc::Key::CTRL).bHeld) {
+			const std::string filename="assets/save.txt";
+
+			//saving
+			if(GetKey(olc::Key::S).bPressed) {
+				if(game.save(filename)) {
+					std::cout<<"saved to: "<<filename<<'\n';
+				} else std::cout<<"unable to save\n";
+			}
+
+			//loading
+			if(GetKey(olc::Key::L).bPressed) {
+				Wordle other;
+				if(other.load(filename)) {
+					game=other;
+					std::cout<<"loaded from: "<<filename<<'\n';
+				} else std::cout<<"unable to load\n";
+			}
+		}
 		//only allow input if playing
-		if(state==PLAYING) {
+		else if(game.state==Wordle::PLAYING) {
 			//check if letter pressed
 			for(int i=0; i<26; i++) {
 				auto k=(olc::Key)(olc::Key::A+i);
 				if(GetKey(k).bPressed) {
-					if(word_index<5) {
-						guesses[guess_index][word_index]='a'+i;
-						word_index++;
-					}
+					resetCursor();
+					game.type('a'+i);
 				}
 			}
 
 			//guess
 			if(GetKey(olc::ENTER).bPressed) {
-				//ensure 5 letters
-				if(word_index==5) {
-					//is it even a word?
-					if(isWord(guesses[guess_index])) {
-						//update colors
-						if(updateColors(guess_index)) state=WON;
+				resetCursor();
 
-						//reset & increment indexes
-						word_index=0, guess_index++;
-						if(state!=WON&&guess_index==6) state=LOST;
-					} else std::cout<<"invalid word\n";
-				}
+				game.guess();
 			}
 
 			//backspace
 			if(GetKey(olc::Key::BACK).bPressed) {
-				guesses[guess_index][word_index]=' ';
-				if(word_index>0) word_index--;
+				resetCursor();
+				game.backspace();
 			}
 
 			//reset guess
 			if(GetKey(olc::Key::DEL).bPressed) {
-				word_index=0;
-				for(int i=0; i<5; i++) guesses[guess_index][i]=' ';
+				resetCursor();
+				game.resetGuess();
 			}
 		}
 
-		//cursor update
-		if(cursor_timer<0) {
-			cursor_timer+=1;
+		//every now and then,
+		if(cursor_timer>.5f) {
+			cursor_timer-=.5f;
+			//toggle on/off
 			show_cursor^=true;
 		}
-		cursor_timer-=dt;
+		cursor_timer+=dt;
+	}
 
-		//RENDER
-		switch(state) {
-			case PLAYING: Clear(olc::WHITE); break;
-			case LOST: Clear(olc::RED); break;
-			case WON: Clear(olc::BLUE); break;
+	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
+		olc::vf2d sub=b-a;
+		float len=sub.mag();
+		olc::vf2d tang=(sub/len).perp();
+
+		float angle=std::atan2f(sub.y, sub.x);
+		DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
+	}
+
+	void DrawThickRect(const olc::vf2d& pos, const olc::vf2d& sz, float rad, olc::Pixel col) {
+		FillRectDecal(pos, {rad, sz.y}, col);//left
+		FillRectDecal(pos, {sz.x, rad}, col);//top
+		FillRectDecal({pos.x+sz.x-rad, pos.y}, {rad, sz.y}, col);//right
+		FillRectDecal({pos.x, pos.y+sz.y-rad}, {sz.x, rad}, col);//bottom
+	}
+
+	void render() {
+		switch(game.state) {
+			case Wordle::PLAYING: Clear(olc::WHITE); break;
+			case Wordle::LOST: Clear(olc::RED); break;
+			case Wordle::WON: Clear(olc::BLUE); break;
 		}
 
 		//show blocks and letters
@@ -316,32 +146,38 @@ default_setup:
 				float y=sy+dy*j;
 
 				//show box
-				FillRectDecal(vf2d(x, y)-box_sz/2, box_sz, guesses_col[j][i]);
+				vf2d pos=vf2d(x, y)-box_sz/2;
+				DrawThickRect(pos, box_sz, 3, olc::DARK_GREY);
+				bool fill_rect=j<game.guess_index;
+				if(fill_rect) FillRectDecal(pos, box_sz, game.colors[j][i]);
 
-				//show old words
-				bool show_let=j<guess_index;
 				//show current typing letters
-				if(!show_let&&j==guess_index&&i<word_index) show_let=true;
-				if(show_let) {
-					DrawStringDecal(vf2d(x-4*scl, y-4*scl), std::string(1, guesses[j][i]), olc::BLACK, {scl, scl});
+				if(fill_rect||j==game.guess_index&&i<game.word_index) {
+					DrawStringDecal(vf2d(x-4*scl, y-4*scl), std::string(1, game.guesses[j][i]), olc::BLACK, {scl, scl});
 				}
 			}
 		}
 
 		//show blinking cursor
-		if(show_cursor) {
-			float x=sx+dx*word_index;
-			float y=sy+dy*guess_index;
+		if(game.state==Wordle::PLAYING&&show_cursor) {
+			float x=sx+dx*game.word_index;
+			float y=sy+dy*game.guess_index;
 			DrawStringDecal(vf2d(x-4*scl, y-4*scl), "_", olc::BLACK, {scl, scl});
 		}
+	}
+
+	bool OnUserUpdate(float dt) override {
+		update(dt);
+
+		render();
 
 		return true;
 	}
 };
 
 int main() {
-	Example demo;
-	if(demo.Construct(400, 500, 1, 1, false, true)) demo.Start();
+	WordleGame wg;
+	if(wg.Construct(400, 500, 1, 1, false, true)) wg.Start();
 
 	return 0;
 }

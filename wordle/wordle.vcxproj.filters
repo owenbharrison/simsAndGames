@@ -23,4 +23,12 @@
     <Text Include="assets\save.txt" />
     <Text Include="assets\words.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\wordle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\words.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
