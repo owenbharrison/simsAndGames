@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 #include "words.h"
 
@@ -70,33 +71,44 @@ struct Wordle {
 	}
 
 	bool updateColors(int g) {
-		int good=0;
+		int feedback[5]{0, 0, 0, 0, 0};
+		std::unordered_map<char, int> cts;
+
+		//check for greens
 		for(int i=0; i<5; i++) {
-			char c=guesses[g][i];
-			auto& col=colors[g][i];
-			//if there are n of this letter,
-			int num=0;
-			for(int j=0; j<5; j++) {
-				if(target[j]==c) num++;
-			}
-			//is this the 1->nth occurance?
-			int occur=0;
-			for(int j=0; j<=i; j++) {
-				if(guesses[g][j]==c) occur++;
-			}
-			if(occur<=num) {
-				col=olc::YELLOW;
-				if(target[i]==c) good++, col=olc::GREEN;
-			} else col=olc::GREY;
+			if(guesses[g][i]==target[i]) feedback[i]=2;
+			else cts[target[i]]++;
 		}
-		return good==5;
+
+		//check for yellows
+		for(int i=0; i<5; i++) {
+			if(feedback[i]==0&&cts[guesses[g][i]]>0) {
+				feedback[i]=1;
+				cts[guesses[g][i]]--;
+			}
+		}
+
+		//copy over to colors
+		bool good=true;
+		for(int i=0; i<5; i++) {
+			olc::Pixel& col=colors[g][i];
+			switch(feedback[i]) {
+				case 0: good=false, col=olc::WHITE; break;
+				case 1: good=false, col=olc::YELLOW; break;
+				case 2: col=olc::GREEN; break;
+			}
+		}
+
+
+		return good;
 	}
 
-	void type(char c) {
-		if(word_index<5) {
-			guesses[guess_index][word_index]=c;
-			word_index++;
-		}
+	bool type(char c) {
+		if(word_index>=5) return false;
+		
+		guesses[guess_index][word_index]=c;
+		word_index++;
+		return true;
 	}
 
 	void backspace() {
@@ -123,6 +135,8 @@ struct Wordle {
 		//reset & increment indexes
 		word_index=0, guess_index++;
 		if(state!=WON&&guess_index==6) state=LOST;
+
+		return true;
 	}
 
 	bool load(const std::string& filename) {

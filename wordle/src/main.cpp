@@ -9,11 +9,81 @@ float map(float x, float a, float b, float c, float d) {
 	return c+t*(d-c);
 }
 
+float clamp(float x, float a, float b) {
+	if(x<a) return a;
+	if(x>b) return b;
+	return x;
+}
+
+constexpr float Pi=3.1415927f;
+
+//clever default param placement:
+//random()=0-1
+//random(a)=0-a
+//random(a, b)=a-b
+float random(float b=1, float a=0) {
+	static const float rand_max=RAND_MAX;
+	float t=rand()/rand_max;
+	return a+t*(b-a);
+}
+
+vf2d polar(float rad, float angle) {
+	return {
+		rad*std::cosf(angle),
+		rad*std::sinf(angle)
+	};
+}
+
+struct MessageEffect {
+	std::string msg;
+	olc::Pixel col;
+
+	vf2d pos, vel, acc;
+	float rot=0, rot_vel=0;
+
+	float scl=1;
+
+	float lifespan=0, age=0;
+
+	MessageEffect() {}
+
+	MessageEffect(const std::string& m, olc::Pixel c, vf2d p, vf2d v, float r, float s, float l) {
+		msg=m;
+		col=c;
+
+		pos=p;
+		vel=v;
+		rot_vel=r;
+
+		scl=s;
+
+		lifespan=l;
+	}
+
+	void applyForce(const vf2d& f) {
+		acc+=f;
+	}
+
+	void update(float dt) {
+		vel+=acc*dt;
+		pos+=vel*dt;
+		acc={0, 0};
+
+		rot+=rot_vel*dt;
+
+		age+=dt;
+	}
+
+	bool isDead() const {
+		return age>lifespan;
+	}
+};
+
 struct WordleGame : olc::PixelGameEngine {
 	WordleGame() {
 		sAppName="Wordle";
 	}
-	
+
 	Wordle game;
 
 	bool show_cursor=false;
@@ -21,6 +91,12 @@ struct WordleGame : olc::PixelGameEngine {
 
 	olc::Sprite* prim_rect_spr=nullptr;
 	olc::Decal* prim_rect_dec=nullptr;
+
+	std::list<MessageEffect> msg_fx;
+	vf2d gravity;
+
+	vf2d block_step, block_sz;
+	float letter_scl=0;
 
 	bool OnUserCreate() override {
 		//primitive to draw with
@@ -34,6 +110,20 @@ struct WordleGame : olc::PixelGameEngine {
 
 		//copy into target
 		for(int i=0; i<5; i++) game.target[i]=rand_word[i];
+
+		//setup transforms
+		block_step.x=ScreenWidth()/5.f;
+		block_step.y=ScreenHeight()/6.f;
+		block_sz=vf2d(60, 60);
+		letter_scl=6;
+
+		gravity={0, 32};
+
+		game.target[0]='t';
+		game.target[1]='r';
+		game.target[2]='o';
+		game.target[3]='o';
+		game.target[4]='p';
 
 		return true;
 	}
@@ -51,6 +141,8 @@ struct WordleGame : olc::PixelGameEngine {
 	}
 
 	void update(float dt) {
+		const vf2d mouse_pos=GetMousePos();
+
 		if(GetKey(olc::Key::CTRL).bHeld) {
 			const std::string filename="assets/save.txt";
 
@@ -77,15 +169,48 @@ struct WordleGame : olc::PixelGameEngine {
 				auto k=(olc::Key)(olc::Key::A+i);
 				if(GetKey(k).bPressed) {
 					resetCursor();
-					game.type('a'+i);
+					char letter='a'+i;
+					if(game.type(letter)) {
+						std::string msg(1, letter);
+						olc::Pixel col(rand()%255, rand()%255, rand()%255);
+
+						vf2d pos(block_step.x*(game.word_index-.5f), block_step.y*(.5f+game.guess_index));
+
+						float angle=random(2*Pi);
+						float speed=random(25, 50);
+						vf2d vel=polar(speed, angle);
+						float rot_vel=random(-Pi, Pi);
+
+						float scl=random(5, 10);
+
+						float lifespan=random(3, 5);
+						MessageEffect fx(msg, col, pos, vel, rot_vel, scl, lifespan);
+						msg_fx.emplace_back(fx);
+					}
 				}
 			}
 
 			//guess
 			if(GetKey(olc::ENTER).bPressed) {
 				resetCursor();
+				if(game.guess()) {
+					std::string msg;
+					for(int i=0; i<5; i++) msg+=game.guesses[game.guess_index-1][i];
+					olc::Pixel col(rand()%255, rand()%255, rand()%255);
 
-				game.guess();
+					vf2d pos(ScreenWidth()/2, block_step.y*(.5f+game.guess_index));
+
+					float angle=random(2*Pi);
+					float speed=random(25, 50);
+					vf2d vel=polar(speed, angle);
+					float rot_vel=random(-Pi, Pi);
+
+					float scl=random(5, 10);
+
+					float lifespan=random(3, 5);
+					MessageEffect fx(msg, col, pos, vel, rot_vel, scl, lifespan);
+					msg_fx.emplace_back(fx);
+				}
 			}
 
 			//backspace
@@ -108,6 +233,19 @@ struct WordleGame : olc::PixelGameEngine {
 			show_cursor^=true;
 		}
 		cursor_timer+=dt;
+
+		//sanitize messages
+		for(auto it=msg_fx.begin(); it!=msg_fx.end();) {
+			if(!it->isDead()) it++;
+			else it=msg_fx.erase(it);
+		}
+
+		//kinematics
+		for(auto& m:msg_fx) {
+			m.applyForce(gravity);
+
+			m.update(dt);
+		}
 	}
 
 	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
@@ -133,36 +271,44 @@ struct WordleGame : olc::PixelGameEngine {
 			case Wordle::WON: Clear(olc::BLUE); break;
 		}
 
-		//show blocks and letters
-		float dx=ScreenWidth()/5.f;
-		float sx=.5f*dx;
-		float dy=ScreenHeight()/6.f;
-		float sy=.5f*dy;
-		const vf2d box_sz(60, 60);
-		const float scl=6;
-		for(int i=0; i<5; i++) {
-			float x=sx+dx*i;
-			for(int j=0; j<6; j++) {
-				float y=sy+dy*j;
+		//show blocks
+		for(int j=0; j<6; j++) {
+			float y=block_step.y*(.5f+j);
+			for(int i=0; i<5; i++) {
+				float x=block_step.x*(.5f+i);
 
 				//show box
-				vf2d pos=vf2d(x, y)-box_sz/2;
-				DrawThickRect(pos, box_sz, 3, olc::DARK_GREY);
-				bool fill_rect=j<game.guess_index;
-				if(fill_rect) FillRectDecal(pos, box_sz, game.colors[j][i]);
+				vf2d pos=vf2d(x, y)-block_sz/2;
+				DrawThickRect(pos, block_sz, 3, olc::DARK_GREY);
+				if(j<game.guess_index) FillRectDecal(pos, block_sz, game.colors[j][i]);
+			}
+		}
 
-				//show current typing letters
-				if(fill_rect||j==game.guess_index&&i<game.word_index) {
-					DrawStringDecal(vf2d(x-4*scl, y-4*scl), std::string(1, game.guesses[j][i]), olc::BLACK, {scl, scl});
+		//show messages
+		for(const auto& m:msg_fx) {
+			vf2d offset(4*m.msg.length(), 4);
+			float t=1-m.age/m.lifespan;
+			olc::Pixel fill=m.col;
+			fill.a=255*clamp(t, 0, 1);
+			DrawRotatedStringDecal(m.pos, m.msg, m.rot, offset, fill, {m.scl, m.scl});
+		}
+
+		//show letters
+		for(int i=0; i<5; i++) {
+			float x=block_step.x*(.5f+i);
+			for(int j=0; j<6; j++) {
+				float y=block_step.y*(.5f+j);
+				if(j<game.guess_index||(j==game.guess_index&&i<game.word_index)) {
+					DrawStringDecal(vf2d(x-4*letter_scl, y-4*letter_scl), std::string(1, game.guesses[j][i]), olc::BLACK, {letter_scl, letter_scl});
 				}
 			}
 		}
 
 		//show blinking cursor
 		if(game.state==Wordle::PLAYING&&show_cursor) {
-			float x=sx+dx*game.word_index;
-			float y=sy+dy*game.guess_index;
-			DrawStringDecal(vf2d(x-4*scl, y-4*scl), "_", olc::BLACK, {scl, scl});
+			float x=block_step.x*(.5f+game.word_index);
+			float y=block_step.y*(.5f+game.guess_index);
+			DrawStringDecal(vf2d(x-4*letter_scl, y-4*letter_scl), "_", olc::BLACK, {letter_scl, letter_scl});
 		}
 	}
 
@@ -177,7 +323,8 @@ struct WordleGame : olc::PixelGameEngine {
 
 int main() {
 	WordleGame wg;
-	if(wg.Construct(400, 500, 1, 1, false, true)) wg.Start();
+	bool vsync=true;
+	if(wg.Construct(400, 500, 1, 1, false, vsync)) wg.Start();
 
 	return 0;
 }
