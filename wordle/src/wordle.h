@@ -93,7 +93,7 @@ struct Wordle {
 		for(int i=0; i<5; i++) {
 			olc::Pixel& col=colors[g][i];
 			switch(feedback[i]) {
-				case 0: good=false, col=olc::WHITE; break;
+				case 0: good=false, col=olc::GREY; break;
 				case 1: good=false, col=olc::YELLOW; break;
 				case 2: col=olc::GREEN; break;
 			}
