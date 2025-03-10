@@ -2,12 +2,16 @@
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
 
+#include <cmath>
+
 #include "fluid.h"
 
 float map(float x, float a, float b, float c, float d) {
 	float t=(x-a)/(b-a);
 	return c+t*(d-c);
 }
+
+constexpr float Pi=3.1415927f;
 
 struct FluidUI : olc::PixelGameEngine {
 	FluidUI() {
@@ -17,38 +21,64 @@ struct FluidUI : olc::PixelGameEngine {
 	float cell_size=0;
 	Fluid fluid;
 
+	int obstacle_x=0, obstacle_y=0;
+
+	bool show_pressure=false;
+
+	//int is used for overflow reasons
+	void setObstacle(int x, int y, int r, bool reset=true, float dt=1) {
+		memset(fluid.solid, false, sizeof(bool)*fluid.num_x*fluid.num_y);
+
+		//left
+		for(size_t j=0; j<fluid.num_y; j++) {
+			fluid.solid[fluid.ix(0, j)]=true;
+		}
+		
+		//top, bottom
+		for(size_t i=0; i<fluid.num_x; i++) {
+			fluid.solid[fluid.ix(i, 0)]=true;
+			fluid.solid[fluid.ix(i, fluid.num_y-1)]=true;
+		}
+
+		float vx=0.f, vy=0.f;
+		if(!reset) {
+			vx=(x-obstacle_x)/dt;
+			vy=(y-obstacle_y)/dt;
+		}
+
+		obstacle_x=x;
+		obstacle_y=y;
+
+		//fill circle
+		for(int i=1; i<fluid.num_x-1; i++) {
+			int dx=i-x;
+			for(int j=1; j<fluid.num_y-1; j++) {
+				int dy=j-y;
+				if(dx*dx+dy*dy<r*r) {
+					fluid.solid[fluid.ix(i, j)]=true;
+					fluid.m[fluid.ix(i, j)]=1.f;
+					fluid.u[fluid.ix(i, j)]=vx;
+					fluid.v[fluid.ix(i, j)]=vy;
+				}
+			}
+		}
+	}
+
 	bool OnUserCreate() override {
 		cell_size=5;
 		size_t width=ScreenWidth()/cell_size;
 		size_t height=ScreenHeight()/cell_size;
-		//what the hell is h?
+		//what is h?
 		fluid=Fluid(width, height, 1000, 1/100.f);
 
 		//wind tunnel
 		float in_vel=2;
-		for(size_t i=0; i<fluid.num_x; i++) {
-			for(size_t j=0; j<fluid.num_y; j++) {
-				//set solid tiles(left, top, bottom)
-				fluid.solid[fluid.ix(i, j)]=i==0||j==0||j==fluid.num_y-1;
-
-				//set in velocity
-				if(i==1) fluid.u[fluid.ix(i, j)]=in_vel;
-			}
+		for(size_t j=0; j<fluid.num_y; j++) {
+			fluid.u[fluid.ix(1, j)]=in_vel;
 		}
 
 		//set obstacle
-		size_t x=fluid.num_x/3;
-		size_t y=fluid.num_y/2;
-		size_t rad=fluid.num_x/8;
-		for(int i=0; i<fluid.num_x; i++) {
-			int dx=i-x;
-			for(int j=0; j<fluid.num_y; j++) {
-				int dy=j-y;
-				if(dx*dx+dy*dy<rad*rad) {
-					fluid.solid[fluid.ix(i, j)]=true;
-				}
-			}
-		}
+		setObstacle(fluid.num_x/3, fluid.num_y/2, fluid.num_x/8);
 
 		size_t pipe_h=fluid.num_y/6;
 		size_t min_j=fluid.num_y/2-pipe_h/2;
@@ -61,13 +91,30 @@ struct FluidUI : olc::PixelGameEngine {
 	}
 
 	bool OnUserUpdate(float dt) override {
-		//fluid.integrate(dt, -9.81f);
+		if(GetMouse(olc::Mouse::LEFT).bHeld) {
+			int x=map(GetMouseX(), 0, ScreenWidth(), 0, fluid.num_x);
+			int y=map(GetMouseY(), 0, ScreenHeight(), 0, fluid.num_y);
+			setObstacle(x, y, fluid.num_x/8);
+		}
+
+		if(GetKey(olc::Key::P).bPressed) show_pressure^=true;
 
 		fluid.solveIncompressibility(40, dt);
 
 		fluid.extrapolate();
 		fluid.advectVel(dt);
 		fluid.advectSmoke(dt);
+
+		float p_min=INFINITY, p_max=-p_min;
+		if(show_pressure) {
+			for(size_t i=0; i<fluid.num_x; i++) {
+				for(size_t j=0; j<fluid.num_y; j++) {
+					float p=fluid.pressure[fluid.ix(i, j)];
+					if(p<p_min) p_min=p;
+					if(p>p_max) p_max=p;
+				}
+			}
+		}
 
 		Clear(olc::BLACK);
 		for(size_t i=0; i<fluid.num_x; i++) {
@@ -76,9 +123,18 @@ struct FluidUI : olc::PixelGameEngine {
 				if(fluid.solid[fluid.ix(i, j)]) continue;
 				
 				float y=map(j, 0, fluid.num_y, 0, ScreenHeight());
-
-				float shade=fluid.m[fluid.ix(i, j)];
-				olc::Pixel col=olc::PixelF(shade, shade, shade);
+				olc::Pixel col;
+				if(show_pressure) {
+					float p=fluid.pressure[fluid.ix(i, j)];
+					float angle=map(p, p_min, p_max, 0, 2*Pi);
+					float r=.5f+.5f*std::cosf(angle);
+					float g=.5f+.5f*std::cosf(angle-2*Pi/3);
+					float b=.5f+.5f*std::cosf(angle+2*Pi/3);
+					col=olc::PixelF(r, g, b);
+				} else {
+					float shade=fluid.m[fluid.ix(i, j)];
+					col=olc::PixelF(shade, shade, shade);
+				}
 				FillRectDecal({x, y}, {cell_size, cell_size}, col);
 			}
 		}

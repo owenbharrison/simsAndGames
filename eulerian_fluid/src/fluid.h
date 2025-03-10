@@ -127,7 +127,7 @@ struct Fluid {
 		//pressure coefficient
 		float cp=density*h/dt;
 		for(size_t i=0; i<num_cells; i++) {
-			pressure[i]=0;
+			pressure[i]=0.f;
 		}
 
 		//for each cell
@@ -186,7 +186,7 @@ struct Fluid {
 		x=max(h, min(x, num_x*h));
 		y=max(h, min(y, num_y*h));
 
-		float dx=0, dy=0;
+		float dx=0.f, dy=0.f;
 
 		//which field to sample?
 		float* f=nullptr;
@@ -195,7 +195,7 @@ struct Fluid {
 			case V_FIELD: f=v, dx=h2; break;
 			case S_FIELD: f=m, dx=h2, dy=h2; break;
 		}
-		if(!f) return 0;
+		if(!f) return 0.f;
 
 		//find four corners to interpolate
 		size_t x0=min(size_t(h1*(x-dx)), num_x-1);
