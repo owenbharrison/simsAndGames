@@ -23,5 +23,8 @@
     <ClInclude Include="src\fluid.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\fluid3d.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -18,7 +18,7 @@ struct Fluid {
 	size_t num_x=0, num_y=0;
 	size_t num_cells=0;
 	float density=0;
-	float h=0;
+	float h=0, h1=0;
 	float* u=nullptr, * v=nullptr;
 	float* new_u=nullptr, * new_v=nullptr;
 	float* pressure=nullptr;
@@ -40,6 +40,7 @@ struct Fluid {
 		num_cells=num_x*num_y;
 		density=d;
 		h=h_;
+		h1=1/h;
 
 		//velocity field
 		u=new float[num_cells];
@@ -69,6 +70,7 @@ struct Fluid {
 		num_cells=f.num_cells;
 		density=f.density;
 		h=f.h;
+		h1=f.h1;
 
 		u=new float[num_cells];
 		v=new float[num_cells];
@@ -79,14 +81,14 @@ struct Fluid {
 		m=new float[num_cells];
 		new_m=new float[num_cells];
 
-		memcpy(u, f.u, sizeof(float)*num_x*num_y);
-		memcpy(v, f.v, sizeof(float)*num_x*num_y);
-		memcpy(new_u, f.new_u, sizeof(float)*num_x*num_y);
-		memcpy(new_v, f.new_v, sizeof(float)*num_x*num_y);
-		memcpy(pressure, f.pressure, sizeof(float)*num_x*num_y);
-		memcpy(solid, f.solid, sizeof(bool)*num_x*num_y);
-		memcpy(m, f.m, sizeof(float)*num_x*num_y);
-		memcpy(new_m, f.new_m, sizeof(float)*num_x*num_y);
+		memcpy(u, f.u, sizeof(float)*num_cells);
+		memcpy(v, f.v, sizeof(float)*num_cells);
+		memcpy(new_u, f.new_u, sizeof(float)*num_cells);
+		memcpy(new_v, f.new_v, sizeof(float)*num_cells);
+		memcpy(pressure, f.pressure, sizeof(float)*num_cells);
+		memcpy(solid, f.solid, sizeof(bool)*num_cells);
+		memcpy(m, f.m, sizeof(float)*num_cells);
+		memcpy(new_m, f.new_m, sizeof(float)*num_cells);
 	}
 
 	Fluid(const Fluid& f) {
@@ -179,14 +181,13 @@ struct Fluid {
 	}
 
 	float sampleField(float x, float y, size_t field) const {
-		float h1=1/h;
-		float h2=h/2;
-
 		//clamp query
 		x=max(h, min(x, num_x*h));
 		y=max(h, min(y, num_y*h));
 
 		float dx=0.f, dy=0.f;
+
+		float h2=h/2;
 
 		//which field to sample?
 		float* f=nullptr;
@@ -238,8 +239,8 @@ struct Fluid {
 
 	void advectVel(float dt) {
 		//store so as not to update as iterating
-		memcpy(new_u, u, sizeof(float)*num_x*num_y);
-		memcpy(new_v, v, sizeof(float)*num_x*num_y);
+		memcpy(new_u, u, sizeof(float)*num_cells);
+		memcpy(new_v, v, sizeof(float)*num_cells);
 
 		float h2=h/2;
 
@@ -263,12 +264,12 @@ struct Fluid {
 		}
 
 		//copy values over
-		memcpy(u, new_u, sizeof(float)*num_x*num_y);
-		memcpy(v, new_v, sizeof(float)*num_x*num_y);
+		memcpy(u, new_u, sizeof(float)*num_cells);
+		memcpy(v, new_v, sizeof(float)*num_cells);
 	}
 
 	void advectSmoke(float dt) {
-		memcpy(new_m, m, sizeof(float)*num_x*num_y);
+		memcpy(new_m, m, sizeof(float)*num_cells);
 
 		float h2=h/2;
 
@@ -284,7 +285,7 @@ struct Fluid {
 			}
 		}
 
-		memcpy(m, new_m, sizeof(float)*num_x*num_y);
+		memcpy(m, new_m, sizeof(float)*num_cells);
 	}
 };
 #endif

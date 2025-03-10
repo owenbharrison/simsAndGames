@@ -24,6 +24,7 @@ struct FluidUI : olc::PixelGameEngine {
 	int obstacle_x=0, obstacle_y=0;
 
 	bool show_pressure=false;
+	bool show_streamlines=false;
 
 	//int is used for overflow reasons
 	void setObstacle(int x, int y, int r, bool reset=true, float dt=1) {
@@ -90,7 +91,10 @@ struct FluidUI : olc::PixelGameEngine {
 		return true;
 	}
 
+
 	bool OnUserUpdate(float dt) override {
+		if(dt>1/60.f) dt=1/60.f;
+
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
 			int x=map(GetMouseX(), 0, ScreenWidth(), 0, fluid.num_x);
 			int y=map(GetMouseY(), 0, ScreenHeight(), 0, fluid.num_y);
@@ -98,6 +102,7 @@ struct FluidUI : olc::PixelGameEngine {
 		}
 
 		if(GetKey(olc::Key::P).bPressed) show_pressure^=true;
+		if(GetKey(olc::Key::S).bPressed) show_streamlines^=true;
 
 		fluid.solveIncompressibility(40, dt);
 
@@ -136,6 +141,29 @@ struct FluidUI : olc::PixelGameEngine {
 					col=olc::PixelF(shade, shade, shade);
 				}
 				FillRectDecal({x, y}, {cell_size, cell_size}, col);
+			}
+		}
+
+		if(show_streamlines) {
+			for(size_t i=0; i<fluid.num_x; i+=5) {
+				for(size_t j=0; j<fluid.num_y; j+=5) {
+					if(fluid.solid[fluid.ix(i, j)]) continue;
+
+					float xh=fluid.h*(.5f+i), yh=fluid.h*(.5f+j);
+					float pxh, pyh;
+					for(size_t k=0; k<5; k++) {
+						float u=fluid.sampleField(xh, yh, Fluid::U_FIELD);
+						float v=fluid.sampleField(xh, yh, Fluid::V_FIELD);
+						pxh=xh, pyh=yh;
+						xh+=dt*u, yh+=dt*v;
+
+						float x=map(fluid.h1*xh, 0, fluid.num_x, 0, ScreenWidth());
+						float y=map(fluid.h1*yh, 0, fluid.num_y, 0, ScreenHeight());
+						float px=map(fluid.h1*pxh, 0, fluid.num_x, 0, ScreenWidth());
+						float py=map(fluid.h1*pyh, 0, fluid.num_y, 0, ScreenHeight());
+						DrawLineDecal({x, y}, {px, py}, olc::BLUE);
+					}
+				}
 			}
 		}
 
