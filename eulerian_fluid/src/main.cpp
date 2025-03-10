@@ -18,13 +18,14 @@ struct FluidUI : olc::PixelGameEngine {
 	Fluid fluid;
 
 	bool OnUserCreate() override {
-		cell_size=2;
+		cell_size=5;
 		size_t width=ScreenWidth()/cell_size;
 		size_t height=ScreenHeight()/cell_size;
-		fluid=Fluid(width, height, cell_size, 1000);
+		//what the hell is h?
+		fluid=Fluid(width, height, 1000, 1/100.f);
 
 		//wind tunnel
-		float in_vel=20;
+		float in_vel=2;
 		for(size_t i=0; i<fluid.num_x; i++) {
 			for(size_t j=0; j<fluid.num_y; j++) {
 				//set solid tiles(left, top, bottom)
@@ -38,7 +39,7 @@ struct FluidUI : olc::PixelGameEngine {
 		//set obstacle
 		size_t x=fluid.num_x/3;
 		size_t y=fluid.num_y/2;
-		size_t rad=fluid.num_x/6;
+		size_t rad=fluid.num_x/8;
 		for(int i=0; i<fluid.num_x; i++) {
 			int dx=i-x;
 			for(int j=0; j<fluid.num_y; j++) {
@@ -49,9 +50,9 @@ struct FluidUI : olc::PixelGameEngine {
 			}
 		}
 
-		size_t pipe_h=fluid.num_y/8;
-		size_t min_j=.5f*fluid.num_y-.5f*pipe_h;
-		size_t max_j=.5f*fluid.num_y+.5f*pipe_h;
+		size_t pipe_h=fluid.num_y/6;
+		size_t min_j=fluid.num_y/2-pipe_h/2;
+		size_t max_j=fluid.num_y/2+pipe_h/2;
 		for(size_t j=min_j; j<=max_j; j++) {
 			fluid.m[fluid.ix(0, j)]=0;
 		}
@@ -89,7 +90,7 @@ struct FluidUI : olc::PixelGameEngine {
 int main() {
 	FluidUI f;
 	bool vsync=true;
-	if(f.Construct(320, 240, 1, 1, false, vsync)) f.Start();
+	if(f.Construct(480, 360, 1, 1, false, vsync)) f.Start();
 
 	return 0;
 }

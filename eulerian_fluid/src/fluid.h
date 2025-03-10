@@ -17,8 +17,8 @@ const T& max(const T& a, const T& b) {
 struct Fluid {
 	size_t num_x=0, num_y=0;
 	size_t num_cells=0;
-	float spacing=0;
 	float density=0;
+	float h=0;
 	float* u=nullptr, * v=nullptr;
 	float* new_u=nullptr, * new_v=nullptr;
 	float* pressure=nullptr;
@@ -34,12 +34,12 @@ struct Fluid {
 
 	Fluid()=default;
 
-	Fluid(size_t x, size_t y, float sp, float d) {
+	Fluid(size_t x, size_t y, float d, float h_) {
 		//allow for border
 		num_x=2+x, num_y=2+y;
 		num_cells=num_x*num_y;
-		spacing=sp;
 		density=d;
+		h=h_;
 
 		//velocity field
 		u=new float[num_cells];
@@ -67,8 +67,8 @@ struct Fluid {
 		num_x=f.num_x;
 		num_y=f.num_y;
 		num_cells=f.num_cells;
-		spacing=f.spacing;
 		density=f.density;
+		h=f.h;
 
 		u=new float[num_cells];
 		v=new float[num_cells];
@@ -125,7 +125,7 @@ struct Fluid {
 
 	void solveIncompressibility(size_t num_iter, float dt) {
 		//pressure coefficient
-		float cp=density*spacing/dt;
+		float cp=density*h/dt;
 		for(size_t i=0; i<num_cells; i++) {
 			pressure[i]=0;
 		}
@@ -179,7 +179,6 @@ struct Fluid {
 	}
 
 	float sampleField(float x, float y, size_t field) const {
-		float h=spacing;
 		float h1=1/h;
 		float h2=h/2;
 
@@ -242,8 +241,7 @@ struct Fluid {
 		memcpy(new_u, u, sizeof(float)*num_x*num_y);
 		memcpy(new_v, v, sizeof(float)*num_x*num_y);
 
-		float h=spacing;
-		float h2=.5f*spacing;
+		float h2=h/2;
 
 		for(size_t i=1; i<num_x; i++) {
 			for(size_t j=1; j<num_y; j++) {
@@ -272,15 +270,14 @@ struct Fluid {
 	void advectSmoke(float dt) {
 		memcpy(new_m, m, sizeof(float)*num_x*num_y);
 
-		float h=spacing;
-		float h2=.5f*spacing;
+		float h2=h/2;
 
 		for(size_t i=1; i<num_x-1; i++) {
 			for(size_t j=1; j<num_y-1; j++) {
 				//skip solid cells
 				if(solid[ix(i, j)]) continue;
 				float u0=(u[ix(i, j)]+u[ix(i+1, j)])/2;
-				float v0=(v[ix(i, j)]+u[ix(i, j+1)])/2;
+				float v0=(v[ix(i, j)]+v[ix(i, j+1)])/2;
 				float x=h2+h*i-dt*u0;
 				float y=h2+h*j-dt*v0;
 				new_m[ix(i, j)]=sampleField(x, y, S_FIELD);
