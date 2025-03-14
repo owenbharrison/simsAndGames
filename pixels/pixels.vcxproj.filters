@@ -21,6 +21,9 @@
     <ClInclude Include="src\pixel_set.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\pixel_game.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">

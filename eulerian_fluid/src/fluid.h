@@ -1,3 +1,5 @@
+//thanks matthias muller
+//https://www.youtube.com/watch?v=iKAVRgIrUOU
 #pragma once
 #ifndef FLUID_CLASS_H
 #define FLUID_CLASS_H

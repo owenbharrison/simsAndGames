@@ -146,7 +146,9 @@
     <Text Include="assets\save.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\message_effect.h" />
     <ClInclude Include="src\wordle.h" />
+    <ClInclude Include="src\wordle_game.h" />
     <ClInclude Include="src\words.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
