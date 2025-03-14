@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.10.35122.118
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jelly_car", "jelly_car\jelly_car.vcxproj", "{12323690-BC12-4382-859B-CDBBE6758BE0}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "voxels", "voxels\voxels.vcxproj", "{8D4842FA-C059-4F5F-AE33-1E35F53BDB25}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pixels", "pixels\pixels.vcxproj", "{F218F667-B3BA-4E1E-A07C-6FE9119791C7}"
@@ -31,8 +29,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "clock", "clock\clock.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wordle", "wordle\wordle.vcxproj", "{D15D3205-8F2F-4F66-B1E4-0FFBD73C4F5C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jellyCarClone", "jellyCarClone\jellyCarClone.vcxproj", "{EC28B612-10C1-474A-BC23-3904E9AB6414}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jelly_car_clone", "jelly_car_clone\jelly_car_clone.vcxproj", "{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "eulerian_fluid", "eulerian_fluid\eulerian_fluid.vcxproj", "{BCFD2C26-3DC9-479A-AB79-A7307BD25BEB}"
@@ -45,14 +41,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Debug|x64.ActiveCfg = Debug|x64
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Debug|x64.Build.0 = Debug|x64
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Debug|x86.ActiveCfg = Debug|Win32
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Debug|x86.Build.0 = Debug|Win32
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Release|x64.ActiveCfg = Release|x64
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Release|x64.Build.0 = Release|x64
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Release|x86.ActiveCfg = Release|Win32
-		{12323690-BC12-4382-859B-CDBBE6758BE0}.Release|x86.Build.0 = Release|Win32
 		{8D4842FA-C059-4F5F-AE33-1E35F53BDB25}.Debug|x64.ActiveCfg = Debug|x64
 		{8D4842FA-C059-4F5F-AE33-1E35F53BDB25}.Debug|x64.Build.0 = Debug|x64
 		{8D4842FA-C059-4F5F-AE33-1E35F53BDB25}.Debug|x86.ActiveCfg = Debug|Win32
@@ -157,14 +145,6 @@ Global
 		{D15D3205-8F2F-4F66-B1E4-0FFBD73C4F5C}.Release|x64.Build.0 = Release|x64
 		{D15D3205-8F2F-4F66-B1E4-0FFBD73C4F5C}.Release|x86.ActiveCfg = Release|Win32
 		{D15D3205-8F2F-4F66-B1E4-0FFBD73C4F5C}.Release|x86.Build.0 = Release|Win32
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Debug|x64.ActiveCfg = Debug|x64
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Debug|x64.Build.0 = Debug|x64
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Debug|x86.ActiveCfg = Debug|Win32
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Debug|x86.Build.0 = Debug|Win32
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Release|x64.ActiveCfg = Release|x64
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Release|x64.Build.0 = Release|x64
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Release|x86.ActiveCfg = Release|Win32
-		{EC28B612-10C1-474A-BC23-3904E9AB6414}.Release|x86.Build.0 = Release|Win32
 		{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}.Debug|x64.ActiveCfg = Debug|x64
 		{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}.Debug|x64.Build.0 = Debug|x64
 		{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}.Debug|x86.ActiveCfg = Debug|Win32
