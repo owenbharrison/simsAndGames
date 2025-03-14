@@ -20,19 +20,19 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\geom\aabb.h">
+    <ClInclude Include="src\shape.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\phys\point_mass.h">
+    <ClInclude Include="src\point_mass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\phys\constraint.h">
+    <ClInclude Include="src\aabb.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\phys\spring.h">
+    <ClInclude Include="src\constraint.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\phys\shape.h">
+    <ClInclude Include="src\spring.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
