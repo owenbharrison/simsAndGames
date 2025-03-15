@@ -91,6 +91,21 @@ struct WordleGame : olc::PixelGameEngine {
 		cursor_timer=0;
 	}
 
+	void addEffect(std::string msg, olc::Pixel col, vf2d pos) {
+		//random velocities
+		float angle=random(2*Pi);
+		float speed=random(25, 50);
+		vf2d vel=polar(speed, angle);
+		float rot_vel=random(-Pi, Pi);
+
+		//random size
+		float scl=random(5, 10);
+
+		//random time
+		float lifespan=random(3, 5);
+		msg_fx.emplace_back(msg, col, pos, vel, rot_vel, scl, lifespan);
+	}
+
 	void update(float dt) {
 		if(GetKey(olc::Key::CTRL).bHeld) {
 			const std::string filename="assets/save.txt";
@@ -98,6 +113,8 @@ struct WordleGame : olc::PixelGameEngine {
 			//saving
 			if(GetKey(olc::Key::S).bPressed) {
 				if(game.save(filename)) {
+					vf2d pos(ScreenWidth()/2, ScreenHeight()/2);
+					addEffect("saved", olc::BLUE, pos);
 					std::cout<<"saved to: "<<filename<<'\n';
 				} else std::cout<<"unable to save\n";
 			}
@@ -107,6 +124,8 @@ struct WordleGame : olc::PixelGameEngine {
 				Wordle other;
 				if(other.load(filename)) {
 					game=other;
+					vf2d pos(ScreenWidth()/2, ScreenHeight()/2);
+					addEffect("loaded", olc::GREEN, pos);
 					std::cout<<"loaded from: "<<filename<<'\n';
 				} else std::cout<<"unable to load\n";
 			}
@@ -122,19 +141,8 @@ struct WordleGame : olc::PixelGameEngine {
 					if(game.type(letter)) {
 						std::string msg(1, letter);
 						olc::Pixel col(rand()%255, rand()%255, rand()%255);
-
 						vf2d pos(block_step.x*(game.word_index-.5f), block_step.y*(.5f+game.guess_index));
-
-						float angle=random(2*Pi);
-						float speed=random(25, 50);
-						vf2d vel=polar(speed, angle);
-						float rot_vel=random(-Pi, Pi);
-
-						float scl=random(5, 10);
-
-						float lifespan=random(3, 5);
-						MessageEffect fx(msg, col, pos, vel, rot_vel, scl, lifespan);
-						msg_fx.emplace_back(fx);
+						addEffect(msg, col, pos);
 					}
 				}
 			}
@@ -146,19 +154,8 @@ struct WordleGame : olc::PixelGameEngine {
 					std::string msg;
 					for(int i=0; i<5; i++) msg+=game.guesses[game.guess_index-1][i];
 					olc::Pixel col(rand()%255, rand()%255, rand()%255);
-
 					vf2d pos(ScreenWidth()/2, block_step.y*(.5f+game.guess_index));
-
-					float angle=random(2*Pi);
-					float speed=random(25, 50);
-					vf2d vel=polar(speed, angle);
-					float rot_vel=random(-Pi, Pi);
-
-					float scl=random(5, 10);
-
-					float lifespan=random(3, 5);
-					MessageEffect fx(msg, col, pos, vel, rot_vel, scl, lifespan);
-					msg_fx.emplace_back(fx);
+					addEffect(msg, col, pos);
 				}
 			}
 
