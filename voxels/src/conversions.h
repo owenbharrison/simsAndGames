@@ -2,6 +2,8 @@
 //i.e. shelling + greedymeshing
 //and polyhedra pixelization
 
+#include <thread>
+
 //HOW CAN I MAKE THIS SMALLER??
 [[nodiscard]] Mesh voxelsToMesh(const VoxelSet& v) {
 	Mesh m;
@@ -548,6 +550,55 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 				v(i, j, k)=num_ix%2;
 			}
 		}
+	}
+
+	return v;
+}
+
+[[nodiscard]] VoxelSet meshToVoxels_fast(const Mesh& m, float resolution) {
+	//find mesh bounds
+	AABB3 box=m.getAABB();
+
+	//determine voxelset sizing
+	vf3d size=(box.max-box.min)/resolution;
+	int w=1+size.x, h=1+size.y, d=1+size.z;
+
+	VoxelSet v(w, h, d);
+	v.offset=box.min;
+	v.scale=resolution;
+
+	const int num_thr=8;
+	std::thread worker[num_thr];
+	for(int gr=0; gr<num_thr; gr++) {
+		worker[gr]=std::thread([&v, gr, &m]() {
+			//for every voxel, is it in the polyhedra?
+			for(int i=0; i<v.getW(); i++) {
+				for(int j=0; j<v.getH(); j++) {
+					for(int k=0; k<v.getD(); k++) {
+						int l=v.ix(i, j, k);
+						if(l%num_thr!=gr) continue;
+
+						//polyhedra raycasting algorithm
+						vf3d xyz=v.offset+v.scale*vf3d(.5f+i, .5f+j, .5f+k);
+						vf3d dir=vf3d(random(-1, 1), random(-1, 1), random(-1, 1)).norm();
+
+						//for every tri
+						int num_ix=0;
+						for(const auto& tri:m.triangles) {
+							float t=segIntersectTri(xyz, xyz+dir, tri);
+							if(t>0) num_ix++;
+						}
+
+						//odd? inside!
+						v.grid[l]=num_ix%2;
+					}
+				}
+			}
+		});
+	}
+
+	for(int i=0; i<8; i++) {
+		worker[i].join();
 	}
 
 	return v;

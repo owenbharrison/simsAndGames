@@ -66,11 +66,11 @@ struct VoxelGame : olc::PixelGameEngine {
 		std::cout<<"load mesh: "<<dur0<<"us ("<<dur0/1000.f<<"ms)\n";
 
 		auto time2=std::chrono::steady_clock::now();
-		VoxelSet v_teapot=meshToVoxels(m_teapot, .5f);
+		VoxelSet v_teapot=meshToVoxels_fast(m_teapot, .25f);
 		v_teapot.updateTypes();
 		auto time3=std::chrono::steady_clock::now();
-		auto dur1=std::chrono::duration_cast<std::chrono::microseconds>(time3-time2).count();
-		std::cout<<"voxelize: "<<dur1<<"us ("<<dur1/1000.f<<"ms)\n";
+		auto dur1=std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
+		std::cout<<"voxelize: "<<dur1<<"ms ("<<dur1/1000.f<<"s)\n";
 
 		auto time4=std::chrono::steady_clock::now();
 		mesh=voxelsToMesh(v_teapot);
