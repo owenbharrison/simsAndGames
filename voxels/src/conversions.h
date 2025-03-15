@@ -567,10 +567,10 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 	v.offset=box.min;
 	v.scale=resolution;
 
-	const int num_thr=8;
-	std::thread worker[num_thr];
+	int num_thr=std::thread::hardware_concurrency();
+	std::thread* workers=new std::thread[num_thr];
 	for(int gr=0; gr<num_thr; gr++) {
-		worker[gr]=std::thread([&v, gr, &m]() {
+		workers[gr]=std::thread([&v, num_thr, gr, &m]() {
 			//for every voxel, is it in the polyhedra?
 			for(int i=0; i<v.getW(); i++) {
 				for(int j=0; j<v.getH(); j++) {
@@ -598,8 +598,10 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 	}
 
 	for(int i=0; i<8; i++) {
-		worker[i].join();
+		workers[i].join();
 	}
+
+	delete[] workers;
 
 	return v;
 }
