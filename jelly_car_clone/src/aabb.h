@@ -2,6 +2,7 @@
 #ifndef AABB_STRUCT_H
 #define AABB_STRUCT_H
 
+//didnt think i'd have to include this..
 #include "common/olcPixelGameEngine.h"
 
 struct AABB {

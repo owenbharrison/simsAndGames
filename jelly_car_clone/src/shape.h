@@ -244,10 +244,13 @@ void Shape::connectConstraints() {
 void Shape::connectSprings() {
 	springs.clear();
 
+	float k=13.2f*points[0].mass;
+	float d=points[0].mass;
+
 	//connect to all consequtive(except 0 -> N-1)
 	for(size_t i=0; i<num_pts; i++) {
 		for(size_t j=i+2; j<num_pts-(i==0); j++) {
-			springs.emplace_back(&points[i], &points[j], 1, 1);
+			springs.emplace_back(&points[i], &points[j], k, d);
 		}
 	}
 }

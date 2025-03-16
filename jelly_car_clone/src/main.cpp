@@ -104,29 +104,23 @@ struct Example : olc::PixelGameEngine {
 			addition.clear();
 		}
 		//every now and then,
-		if(addition_timer<0) {
-			addition_timer+=.05f;
-
-			if(add_action.bHeld) {
-				//ensure points not "overlapping"
-				bool unique=true;
-				for(const auto& a:addition) {
-					if((mouse_pos-a).mag()<5) {
-						unique=false;
-						break;
-					}
+		if(add_action.bHeld) {
+			//ensure points not "overlapping"
+			bool unique=true;
+			for(const auto& a:addition) {
+				if((mouse_pos-a).mag()<10) {
+					unique=false;
+					break;
 				}
-				//add if "unique"
-				if(unique) addition.push_back(mouse_pos);
 			}
+			//add if "unique"
+			if(unique) addition.push_back(mouse_pos);
 		}
-		addition_timer-=dt;
 		if(add_action.bReleased) {
 			if(addition.size()>=3) {
 				//check later for self intersection?
 				//or we could do that in the sanitize step
 				shapes.push_back(new Shape(addition));
-				std::cout<<"added shape\n";
 			}
 			addition.clear();
 		}
