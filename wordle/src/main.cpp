@@ -1,7 +1,7 @@
-#include "wordle_game.h"
+#include "wordle_ui.h"
 
 int main() {
-	WordleGame wg;
+	WordleUI wg;
 	bool vsync=true;
 	if(wg.Construct(400, 500, 1, 1, false, vsync)) wg.Start();
 

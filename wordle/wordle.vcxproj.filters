@@ -30,7 +30,7 @@
     <ClInclude Include="src\words.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\wordle_game.h">
+    <ClInclude Include="src\wordle_ui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\message_effect.h">

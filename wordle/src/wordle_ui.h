@@ -36,8 +36,8 @@ vf2d polar(float rad, float angle) {
 	};
 }
 
-struct WordleGame : olc::PixelGameEngine {
-	WordleGame() {
+struct WordleUI : olc::PixelGameEngine {
+	WordleUI() {
 		sAppName="Wordle";
 	}
 
