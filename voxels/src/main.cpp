@@ -38,6 +38,36 @@ vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
 }
 
+class Stopwatch {
+	std::chrono::steady_clock::time_point m_start, m_end;
+
+	auto getTime() const {
+		return std::chrono::steady_clock::now();
+	}
+public:
+	Stopwatch() {}
+
+	void start() {
+		m_start=std::chrono::steady_clock::now();
+	}
+
+	void stop() {
+		m_end=std::chrono::steady_clock::now();
+	}
+
+	long long getNanos() const {
+		return std::chrono::duration_cast<std::chrono::nanoseconds>(m_end-m_start).count();
+	}
+
+	long long getMicros() const {
+		return std::chrono::duration_cast<std::chrono::microseconds>(m_end-m_start).count();
+	}
+
+	long long getMillis() const {
+		return std::chrono::duration_cast<std::chrono::milliseconds>(m_end-m_start).count();
+	}
+}; 
+
 struct VoxelGame : olc::PixelGameEngine {
 	VoxelGame() {
 		sAppName="Voxel Game";
@@ -58,24 +88,25 @@ struct VoxelGame : olc::PixelGameEngine {
 	bool OnUserCreate() override {
 		mat_proj=Mat4::makeProj(90.f, float(ScreenHeight())/ScreenWidth(), .1f, 1000.f);
 		
-		auto time0=std::chrono::steady_clock::now();
+		Stopwatch watch;
+		watch.start();
 		Mesh m_teapot=Mesh::loadFromOBJ("assets/teapot.txt");
 		m_teapot.normalize(10);
-		auto time1=std::chrono::steady_clock::now();
-		auto dur0=std::chrono::duration_cast<std::chrono::microseconds>(time1-time0).count();
+		watch.stop();
+		auto dur0=watch.getMicros();
 		std::cout<<"load mesh: "<<dur0<<"us ("<<dur0/1000.f<<"ms)\n";
 
-		auto time2=std::chrono::steady_clock::now();
+		watch.start();
 		VoxelSet v_teapot=meshToVoxels_fast(m_teapot, .25f);
 		v_teapot.updateTypes();
-		auto time3=std::chrono::steady_clock::now();
-		auto dur1=std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
+		watch.stop();
+		auto dur1=watch.getMillis();
 		std::cout<<"voxelize: "<<dur1<<"ms ("<<dur1/1000.f<<"s)\n";
 
-		auto time4=std::chrono::steady_clock::now();
+		watch.start();
 		mesh=voxelsToMesh(v_teapot);
-		auto time5=std::chrono::steady_clock::now();
-		auto dur2=std::chrono::duration_cast<std::chrono::microseconds>(time5-time4).count();
+		watch.stop();
+		auto dur2=watch.getMicros();
 		std::cout<<"remesh: "<<dur2<<"us ("<<dur2/1000.f<<"ms)\n";
 
 		light_pos=cam_pos;
@@ -83,10 +114,11 @@ struct VoxelGame : olc::PixelGameEngine {
 		return true;
 	}
 
-	//how can we make this const?
-	int clipAgainstPlane(Triangle& t, const vf3d& ctr, const vf3d& norm, Triangle& a, Triangle& b) {
-		vf3d* inside_pts[3]; int inside_ct=0;
-		vf3d* outside_pts[3]; int outside_ct=0;
+	int clipAgainstPlane(const Triangle& t, const vf3d& ctr, const vf3d& norm, Triangle& a, Triangle& b) {
+		const vf3d* inside_pts[3];
+		int inside_ct=0;
+		const vf3d* outside_pts[3];
+		int outside_ct=0;
 		for(int i=0; i<3; i++) {
 			//what side of plane is pt on?
 			float dp=norm.dot(t.p[i]-ctr);
