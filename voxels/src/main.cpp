@@ -97,7 +97,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		std::cout<<"load mesh: "<<dur0<<"us ("<<dur0/1000.f<<"ms)\n";
 
 		watch.start();
-		VoxelSet v_teapot=meshToVoxels_fast(m_teapot, .25f);
+		VoxelSet v_teapot=meshToVoxels_fast(m_teapot, .33f);
 		v_teapot.updateTypes();
 		watch.stop();
 		auto dur1=watch.getMillis();
@@ -110,6 +110,14 @@ struct VoxelGame : olc::PixelGameEngine {
 		std::cout<<"remesh: "<<dur2<<"us ("<<dur2/1000.f<<"ms)\n";
 
 		light_pos=cam_pos;
+
+		//color normals of triangles
+		for(auto& t:mesh.triangles) {
+			vf3d norm=t.getNorm();
+			t.col.r=128+127*norm.x;
+			t.col.g=128+127*norm.y;
+			t.col.b=128+127*norm.z;
+		}
 
 		return true;
 	}
@@ -165,6 +173,9 @@ struct VoxelGame : olc::PixelGameEngine {
 	bool OnUserUpdate(float dt) override {
 		if(GetKey(olc::Key::CTRL).bHeld) dt/=10;
 
+		const bool to_time=GetKey(olc::Key::T).bPressed;
+		Stopwatch geom_watch, render_watch;
+
 #pragma region MOVEMENT
 		//add mouse later
 
@@ -198,6 +209,7 @@ struct VoxelGame : olc::PixelGameEngine {
 #pragma endregion
 
 #pragma region GEOMETRY AND CLIPPING
+		if(to_time) geom_watch.start();
 		const vf3d up(0, 1, 0);
 		vf3d look_dir(
 			std::sinf(cam_yaw)*std::cosf(cam_pitch),
@@ -257,10 +269,15 @@ struct VoxelGame : olc::PixelGameEngine {
 			float b_z=b.p[0].z+b.p[1].z+b.p[2].z;
 			return a_z>b_z;
 		});
-
+		if(to_time) {
+			geom_watch.stop();
+			auto dur=geom_watch.getMicros();
+			std::cout<<"geom: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+		}
 #pragma endregion
 
 #pragma region RENDER
+		if(to_time) render_watch.start();
 		Clear(olc::Pixel(50, 50, 50));
 
 		//screen space clipping!
@@ -321,7 +338,11 @@ struct VoxelGame : olc::PixelGameEngine {
 				}
 			}
 		}
-
+		if(to_time) {
+			render_watch.stop();
+			auto dur=render_watch.getMicros();
+			std::cout<<"render: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+		}
 #pragma endregion
 
 		return true;
@@ -332,7 +353,7 @@ int main() {
 	srand(time(0));
 
 	VoxelGame vg;
-	if(vg.Construct(320, 240, 2, 2, false, true)) vg.Start();
+	if(vg.Construct(320, 240, 2, 2, false, false)) vg.Start();
 
 	return 0;
 }
