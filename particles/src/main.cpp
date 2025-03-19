@@ -22,11 +22,12 @@ struct ParticleUI : olc::PixelGameEngine {
 	olc::Sprite* prim_circ_spr=nullptr;
 	olc::Decal* prim_circ_dec=nullptr;
 
-	float add_timer=0;
-
-	float addition_radius=30;
+	float selection_radius=30;
 
 	Solver solver;
+
+	bool show_grid=false;
+	bool show_density=false;
 
 	bool OnUserCreate() override {
 		//make some "primitives" to draw with
@@ -66,12 +67,13 @@ struct ParticleUI : olc::PixelGameEngine {
 		const vf2d mouse_pos=GetMousePos();
 
 		//user input
-		const bool to_time=GetKey(olc::Key::T).bPressed;
 		Stopwatch physics_watch, render_watch;
+		const bool to_time=GetKey(olc::Key::T).bPressed;
+		if(to_time) std::cout<<"\nDiagnostic Info:\n";
 
 		const bool adding=GetMouse(olc::Mouse::LEFT).bHeld;
 		if(adding) {
-			float pos_rad=random(0, addition_radius);
+			float pos_rad=random(0, selection_radius);
 			vf2d offset=polar(pos_rad, random(2*Pi));
 
 			//random size and color
@@ -88,13 +90,27 @@ struct ParticleUI : olc::PixelGameEngine {
 			solver.addParticle(temp);
 		}
 
+		const bool removing=GetMouse(olc::Mouse::RIGHT).bHeld;
+		if(removing){
+			for(const auto& p:solver.particles) {
+				if((mouse_pos-p.pos).mag()<selection_radius){
+					solver.removeParticle(p);
+				}
+			}
+		}
+
+		//graphics toggles
+		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
+		if(GetKey(olc::Key::D).bPressed) show_density^=true;
+
 		//physics
 		if(to_time) physics_watch.start();
 
+		int checks=0;
 		const int sub_steps=3;
 		float sub_dt=dt/sub_steps;
 		for(int i=0; i<sub_steps; i++) {
-			solver.solveCollisions();
+			checks+=solver.solveCollisions();
 
 			solver.updateKinematics(dt);
 		}
@@ -103,50 +119,83 @@ struct ParticleUI : olc::PixelGameEngine {
 			physics_watch.stop();
 			auto dur=physics_watch.getMicros();
 			std::cout<<"physics: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+			int num=solver.particles.size();
+			std::cout<<"at "<<num<<" particles:\n";
+			int brute=num*(num-1)/2;
+			std::cout<<"  brute force: "<<brute<<" tests\n";
+			std::cout<<"  spacial hash: "<<checks<<" tests\n";
+			int pct=100.f*(brute-checks)/brute;
+			std::cout<<"  "<<pct<<"% faster\n";
 		}
 
 		//render
 		if(to_time) render_watch.start();
 
-		Clear(olc::BLACK);
+		const olc::Pixel background_color(190, 255, 255);
+		Clear(background_color);
 
 		//show addition radius
 		if(adding) {
-			FillCircleDecal(mouse_pos, addition_radius, olc::GREY);
-			FillCircleDecal(mouse_pos, addition_radius-2, olc::BLACK);
+			FillCircleDecal(mouse_pos, selection_radius, olc::GREEN);
+			FillCircleDecal(mouse_pos, selection_radius-2, background_color);
+		}
+
+		if(removing) {
+			FillCircleDecal(mouse_pos, selection_radius, olc::RED);
+			FillCircleDecal(mouse_pos, selection_radius-2, background_color);
+		}
+
+		//show particles
+		if(!show_density) for(const auto& p:solver.particles) {
+			FillCircleDecal(p.pos, p.rad, p.col);
 		}
 
 		//draw solver hash grid
-		if(GetKey(olc::Key::H).bHeld) {
+		if(show_grid) {
 			//vertical lines
 			for(int i=0; i<=solver.getNumCellX(); i++) {
 				float x=solver.getCellSize()*i;
 				vf2d top(x, 0), btm(x, ScreenHeight());
-				DrawLineDecal(top, btm, olc::CYAN);
+				DrawLineDecal(top, btm, olc::BLACK);
 			}
 
 			//horizontal lines
 			for(int j=0; j<=solver.getNumCellY(); j++) {
 				float y=solver.getCellSize()*j;
 				vf2d lft(0, y), rgt(ScreenWidth(), y);
-				DrawLineDecal(lft, rgt, olc::CYAN);
+				DrawLineDecal(lft, rgt, olc::BLACK);
 			}
 		}
 
-		//show particles
-		for(const auto& p:solver.particles) {
-			FillCircleDecal(p.pos, p.rad, p.col);
-		}
-
 		//show values(debug)
-		if(GetKey(olc::Key::G).bHeld) {
+		if(show_density) {
+			//find max cell num
+			int max=0;
 			for(int i=0; i<solver.getNumCellX(); i++) {
 				for(int j=0; j<solver.getNumCellY(); j++) {
-					float x=solver.getCellSize()*(.5f+i);
-					float y=solver.getCellSize()*(.5f+j);
-					const auto& cell=solver.cells[solver.hashIX(i, j)];
-					auto str=std::to_string(cell.size());
-					DrawStringDecal(vf2d(x-4*str.length(), y-4), str, olc::BLACK);
+					int num=solver.cells[solver.hashIX(i, j)].size();
+					if(num>max) max=num;
+				}
+			}
+			//draw squares showing "density"
+			if(max!=0) {
+				for(int i=0; i<solver.getNumCellX(); i++) {
+					for(int j=0; j<solver.getNumCellY(); j++) {
+						int num=solver.cells[solver.hashIX(i, j)].size();
+						if(num==0) continue;
+
+						int shade=map(num, 0, max, 0, 255);
+						olc::Pixel col(shade, shade, shade);
+
+						float x=solver.getCellSize()*i;
+						float y=solver.getCellSize()*j;
+						FillRectDecal({x, y}, {solver.getCellSize(), solver.getCellSize()}, col);
+						
+						float cx=.5f*solver.getCellSize()+x;
+						float cy=.5f*solver.getCellSize()+y;
+						std::string str=std::to_string(num);
+						DrawStringDecal({cx-4, cy-4}, str);
+					}
 				}
 			}
 		}

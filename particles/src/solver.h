@@ -28,7 +28,7 @@ vf2d reflect(const vf2d& in, const vf2d& norm) {
 }
 
 class Solver {
-	float cell_size=1;
+	float cell_size=0;
 	int num_cell_x=1;
 	int num_cell_y=1;
 
@@ -47,19 +47,35 @@ public:
 		cells=new std::list<int>[num_cell_x*num_cell_y];
 	}
 
-	void addParticle(const Particle& o) {
-		bool overlap=false;
-		for(const auto& p:particles) {
-			if((o.pos-p.pos).mag()<o.rad+p.rad) {
-				overlap=true;
-				break;
-			}
-		}
-		//add only if NOT overlapping any others
-		if(!overlap) {
-			particles.push_back(o);
+	//1
+	Solver(const Solver& s)=delete;
 
-			updateSpacialHash();
+	//2
+	~Solver() {
+		delete[] cells;
+	}
+
+	//3
+	Solver& operator=(const Solver& s)=delete;
+
+	//if NOT overlapping others, update spacial hash
+	void addParticle(const Particle& o) {
+		for(const auto& p:particles) {
+			if((o.pos-p.pos).mag()<o.rad+p.rad) return;
+		}
+
+		particles.push_back(o);
+		updateSpacialHash();
+	}
+
+	//if found, update spacial hash
+	void removeParticle(const Particle& o) {
+		for(auto it=particles.begin(); it!=particles.end(); it++) {
+			if(&*it==&o) {
+				particles.erase(it);
+				updateSpacialHash();
+				return;
+			}
 		}
 	}
 
@@ -87,9 +103,11 @@ public:
 		return j>=0&&j<num_cell_y;
 	}
 
-	void solveCollisions() {
+	int solveCollisions() {
 		fillSpacialHash();
 		
+		int checks=0;
+
 		//for each cell
 		for(int ci=0; ci<num_cell_x; ci++) {
 			for(int cj=0; cj<num_cell_y; cj++) {
@@ -109,6 +127,8 @@ public:
 								auto& pb=particles[a];
 								//dont check self
 								if(a==c) continue;
+
+								checks++;
 
 								//are the circles overlapping?
 								vf2d sub=pa.pos-pb.pos;
@@ -141,6 +161,8 @@ public:
 				}
 			}
 		}
+		
+		return checks;
 	}
 
 	void updateKinematics(float dt) {
@@ -156,13 +178,19 @@ public:
 
 //update sizing and reallocate
 void Solver::updateSpacialHash() {
-	float max_rad=1;
-	for(const auto& p:particles) {
-		if(p.rad>max_rad) max_rad=p.rad;
+	if(particles.empty()) {
+		cell_size=0;
+		num_cell_x=1;
+		num_cell_y=1;
+	} else {
+		float max_rad=1;
+		for(const auto& p:particles) {
+			if(p.rad>max_rad) max_rad=p.rad;
+		}
+		cell_size=2*max_rad;
+		num_cell_x=1+(bounds.max.x-bounds.min.x)/cell_size;
+		num_cell_y=1+(bounds.max.y-bounds.min.y)/cell_size;
 	}
-	cell_size=2*max_rad;
-	num_cell_x=1+(bounds.max.x-bounds.min.x)/cell_size;
-	num_cell_y=1+(bounds.max.y-bounds.min.y)/cell_size;
 
 	delete[] cells;
 	cells=new std::list<int>[num_cell_x*num_cell_y];
