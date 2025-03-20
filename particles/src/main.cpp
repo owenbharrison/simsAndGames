@@ -123,8 +123,8 @@ struct ParticleUI : olc::PixelGameEngine {
 				box.fitToEnclose(*bulk_start);
 				box.fitToEnclose(mouse_pos);
 				float max_rad=10;
-				int num_x=(box.max.x-box.min.x)/max_rad;
-				int num_y=(box.max.y-box.min.y)/max_rad;
+				int num_x=(box.max.x-box.min.x)/max_rad/2;
+				int num_y=(box.max.y-box.min.y)/max_rad/2;
 				for(int i=0; i<num_x; i++) {
 					float x=map(i, 0, num_x-1, box.min.x, box.max.x);
 					for(int j=0; j<num_y; j++) {
@@ -136,7 +136,9 @@ struct ParticleUI : olc::PixelGameEngine {
 					}
 				}
 			}
+
 			delete bulk_start;
+			bulk_start=nullptr;
 		}
 
 		const bool removing=GetMouse(olc::Mouse::RIGHT).bHeld;
@@ -189,9 +191,23 @@ struct ParticleUI : olc::PixelGameEngine {
 			FillCircleDecal(mouse_pos, selection_radius-2, background_color);
 		}
 
+		//show deletion radius
 		if(removing) {
 			FillCircleDecal(mouse_pos, selection_radius, olc::RED);
 			FillCircleDecal(mouse_pos, selection_radius-2, background_color);
+		}
+
+		//show bulk action
+		if(bulk_start) {
+			AABB box;
+			box.fitToEnclose(*bulk_start);
+			box.fitToEnclose(mouse_pos);
+			vf2d tr(box.max.x, box.min.y);
+			vf2d bl(box.min.x, box.max.y);
+			DrawLineDecal(box.min, tr, olc::BLUE);
+			DrawLineDecal(tr, box.max, olc::BLUE);
+			DrawLineDecal(box.max, bl, olc::BLUE);
+			DrawLineDecal(bl, box.min, olc::BLUE);
 		}
 
 		//show particles
