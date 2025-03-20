@@ -28,7 +28,7 @@ Select your desired project, and press the `Start Without Debugging` or `Ctrl+F5
 - [ ] Emscripten to host projects
 - [ ] terraria water physics
 - [ ] minecraft clone
-- [x] raytracing
+- [x] raycasting
 - [ ] sentiment analysis
 - [ ] fourier transform
 - [ ] levenshtein distance
