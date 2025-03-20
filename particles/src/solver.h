@@ -31,12 +31,17 @@ class Solver {
 	float cell_size=0;
 	int num_cell_x=1;
 	int num_cell_y=1;
+	std::list<int>* cells=nullptr;
 
-	void updateSpacialHash();
-	void fillSpacialHash();
+	int cellIX(int i, int j) const {
+		return i+num_cell_x*j;
+	}
+
+	void updateCellNum();
+	void reallocateCells();
+	void fillCells();
 
 public:
-	std::list<int>* cells=nullptr;
 	std::vector<Particle> particles;
 
 	AABB bounds;
@@ -44,7 +49,7 @@ public:
 	vf2d gravity;
 
 	Solver() {
-		cells=new std::list<int>[num_cell_x*num_cell_y];
+		reallocateCells();
 	}
 
 	//1
@@ -59,21 +64,45 @@ public:
 	Solver& operator=(const Solver& s)=delete;
 
 	//if NOT overlapping others, update spacial hash
-	void addParticle(const Particle& o) {
+	Particle* addParticle(const Particle& o) {
 		for(const auto& p:particles) {
-			if((o.pos-p.pos).mag()<o.rad+p.rad) return;
+			if((o.pos-p.pos).mag()<o.rad+p.rad) return nullptr;
 		}
 
 		particles.push_back(o);
-		updateSpacialHash();
+		if(2*o.rad>cell_size) {
+			cell_size=2*o.rad;
+			updateCellNum();
+			reallocateCells();
+		}
+		return &particles.back();
 	}
 
 	//if found, update spacial hash
 	void removeParticle(const Particle& o) {
 		for(auto it=particles.begin(); it!=particles.end(); it++) {
 			if(&*it==&o) {
+				float rad=it->rad;
 				particles.erase(it);
-				updateSpacialHash();
+				
+				float record=-1;
+				for(const auto& p:particles) {
+					if(p.rad>rad) return;
+					if(p.rad>record) record=p.rad;
+				}
+				
+				if(record<0) {
+					//that was last particle
+					cell_size=0;
+					num_cell_x=1;
+					num_cell_x=1;
+				} else {
+					//that was biggest particle
+					cell_size=2*record;
+					updateCellNum();
+				}
+				reallocateCells();
+				
 				return;
 			}
 		}
@@ -91,77 +120,78 @@ public:
 		return num_cell_y;
 	}
 
-	int hashIX(int i, int j) const {
-		return i+num_cell_x*j;
-	}
-
-	bool hashInRangeX(int i) const {
+	bool cellInRangeX(int i) const {
 		return i>=0&&i<num_cell_x;
 	}
 
-	bool hashInRangeY(int j) const {
+	bool cellInRangeY(int j) const {
 		return j>=0&&j<num_cell_y;
 	}
 
-	int solveCollisions() {
-		fillSpacialHash();
-		
+	const std::list<int>& getCell(int i, int j) const {
+		return cells[cellIX(i, j)];
+	}
+
+	int collideCells(int i1, int j1, int i2, int j2) {
 		int checks=0;
+		
+		const auto& c1=cells[cellIX(i1, j1)];
+		const auto& c2=cells[cellIX(i2, j2)];
+		for(const auto& a:c1) {
+			auto& pa=particles[a];
+			for(const auto& b:c2) {
+				//dont check self
+				if(b==a) continue;
 
-		//for each cell
-		for(int ci=0; ci<num_cell_x; ci++) {
-			for(int cj=0; cj<num_cell_y; cj++) {
-				//check adjacent including self
-				for(int di=-1; di<=1; di++) {
-					for(int dj=-1; dj<=1; dj++) {
-						int ai=ci+di, aj=cj+dj;
-						if(!hashInRangeX(ai)||!hashInRangeY(aj)) continue;
+				checks++;
 
-						//get cell lists
-						const auto& curr=cells[hashIX(ci, cj)];
-						const auto& adj=cells[hashIX(ai, aj)];
-						//check each against eachother
-						for(const auto& c:curr) {
-							auto& pa=particles[c];
-							for(const auto& a:adj) {
-								auto& pb=particles[a];
-								//dont check self
-								if(a==c) continue;
+				auto& pb=particles[b];
 
-								checks++;
+				//are the circles overlapping?
+				vf2d sub=pa.pos-pb.pos;
+				float dist_sq=sub.mag2();
+				float rad=pa.rad+pb.rad;
+				float rad_sq=rad*rad;
+				if(dist_sq<rad_sq) {
+					float dist=std::sqrtf(dist_sq);
+					float delta=dist-rad;
 
-								//are the circles overlapping?
-								vf2d sub=pa.pos-pb.pos;
-								float dist_sq=sub.mag2();
-								float rad=pa.rad+pb.rad;
-								float rad_sq=rad*rad;
-								if(dist_sq<rad_sq) {
-									float dist=std::sqrtf(dist_sq);
-									float delta=dist-rad;
+					//dont divide by 0
+					vf2d norm;
+					if(dist<1e-6f) norm=polar(1, random(2*Pi));
+					else norm=sub/dist;
 
-									//dont divide by 0
-									vf2d norm;
-									if(dist<1e-6f) norm=polar(1, random(2*Pi));
-									else norm=sub/dist;
-
-									//vf2d a_vel=pa.pos-pa.oldpos;
-									//vf2d b_vel=pb.pos-pb.oldpos;
-
-									vf2d diff=.5f*delta*norm;
-									pa.pos-=diff;
-									pb.pos+=diff;
-
-									//reflect velocity about collision normal
-									//ait->oldpos=ait->pos-reflect(a_vel, norm);
-									//bit->oldpos=bit->pos-reflect(b_vel, norm);
-								}
-							}
-						}
-					}
+					vf2d diff=.5f*delta*norm;
+					pa.pos-=diff;
+					pb.pos+=diff;
 				}
 			}
 		}
-		
+
+		return checks;
+	}
+
+	int solveCollisions() {
+		fillCells();
+
+		int checks=0;
+
+		const int di[5]{1, 1, 0, 0, -1};
+		const int dj[5]{0, 1, 0, 1, 1};
+
+		//for each cell
+		for(int i=0; i<num_cell_x; i++) {
+			for(int j=0; j<num_cell_y; j++) {
+				for(int k=0; k<5; k++) {
+					//check adjacent including self
+					int oi=i+di[k], oj=j+dj[k];
+					if(!cellInRangeX(oi)||!cellInRangeY(oj)) continue;
+						
+					checks+=collideCells(i, j, oi, oj);
+				}
+			}
+		}
+
 		return checks;
 	}
 
@@ -176,31 +206,21 @@ public:
 	}
 };
 
-//update sizing and reallocate
-void Solver::updateSpacialHash() {
-	if(particles.empty()) {
-		cell_size=0;
-		num_cell_x=1;
-		num_cell_y=1;
-	} else {
-		float max_rad=1;
-		for(const auto& p:particles) {
-			if(p.rad>max_rad) max_rad=p.rad;
-		}
-		cell_size=2*max_rad;
-		num_cell_x=1+(bounds.max.x-bounds.min.x)/cell_size;
-		num_cell_y=1+(bounds.max.y-bounds.min.y)/cell_size;
-	}
+void Solver::updateCellNum() {
+	num_cell_x=1+(bounds.max.x-bounds.min.x)/cell_size;
+	num_cell_y=1+(bounds.max.y-bounds.min.y)/cell_size;
+}
 
+void Solver::reallocateCells() {
 	delete[] cells;
 	cells=new std::list<int>[num_cell_x*num_cell_y];
 }
 
-void Solver::fillSpacialHash() {
+void Solver::fillCells() {
 	//first clear it
 	for(int i=0; i<num_cell_x; i++) {
 		for(int j=0; j<num_cell_y; j++) {
-			cells[hashIX(i, j)].clear();
+			cells[cellIX(i, j)].clear();
 		}
 	}
 
@@ -210,9 +230,9 @@ void Solver::fillSpacialHash() {
 
 		int i=p.pos.x/cell_size;
 		int j=p.pos.y/cell_size;
-		if(!hashInRangeX(i)||!hashInRangeY(j)) continue;
+		if(!cellInRangeX(i)||!cellInRangeY(j)) continue;
 
-		cells[hashIX(i, j)].emplace_back(k);
+		cells[cellIX(i, j)].emplace_back(k);
 	}
 }
 #endif

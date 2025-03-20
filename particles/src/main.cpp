@@ -22,7 +22,22 @@ struct ParticleUI : olc::PixelGameEngine {
 	olc::Sprite* prim_circ_spr=nullptr;
 	olc::Decal* prim_circ_dec=nullptr;
 
-	float selection_radius=30;
+	static const int num_img=7;
+	const std::string filenames[num_img]{
+		"base",
+		"basket",
+		"beach",
+		"dodge",
+		"soccer",
+		"tennis",
+		"volley"
+	};
+	olc::Sprite* ball_spr[num_img];
+	olc::Decal* ball_dec[num_img];
+
+	float selection_radius=45;
+
+	vf2d* bulk_start=nullptr;
 
 	Solver solver;
 
@@ -39,6 +54,13 @@ struct ParticleUI : olc::PixelGameEngine {
 		SetDrawTarget(nullptr);
 		prim_circ_dec=new olc::Decal(prim_circ_spr);
 
+		//load ball sprites
+		for(int i=0; i<num_img; i++) {
+			std::string filename="assets/"+filenames[i]+"_ball.png";
+			ball_spr[i]=new olc::Sprite(filename);
+			ball_dec[i]=new olc::Decal(ball_spr[i]);
+		}
+
 		solver.bounds={vf2d(0, 0), vf2d(ScreenWidth(), ScreenHeight())};
 
 		solver.gravity=vf2d(0, 24);
@@ -49,6 +71,11 @@ struct ParticleUI : olc::PixelGameEngine {
 	bool OnUserDestroy() override {
 		delete prim_circ_dec;
 		delete prim_circ_spr;
+
+		for(int i=0; i<num_img; i++) {
+			delete ball_dec[i];
+			delete ball_spr[i];
+		}
 
 		return true;
 	}
@@ -77,23 +104,45 @@ struct ParticleUI : olc::PixelGameEngine {
 			vf2d offset=polar(pos_rad, random(2*Pi));
 
 			//random size and color
-			float ptc_rad=random(3, 10);
-			olc::Pixel col(
-				rand()%255,
-				rand()%255,
-				rand()%255
-			);
+			float ptc_rad=random(3, 7);
 			float speed=dt*random(20);
-			Particle temp(mouse_pos+offset, ptc_rad, col);
+			Particle temp(mouse_pos+offset, ptc_rad);
 			temp.oldpos-=polar(speed, random(2*Pi));
 
-			solver.addParticle(temp);
+			const auto& p=solver.addParticle(temp);
+			if(p) p->id=rand()%7;
+		}
+
+		const auto bulk_action=GetMouse(olc::Mouse::MIDDLE);
+		if(bulk_action.bPressed) {
+			bulk_start=new vf2d(mouse_pos);
+		}
+		if(bulk_action.bReleased) {
+			if(bulk_start) {
+				AABB box;
+				box.fitToEnclose(*bulk_start);
+				box.fitToEnclose(mouse_pos);
+				float max_rad=10;
+				int num_x=(box.max.x-box.min.x)/max_rad;
+				int num_y=(box.max.y-box.min.y)/max_rad;
+				for(int i=0; i<num_x; i++) {
+					float x=map(i, 0, num_x-1, box.min.x, box.max.x);
+					for(int j=0; j<num_y; j++) {
+						float y=map(j, 0, num_y-1, box.min.y, box.max.y);
+						Particle temp({x, y}, random(5, max_rad));
+
+						const auto& p=solver.addParticle(temp);
+						if(p) p->id=rand()%7;
+					}
+				}
+			}
+			delete bulk_start;
 		}
 
 		const bool removing=GetMouse(olc::Mouse::RIGHT).bHeld;
-		if(removing){
+		if(removing) {
 			for(const auto& p:solver.particles) {
-				if((mouse_pos-p.pos).mag()<selection_radius){
+				if((mouse_pos-p.pos).mag()<selection_radius) {
 					solver.removeParticle(p);
 				}
 			}
@@ -146,8 +195,12 @@ struct ParticleUI : olc::PixelGameEngine {
 		}
 
 		//show particles
-		if(!show_density) for(const auto& p:solver.particles) {
-			FillCircleDecal(p.pos, p.rad, p.col);
+		if(!show_density) {
+			for(const auto& p:solver.particles) {
+				const auto& s=ball_spr[p.id];
+				vf2d scale=2*p.rad/vf2d(s->width, s->height);
+				DrawDecal(p.pos-vf2d(p.rad, p.rad), ball_dec[p.id], scale);
+			}
 		}
 
 		//draw solver hash grid
@@ -173,7 +226,7 @@ struct ParticleUI : olc::PixelGameEngine {
 			int max=0;
 			for(int i=0; i<solver.getNumCellX(); i++) {
 				for(int j=0; j<solver.getNumCellY(); j++) {
-					int num=solver.cells[solver.hashIX(i, j)].size();
+					int num=solver.getCell(i, j).size();
 					if(num>max) max=num;
 				}
 			}
@@ -181,7 +234,7 @@ struct ParticleUI : olc::PixelGameEngine {
 			if(max!=0) {
 				for(int i=0; i<solver.getNumCellX(); i++) {
 					for(int j=0; j<solver.getNumCellY(); j++) {
-						int num=solver.cells[solver.hashIX(i, j)].size();
+						int num=solver.getCell(i, j).size();
 						if(num==0) continue;
 
 						int shade=map(num, 0, max, 0, 255);
@@ -190,7 +243,7 @@ struct ParticleUI : olc::PixelGameEngine {
 						float x=solver.getCellSize()*i;
 						float y=solver.getCellSize()*j;
 						FillRectDecal({x, y}, {solver.getCellSize(), solver.getCellSize()}, col);
-						
+
 						float cx=.5f*solver.getCellSize()+x;
 						float cy=.5f*solver.getCellSize()+y;
 						std::string str=std::to_string(num);

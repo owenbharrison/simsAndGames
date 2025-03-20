@@ -7,16 +7,15 @@ constexpr float Pi=3.1415927f;
 struct Particle {
 	vf2d pos, oldpos, forces;
 	float rad=0, mass=1;
-	olc::Pixel col;
+	int id=0;
 
 	Particle() {}
 
-	Particle(const vf2d& p, const float& r, const olc::Pixel& c) {
+	Particle(const vf2d& p, const float& r) {
 		pos=p;
 		oldpos=p;
 		rad=r;
 		mass=Pi*rad*rad;
-		col=c;
 	}
 
 	void applyForce(const vf2d& f) {

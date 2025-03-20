@@ -33,4 +33,27 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\base_ball.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\basket_ball.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\beach_ball.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\dodge_ball.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\soccer_ball.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\tennis_ball.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\volley_ball.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
 </Project>

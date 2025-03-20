@@ -147,6 +147,15 @@
     <ClInclude Include="src\solver.h" />
     <ClInclude Include="src\stopwatch.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\base_ball.png" />
+    <Image Include="assets\basket_ball.png" />
+    <Image Include="assets\beach_ball.png" />
+    <Image Include="assets\dodge_ball.png" />
+    <Image Include="assets\soccer_ball.png" />
+    <Image Include="assets\tennis_ball.png" />
+    <Image Include="assets\volley_ball.png" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
