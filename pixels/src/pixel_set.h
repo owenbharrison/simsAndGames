@@ -206,19 +206,10 @@ public:
 
 	[[nodiscard]] AABB getAABB() const {
 		AABB box;
-
-		//for each corner point
-		for(int p=0; p<4; p++) {
-			int i=0, j=0;
-			switch(p) {
-				case 1: i=w; break;
-				case 2: i=w, j=h; break;
-				case 3: j=h; break;
-			}
-
-			//rotate point and fit in box
-			box.fitToEnclose(localToWorld(vf2d(i, j)));
-		}
+		box.fitToEnclose(localToWorld(vf2d(0, 0)));
+		box.fitToEnclose(localToWorld(vf2d(w, 0)));
+		box.fitToEnclose(localToWorld(vf2d(w, h)));
+		box.fitToEnclose(localToWorld(vf2d(0, h)));
 		return box;
 	}
 
@@ -311,6 +302,7 @@ public:
 		AABB seg_box;
 		seg_box.fitToEnclose(s1);
 		seg_box.fitToEnclose(s2);
+
 		//make sure they overlap
 		if(!seg_box.overlaps(getAABB())) return false;
 
@@ -323,7 +315,7 @@ public:
 		//clip segment about w, h: is it valid?
 		if(!clip(x1, y1, x2, y2)) return false;
 
-		//rasterize EMPTY line
+		//place empty at point
 		bool edited=false;
 		auto edit=[this, &edited] (int x, int y) {
 			if(inRangeX(x)&&inRangeY(y)) {
@@ -335,6 +327,7 @@ public:
 			}
 		};
 
+		//rasterize line
 		int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
 		dx=x2-x1; dy=y2-y1;
 		dx1=abs(dx), dy1=abs(dy);
@@ -371,7 +364,7 @@ public:
 		return edited;
 	}
 
-	//call this after destruction to see
+	//call this after "destruction" to see
 	//	how many new pixelsets to split into
 	//basically a parts detection algorithm
 	[[nodiscard]] std::vector<PixelSet> floodfill() const {
@@ -384,7 +377,6 @@ public:
 
 		//store each part
 		std::vector<PixelSet> pixelsets;
-
 
 		//for every block
 		for(int i=0; i<w; i++) {

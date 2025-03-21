@@ -9,7 +9,7 @@ using olc::vf2d;
 
 struct PixelGame : olc::PixelGameEngine {
 	PixelGame() {
-		sAppName="Testing";
+		sAppName="Pixels";
 	}
 
 	//helpful positions
@@ -165,9 +165,13 @@ struct PixelGame : olc::PixelGameEngine {
 		return true;
 	}
 
-	void reset() {
+	void resetMarkers() {
 		spring_set=nullptr;
 		drag_set=nullptr;
+	}
+
+	void reset() {
+		resetMarkers();
 
 		for(const auto& p:pixelsets) delete p;
 		pixelsets.clear();
@@ -561,8 +565,7 @@ struct PixelGame : olc::PixelGameEngine {
 		//slice objects
 		const auto s_key=GetKey(olc::Key::S);
 		if(s_key.bHeld) {
-			drag_set=nullptr;
-			spring_set=nullptr;
+			resetMarkers();
 
 			//check every pixelset
 			for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
@@ -585,8 +588,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 		//remove objects
 		if(GetKey(olc::Key::X).bPressed) {
-			drag_set=nullptr;
-			spring_set=nullptr;
+			resetMarkers();
 
 			for(auto it=pixelsets.begin(); it!=pixelsets.end();) {
 
@@ -692,7 +694,7 @@ struct PixelGame : olc::PixelGameEngine {
 		tv.DrawDecal(pos-offset, prim_circ_dec, scale, col);
 	}
 
-	void renderWorldGrid() {
+	void renderWorldGrid(olc::Pixel col) {
 		//how can i make these adaptive?
 		float grid_spacing=25;
 
@@ -706,8 +708,8 @@ struct PixelGame : olc::PixelGameEngine {
 			float x=grid_spacing*i;
 			vf2d top{x, tl.y}, btm{x, br.y};
 			//major and minor lines
-			if(i%5==0) tvDrawThickLine(top, btm, 2.5f, olc::GREY);
-			else tv.DrawLineDecal(top, btm, olc::GREY);
+			if(i%5==0) tvDrawThickLine(top, btm, 2.2f, col);
+			else tv.DrawLineDecal(top, btm, col);
 		}
 
 		//horiz
@@ -715,8 +717,8 @@ struct PixelGame : olc::PixelGameEngine {
 			float y=grid_spacing*j;
 			vf2d lft{tl.x, y}, rgt{br.x, y};
 			//major and minor lines
-			if(j%5==0) tvDrawThickLine(lft, rgt, 2.5f, olc::GREY);
-			else tv.DrawLineDecal(lft, rgt, olc::GREY);
+			if(j%5==0) tvDrawThickLine(lft, rgt, 2.2f, col);
+			else tv.DrawLineDecal(lft, rgt, col);
 		}
 
 		//show x & y labels
@@ -821,10 +823,10 @@ struct PixelGame : olc::PixelGameEngine {
 
 	void render(float dt) {
 		//draw grey background
-		Clear(olc::Pixel(0, 100, 255));
+		Clear(olc::Pixel(143, 201, 255));
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
-
-		renderWorldGrid();
+		
+		renderWorldGrid(olc::Pixel(25, 131, 230));
 
 		//show addition
 		if(addition.size()) {
@@ -917,7 +919,7 @@ struct PixelGame : olc::PixelGameEngine {
 				tvDrawThickLine(orig, ix, 1, closest->col);
 				tvFillCircleDecal(ix, 3, closest->col);
 			} else tvDrawThickLine(orig, wld_mouse_pos, 1, olc::WHITE);
-			tvFillCircleDecal(orig, 3, olc::WHITE);
+			tvFillCircleDecal(orig, 3, olc::BLACK);
 		}
 #pragma endregion
 
