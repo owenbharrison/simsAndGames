@@ -32,6 +32,12 @@
     <ClInclude Include="src\solver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\particles_ui.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\chart.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\base_ball.png">

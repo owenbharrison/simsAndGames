@@ -46,8 +46,6 @@ public:
 
 	AABB bounds;
 
-	vf2d gravity;
-
 	Solver() {
 		reallocateCells();
 	}
@@ -195,10 +193,14 @@ public:
 		return checks;
 	}
 
+	void applyGravity(float g) {
+		for(auto& p:particles) {
+			p.applyForce(vf2d(0, p.mass*g));
+		}
+	}
+
 	void updateKinematics(float dt) {
 		for(auto& p:particles) {
-			p.applyForce(gravity*p.mass);
-
 			p.update(dt);
 
 			p.keepIn(bounds);

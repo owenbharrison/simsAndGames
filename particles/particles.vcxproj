@@ -143,7 +143,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\aabb.h" />
+    <ClInclude Include="src\chart.h" />
     <ClInclude Include="src\particle.h" />
+    <ClInclude Include="src\particles_ui.h" />
     <ClInclude Include="src\solver.h" />
     <ClInclude Include="src\stopwatch.h" />
   </ItemGroup>
