@@ -130,39 +130,44 @@ public:
 		return cells[cellIX(i, j)];
 	}
 
+	void collideParticles(int k1, int k2) {
+		auto& a=particles[k1];
+		auto& b=particles[k2];
+
+		//are the circles overlapping?
+		vf2d sub=a.pos-b.pos;
+		float dist_sq=sub.mag2();
+		float rad=a.rad+b.rad;
+		float rad_sq=rad*rad;
+		if(dist_sq<rad_sq) {
+			float dist=std::sqrtf(dist_sq);
+			float delta=dist-rad;
+
+			//dont divide by 0
+			vf2d norm;
+			if(dist<1e-6f) norm=polar(1, random(2*Pi));
+			else norm=sub/dist;
+
+			float inv_sum=a.inv_mass+b.inv_mass;
+			vf2d diff=delta*norm/inv_sum;
+			a.pos-=a.inv_mass*diff;
+			b.pos+=b.inv_mass*diff;
+		}
+	}
+
 	int collideCells(int i1, int j1, int i2, int j2) {
 		int checks=0;
 		
 		const auto& c1=cells[cellIX(i1, j1)];
 		const auto& c2=cells[cellIX(i2, j2)];
-		for(const auto& a:c1) {
-			auto& pa=particles[a];
-			for(const auto& b:c2) {
+		for(const auto& k1:c1) {
+			for(const auto& k2:c2) {
 				//dont check self
-				if(b==a) continue;
+				if(k2==k1) continue;
 
 				checks++;
 
-				auto& pb=particles[b];
-
-				//are the circles overlapping?
-				vf2d sub=pa.pos-pb.pos;
-				float dist_sq=sub.mag2();
-				float rad=pa.rad+pb.rad;
-				float rad_sq=rad*rad;
-				if(dist_sq<rad_sq) {
-					float dist=std::sqrtf(dist_sq);
-					float delta=dist-rad;
-
-					//dont divide by 0
-					vf2d norm;
-					if(dist<1e-6f) norm=polar(1, random(2*Pi));
-					else norm=sub/dist;
-
-					vf2d diff=.5f*delta*norm;
-					pa.pos-=diff;
-					pb.pos+=diff;
-				}
+				collideParticles(k1, k2);
 			}
 		}
 

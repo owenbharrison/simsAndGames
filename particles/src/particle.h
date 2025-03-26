@@ -6,7 +6,8 @@ constexpr float Pi=3.1415927f;
 
 struct Particle {
 	vf2d pos, oldpos, forces;
-	float rad=0, mass=1;
+	float rad=0;
+	float mass=1, inv_mass=1;
 	int id=0;
 
 	Particle() {}
@@ -16,6 +17,7 @@ struct Particle {
 		oldpos=p;
 		rad=r;
 		mass=Pi*rad*rad;
+		inv_mass=1/mass;
 	}
 
 	void applyForce(const vf2d& f) {

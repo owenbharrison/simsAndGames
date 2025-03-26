@@ -17,12 +17,29 @@ float map(float x, float a, float b, float c, float d) {
 	return c+t*(d-c);
 }
 
+//this assumes a true color terminal
+void setConsoleColor(int r, int g, int b) {
+	std::cout<<"\033[38;2;"<<r<<';'<<g<<';'<<b<<'m';
+}
+
+void setConsoleColorFromPerf(float ms) {
+	if(ms>4) setConsoleColor(255, 0, 0);
+	else if(ms>2) setConsoleColor(255, 255, 0);
+	else setConsoleColor(0, 255, 0);
+}
+
+void resetConsoleColor() {
+	std::cout<<"\033[0m";
+}
+
 struct ParticlesUI : olc::PixelGameEngine {
 	ParticlesUI() {
 		sAppName="Particles";
 	}
 
 	//sprite stuff
+	olc::Sprite* prim_rect_spr=nullptr;
+	olc::Decal* prim_rect_dec=nullptr;
 	olc::Sprite* prim_circ_spr=nullptr;
 	olc::Decal* prim_circ_dec=nullptr;
 
@@ -46,6 +63,8 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 	bool adding=false, removing=false;
 
+	bool to_time=false;
+
 	vf2d* bulk_start=nullptr;
 
 	std::list<Particle*> grab_particles;
@@ -59,11 +78,16 @@ struct ParticlesUI : olc::PixelGameEngine {
 	bool show_grid=false;
 	bool show_density=false;
 	bool show_energy_chart=false;
+	bool show_velocity=false;
 
 	Chart energy_chart;
+	float energy_chart_timer=0;
 
 	bool OnUserCreate() override {
-		//make circle "primitive" to draw with
+		//make some "primitives" to draw with
+		prim_rect_spr=new olc::Sprite(1, 1);
+		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
+		prim_rect_dec=new olc::Decal(prim_rect_spr);
 		{
 			int sz=1024;
 			prim_circ_spr=new olc::Sprite(sz, sz);
@@ -108,22 +132,9 @@ struct ParticlesUI : olc::PixelGameEngine {
 		return true;
 	}
 
-	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
-		DrawDecal(pos-offset, prim_circ_dec, scale, col);
-	}
-
-	bool OnUserUpdate(float dt) override {
-		if(dt>1/30.f) dt=1/30.f;
-
-		mouse_pos=GetMousePos();
-
-#pragma region USER INPUT
-		const bool to_time=GetKey(olc::Key::T).bPressed;
-		if(to_time) std::cout<<"\nDiagnostic Info:\n";
-
-		const bool adding=GetMouse(olc::Mouse::LEFT).bHeld;
+	void handleUserInput(float dt) {
+		//add random particles in radius around mouse
+		adding=GetMouse(olc::Mouse::LEFT).bHeld;
 		if(adding) {
 			float pos_rad=random(0, selection_radius);
 			vf2d offset=polar(pos_rad, random(2*Pi));
@@ -138,7 +149,8 @@ struct ParticlesUI : olc::PixelGameEngine {
 			if(p) p->id=rand()%7;
 		}
 
-		const auto bulk_action=GetKey(olc::Key::B);//GetMouse(olc::Mouse::MIDDLE);
+		//add grid of particles inside dragged rectangle
+		const auto bulk_action=GetKey(olc::Key::B);
 		if(bulk_action.bPressed) {
 			bulk_start=new vf2d(mouse_pos);
 		}
@@ -166,7 +178,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 			bulk_start=nullptr;
 		}
 
-		const bool removing=GetMouse(olc::Mouse::RIGHT).bHeld;
+		removing=GetMouse(olc::Mouse::RIGHT).bHeld;
 		if(removing) {
 			grab_particles.clear();
 			for(const auto& p:solver.particles) {
@@ -192,13 +204,14 @@ struct ParticlesUI : olc::PixelGameEngine {
 		//graphics toggles
 		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 		if(GetKey(olc::Key::D).bPressed) show_density^=true;
-		if(GetKey(olc::Key::E).bPressed) show_energy_chart^=true;
-#pragma endregion
+		if(GetKey(olc::Key::E).bPressed) {
+			show_energy_chart^=true;
+			energy_chart.reset();
+		}
+		if(GetKey(olc::Key::V).bPressed) show_velocity^=true;
+	}
 
-#pragma region PHYSICS
-		Stopwatch physics_watch;
-		if(to_time) physics_watch.start();
-
+	int handlePhysics(float dt) {
 		int checks=0;
 		const int sub_steps=3;
 		float sub_dt=dt/sub_steps;
@@ -211,37 +224,77 @@ struct ParticlesUI : olc::PixelGameEngine {
 		}
 
 		//update energy chart
-		{
-			float total_energy=0;
-			for(const auto& p:solver.particles) {
-				//mgh
-				float h=solver.bounds.max.y-p.pos.y;
-				total_energy+=p.mass*gravity*h;
-				//1/2mv^2
-				vf2d vel=p.pos-p.oldpos;
-				total_energy+=.5f*p.mass*vel.dot(vel);
+		if(energy_chart_timer<0) {
+			energy_chart_timer+=.05f;
+
+			if(show_energy_chart) {
+				float total_energy=0;
+				for(const auto& p:solver.particles) {
+					//mgh
+					float h=solver.bounds.max.y-p.pos.y;
+					total_energy+=p.mass*gravity*h;
+					//1/2mv^2
+					vf2d vel=p.pos-p.oldpos;
+					total_energy+=.5f*p.mass*vel.dot(vel);
+				}
+				energy_chart.update(total_energy);
 			}
-			energy_chart.update(total_energy);
 		}
+		energy_chart_timer-=dt;
+
+		return checks;
+	}
+
+	void update(float dt) {
+		//basic timestep clamping
+		if(dt>1/30.f) dt=1/30.f;
+		mouse_pos=GetMousePos();
+
+		handleUserInput(dt);
+
+		Stopwatch physics_watch;
+		if(to_time) physics_watch.start();
+
+		int phys_checks=handlePhysics(dt);
 
 		if(to_time) {
 			physics_watch.stop();
+
 			auto dur=physics_watch.getMicros();
-			std::cout<<"physics: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+			float dur_ms=dur/1000.f;
+			std::cout<<"render: ";
+			//choose color based on performance
+			setConsoleColorFromPerf(dur_ms);
+			std::cout<<dur<<"us ("<<dur_ms<<" ms)";
+			resetConsoleColor();
+			std::cout<<'\n';
+
 			int num=solver.particles.size();
 			std::cout<<"at "<<num<<" particles:\n";
 			int brute=num*(num-1)/2;
 			std::cout<<"  brute force: "<<brute<<" tests\n";
-			std::cout<<"  spacial hash: "<<checks<<" tests\n";
-			float pct=(brute-checks)/brute;
-			std::cout<<"  "<<int(100*pct)<<"% faster\n";
+			std::cout<<"  spacial hash: "<<phys_checks<<" tests\n";
+			int pct=100.f*(brute-phys_checks)/brute;
+			std::cout<<"  "<<int(pct)<<"% faster\n";
 		}
-#pragma endregion
+	}
 
-#pragma region RENDER
-		Stopwatch render_watch;
-		if(to_time) render_watch.start();
+	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
+		olc::vf2d sub=b-a;
+		float len=sub.mag();
+		olc::vf2d tang=sub.perp()/len;
 
+		float angle=std::atan2f(sub.y, sub.x);
+		DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
+	}
+
+	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
+		olc::vf2d offset(rad, rad);
+		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+		DrawDecal(pos-offset, prim_circ_dec, scale, col);
+	}
+
+	void render(float dt) {
 		const olc::Pixel background_color(190, 255, 255);
 		Clear(background_color);
 
@@ -271,7 +324,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 		}
 
 		//show particles
-		if(!show_density) {
+		if(!show_density&&!show_velocity) {
 			for(const auto& p:solver.particles) {
 				const auto& s=ball_spr[p.id];
 				vf2d scale=2*p.rad/vf2d(s->width, s->height);
@@ -329,27 +382,79 @@ struct ParticlesUI : olc::PixelGameEngine {
 			}
 		}
 
+		if(show_velocity) {
+			for(int i=0; i<solver.getNumCellX(); i++) {
+				float x=solver.getCellSize()*(.5f+i);
+				for(int j=0; j<solver.getNumCellY(); j++) {
+					float y=solver.getCellSize()*(.5f+j);
+
+					//get weighted avg cell velocity
+					vf2d v_sum;
+					float m_sum=0;
+					const auto& particles=solver.getCell(i, j);
+					for(const auto& k:particles) {
+						const auto& p=solver.particles[k];
+						v_sum+=p.mass*(p.pos-p.oldpos);
+						m_sum+=p.mass;
+					}
+					vf2d vel=v_sum/m_sum;
+					//actual movement in a given frame
+					vel/=dt;
+					
+					//color based on speed?
+					vf2d pos(x, y);
+					DrawThickLine(pos, pos+vel, 1, olc::BLUE);
+				}
+			}
+		}
+
 		//show energy chart
 		if(show_energy_chart) {
 			const auto& box=energy_chart.bounds;
 			vf2d size=box.max-box.min;
 			FillRectDecal(box.min-2, size+4, olc::BLACK);
 			FillRectDecal(box.min, size, olc::GREY);
+			
+			//how can i draw triangles?
 			float max=energy_chart.getMaxValue();
+			float px, py;
 			for(int i=0; i<energy_chart.getNum();i++) {
 				float x=map(i, 0, energy_chart.getNum()-1, box.min.x, box.max.x);
 				float y=map(energy_chart.values[i], 0, max, box.max.y, box.min.y);
-				FillCircleDecal({x, y}, 1, olc::BLUE);
+				if(i!=0) DrawThickLine({x, y}, {px, py}, 1, olc::BLUE);
+				px=x, py=y;
 			}
-			DrawStringDecal(box.min, "Energy", olc::WHITE);
+			DrawStringDecal(box.min, "Energy", olc::RED);
 		}
+	}
+
+	bool OnUserUpdate(float dt) override {
+		to_time=to_time=GetKey(olc::Key::T).bPressed;
+		if(to_time) {
+			std::cout<<"\n\033[1;4m";
+			std::cout<<"Diagnostic Info:";
+			resetConsoleColor();
+			std::cout<<'\n';
+		}
+
+		update(dt);
+
+		Stopwatch render_watch;
+		if(to_time) render_watch.start();
+
+		render(dt);
 
 		if(to_time) {
 			render_watch.stop();
 			auto dur=render_watch.getMicros();
-			std::cout<<"render: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+			float dur_ms=dur/1000.f;
+			std::cout<<"render: ";
+			//choose color based on performance
+			setConsoleColorFromPerf(dur_ms);
+			std::cout<<dur<<"us ("<<dur_ms<<" ms)";
+			resetConsoleColor();
+			std::cout<<'\n';
 		}
-#pragma endregion
 
 		return true;
 	}
