@@ -42,7 +42,7 @@ struct SmokeDemo : olc::PixelGameEngine {
 
 	//simulation
 	std::list<Smoke> particles;
-	vf2d gravity{0, -50};
+	vf2d gravity{0, -120};
 
 	bool show_sprites=true;
 	bool show_outlines=false;
@@ -87,8 +87,10 @@ struct SmokeDemo : olc::PixelGameEngine {
 		}
 		//add particles at mouse
 		if(add_action.bHeld) {
-			vf2d dir=(mouse_pos-emitter_pos).norm();
-			float speed=random(125, 325);
+			vf2d sub=mouse_pos-emitter_pos;
+			float dist=sub.mag();
+			vf2d dir=sub/dist;
+			float speed=std::max(0.f, dist+random(-100, 100));
 			vf2d vel=speed*dir;
 			float rot=random(2*Pi);
 			float rot_vel=random(-1.5f, 1.5f);
@@ -98,6 +100,9 @@ struct SmokeDemo : olc::PixelGameEngine {
 			particles.push_back(s);
 		}
 
+		//set emitter pos
+		if(GetKey(olc::Key::E).bPressed) emitter_pos=mouse_pos;
+
 		//gfx toggles
 		if(GetKey(olc::Key::S).bPressed) show_sprites^=true;
 		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
@@ -105,7 +110,7 @@ struct SmokeDemo : olc::PixelGameEngine {
 		//update particles
 		for(auto& p:particles) {
 			//drag
-			p.vel.x*=1-.9f*dt;
+			p.vel*=1-.85f*dt;
 			p.rot_vel*=1-.55f*dt;
 			p.size_vel*=1-.25f*dt;
 
@@ -133,11 +138,11 @@ struct SmokeDemo : olc::PixelGameEngine {
 		//draw particles
 		const vf2d spr_sz(smoke_spr->width, smoke_spr->height);
 		for(const auto& p:particles) {
-			olc::Pixel col=p.col;
-			col.a=255*p.life;
+			olc::Pixel fill=p.col;
+			fill.a=255*p.life;
 			//to show sprite or just a box?
-			if(show_sprites) DrawRotatedDecal(p.pos, smoke_dec, p.rot, spr_sz/2, p.size/spr_sz, col);
-			else DrawRotatedDecal(p.pos, prim_rect_dec, p.rot, {.5f, .5f}, {p.size, p.size}, col);
+			if(show_sprites) DrawRotatedDecal(p.pos, smoke_dec, p.rot, spr_sz/2, p.size/spr_sz, fill);
+			else DrawRotatedDecal(p.pos, prim_rect_dec, p.rot, {.5f, .5f}, {p.size, p.size}, fill);
 			if(show_outlines) {
 				//for each corner
 				vf2d corners[4]{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
@@ -152,12 +157,14 @@ struct SmokeDemo : olc::PixelGameEngine {
 					);
 				}
 				//draw box
-				DrawLineDecal(corners[0], corners[1], olc::WHITE);
-				DrawLineDecal(corners[1], corners[2], olc::WHITE);
-				DrawLineDecal(corners[2], corners[3], olc::WHITE);
-				DrawLineDecal(corners[3], corners[0], olc::WHITE);
+				olc::Pixel outline=olc::WHITE;
+				outline.a=255*p.life;
+				DrawLineDecal(corners[0], corners[1], outline);
+				DrawLineDecal(corners[1], corners[2], outline);
+				DrawLineDecal(corners[2], corners[3], outline);
+				DrawLineDecal(corners[3], corners[0], outline);
 				//draw diagonal
-				DrawLineDecal(corners[0], corners[2], olc::WHITE);
+				DrawLineDecal(corners[0], corners[2], outline);
 			}
 		}
 
