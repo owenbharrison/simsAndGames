@@ -41,6 +41,7 @@ struct FluidUI : olc::PixelGameEngine {
 			fluid.solid[fluid.ix(i, fluid.num_y-1)]=true;
 		}
 
+		//set velocity to curr-prev
 		float vx=0.f, vy=0.f;
 		if(!reset) {
 			vx=(x-obstacle_x)/dt;
@@ -50,7 +51,7 @@ struct FluidUI : olc::PixelGameEngine {
 		obstacle_x=x;
 		obstacle_y=y;
 
-		//fill circle
+		//fill circle with solid and velocity
 		for(int i=1; i<fluid.num_x-1; i++) {
 			int dx=i-x;
 			for(int j=1; j<fluid.num_y-1; j++) {
@@ -81,6 +82,7 @@ struct FluidUI : olc::PixelGameEngine {
 		//set obstacle
 		setObstacle(fluid.num_x/3, fluid.num_y/2, fluid.num_x/8);
 
+		//set wind tunnel input
 		size_t pipe_h=fluid.num_y/6;
 		size_t min_j=fluid.num_y/2-pipe_h/2;
 		size_t max_j=fluid.num_y/2+pipe_h/2;
@@ -95,21 +97,25 @@ struct FluidUI : olc::PixelGameEngine {
 	bool OnUserUpdate(float dt) override {
 		if(dt>1/60.f) dt=1/60.f;
 
+		//change obstacle position
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
 			int x=map(GetMouseX(), 0, ScreenWidth(), 0, fluid.num_x);
 			int y=map(GetMouseY(), 0, ScreenHeight(), 0, fluid.num_y);
 			setObstacle(x, y, fluid.num_x/8);
 		}
 
+		//gfx toggles
 		if(GetKey(olc::Key::P).bPressed) show_pressure^=true;
 		if(GetKey(olc::Key::S).bPressed) show_streamlines^=true;
 
+		//update fluid
 		fluid.solveIncompressibility(40, dt);
 
 		fluid.extrapolate();
 		fluid.advectVel(dt);
 		fluid.advectSmoke(dt);
 
+		//get fluid pressure extrema
 		float p_min=INFINITY, p_max=-p_min;
 		if(show_pressure) {
 			for(size_t i=0; i<fluid.num_x; i++) {
@@ -121,7 +127,10 @@ struct FluidUI : olc::PixelGameEngine {
 			}
 		}
 
+		//render
 		Clear(olc::BLACK);
+
+		//show each cell as rectangle
 		for(size_t i=0; i<fluid.num_x; i++) {
 			float x=map(i, 0, fluid.num_x, 0, ScreenWidth());
 			for(size_t j=0; j<fluid.num_y; j++) {
@@ -130,6 +139,7 @@ struct FluidUI : olc::PixelGameEngine {
 				float y=map(j, 0, fluid.num_y, 0, ScreenHeight());
 				olc::Pixel col;
 				if(show_pressure) {
+					//scientific coloring for pressure
 					float p=fluid.pressure[fluid.ix(i, j)];
 					float angle=map(p, p_min, p_max, 0, 2*Pi);
 					float r=.5f+.5f*std::cosf(angle);
@@ -137,6 +147,7 @@ struct FluidUI : olc::PixelGameEngine {
 					float b=.5f+.5f*std::cosf(angle+2*Pi/3);
 					col=olc::PixelF(r, g, b);
 				} else {
+					//grayscale for smoke values
 					float shade=fluid.m[fluid.ix(i, j)];
 					col=olc::PixelF(shade, shade, shade);
 				}
@@ -144,11 +155,13 @@ struct FluidUI : olc::PixelGameEngine {
 			}
 		}
 
+		//for every nth cell
 		if(show_streamlines) {
 			for(size_t i=0; i<fluid.num_x; i+=5) {
 				for(size_t j=0; j<fluid.num_y; j+=5) {
 					if(fluid.solid[fluid.ix(i, j)]) continue;
 
+					//eulers method to approx solution
 					float xh=fluid.h*(.5f+i), yh=fluid.h*(.5f+j);
 					float pxh, pyh;
 					for(size_t k=0; k<5; k++) {
@@ -157,6 +170,7 @@ struct FluidUI : olc::PixelGameEngine {
 						pxh=xh, pyh=yh;
 						xh+=dt*u, yh+=dt*v;
 
+						//map h values to screen values...
 						float x=map(fluid.h1*xh, 0, fluid.num_x, 0, ScreenWidth());
 						float y=map(fluid.h1*yh, 0, fluid.num_y, 0, ScreenHeight());
 						float px=map(fluid.h1*pxh, 0, fluid.num_x, 0, ScreenWidth());

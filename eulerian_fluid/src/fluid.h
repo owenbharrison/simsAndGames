@@ -93,6 +93,7 @@ struct Fluid {
 		memcpy(new_m, f.new_m, sizeof(float)*num_cells);
 	}
 
+	//1
 	Fluid(const Fluid& f) {
 		copyFrom(f);
 	}
@@ -108,10 +109,12 @@ struct Fluid {
 		delete[] new_m;
 	}
 
+	//2
 	~Fluid() {
 		clear();
 	}
 
+	//3
 	Fluid& operator=(const Fluid& f) {
 		if(&f==this) return *this;
 
