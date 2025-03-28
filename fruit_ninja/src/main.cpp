@@ -19,6 +19,9 @@ scoring
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
 
+#define OLC_SOUNDWAVE
+#include "common/olcSoundWaveEngine.h"
+
 #include "aabb.h"
 #include "fruit.h"
 
@@ -28,49 +31,7 @@ float clamp(float x, float a, float b) {
 	return x;
 }
 
-struct Message {
-	std::string msg;
-	olc::Pixel col;
-
-	vf2d pos, vel, acc;
-	float rot=0, rot_vel=0;
-
-	float lifespan=0, age=0;
-
-	Message() {}
-
-	Message(const std::string& m, olc::Pixel c, vf2d p, vf2d v, float r, float l) {
-		msg=m;
-		col=c;
-		
-		pos=p;
-		vel=v;
-		rot_vel=r;
-
-		lifespan=l;
-	}
-
-	void applyForce(const vf2d& f) {
-		acc+=f;
-	}
-
-	void update(float dt) {
-		vel+=acc*dt;
-		pos+=vel*dt;
-		acc={0, 0};
-
-		rot+=rot_vel*dt;
-
-		age+=dt;
-	}
-
-	bool isDead() const {
-		return age>lifespan;
-	}
-};
-
-#define OLC_SOUNDWAVE
-#include "common/olcSoundWaveEngine.h"
+#include "particles.h"
 
 struct FruitNinja : olc::PixelGameEngine {
 	FruitNinja() {
@@ -87,29 +48,41 @@ struct FruitNinja : olc::PixelGameEngine {
 
 	std::list<vf2d> slice;
 
-	//actual fruit storage
-	std::list<Fruit*> fruits;
-	float throw_timer=0;
-
 	const float total_ultra=100;
 	float ultra=total_ultra;
 	float ultra_reload=0;
 
-	vf2d gravity;
+	//actual fruit storage
+	std::list<Fruit*> fruits;
+	float throw_timer=0;
+
+	vf2d gravity{0, 64};
 	AABB screen_bounds;
 
 	//visual things
+	olc::Sprite* prim_circ_spr=nullptr;
+	olc::Decal* prim_circ_dec=nullptr;
+
 	bool show_bounds=false;
 
-	std::list<Message*> messages;
+	std::list<Particle*> particles;
 
+	//sound stuff
 	olc::sound::WaveEngine sound_engine;
 	olc::sound::Wave throw_sound, slice1_sound, slice2_sound;
 
 	bool OnUserCreate() override {
 		srand(time(0));
 
-		gravity={0, 64};
+		{//"primitive" to draw with
+			int sz=1024;
+			prim_circ_spr=new olc::Sprite(sz, sz);
+			SetDrawTarget(prim_circ_spr);
+			Clear(olc::BLANK);
+			FillCircle(sz/2, sz/2, sz/2);
+			SetDrawTarget(nullptr);
+			prim_circ_dec=new olc::Decal(prim_circ_spr);
+		}
 
 		screen_bounds={{0, 0}, GetScreenSize()};
 
@@ -146,116 +119,107 @@ struct FruitNinja : olc::PixelGameEngine {
 		return true;
 	}
 
-	bool OnUserUpdate(float dt) override {
-		mouse_pos=GetMousePos();
+	void handleUserInput(float dt) {
+		//draw new objects
+		const auto a_key=GetKey(olc::Key::A);
+		if(a_key.bPressed) {
+			addition.clear();
+		}
+		if(addition_timer<0) {
+			addition_timer=.1f;
 
-		total_time+=dt;
-
-#pragma region USER INPUT
-		if(!IsConsoleShowing()) {
-			//draw new objects
-			const auto a_key=GetKey(olc::Key::A);
-			if(a_key.bPressed) {
-				addition.clear();
-			}
-			if(addition_timer<0) {
-				addition_timer=.1f;
-
-				if(a_key.bHeld) {
-					//make sure points cant be too close
-					bool exist=false;
-					for(const auto& a:addition) {
-						if((a-mouse_pos).mag()<1) exist=true;
-					}
-					if(!exist) addition.emplace_back(mouse_pos);
-				}
-			}
-			addition_timer-=dt;
-			if(a_key.bReleased) {
-				//sanitize user input
-				if(addition.size()>3) {
-					fruits.emplace_back(new Fruit(addition, olc::WHITE));
-				}
-				addition.clear();
-			}
-
-			//ultra ability: slow down time
-			if(GetKey(olc::Key::SHIFT).bHeld) {
-				//can we even use it?
-				if(ultra>0) {
-					//use it up
-					ultra-=17*dt;
-
-					//reset reload timer
-					ultra_reload=1;
-
-					//clamp values
-					if(ultra<0) {
-						ultra=0;
-
-						//take longer to regain
-						ultra_reload=3;
-					}
-
-					//actual ability
-					dt/=10;
-				}
-			}
-			//after some time, reload ability.
-			if(ultra_reload<0) {
-				ultra+=10*dt;
-				//clamp values
-				if(ultra>100) ultra=100;
-			}
-			ultra_reload-=dt;
-
-			//slice objects
-			const auto s_key=GetKey(olc::Key::S);
-			if(s_key.bPressed) slice.clear();
-			if(s_key.bHeld) {
+			if(a_key.bHeld) {
 				//make sure points cant be too close
 				bool exist=false;
-				for(const auto& s:slice) {
-					if((s-mouse_pos).mag()<1) exist=true;
+				for(const auto& a:addition) {
+					if((a-mouse_pos).mag()<1) exist=true;
 				}
-				if(!exist) slice.emplace_back(mouse_pos);
+				if(!exist) addition.emplace_back(mouse_pos);
 			}
-			if(s_key.bReleased) {
-				std::vector<vf2d> slice_vec(slice.begin(), slice.end());
+		}
+		addition_timer-=dt;
+		if(a_key.bReleased) {
+			//sanitize user input
+			if(addition.size()>3) {
+				fruits.emplace_back(new Fruit(addition, olc::WHITE));
+			}
+			addition.clear();
+		}
 
-				//store temporary new fruits
-				Fruit fa, fb;
-				for(auto it=fruits.begin(); it!=fruits.end();) {
-					const auto& f=*it;
-					if(f->slice(slice_vec, fa, fb)) {
-						//determine score
-						int pct=100*fa.mass/(fa.mass+fb.mass);
-						//how close to 50/50?
-						int diff=abs(50-pct);
-						
-						//add message
-						{
-							std::string msg; olc::Pixel col;
-							if(diff<5) msg="awesome!!", col=olc::BLUE;
-							else if(diff<10) msg="nice!", col=olc::CYAN;
-							else if(diff<20) msg="decent", col=olc::GREEN;
-							else if(diff<30) msg="meh.", col=olc::YELLOW;
-							else msg="bad!", col=olc::RED;
+		//ultra ability: slow down time
+		if(GetKey(olc::Key::SHIFT).bHeld) {
+			//can we even use it?
+			if(ultra>0) {
+				//use it up
+				ultra-=17*dt;
 
-							float angle=random(2*Pi);
-							float speed=random(50, 75);
-							vf2d vel=polar(speed, angle);
-							float rot_vel=random(-.5f*Pi, .5f*Pi);
+				//reset reload timer
+				ultra_reload=1;
 
-							float lifespan=random(2, 4);
-							messages.push_back(new Message(msg, col, f->pos, vel, rot_vel, lifespan));
-						}
+				//clamp values
+				if(ultra<0) {
+					ultra=0;
 
-						//remove old fruit
-						delete f;
-						it=fruits.erase(it);
+					//take longer to regain
+					ultra_reload=3;
+				}
 
-						//find new velocities
+				//actual ability
+				dt/=10;
+			}
+		}
+		//after some time, reload ability.
+		if(ultra_reload<0) {
+			ultra+=10*dt;
+			//clamp values
+			if(ultra>100) ultra=100;
+		}
+		ultra_reload-=dt;
+
+		//slice objects
+		const auto s_key=GetKey(olc::Key::S);
+		if(s_key.bPressed) slice.clear();
+		if(s_key.bHeld) {
+			//make sure points cant be too close
+			bool exist=false;
+			for(const auto& s:slice) {
+				if((s-mouse_pos).mag()<1) exist=true;
+			}
+			if(!exist) slice.emplace_back(mouse_pos);
+		}
+		if(s_key.bReleased) {
+			std::vector<vf2d> slice_vec(slice.begin(), slice.end());
+
+			//store temporary new fruits
+			Fruit fa, fb;
+			for(auto it=fruits.begin(); it!=fruits.end();) {
+				const auto& f=*it;
+				if(f->slice(slice_vec, fa, fb)) {
+					//determine score
+					int pct=100*fa.mass/(fa.mass+fb.mass);
+					//how close to 50/50?
+					int diff=abs(50-pct);
+
+					//add message
+					{
+						std::string msg; olc::Pixel col;
+						if(diff<5) msg="awesome!!", col=olc::BLUE;
+						else if(diff<10) msg="nice!", col=olc::CYAN;
+						else if(diff<20) msg="decent", col=olc::GREEN;
+						else if(diff<30) msg="meh.", col=olc::YELLOW;
+						else msg="bad!", col=olc::RED;
+
+						float angle=random(2*Pi);
+						float speed=random(50, 75);
+						vf2d vel=polar(speed, angle);
+						float rot_vel=random(-.5f*Pi, .5f*Pi);
+
+						float lifespan=random(2, 4);
+						particles.push_back(new Message(f->pos, vel, col, lifespan, msg, rot_vel));
+					}
+
+					//find new velocities
+					{
 						float angle_a=random(2*Pi);
 						float speed_a=random(40, 70);
 						fa.vel=polar(speed_a, angle_a);
@@ -264,44 +228,61 @@ struct FruitNinja : olc::PixelGameEngine {
 						float speed_b=random(40, 70);
 						fb.vel=polar(speed_b, angle_b);
 						fb.rot_vel=random(-.5f*Pi, .5f*Pi);
-
 						//point opposite directions
 						if(fa.vel.dot(fb.vel)>0) fb.vel*=-1;
 						if(fa.rot_vel*fb.rot_vel>0) fb.rot_vel*=-1;
+					}
 
-						//add new at front to avoid reslice
-						fruits.emplace_front(new Fruit(fa));
-						fruits.emplace_front(new Fruit(fb));
+					//add new at front to avoid reslice
+					fruits.emplace_front(new Fruit(fa));
+					fruits.emplace_front(new Fruit(fb));
 
-						//play a noise
-						if(random()<.5f) sound_engine.PlayWaveform(&slice1_sound);
-						else sound_engine.PlayWaveform(&slice2_sound);
-					} else it++;
-				}
+					//add splatter near fruit
+					{
+						AABB box=f->getAABB();
+						vf2d ctr=box.getCenter();
+						float rad=(box.max-ctr).mag();
+						int num=random(20, 35);
+						for(int i=0; i<num; i++) {
+							float pos_rad=random(rad);
+							vf2d offset=polar(pos_rad, random(2*Pi));
+							float speed=random(5, 15);
+							vf2d vel=polar(speed, random(2*Pi));
+							float lifespan=random(2, 3);
+							float rad=random(3, 4);
+							particles.emplace_back(new Splatter(ctr+offset, vel, f->col, lifespan, rad));
+						}
+					}
 
-				slice.clear();
+					//remove old fruit
+					delete f;
+					it=fruits.erase(it);
+
+					//play random slide noise
+					if(random()<.5f) sound_engine.PlayWaveform(&slice1_sound);
+					else sound_engine.PlayWaveform(&slice2_sound);
+				} else it++;
 			}
 
-			//remove objects
-			if(GetKey(olc::Key::X).bPressed) {
-				for(auto it=fruits.begin(); it!=fruits.end(); ) {
-					const auto& f=*it;
-					if(f->contains(mouse_pos)) {
-						delete f;
-						it=fruits.erase(it);
-					} else it++;
-				}
-			}
-
-			//visual toggles
-			if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+			slice.clear();
 		}
 
-		//open built in console
-		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
-#pragma endregion
+		//remove objects
+		if(GetKey(olc::Key::X).bPressed) {
+			for(auto it=fruits.begin(); it!=fruits.end(); ) {
+				const auto& f=*it;
+				if(f->contains(mouse_pos)) {
+					delete f;
+					it=fruits.erase(it);
+				} else it++;
+			}
+		}
 
-#pragma region AUTOMATIC
+		//visual toggles
+		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+	}
+
+	void automaticUpdate(float dt) {
 		//every now and then throw a fruit
 		if(throw_timer<0) {
 			throw_timer=random(1, 4);
@@ -350,10 +331,10 @@ struct FruitNinja : olc::PixelGameEngine {
 				else length+=(s-prev).mag();
 				prev=s;
 			}
-			if(length>300) slice.pop_front();
+			if(length>300.f) slice.pop_front();
 		}
 
-		//sanitize fruits
+		//"sanitize" fruits
 		for(auto it=fruits.begin(); it!=fruits.end();) {
 			const auto& f=*it;
 			//is fruit offscreen?
@@ -363,40 +344,80 @@ struct FruitNinja : olc::PixelGameEngine {
 				it=fruits.erase(it);
 			} else it++;
 		}
-		 
-		//sanitize messages
-		for(auto it=messages.begin(); it!=messages.end();) {
-			const auto& m=*it;
-			if(m->isDead()) {
-				delete m;
-				it=messages.erase(it);
+
+		//"sanitize" messages
+		for(auto it=particles.begin(); it!=particles.end();) {
+			const auto& p=*it;
+			if(p->isDead()) {
+				delete p;
+				it=particles.erase(it);
 			} else it++;
 		}
+	}
 
-#pragma endregion
-
-#pragma region PHYSICS
-		//dynamics
-		if(!IsConsoleShowing()) {
-			//fruits
-			for(const auto& f:fruits) {
-				f->applyForce(f->mass*gravity);
-				f->update(dt);
-			}
-
-			//messages
-			for(const auto& m:messages) {
-				//~99% compounding
-				float drag=1-.6f*dt;
-				m->vel*=drag;
-				m->rot_vel*=drag;
-
-				m->update(dt);
-			}
+	void handlePhysics(float dt) {
+		//fruit kinematics
+		for(const auto& f:fruits) {
+			f->applyForce(f->mass*gravity);
+			f->update(dt);
 		}
-#pragma endregion
 
-#pragma region RENDER
+		//particle kinematics
+		for(const auto& p:particles) {
+			p->update(dt);
+		}
+	}
+
+	bool update(float dt) {
+		mouse_pos=GetMousePos();
+
+		total_time+=dt;
+
+		if(!IsConsoleShowing()) handleUserInput(dt);
+
+		//open built in console
+		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
+
+		automaticUpdate(dt);
+
+		if(!IsConsoleShowing()) handlePhysics(dt);
+	}
+
+	bool OnConsoleCommand(const std::string& line) {
+		std::stringstream line_str(line);
+		std::string cmd; line_str>>cmd;
+
+		if(cmd=="clear") ConsoleClear();
+
+		//english + logic = grammar :D
+		else if(cmd=="count") {
+			int num=fruits.size();
+			std::cout<<"there ";
+			std::cout<<(num==1?"is ":"are ");
+			std::cout<<num<<" fruit";
+			if(num!=1) std::cout<<'s';
+			std::cout<<'\n';
+		}
+
+		else if(cmd=="reset") {
+			int f_num=fruits.size();
+			std::cout<<"removed "<<f_num<<" fruit";
+			if(f_num!=1) std::cout<<'s';
+			std::cout<<'\n';
+
+			reset();
+		}
+
+		return true;
+	}
+
+	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
+		olc::vf2d offset(rad, rad);
+		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+		DrawDecal(pos-offset, prim_circ_dec, scale, col);
+	}
+
+	void render() {
 		Clear(olc::GREY);
 
 		//show addition
@@ -517,44 +538,37 @@ struct FruitNinja : olc::PixelGameEngine {
 			}
 		}
 
-		//show messages
-		for(const auto& m:messages) {
-			vf2d offset(4*m->msg.length(), 4);
-			float t=1-m->age/m->lifespan;
-			olc::Pixel fill=m->col;
-			fill.a=255*clamp(t, 0, 1);
-			DrawRotatedStringDecal(m->pos, m->msg, m->rot, offset, fill, {2, 2});
+		//show particles
+		for(const auto& p:particles) {
+			switch(p->getID()) {
+				case Particle::MESSAGE:
+				{
+					const auto& m=dynamic_cast<Message*>(p);
+					vf2d offset(4*m->msg.length(), 4);
+					float t=1-m->age/m->lifespan;
+					olc::Pixel fill=m->col;
+					fill.a=255*clamp(t, 0, 1);
+					DrawRotatedStringDecal(m->pos, m->msg, m->rot, offset, fill, {2, 2});
+					break;
+				}
+				case Particle::SPLATTER:
+				{
+					const auto& s=dynamic_cast<Splatter*>(p);
+					float t=1-s->age/s->lifespan;
+					olc::Pixel fill=s->col;
+					fill.a=255*clamp(t, 0, 1);
+					FillCircleDecal(s->pos, s->rad, fill);
+					break;
+				}
+			}
 		}
-#pragma endregion
-
-		return true;
 	}
 
-	bool OnConsoleCommand(const std::string& line) {
-		std::stringstream line_str(line);
-		std::string cmd; line_str>>cmd;
+	bool OnUserUpdate(float dt) override {
+		update(dt);
 
-		if(cmd=="clear") ConsoleClear();
+		render();
 
-		//english + logic = grammar :D
-		else if(cmd=="count") {
-			int num=fruits.size();
-			std::cout<<"there ";
-			std::cout<<(num==1?"is ":"are ");
-			std::cout<<num<<" fruit";
-			if(num!=1) std::cout<<'s';
-			std::cout<<'\n';
-		}
-
-		else if(cmd=="reset") {
-			int f_num=fruits.size();
-			std::cout<<"removed "<<f_num<<" fruit";
-			if(f_num!=1) std::cout<<'s';
-			std::cout<<'\n';
-
-			reset();
-		}
-		
 		return true;
 	}
 };

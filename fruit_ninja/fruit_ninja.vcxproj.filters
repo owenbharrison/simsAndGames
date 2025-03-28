@@ -26,6 +26,9 @@
     <ClInclude Include="src\aabb.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\particles.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Media Include="assets\explode.wav">
