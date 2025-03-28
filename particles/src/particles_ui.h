@@ -23,6 +23,7 @@ void setConsoleColor(int r, int g, int b) {
 }
 
 void setConsoleColorFromPerf(float ms) {
+	//red vs yellow vs green
 	if(ms>4) setConsoleColor(255, 0, 0);
 	else if(ms>2) setConsoleColor(255, 255, 0);
 	else setConsoleColor(0, 255, 0);
@@ -114,7 +115,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 			float margin=30;
 			vf2d tl(ScreenWidth()-w-margin, margin);
 			vf2d br(ScreenWidth()-margin, h+margin);
-			energy_chart=Chart(500, {tl, br});
+			energy_chart=Chart(250, {tl, br});
 		}
 
 		return true;
@@ -262,7 +263,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 			auto dur=physics_watch.getMicros();
 			float dur_ms=dur/1000.f;
-			std::cout<<"render: ";
+			std::cout<<"physics: ";
 			//choose color based on performance
 			setConsoleColorFromPerf(dur_ms);
 			std::cout<<dur<<"us ("<<dur_ms<<" ms)";
@@ -424,7 +425,8 @@ struct ParticlesUI : olc::PixelGameEngine {
 				if(i!=0) DrawThickLine({x, y}, {px, py}, 1, olc::BLUE);
 				px=x, py=y;
 			}
-			DrawStringDecal(box.min, "Energy", olc::RED);
+			FillRectDecal(box.min-vf2d(1,1), vf2d(50, 10), olc::BLACK);
+			DrawStringDecal(box.min, "Energy", olc::WHITE);
 		}
 	}
 

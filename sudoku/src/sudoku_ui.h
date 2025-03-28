@@ -53,7 +53,7 @@ struct SudokuUI : olc::PixelGameEngine {
 	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
 		olc::vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=(sub/len).perp();
+		olc::vf2d tang=sub.perp()/len;
 
 		float angle=std::atan2f(sub.y, sub.x);
 		DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);

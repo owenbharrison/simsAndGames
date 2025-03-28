@@ -388,7 +388,7 @@ struct AStarDemo : public MyPixelGameEngine {
 	void tvDrawThickLine(const vf2d& a, const vf2d& b, float rad, olc::Pixel col=olc::WHITE) {
 		vf2d sub=b-a;
 		float len=sub.mag();
-		vf2d tang=(sub/len).perp();
+		vf2d tang=sub.perp()/len;
 
 		float angle=atan2f(sub.y, sub.x);
 		tv.DrawRotatedDecal(a-rad*tang, getRectDecal(), angle, {0, 0}, {len, 2*rad}, col);
