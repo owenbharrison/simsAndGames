@@ -636,8 +636,11 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				m.triangles.push_back({v0, v2, v1, col});
-				m.triangles.push_back({v0, v3, v2, col});
+				Triangle t;
+				t.p[0]=v0, t.p[1]=v2, t.p[2]=v1, t.col=col;
+				m.triangles.push_back(t);
+				t.p[0]=v0, t.p[1]=v3, t.p[2]=v2;
+				m.triangles.push_back(t);
 			}
 		}
 
@@ -704,8 +707,11 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				m.triangles.push_back({v0, v1, v2, col});
-				m.triangles.push_back({v0, v2, v3, col});
+				Triangle t;
+				t.p[0]=v0, t.p[1]=v1, t.p[2]=v2, t.col=col;
+				m.triangles.push_back(t);
+				t.p[0]=v0, t.p[1]=v2, t.p[2]=v3;
+				m.triangles.push_back(t);
 			}
 		}
 	}
@@ -781,8 +787,11 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				m.triangles.push_back({v0, v2, v1, col});
-				m.triangles.push_back({v0, v3, v2, col});
+				Triangle t;
+				t.p[0]=v0, t.p[1]=v2, t.p[2]=v1, t.col=col;
+				m.triangles.push_back(t);
+				t.p[0]=v0, t.p[1]=v3, t.p[2]=v2;
+				m.triangles.push_back(t);
 			}
 		}
 
@@ -849,8 +858,11 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				m.triangles.push_back({v0, v1, v2, col});
-				m.triangles.push_back({v0, v2, v3, col});
+				Triangle t;
+				t.p[0]=v0, t.p[1]=v1, t.p[2]=v2, t.col=col;
+				m.triangles.push_back(t);
+				t.p[0]=v0, t.p[1]=v2, t.p[2]=v3;
+				m.triangles.push_back(t);
 			}
 		}
 	}
@@ -926,8 +938,11 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				m.triangles.push_back({v0, v2, v1, col});
-				m.triangles.push_back({v0, v3, v2, col});
+				Triangle t;
+				t.p[0]=v0, t.p[1]=v2, t.p[2]=v1, t.col=col;
+				m.triangles.push_back(t);
+				t.p[0]=v0, t.p[1]=v3, t.p[2]=v2;
+				m.triangles.push_back(t);
 			}
 		}
 
@@ -994,8 +1009,11 @@ float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				m.triangles.push_back({v0, v1, v2, col});
-				m.triangles.push_back({v0, v2, v3, col});
+				Triangle t;
+				t.p[0]=v0, t.p[1]=v1, t.p[2]=v2, t.col=col;
+				m.triangles.push_back(t);
+				t.p[0]=v0, t.p[1]=v2, t.p[2]=v3;
+				m.triangles.push_back(t);
 			}
 		}
 	}

@@ -15,19 +15,21 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\axis.txt" />
-    <Text Include="assets\teapot.txt" />
-    <Text Include="assets\video_ship.txt" />
-    <Text Include="assets\torus.txt" />
-    <Text Include="assets\airplane.txt" />
-    <Text Include="assets\bike.txt" />
-    <Text Include="assets\car.txt" />
-    <Text Include="assets\digger.txt" />
-    <Text Include="assets\house.txt" />
-    <Text Include="assets\motorcycle.txt" />
-    <Text Include="assets\table.txt" />
-    <Text Include="assets\mountains.txt" />
-    <Text Include="assets\dragon.txt" />
+    <Text Include="assets\models\airplane.txt" />
+    <Text Include="assets\models\axis.txt" />
+    <Text Include="assets\models\barrel.txt" />
+    <Text Include="assets\models\bike.txt" />
+    <Text Include="assets\models\car.txt" />
+    <Text Include="assets\models\cube.txt" />
+    <Text Include="assets\models\digger.txt" />
+    <Text Include="assets\models\dragon.txt" />
+    <Text Include="assets\models\house.txt" />
+    <Text Include="assets\models\motorcycle.txt" />
+    <Text Include="assets\models\mountains.txt" />
+    <Text Include="assets\models\table.txt" />
+    <Text Include="assets\models\teapot.txt" />
+    <Text Include="assets\models\torus.txt" />
+    <Text Include="assets\models\video_ship.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -56,5 +58,19 @@
     <ClInclude Include="src\conversions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\math\v2d.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\stopwatch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\textures\mario.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\textures\barrel.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

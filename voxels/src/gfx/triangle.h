@@ -3,14 +3,18 @@
 #define TRIANGLE_STRUCT_H
 
 #include "../geom/aabb3.h"
+#include "../math/v2d.h"
 
-vf3d segIntersectPlane(const vf3d& a, const vf3d& b, const vf3d& ctr, const vf3d& norm) {
+//i only want to expose the t value some of the time
+vf3d segIntersectPlane(const vf3d& a, const vf3d& b, const vf3d& ctr, const vf3d& norm, float* tp=nullptr) {
 	float t=norm.dot(ctr-a)/norm.dot(b-a);
+	if(tp) *tp=t;
 	return a+t*(b-a);
 }
 
 struct Triangle {
 	vf3d p[3];
+	v2d t[3];
 	olc::Pixel col=olc::WHITE;
 
 	vf3d getCtr() const {

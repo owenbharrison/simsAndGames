@@ -21,6 +21,7 @@ struct Mesh {
 		if(file.fail()) return m;
 
 		std::vector<vf3d> verts;
+		std::vector<v2d> texs;
 
 		std::string line;
 		while(std::getline(file, line)) {
@@ -30,24 +31,40 @@ struct Mesh {
 				vf3d v;
 				line_str>>v.x>>v.y>>v.z;
 				verts.push_back({v});
+			} else if(type=="vt") {
+				v2d t;
+				line_str>>t.u>>t.v;
+				texs.push_back(t);
 			} else if(type=="f") {
-				std::vector<int> indexes;
+				std::vector<int> v_ixs;
+				std::vector<int> vt_ixs;
 
 				//parse v/t/n until fail
 				int num=0;
 				for(std::string vtn; line_str>>vtn; num++) {
 					std::stringstream vtn_str(vtn);
-					int v_ix; vtn_str>>v_ix;
-					indexes.emplace_back(v_ix-1);
+					int v_ix;
+					if(vtn_str>>v_ix) v_ixs.emplace_back(v_ix-1);
+					char junk; vtn_str>>junk;
+					int vt_ix;
+					if(vtn_str>>vt_ix) vt_ixs.emplace_back(vt_ix-1);
 				}
 
 				//triangulate
+				bool to_texture=vt_ixs.size();
 				for(int i=2; i<num; i++) {
-					m.triangles.push_back({
-						verts[indexes[0]],
-						verts[indexes[i-1]],
-						verts[indexes[i]],
-					});
+					Triangle t{
+						verts[v_ixs[0]],
+						verts[v_ixs[i-1]],
+						verts[v_ixs[i]]
+					};
+					//whether to add texture info...
+					if(to_texture) {
+						t.t[0]=texs[vt_ixs[0]];
+						t.t[1]=texs[vt_ixs[i-1]];
+						t.t[2]=texs[vt_ixs[i]];
+					}
+					m.triangles.push_back(t);
 				}
 			}
 		}

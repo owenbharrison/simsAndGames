@@ -4,6 +4,7 @@ using olc::vf2d;
 
 #include "math/vf3d.h"
 #include "math/mat4.h"
+#include "math/v2d.h"
 
 //vector-matrix multiplication
 vf3d operator*(const vf3d& v, const Mat4& m) {
@@ -30,136 +31,124 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
 
 #include "gfx/mesh.h"
 
-#include "voxel_set.h"
-
-#include "conversions.h"
+#include "stopwatch.h"
 
 vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
 }
-
-class Stopwatch {
-	std::chrono::steady_clock::time_point m_start, m_end;
-
-	auto getTime() const {
-		return std::chrono::steady_clock::now();
-	}
-public:
-	Stopwatch() {}
-
-	void start() {
-		m_start=std::chrono::steady_clock::now();
-	}
-
-	void stop() {
-		m_end=std::chrono::steady_clock::now();
-	}
-
-	long long getNanos() const {
-		return std::chrono::duration_cast<std::chrono::nanoseconds>(m_end-m_start).count();
-	}
-
-	long long getMicros() const {
-		return std::chrono::duration_cast<std::chrono::microseconds>(m_end-m_start).count();
-	}
-
-	long long getMillis() const {
-		return std::chrono::duration_cast<std::chrono::milliseconds>(m_end-m_start).count();
-	}
-}; 
 
 struct VoxelGame : olc::PixelGameEngine {
 	VoxelGame() {
 		sAppName="Voxel Game";
 	}
 
-	Mesh mesh;
+	Mesh model;
 	Mat4 mat_proj;
 
-	vf3d cam_pos;
+	vf3d cam_pos{0, 0, -5};
 	float cam_yaw=0;
 	float cam_pitch=0;
 
 	vf3d light_pos;
 	bool show_outlines=false;
 
-	std::list<VoxelSet*> objects;
+	olc::Sprite* texture=nullptr;
 
 	bool OnUserCreate() override {
 		mat_proj=Mat4::makeProj(90.f, float(ScreenHeight())/ScreenWidth(), .1f, 1000.f);
-		
-		Stopwatch watch;
-		watch.start();
-		Mesh m_teapot=Mesh::loadFromOBJ("assets/teapot.txt");
-		m_teapot.normalize(10);
-		watch.stop();
-		auto dur0=watch.getMicros();
-		std::cout<<"load mesh: "<<dur0<<"us ("<<dur0/1000.f<<"ms)\n";
-
-		watch.start();
-		VoxelSet v_teapot=meshToVoxels_fast(m_teapot, .33f);
-		v_teapot.updateTypes();
-		watch.stop();
-		auto dur1=watch.getMillis();
-		std::cout<<"voxelize: "<<dur1<<"ms ("<<dur1/1000.f<<"s)\n";
-
-		watch.start();
-		mesh=voxelsToMesh(v_teapot);
-		watch.stop();
-		auto dur2=watch.getMicros();
-		std::cout<<"remesh: "<<dur2<<"us ("<<dur2/1000.f<<"ms)\n";
 
 		light_pos=cam_pos;
 
-		//color normals of triangles
-		for(auto& t:mesh.triangles) {
-			vf3d norm=t.getNorm();
-			t.col.r=128+127*norm.x;
-			t.col.g=128+127*norm.y;
-			t.col.b=128+127*norm.z;
-		}
+		model=Mesh::loadFromOBJ("assets/models/cube.txt");
+		model.normalize(2);
+		texture=new olc::Sprite("assets/textures/mario.png");
 
 		return true;
 	}
 
-	int clipAgainstPlane(const Triangle& t, const vf3d& ctr, const vf3d& norm, Triangle& a, Triangle& b) {
-		const vf3d* inside_pts[3];
-		int inside_ct=0;
-		const vf3d* outside_pts[3];
-		int outside_ct=0;
+	int clipAgainstPlane(const Triangle& tri, const vf3d& ctr, const vf3d& norm, Triangle& a, Triangle& b) {
+		const vf3d* in_pts[3];
+		const v2d* in_tex[3];
+		int in_ct=0;
+		const vf3d* out_pts[3];
+		const v2d* out_tex[3];
+		int out_ct=0;
+
+		//classify each point based on
 		for(int i=0; i<3; i++) {
-			//what side of plane is pt on?
-			float dp=norm.dot(t.p[i]-ctr);
-			if(dp>0) inside_pts[inside_ct++]=&t.p[i];
-			else outside_pts[outside_ct++]=&t.p[i];
+			//what side of plane it is on
+			if(norm.dot(tri.p[i]-ctr)>0) {
+				in_pts[in_ct]=&tri.p[i];
+				in_tex[in_ct]=&tri.t[i];
+				in_ct++;
+			}
+			else {
+				out_pts[out_ct]=&tri.p[i];
+				out_tex[out_ct]=&tri.t[i];
+				out_ct++;
+			}
 		}
 
-		switch(inside_ct) {
-			case 0:
+		switch(in_ct) {
+			default:
 				//tri behind plane
 				return 0;
-			case 1: {
+			case 1:
+			{
 				//form tri
-				a.p[0]=*inside_pts[0];
-				a.p[1]=segIntersectPlane(*inside_pts[0], *outside_pts[0], ctr, norm);
-				a.p[2]=segIntersectPlane(*inside_pts[0], *outside_pts[1], ctr, norm);;
-				a.col=t.col;
+				a.p[0]=*in_pts[0];
+				a.t[0]=*in_tex[0];
+
+				float t=0;
+				a.p[1]=segIntersectPlane(*in_pts[0], *out_pts[0], ctr, norm, &t);
+				a.t[1].u=in_tex[0]->u+t*(out_tex[0]->u-in_tex[0]->u);
+				a.t[1].v=in_tex[0]->v+t*(out_tex[0]->v-in_tex[0]->v);
+				a.t[1].w=in_tex[0]->w+t*(out_tex[0]->w-in_tex[0]->w);
+
+				t=0;
+				a.p[2]=segIntersectPlane(*in_pts[0], *out_pts[1], ctr, norm, &t);
+				a.t[2].u=in_tex[0]->u+t*(out_tex[1]->u-in_tex[0]->u);
+				a.t[2].v=in_tex[0]->v+t*(out_tex[1]->v-in_tex[0]->v);
+				a.t[2].w=in_tex[0]->w+t*(out_tex[1]->w-in_tex[0]->w);
+				
+				a.col=tri.col;
 				return 1;
 			}
-			case 2: {
+			case 2:
+			{
 				//form quad
-				a.p[0]=*inside_pts[0], a.p[1]=*inside_pts[1];
-				a.p[2]=segIntersectPlane(*inside_pts[1], *outside_pts[0], ctr, norm);
-				a.col=t.col;
+				a.p[0]=*in_pts[0];
+				a.t[0]=*in_tex[0];
 
-				b.p[0]=a.p[0], b.p[1]=a.p[2];
-				b.p[2]=segIntersectPlane(*outside_pts[0], a.p[0], ctr, norm);
-				b.col=t.col;
+				a.p[1]=*in_pts[1];
+				a.t[1]=*in_tex[1];
+
+				float t=0;
+				a.p[2]=segIntersectPlane(*in_pts[1], *out_pts[0], ctr, norm, &t);
+				a.t[2].u=in_tex[1]->u+t*(out_tex[0]->u-in_tex[1]->u);
+				a.t[2].v=in_tex[1]->v+t*(out_tex[0]->v-in_tex[1]->v);
+				a.t[2].w=in_tex[1]->w+t*(out_tex[0]->w-in_tex[1]->w);
+
+				a.col=tri.col;
+
+				b.p[0]=a.p[0];
+				b.t[0]=a.t[0];
+				
+				b.p[1]=a.p[2];
+				b.t[1]=a.t[2];
+
+				t=0;
+				b.p[2]=segIntersectPlane(*out_pts[0], a.p[0], ctr, norm, &t);
+				b.t[2].u=out_tex[0]->u+t*(a.t[0].u-out_tex[0]->u);
+				b.t[2].v=out_tex[0]->v+t*(a.t[0].v-out_tex[0]->v);
+				b.t[2].w=out_tex[0]->w+t*(a.t[0].w-out_tex[0]->w);
+
+				b.col=tri.col;
 				return 2;
 			}
 			case 3:
 				//tri infront of plane
-				a=t;
+				a=tri;
 				return 1;
 		}
 	}
@@ -168,6 +157,137 @@ struct VoxelGame : olc::PixelGameEngine {
 		DrawLineDecal(a, b, col);
 		DrawLineDecal(b, c, col);
 		DrawLineDecal(c, a, col);
+	}
+
+	void TexturedTriangle(
+	int x1, int y1, float u1, float v1, float w1,
+	int x2, int y2, float u2, float v2, float w2,
+	int x3, int y3, float u3, float v3, float w3,
+	olc::Sprite* s
+	) {
+		//sort by y
+		if(y2<y1) {
+			std::swap(x1, x2);
+			std::swap(y1, y2);
+			std::swap(u1, u2);
+			std::swap(v1, v2);
+			std::swap(w1, w2);
+		}
+		if(y3<y1) {
+			std::swap(x1, x3);
+			std::swap(y1, y3);
+			std::swap(u1, u3);
+			std::swap(v1, v3);
+			std::swap(w1, w3);
+		}
+		if(y3<y2) {
+			std::swap(x2, x3);
+			std::swap(y2, y3);
+			std::swap(u2, u3);
+			std::swap(v2, v3);
+			std::swap(w2, w3);
+		}
+
+		//calculate slopes
+		int dx1=x2-x1;
+		int dy1=y2-y1;
+		float du1=u2-u1;
+		float dv1=v2-v1;
+		float dw1=w2-w1;
+
+		int dx2=x3-x1;
+		int dy2=y3-y1;
+		float du2=u3-u1;
+		float dv2=v3-v1;
+		float dw2=w3-w1;
+
+		float tex_u, tex_v, tex_w;
+
+		float dax_step=0, dbx_step=0,  
+			du1_step=0, dv1_step=0,
+			du2_step=0, dv2_step=0,
+			dw1_step=0, dw2_step=0;
+
+		if(dy1) dax_step=dx1/std::fabsf(dy1);
+		if(dy2) dbx_step=dx2/std::fabsf(dy2);
+
+		if(dy1) du1_step=du1/std::fabsf(dy1);
+		if(dy1) dv1_step=dv1/std::fabsf(dy1);
+		if(dy1) dw1_step=dw1/std::fabsf(dy1);
+		if(dy2) du2_step=du2/std::fabsf(dy2);
+		if(dy2) dv2_step=dv2/std::fabsf(dy2);
+		if(dy2) dw2_step=dw2/std::fabsf(dy2);
+
+		//start scanline filling triangles
+		if(dy1) {
+			for(int i=y1; i<=y2; i++) {
+				int ax=x1+dax_step*(i-y1);
+				int bx=x1+dbx_step*(i-y1);
+				float tex_su=u1+du1_step*(i-y1);
+				float tex_sv=v1+dv1_step*(i-y1);
+				float tex_sw=w1+dw1_step*(i-y1);
+				float tex_eu=u1+du2_step*(i-y1);
+				float tex_ev=v1+dv2_step*(i-y1);
+				float tex_ew=w1+dw2_step*(i-y1);
+				//sort along x
+				if(ax>bx) {
+					std::swap(ax, bx);
+					std::swap(tex_su, tex_eu);
+					std::swap(tex_sv, tex_ev);
+					std::swap(tex_sw, tex_ew);
+				}
+				float t_step=1.f/(bx-ax);
+				float t=0;
+				for(int j=ax; j<bx; j++) {
+					tex_u=tex_su+t*(tex_eu-tex_su);
+					tex_v=tex_sv+t*(tex_ev-tex_sv);
+					tex_w=tex_sw+t*(tex_ew-tex_sw);
+					Draw(j, i, s->Sample(tex_u/tex_w, tex_v/tex_w));
+					t+=t_step;
+				}
+			}
+		}
+
+		//recalculate slopes
+		dx1=x3-x2;
+		dy1=y3-y2;
+		du1=u3-u2;
+		dv1=v3-v2;
+		dw1=w3-w2;
+
+		if(dy1) dax_step=dx1/std::fabsf(dy1);
+
+		du1_step=0, dv1_step=0;
+		if(dy1) du1_step=du1/std::fabsf(dy1);
+		if(dy1) dv1_step=dv1/std::fabsf(dy1);
+		if(dy1) dw1_step=dw1/std::fabsf(dy1);
+
+		for(int i=y2; i<=y3; i++) {
+			int ax=x2+dax_step*(i-y2);
+			int bx=x1+dbx_step*(i-y1);
+			float tex_su=u2+du1_step*(i-y2);
+			float tex_sv=v2+dv1_step*(i-y2);
+			float tex_sw=w2+dw1_step*(i-y2);
+			float tex_eu=u1+du2_step*(i-y1);
+			float tex_ev=v1+dv2_step*(i-y1);
+			float tex_ew=w1+dw2_step*(i-y1);
+			//sort along x
+			if(ax>bx) {
+				std::swap(ax, bx);
+				std::swap(tex_su, tex_eu);
+				std::swap(tex_sv, tex_ev);
+				std::swap(tex_sw, tex_ew);
+			}
+			float t_step=1.f/(bx-ax);
+			float t=0;
+			for(int j=ax; j<bx; j++) {
+				tex_u=tex_su+t*(tex_eu-tex_su);
+				tex_v=tex_sv+t*(tex_ev-tex_sv);
+				tex_w=tex_sw+t*(tex_ew-tex_sw);
+				Draw(j, i, s->Sample(tex_u/tex_w, tex_v/tex_w));
+				t+=t_step;
+			}
+		}
 	}
 
 	bool OnUserUpdate(float dt) override {
@@ -222,41 +342,54 @@ struct VoxelGame : olc::PixelGameEngine {
 		Mat4 mat_view=Mat4::quickInverse(mat_cam);
 
 		std::list<Triangle> tris_to_clip;
-		for(const auto& t:mesh.triangles) {
-			vf3d norm=t.getNorm();
+		for(const auto& tri:model.triangles) {
+			vf3d norm=tri.getNorm();
 
 			//is triangle pointing towards me? culling
-			if(norm.dot(t.p[0]-cam_pos)<0) {
+			if(norm.dot(tri.p[0]-cam_pos)<0) {
 				//lighting
-				vf3d light_dir=(light_pos-t.getCtr()).norm();
+				vf3d light_dir=(light_pos-tri.getCtr()).norm();
 				float dp=std::max(.5f, norm.dot(light_dir));
 
 				Triangle tri_view;
 				for(int i=0; i<3; i++) {
-					tri_view.p[i]=t.p[i]*mat_view;
+					tri_view.p[i]=tri.p[i]*mat_view;
+					tri_view.t[i]=tri.t[i];
 				}
-				tri_view.col=t.col*dp;
+				tri_view.col=tri.col*dp;
 
 				//clip against near plane
 				Triangle clipped[2];
 				int num=clipAgainstPlane(tri_view, vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
-				for(int j=0; j<num; j++) {
+				for(int i=0; i<num; i++) {
 					Triangle tri_proj;
-					for(int k=0; k<3; k++) {
+					//for each vert
+					for(int j=0; j<3; j++) {						
 						//project
-						tri_proj.p[k]=clipped[j].p[k]*mat_proj;
-						tri_proj.p[k]/=tri_proj.p[k].w;
+						tri_proj.p[j]=clipped[i].p[j]*mat_proj;
+						
+						//copy over texture stuff
+						tri_proj.t[j]=clipped[i].t[j];
 
-						//x/y inverted so put them back
-						tri_proj.p[k].x*=-1;
-						tri_proj.p[k].y*=-1;
+						//w normalization?
+						float w=tri_proj.p[j].w;
+						tri_proj.t[j].u/=w;
+						tri_proj.t[j].v/=w;
+						tri_proj.t[j].w=1/w;
 
 						//scale into view
-						tri_proj.p[k]+=vf3d(1, 1, 0);
-						tri_proj.p[k].x*=ScreenWidth()/2;
-						tri_proj.p[k].y*=ScreenHeight()/2;
+						tri_proj.p[j]/=w;
+
+						//x/y inverted so put them back
+						tri_proj.p[j].x*=-1;
+						tri_proj.p[j].y*=-1;
+
+						//offset into visible normalized space
+						tri_proj.p[j]+=vf3d(1, 1, 0);
+						tri_proj.p[j].x*=ScreenWidth()/2;
+						tri_proj.p[j].y*=ScreenHeight()/2;
 					}
-					tri_proj.col=clipped[j].col;
+					tri_proj.col=clipped[i].col;
 
 					tris_to_clip.emplace_back(tri_proj);
 				}
@@ -264,7 +397,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		//painters algorithm?
-		tris_to_clip.sort([] (const Triangle& a, const Triangle& b) {
+		tris_to_clip.sort([](const Triangle& a, const Triangle& b) {
 			float a_z=a.p[0].z+a.p[1].z+a.p[2].z;
 			float b_z=b.p[0].z+b.p[1].z+b.p[2].z;
 			return a_z>b_z;
@@ -322,18 +455,18 @@ struct VoxelGame : olc::PixelGameEngine {
 
 			//finally!
 			for(const auto& t:tri_queue) {
-				FillTriangleDecal(
-					vf2d(t.p[0].x, t.p[0].y),
-					vf2d(t.p[1].x, t.p[1].y),
-					vf2d(t.p[2].x, t.p[2].y),
-					t.col
+				TexturedTriangle(
+				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
+				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
+				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+				texture
 				);
 				if(show_outlines) {
-					DrawTriangleDecal(
+					DrawTriangle(
 						vf2d(t.p[0].x, t.p[0].y),
 						vf2d(t.p[1].x, t.p[1].y),
 						vf2d(t.p[2].x, t.p[2].y),
-						olc::BLACK
+						olc::WHITE
 					);
 				}
 			}
