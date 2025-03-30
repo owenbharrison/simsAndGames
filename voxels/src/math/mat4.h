@@ -105,4 +105,17 @@ struct Mat4 {
 		return b;
 	}
 };
+
+//matrix-matrix multiplication
+Mat4 operator*(const Mat4& a, const Mat4& b) {
+	Mat4 m;
+	for(int i=0; i<4; i++) {
+		for(int j=0; j<4; j++) {
+			float sum=0;
+			for(int k=0; k<4; k++) sum+=a.v[i][k]*b.v[k][j];
+			m.v[i][j]=sum;
+		}
+	}
+	return m;
+}
 #endif//MAT4_STRUCT_H

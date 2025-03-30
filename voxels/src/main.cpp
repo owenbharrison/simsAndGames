@@ -3,7 +3,13 @@
 using olc::vf2d;
 
 #include "math/vf3d.h"
+
 #include "math/mat4.h"
+
+#include "gfx/mesh.h"
+
+#include "stopwatch.h"
+
 #include "math/v2d.h"
 
 //vector-matrix multiplication
@@ -16,25 +22,13 @@ vf3d operator*(const vf3d& v, const Mat4& m) {
 	return r;
 }
 
-//matrix-matrix multiplication
-Mat4 operator*(const Mat4& a, const Mat4& b) {
-	Mat4 m;
-	for(int i=0; i<4; i++) {
-		for(int j=0; j<4; j++) {
-			float sum=0;
-			for(int k=0; k<4; k++) sum+=a.v[i][k]*b.v[k][j];
-			m.v[i][j]=sum;
-		}
-	}
-	return m;
-}
-
-#include "gfx/mesh.h"
-
-#include "stopwatch.h"
-
 vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
+}
+
+float map(float x, float a, float b, float c, float d) {
+	float t=(x-a)/(b-a);
+	return c+t*(d-c);
 }
 
 struct VoxelGame : olc::PixelGameEngine {
@@ -43,25 +37,56 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 
 	Mesh model;
+
+	float* depth_buffer=nullptr;
+	float* u_buffer=nullptr;
+	float* v_buffer=nullptr;
+
+	//camera matrix
 	Mat4 mat_proj;
 
+	//camera positioning
 	vf3d cam_pos{0, 0, -5};
 	float cam_yaw=0;
 	float cam_pitch=0;
 
-	vf3d light_pos;
+	//graphics stuff
+	vf3d light_pos=cam_pos;
 	bool show_outlines=false;
+	bool to_time=false;
+	enum struct Debug {
+		NONE=0,
+		DEPTH,
+		UV
+	};
+	Debug debug_view=Debug::NONE;
 
 	olc::Sprite* texture=nullptr;
+	olc::Sprite* white_texture=nullptr;
 
 	bool OnUserCreate() override {
-		mat_proj=Mat4::makeProj(90.f, float(ScreenHeight())/ScreenWidth(), .1f, 1000.f);
+		srand(time(0));
 
-		light_pos=cam_pos;
+		std::cout<<"Press ESC for integrated console.\n"
+			"  then type help for help.\n";
+		ConsoleCaptureStdOut(true);
+		
+		//make projection matrix
+		float fov=90.f;
+		float asp=float(ScreenHeight())/ScreenWidth();
+		mat_proj=Mat4::makeProj(fov, asp, .1f, 1000.f);
 
+		depth_buffer=new float[ScreenWidth()*ScreenHeight()];
+		u_buffer=new float[ScreenWidth()*ScreenHeight()];
+		v_buffer=new float[ScreenWidth()*ScreenHeight()];
+
+		//load model, rescale, load texture
 		model=Mesh::loadFromOBJ("assets/models/cube.txt");
 		model.normalize(2);
 		texture=new olc::Sprite("assets/textures/mario.png");
+
+		white_texture=new olc::Sprite(1, 1);
+		white_texture->SetPixel(0, 0, olc::WHITE);
 
 		return true;
 	}
@@ -81,8 +106,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				in_pts[in_ct]=&tri.p[i];
 				in_tex[in_ct]=&tri.t[i];
 				in_ct++;
-			}
-			else {
+			} else {
 				out_pts[out_ct]=&tri.p[i];
 				out_tex[out_ct]=&tri.t[i];
 				out_ct++;
@@ -93,29 +117,29 @@ struct VoxelGame : olc::PixelGameEngine {
 			default:
 				//tri behind plane
 				return 0;
-			case 1:
-			{
+			case 1: {
 				//form tri
 				a.p[0]=*in_pts[0];
 				a.t[0]=*in_tex[0];
 
 				float t=0;
 				a.p[1]=segIntersectPlane(*in_pts[0], *out_pts[0], ctr, norm, &t);
+				//interpolate tex coords
 				a.t[1].u=in_tex[0]->u+t*(out_tex[0]->u-in_tex[0]->u);
 				a.t[1].v=in_tex[0]->v+t*(out_tex[0]->v-in_tex[0]->v);
 				a.t[1].w=in_tex[0]->w+t*(out_tex[0]->w-in_tex[0]->w);
 
 				t=0;
 				a.p[2]=segIntersectPlane(*in_pts[0], *out_pts[1], ctr, norm, &t);
+				//interpolate tex coords
 				a.t[2].u=in_tex[0]->u+t*(out_tex[1]->u-in_tex[0]->u);
 				a.t[2].v=in_tex[0]->v+t*(out_tex[1]->v-in_tex[0]->v);
 				a.t[2].w=in_tex[0]->w+t*(out_tex[1]->w-in_tex[0]->w);
-				
+
 				a.col=tri.col;
 				return 1;
 			}
-			case 2:
-			{
+			case 2: {
 				//form quad
 				a.p[0]=*in_pts[0];
 				a.t[0]=*in_tex[0];
@@ -125,6 +149,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 				float t=0;
 				a.p[2]=segIntersectPlane(*in_pts[1], *out_pts[0], ctr, norm, &t);
+				//interpolate tex coords
 				a.t[2].u=in_tex[1]->u+t*(out_tex[0]->u-in_tex[1]->u);
 				a.t[2].v=in_tex[1]->v+t*(out_tex[0]->v-in_tex[1]->v);
 				a.t[2].w=in_tex[1]->w+t*(out_tex[0]->w-in_tex[1]->w);
@@ -133,12 +158,13 @@ struct VoxelGame : olc::PixelGameEngine {
 
 				b.p[0]=a.p[0];
 				b.t[0]=a.t[0];
-				
+
 				b.p[1]=a.p[2];
 				b.t[1]=a.t[2];
 
 				t=0;
 				b.p[2]=segIntersectPlane(*out_pts[0], a.p[0], ctr, norm, &t);
+				//interpolate tex coords
 				b.t[2].u=out_tex[0]->u+t*(a.t[0].u-out_tex[0]->u);
 				b.t[2].v=out_tex[0]->v+t*(a.t[0].v-out_tex[0]->v);
 				b.t[2].w=out_tex[0]->w+t*(a.t[0].w-out_tex[0]->w);
@@ -153,17 +179,11 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 	}
 
-	void DrawTriangleDecal(const vf2d& a, const vf2d& b, const vf2d& c, olc::Pixel col=olc::WHITE) {
-		DrawLineDecal(a, b, col);
-		DrawLineDecal(b, c, col);
-		DrawLineDecal(c, a, col);
-	}
-
 	void TexturedTriangle(
-	int x1, int y1, float u1, float v1, float w1,
-	int x2, int y2, float u2, float v2, float w2,
-	int x3, int y3, float u3, float v3, float w3,
-	olc::Sprite* s
+		int x1, int y1, float u1, float v1, float w1,
+		int x2, int y2, float u2, float v2, float w2,
+		int x3, int y3, float u3, float v3, float w3,
+		olc::Sprite* s
 	) {
 		//sort by y
 		if(y2<y1) {
@@ -203,7 +223,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		float tex_u, tex_v, tex_w;
 
-		float dax_step=0, dbx_step=0,  
+		float dax_step=0, dbx_step=0,
 			du1_step=0, dv1_step=0,
 			du2_step=0, dv2_step=0,
 			dw1_step=0, dw2_step=0;
@@ -220,15 +240,15 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//start scanline filling triangles
 		if(dy1) {
-			for(int i=y1; i<=y2; i++) {
-				int ax=x1+dax_step*(i-y1);
-				int bx=x1+dbx_step*(i-y1);
-				float tex_su=u1+du1_step*(i-y1);
-				float tex_sv=v1+dv1_step*(i-y1);
-				float tex_sw=w1+dw1_step*(i-y1);
-				float tex_eu=u1+du2_step*(i-y1);
-				float tex_ev=v1+dv2_step*(i-y1);
-				float tex_ew=w1+dw2_step*(i-y1);
+			for(int j=y1; j<=y2; j++) {
+				int ax=x1+dax_step*(j-y1);
+				int bx=x1+dbx_step*(j-y1);
+				float tex_su=u1+du1_step*(j-y1);
+				float tex_sv=v1+dv1_step*(j-y1);
+				float tex_sw=w1+dw1_step*(j-y1);
+				float tex_eu=u1+du2_step*(j-y1);
+				float tex_ev=v1+dv2_step*(j-y1);
+				float tex_ew=w1+dw2_step*(j-y1);
 				//sort along x
 				if(ax>bx) {
 					std::swap(ax, bx);
@@ -238,11 +258,17 @@ struct VoxelGame : olc::PixelGameEngine {
 				}
 				float t_step=1.f/(bx-ax);
 				float t=0;
-				for(int j=ax; j<bx; j++) {
+				for(int i=ax; i<bx; i++) {
 					tex_u=tex_su+t*(tex_eu-tex_su);
 					tex_v=tex_sv+t*(tex_ev-tex_sv);
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					Draw(j, i, s->Sample(tex_u/tex_w, tex_v/tex_w));
+					float& depth=depth_buffer[i+ScreenWidth()*j];
+					if(tex_w>depth) {
+						Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
+						depth=tex_w;
+						u_buffer[i+ScreenWidth()*j]=tex_u;
+						v_buffer[i+ScreenWidth()*j]=tex_v;
+					}
 					t+=t_step;
 				}
 			}
@@ -262,15 +288,15 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(dy1) dv1_step=dv1/std::fabsf(dy1);
 		if(dy1) dw1_step=dw1/std::fabsf(dy1);
 
-		for(int i=y2; i<=y3; i++) {
-			int ax=x2+dax_step*(i-y2);
-			int bx=x1+dbx_step*(i-y1);
-			float tex_su=u2+du1_step*(i-y2);
-			float tex_sv=v2+dv1_step*(i-y2);
-			float tex_sw=w2+dw1_step*(i-y2);
-			float tex_eu=u1+du2_step*(i-y1);
-			float tex_ev=v1+dv2_step*(i-y1);
-			float tex_ew=w1+dw2_step*(i-y1);
+		for(int j=y2; j<=y3; j++) {
+			int ax=x2+dax_step*(j-y2);
+			int bx=x1+dbx_step*(j-y1);
+			float tex_su=u2+du1_step*(j-y2);
+			float tex_sv=v2+dv1_step*(j-y2);
+			float tex_sw=w2+dw1_step*(j-y2);
+			float tex_eu=u1+du2_step*(j-y1);
+			float tex_ev=v1+dv2_step*(j-y1);
+			float tex_ew=w1+dw2_step*(j-y1);
 			//sort along x
 			if(ax>bx) {
 				std::swap(ax, bx);
@@ -280,56 +306,132 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 			float t_step=1.f/(bx-ax);
 			float t=0;
-			for(int j=ax; j<bx; j++) {
+			for(int i=ax; i<bx; i++) {
 				tex_u=tex_su+t*(tex_eu-tex_su);
 				tex_v=tex_sv+t*(tex_ev-tex_sv);
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
-				Draw(j, i, s->Sample(tex_u/tex_w, tex_v/tex_w));
+				float& depth=depth_buffer[i+ScreenWidth()*j];
+				if(tex_w>depth) {
+					Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
+					depth=tex_w;
+					u_buffer[i+ScreenWidth()*j]=tex_u;
+					v_buffer[i+ScreenWidth()*j]=tex_v;
+				}
 				t+=t_step;
 			}
 		}
 	}
 
-	bool OnUserUpdate(float dt) override {
-		if(GetKey(olc::Key::CTRL).bHeld) dt/=10;
+	bool OnConsoleCommand(const std::string& line) override {
+		std::stringstream line_str(line);
+		std::string cmd; line_str>>cmd;
 
-		const bool to_time=GetKey(olc::Key::T).bPressed;
+		if(cmd=="clear") {
+			ConsoleClear();
+
+			return true;
+		}
+
+		if(cmd=="time") {
+			to_time=true;
+
+			return true;
+		}
+
+		if(cmd=="import") {
+			std::string filename;
+			line_str>>filename;
+			if(filename.empty()) {
+				std::cout<<"no filename. try using:\n  import <filename>\n";
+
+				return false;
+			}
+
+			model=Mesh::loadFromOBJ(filename);
+			model.normalize(2);
+
+			return true;
+		}
+
+		if(cmd=="keybinds") {
+			std::cout<<"useful keybinds:\n"
+				"  SPACE    move up\n"
+				"  SHIFT    move down\n"
+				"  WASD     move camera\n"
+				"  ARROWS   look camera\n"
+				"  ENTER    set light pos\n"
+				"  O        toggle outlines\n"
+				"  B        depth debug view\n"
+				"  U        uv debug view\n"
+				"  N        no debug\n"
+				"  ESC      toggle integrated console\n";
+
+			return true;
+		}
+
+		if(cmd=="help") {
+			std::cout<<"useful commands:\n"
+				"  clear      clears the console\n"
+				"  time       times immediate next update and render loop\n"
+				"  import     import model from file\n"
+				"  keybinds   which keys to press for this program?\n";
+
+			return true;
+		}
+
+		std::cout<<"unknown command. type help for list of commands.\n";
+
+		return false;
+	}
+
+	bool OnUserUpdate(float dt) override {
 		Stopwatch geom_watch, render_watch;
 
-#pragma region MOVEMENT
-		//add mouse later
+#pragma region USER INPUT
+		//open and close the integrated console
+		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
 
-		//look up,down
-		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
-		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
+		//only allow input when console NOT open
+		if(!IsConsoleShowing()) {
+			//look up, down
+			if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
+			if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+			if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
+			if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
 
-		//look left, right
-		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
-		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
+			//look left, right
+			if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
+			if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
 
-		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+			//move up, down
+			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
-		//move forward, backward
-		vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+			//move forward, backward
+			vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+			//move left, right
+			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
 
-		if(GetKey(olc::Key::ENTER).bHeld) light_pos=cam_pos;
+			//set light to camera
+			if(GetKey(olc::Key::ENTER).bHeld) light_pos=cam_pos;
 
-		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+			//ui toggles
+			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+
+			if(GetKey(olc::Key::B).bPressed) debug_view=Debug::DEPTH;
+			if(GetKey(olc::Key::U).bPressed) debug_view=Debug::UV;
+			if(GetKey(olc::Key::N).bPressed) debug_view=Debug::NONE;
+		}
 #pragma endregion
 
 #pragma region GEOMETRY AND CLIPPING
 		if(to_time) geom_watch.start();
+
 		const vf3d up(0, 1, 0);
 		vf3d look_dir(
 			std::sinf(cam_yaw)*std::cosf(cam_pitch),
@@ -351,6 +453,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				vf3d light_dir=(light_pos-tri.getCtr()).norm();
 				float dp=std::max(.5f, norm.dot(light_dir));
 
+				//transform triangles given camera positioning
 				Triangle tri_view;
 				for(int i=0; i<3; i++) {
 					tri_view.p[i]=tri.p[i]*mat_view;
@@ -364,10 +467,10 @@ struct VoxelGame : olc::PixelGameEngine {
 				for(int i=0; i<num; i++) {
 					Triangle tri_proj;
 					//for each vert
-					for(int j=0; j<3; j++) {						
+					for(int j=0; j<3; j++) {
 						//project
 						tri_proj.p[j]=clipped[i].p[j]*mat_proj;
-						
+
 						//copy over texture stuff
 						tri_proj.t[j]=clipped[i].t[j];
 
@@ -396,12 +499,13 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 
-		//painters algorithm?
-		tris_to_clip.sort([](const Triangle& a, const Triangle& b) {
+		/*painters algorithm?
+		tris_to_clip.sort([] (const Triangle& a, const Triangle& b) {
 			float a_z=a.p[0].z+a.p[1].z+a.p[2].z;
 			float b_z=b.p[0].z+b.p[1].z+b.p[2].z;
 			return a_z>b_z;
-		});
+		});*/
+
 		if(to_time) {
 			geom_watch.stop();
 			auto dur=geom_watch.getMicros();
@@ -411,16 +515,25 @@ struct VoxelGame : olc::PixelGameEngine {
 
 #pragma region RENDER
 		if(to_time) render_watch.start();
+
+		//dark grey background
 		Clear(olc::Pixel(50, 50, 50));
+		//reset buffers
+		for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
+			depth_buffer[i]=0;
+			u_buffer[i]=0;
+			v_buffer[i]=0;
+		}
 
 		//screen space clipping!
-		//its easier?
 		std::list<Triangle> tri_queue;
+		std::list<Triangle> tris_to_draw;
 		for(const auto& t:tris_to_clip) {
 			Triangle clipped[2];
 			tri_queue={t};
 			int num_new=1;
 			for(int i=0; i<4; i++) {
+				//choose plane on screen edge to clip with
 				vf3d ctr, norm;
 				switch(i) {
 					case 0://left
@@ -441,6 +554,7 @@ struct VoxelGame : olc::PixelGameEngine {
 						break;
 				}
 
+				//iteratively clip all tris
 				while(num_new>0) {
 					Triangle test=tri_queue.front();
 					tri_queue.pop_front();
@@ -449,29 +563,82 @@ struct VoxelGame : olc::PixelGameEngine {
 					int num_clip=clipAgainstPlane(test, ctr, norm, clipped[0], clipped[1]);
 					for(int j=0; j<num_clip; j++) tri_queue.emplace_back(clipped[j]);
 				}
-
 				num_new=tri_queue.size();
 			}
 
-			//finally!
-			for(const auto& t:tri_queue) {
-				TexturedTriangle(
+			//add to conglomerate
+			tris_to_draw.insert(tris_to_draw.end(), tri_queue.begin(), tri_queue.end());
+		}
+
+		//rasterize all triangles
+		for(const auto& t:tris_to_draw) {
+			TexturedTriangle(
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-				texture
-				);
-				if(show_outlines) {
-					DrawTriangle(
-						vf2d(t.p[0].x, t.p[0].y),
-						vf2d(t.p[1].x, t.p[1].y),
-						vf2d(t.p[2].x, t.p[2].y),
-						olc::WHITE
-					);
+				model.textured?texture:white_texture
+			);
+		}
+		switch(debug_view) {
+			case Debug::DEPTH: {
+				//find min and max values
+				float min_depth=INFINITY, max_depth=-min_depth;
+				for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
+					float depth=depth_buffer[i];
+					if(depth<min_depth) min_depth=depth;
+					if(depth>max_depth) max_depth=depth;
 				}
+
+				//show all depth values
+				for(int i=0; i<ScreenWidth(); i++) {
+					for(int j=0; j<ScreenHeight(); j++) {
+						float depth=depth_buffer[i+ScreenWidth()*j];
+						float shade=map(depth, min_depth, max_depth, 0, 1);
+						Draw(i, j, olc::PixelF(shade, shade, shade));
+					}
+				}
+
+				//debug view string
+				DrawString({0, 0}, "showing depth", olc::WHITE);
+
+				break;
+			}
+			case Debug::UV: {
+				//show all uv as red and green values
+				for(int i=0; i<ScreenWidth(); i++) {
+					for(int j=0; j<ScreenHeight(); j++) {
+						olc::Pixel col=olc::PixelF(
+							u_buffer[i+ScreenWidth()*j],
+							v_buffer[i+ScreenWidth()*j],
+							0
+						);
+						Draw(i, j, col);
+					}
+				}
+
+				//debug view string
+				DrawString({0, 0}, "showing uv", olc::WHITE);
+				
+				break;
 			}
 		}
+
+		//show white triangle outlines
+		if(show_outlines) {
+			for(const auto& t:tris_to_draw) {
+				DrawTriangle(
+					vf2d(t.p[0].x, t.p[0].y),
+					vf2d(t.p[1].x, t.p[1].y),
+					vf2d(t.p[2].x, t.p[2].y),
+					olc::WHITE
+				);
+			}
+		}
+
 		if(to_time) {
+			//end timing cycle
+			to_time=false;
+
 			render_watch.stop();
 			auto dur=render_watch.getMicros();
 			std::cout<<"render: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
@@ -483,10 +650,9 @@ struct VoxelGame : olc::PixelGameEngine {
 };
 
 int main() {
-	srand(time(0));
-
 	VoxelGame vg;
-	if(vg.Construct(320, 240, 2, 2, false, false)) vg.Start();
+	bool vsync=false;
+	if(vg.Construct(640, 480, 1, 1, false, vsync)) vg.Start();
 
 	return 0;
 }

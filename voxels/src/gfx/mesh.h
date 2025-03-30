@@ -13,6 +13,7 @@
 
 struct Mesh {
 	std::list<Triangle> triangles;
+	bool textured=true;
 
 	static Mesh loadFromOBJ(const std::string& filename) {
 		Mesh m;
@@ -68,6 +69,8 @@ struct Mesh {
 				}
 			}
 		}
+
+		m.textured=!texs.empty();
 
 		file.close();
 		return m;
