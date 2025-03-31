@@ -31,6 +31,8 @@ float map(float x, float a, float b, float c, float d) {
 	return c+t*(d-c);
 }
 
+#include "render.h"
+
 struct VoxelGame : olc::PixelGameEngine {
 	VoxelGame() {
 		sAppName="Voxel Game";
@@ -64,6 +66,9 @@ struct VoxelGame : olc::PixelGameEngine {
 	olc::Sprite* texture=nullptr;
 	olc::Sprite* white_texture=nullptr;
 
+	Render cam1;
+	olc::Sprite* cam1_spr=nullptr;
+
 	bool OnUserCreate() override {
 		srand(time(0));
 
@@ -88,102 +93,44 @@ struct VoxelGame : olc::PixelGameEngine {
 		white_texture=new olc::Sprite(1, 1);
 		white_texture->SetPixel(0, 0, olc::WHITE);
 
+		//set triangle colors
+		for(auto& t:model.triangles) {
+			vf3d norm=t.getNorm();
+			t.col.r=128+127*norm.x;
+			t.col.g=128+127*norm.y;
+			t.col.b=128+127*norm.z;
+		}
+
+		//setup render
+		{
+			int width=64;
+			int height=48;
+			cam1=Render(width, height, 90.f);
+			cam1.updatePos({4, 4, 4}, {-1, -1, -1}, {4, 4, 4});
+			cam1.render(model.triangles);
+		
+			cam1_spr=new olc::Sprite(cam1.getWidth(), cam1.getHeight());
+			for(int i=0; i<cam1.getWidth(); i++) {
+				for(int j=0; j<cam1.getHeight(); j++) {
+					int k=cam1.ix(i, j);
+					cam1_spr->SetPixel(i, j, olc::Pixel(
+						cam1.pixels[3*k],
+						cam1.pixels[1+3*k],
+						cam1.pixels[2+3*k],
+						255
+					));
+				}
+			}
+		}
+
 		return true;
-	}
-
-	int clipAgainstPlane(const Triangle& tri, const vf3d& ctr, const vf3d& norm, Triangle& a, Triangle& b) {
-		const vf3d* in_pts[3];
-		const v2d* in_tex[3];
-		int in_ct=0;
-		const vf3d* out_pts[3];
-		const v2d* out_tex[3];
-		int out_ct=0;
-
-		//classify each point based on
-		for(int i=0; i<3; i++) {
-			//what side of plane it is on
-			if(norm.dot(tri.p[i]-ctr)>0) {
-				in_pts[in_ct]=&tri.p[i];
-				in_tex[in_ct]=&tri.t[i];
-				in_ct++;
-			} else {
-				out_pts[out_ct]=&tri.p[i];
-				out_tex[out_ct]=&tri.t[i];
-				out_ct++;
-			}
-		}
-
-		switch(in_ct) {
-			default:
-				//tri behind plane
-				return 0;
-			case 1: {
-				//form tri
-				a.p[0]=*in_pts[0];
-				a.t[0]=*in_tex[0];
-
-				float t=0;
-				a.p[1]=segIntersectPlane(*in_pts[0], *out_pts[0], ctr, norm, &t);
-				//interpolate tex coords
-				a.t[1].u=in_tex[0]->u+t*(out_tex[0]->u-in_tex[0]->u);
-				a.t[1].v=in_tex[0]->v+t*(out_tex[0]->v-in_tex[0]->v);
-				a.t[1].w=in_tex[0]->w+t*(out_tex[0]->w-in_tex[0]->w);
-
-				t=0;
-				a.p[2]=segIntersectPlane(*in_pts[0], *out_pts[1], ctr, norm, &t);
-				//interpolate tex coords
-				a.t[2].u=in_tex[0]->u+t*(out_tex[1]->u-in_tex[0]->u);
-				a.t[2].v=in_tex[0]->v+t*(out_tex[1]->v-in_tex[0]->v);
-				a.t[2].w=in_tex[0]->w+t*(out_tex[1]->w-in_tex[0]->w);
-
-				a.col=tri.col;
-				return 1;
-			}
-			case 2: {
-				//form quad
-				a.p[0]=*in_pts[0];
-				a.t[0]=*in_tex[0];
-
-				a.p[1]=*in_pts[1];
-				a.t[1]=*in_tex[1];
-
-				float t=0;
-				a.p[2]=segIntersectPlane(*in_pts[1], *out_pts[0], ctr, norm, &t);
-				//interpolate tex coords
-				a.t[2].u=in_tex[1]->u+t*(out_tex[0]->u-in_tex[1]->u);
-				a.t[2].v=in_tex[1]->v+t*(out_tex[0]->v-in_tex[1]->v);
-				a.t[2].w=in_tex[1]->w+t*(out_tex[0]->w-in_tex[1]->w);
-
-				a.col=tri.col;
-
-				b.p[0]=a.p[0];
-				b.t[0]=a.t[0];
-
-				b.p[1]=a.p[2];
-				b.t[1]=a.t[2];
-
-				t=0;
-				b.p[2]=segIntersectPlane(*out_pts[0], a.p[0], ctr, norm, &t);
-				//interpolate tex coords
-				b.t[2].u=out_tex[0]->u+t*(a.t[0].u-out_tex[0]->u);
-				b.t[2].v=out_tex[0]->v+t*(a.t[0].v-out_tex[0]->v);
-				b.t[2].w=out_tex[0]->w+t*(a.t[0].w-out_tex[0]->w);
-
-				b.col=tri.col;
-				return 2;
-			}
-			case 3:
-				//tri infront of plane
-				a=tri;
-				return 1;
-		}
 	}
 
 	void TexturedTriangle(
 		int x1, int y1, float u1, float v1, float w1,
 		int x2, int y2, float u2, float v2, float w2,
 		int x3, int y3, float u3, float v3, float w3,
-		olc::Sprite* s
+		olc::Pixel col//olc::Sprite* s
 	) {
 		//sort by y
 		if(y2<y1) {
@@ -264,7 +211,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					float& depth=depth_buffer[i+ScreenWidth()*j];
 					if(tex_w>depth) {
-						Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
+						Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
 						depth=tex_w;
 						u_buffer[i+ScreenWidth()*j]=tex_u;
 						v_buffer[i+ScreenWidth()*j]=tex_v;
@@ -312,7 +259,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				float& depth=depth_buffer[i+ScreenWidth()*j];
 				if(tex_w>depth) {
-					Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
+					Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
 					depth=tex_w;
 					u_buffer[i+ScreenWidth()*j]=tex_u;
 					v_buffer[i+ScreenWidth()*j]=tex_v;
@@ -463,7 +410,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 				//clip against near plane
 				Triangle clipped[2];
-				int num=clipAgainstPlane(tri_view, vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
+				int num=tri_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
 				for(int i=0; i<num; i++) {
 					Triangle tri_proj;
 					//for each vert
@@ -518,6 +465,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//dark grey background
 		Clear(olc::Pixel(50, 50, 50));
+
 		//reset buffers
 		for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
 			depth_buffer[i]=0;
@@ -560,7 +508,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					tri_queue.pop_front();
 					num_new--;
 
-					int num_clip=clipAgainstPlane(test, ctr, norm, clipped[0], clipped[1]);
+					int num_clip=test.clipAgainstPlane(ctr, norm, clipped[0], clipped[1]);
 					for(int j=0; j<num_clip; j++) tri_queue.emplace_back(clipped[j]);
 				}
 				num_new=tri_queue.size();
@@ -576,7 +524,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-				model.textured?texture:white_texture
+				t.col//model.textured?texture:white_texture
 			);
 		}
 		switch(debug_view) {
@@ -635,6 +583,8 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 
+		DrawSprite(GetMouseX(), GetMouseY(), cam1_spr);
+
 		if(to_time) {
 			//end timing cycle
 			to_time=false;
@@ -651,7 +601,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 int main() {
 	VoxelGame vg;
-	bool vsync=false;
+	bool vsync=true;
 	if(vg.Construct(640, 480, 1, 1, false, vsync)) vg.Start();
 
 	return 0;

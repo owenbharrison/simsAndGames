@@ -166,6 +166,7 @@
     <ClInclude Include="src\math\mat4.h" />
     <ClInclude Include="src\math\v2d.h" />
     <ClInclude Include="src\math\vf3d.h" />
+    <ClInclude Include="src\render.h" />
     <ClInclude Include="src\stopwatch.h" />
     <ClInclude Include="src\voxel_set.h" />
   </ItemGroup>
