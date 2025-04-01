@@ -16,10 +16,12 @@ class Render {
 
 	void updateTransforms();
 
-	void DrawTriangle(int, int, float,
-	int, int, float,
-	int, int, float,
-	unsigned char, unsigned char, unsigned char);
+	void DrawTriangle(
+		int, int, float,
+		int, int, float,
+		int, int, float,
+		olc::Pixel col
+	);
 
 public:
 	//buffers
@@ -98,9 +100,9 @@ public:
 		}
 	}
 
-	//cull, project, clip, transform, clip, raster
+	//cull, clip, project, clip, raster
 	void render(const std::list<Triangle>& tris) {
-		//project triangles
+		//cull, clip, and project
 		std::list<Triangle> tris_to_clip;
 		for(const auto& tri:tris) {
 			vf3d norm=tri.getNorm();
@@ -157,12 +159,12 @@ public:
 			}
 		}
 
-		//screen space clipping!
+		//screen space clipping
 		std::list<Triangle> tri_queue;
 		std::list<Triangle> tris_to_draw;
-		for(const auto& t:tris_to_clip) {
+		for(const auto& tri:tris_to_clip) {
 			Triangle clipped[2];
-			tri_queue={t};
+			tri_queue={tri};
 			int num_new=1;
 			for(int i=0; i<4; i++) {
 				//choose plane on screen edge to clip with
@@ -203,12 +205,12 @@ public:
 		}
 
 		//rasterize all triangles
-		for(const auto& t:tris_to_draw) {
+		for(const auto& tri:tris_to_draw) {
 			DrawTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
-				t.col.r, t.col.g, t.col.b
+				tri.p[0].x, tri.p[0].y, tri.t[0].w,
+				tri.p[1].x, tri.p[1].y, tri.t[1].w,
+				tri.p[2].x, tri.p[2].y, tri.t[2].w,
+				tri.col
 			);
 		}
 	}
@@ -223,6 +225,13 @@ void Render::copyFrom(const Render& r) {
 
 	depth_buffer=new float[width*height];
 	memcpy(depth_buffer, r.depth_buffer, sizeof(float)*width*height);
+
+	cam_pos=r.cam_pos;
+	cam_dir=r.cam_dir;
+	light_pos=r.light_pos;
+
+	mat_proj=r.mat_proj;
+	mat_view=r.mat_view;
 }
 
 void Render::clear() {
@@ -238,10 +247,10 @@ void Render::updateTransforms() {
 }
 
 void Render::DrawTriangle(
-int x1, int y1, float w1,
-int x2, int y2, float w2,
-int x3, int y3, float w3,
-unsigned char r, unsigned char g, unsigned char b
+	int x1, int y1, float w1,
+	int x2, int y2, float w2,
+	int x3, int y3, float w3,
+	olc::Pixel col//olc::Sprite* s
 ) {
 	//sort by y
 	if(y2<y1) {
@@ -298,9 +307,9 @@ unsigned char r, unsigned char g, unsigned char b
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				int k=ix(i, j);
 				if(tex_w>depth_buffer[k]) {
-					pixels[3*k]=r;
-					pixels[1+3*k]=g;
-					pixels[2+3*k]=b;
+					pixels[3*k]=col.r;
+					pixels[1+3*k]=col.g;
+					pixels[2+3*k]=col.b;
 					depth_buffer[k]=tex_w;
 				}
 				t+=t_step;
@@ -333,9 +342,9 @@ unsigned char r, unsigned char g, unsigned char b
 			tex_w=tex_sw+t*(tex_ew-tex_sw);
 			int k=ix(i, j);
 			if(tex_w>depth_buffer[k]) {
-				pixels[3*k]=r;
-				pixels[1+3*k]=g;
-				pixels[2+3*k]=b;
+				pixels[3*k]=col.r;
+				pixels[1+3*k]=col.g;
+				pixels[2+3*k]=col.b;
 				depth_buffer[k]=tex_w;
 			}
 			t+=t_step;

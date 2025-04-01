@@ -51,10 +51,12 @@ struct VoxelGame : olc::PixelGameEngine {
 	vf3d cam_pos{0, 0, -5};
 	float cam_yaw=0;
 	float cam_pitch=0;
+	vf3d cam_dir;
 
 	//graphics stuff
 	vf3d light_pos=cam_pos;
 	bool show_outlines=false;
+	bool show_render=false;
 	bool to_time=false;
 	enum struct Debug {
 		NONE=0,
@@ -66,8 +68,8 @@ struct VoxelGame : olc::PixelGameEngine {
 	olc::Sprite* texture=nullptr;
 	olc::Sprite* white_texture=nullptr;
 
-	Render cam1;
-	olc::Sprite* cam1_spr=nullptr;
+	Render render;
+	olc::Sprite* render_tex=nullptr;
 
 	bool OnUserCreate() override {
 		srand(time(0));
@@ -75,7 +77,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
 		ConsoleCaptureStdOut(true);
-		
+
 		//make projection matrix
 		float fov=90.f;
 		float asp=float(ScreenHeight())/ScreenWidth();
@@ -85,43 +87,18 @@ struct VoxelGame : olc::PixelGameEngine {
 		u_buffer=new float[ScreenWidth()*ScreenHeight()];
 		v_buffer=new float[ScreenWidth()*ScreenHeight()];
 
-		//load model, rescale, load texture
-		model=Mesh::loadFromOBJ("assets/models/cube.txt");
+		//load model, rescale
+		model=Mesh::loadFromOBJ("assets/models/block.txt");
 		model.normalize(2);
-		texture=new olc::Sprite("assets/textures/mario.png");
-
+		model.colorNormals();
+		
+		//load texture
+		texture=new olc::Sprite("assets/textures/grass.png");
 		white_texture=new olc::Sprite(1, 1);
 		white_texture->SetPixel(0, 0, olc::WHITE);
 
-		//set triangle colors
-		for(auto& t:model.triangles) {
-			vf3d norm=t.getNorm();
-			t.col.r=128+127*norm.x;
-			t.col.g=128+127*norm.y;
-			t.col.b=128+127*norm.z;
-		}
-
-		//setup render
-		{
-			int width=64;
-			int height=48;
-			cam1=Render(width, height, 90.f);
-			cam1.updatePos({4, 4, 4}, {-1, -1, -1}, {4, 4, 4});
-			cam1.render(model.triangles);
-		
-			cam1_spr=new olc::Sprite(cam1.getWidth(), cam1.getHeight());
-			for(int i=0; i<cam1.getWidth(); i++) {
-				for(int j=0; j<cam1.getHeight(); j++) {
-					int k=cam1.ix(i, j);
-					cam1_spr->SetPixel(i, j, olc::Pixel(
-						cam1.pixels[3*k],
-						cam1.pixels[1+3*k],
-						cam1.pixels[2+3*k],
-						255
-					));
-				}
-			}
-		}
+		render=Render(128, 96, 90.f);
+		render_tex=new olc::Sprite(render.getWidth(), render.getWidth());
 
 		return true;
 	}
@@ -130,7 +107,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		int x1, int y1, float u1, float v1, float w1,
 		int x2, int y2, float u2, float v2, float w2,
 		int x3, int y3, float u3, float v3, float w3,
-		olc::Pixel col//olc::Sprite* s
+		olc::Sprite* s
 	) {
 		//sort by y
 		if(y2<y1) {
@@ -211,7 +188,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					float& depth=depth_buffer[i+ScreenWidth()*j];
 					if(tex_w>depth) {
-						Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
+						Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
 						depth=tex_w;
 						u_buffer[i+ScreenWidth()*j]=tex_u;
 						v_buffer[i+ScreenWidth()*j]=tex_v;
@@ -259,7 +236,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				float& depth=depth_buffer[i+ScreenWidth()*j];
 				if(tex_w>depth) {
-					Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
+					Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
 					depth=tex_w;
 					u_buffer[i+ScreenWidth()*j]=tex_u;
 					v_buffer[i+ScreenWidth()*j]=tex_v;
@@ -296,6 +273,28 @@ struct VoxelGame : olc::PixelGameEngine {
 
 			model=Mesh::loadFromOBJ(filename);
 			model.normalize(2);
+			model.colorNormals();
+
+			return true;
+		}
+
+		if(cmd=="render") {
+			//rerender scene
+			render.updatePos(cam_pos, cam_dir, light_pos);
+			render.resetBuffers();
+			render.render(model.triangles);
+
+			//update render texture
+			for(int i=0; i<render.getWidth(); i++) {
+				for(int j=0; j<render.getHeight(); j++) {
+					int k=render.ix(i, j);
+					render_tex->SetPixel(i, j, olc::Pixel(
+						render.pixels[3*k],
+						render.pixels[1+3*k],
+						render.pixels[2+3*k]
+					));
+				}
+			}
 
 			return true;
 		}
@@ -321,6 +320,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  clear      clears the console\n"
 				"  time       times immediate next update and render loop\n"
 				"  import     import model from file\n"
+				"  render     update camera render\n"
 				"  keybinds   which keys to press for this program?\n";
 
 			return true;
@@ -369,6 +369,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 			//ui toggles
 			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+			if(GetKey(olc::Key::R).bPressed) show_render^=true;
 
 			if(GetKey(olc::Key::B).bPressed) debug_view=Debug::DEPTH;
 			if(GetKey(olc::Key::U).bPressed) debug_view=Debug::UV;
@@ -380,12 +381,12 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(to_time) geom_watch.start();
 
 		const vf3d up(0, 1, 0);
-		vf3d look_dir(
+		cam_dir=vf3d(
 			std::sinf(cam_yaw)*std::cosf(cam_pitch),
 			std::sinf(cam_pitch),
 			std::cosf(cam_yaw)*std::cosf(cam_pitch)
 		);
-		vf3d target=cam_pos+look_dir;
+		vf3d target=cam_pos+cam_dir;
 
 		Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
 		Mat4 mat_view=Mat4::quickInverse(mat_cam);
@@ -464,7 +465,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(to_time) render_watch.start();
 
 		//dark grey background
-		Clear(olc::Pixel(50, 50, 50));
+		Clear(olc::Pixel(90, 90, 90));
 
 		//reset buffers
 		for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
@@ -524,7 +525,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-				t.col//model.textured?texture:white_texture
+				model.textured?texture:white_texture
 			);
 		}
 		switch(debug_view) {
@@ -532,7 +533,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				//find min and max values
 				float min_depth=INFINITY, max_depth=-min_depth;
 				for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
-					float depth=depth_buffer[i];
+					const auto& depth=depth_buffer[i];
 					if(depth<min_depth) min_depth=depth;
 					if(depth>max_depth) max_depth=depth;
 				}
@@ -566,7 +567,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 				//debug view string
 				DrawString({0, 0}, "showing uv", olc::WHITE);
-				
+
 				break;
 			}
 		}
@@ -578,12 +579,16 @@ struct VoxelGame : olc::PixelGameEngine {
 					vf2d(t.p[0].x, t.p[0].y),
 					vf2d(t.p[1].x, t.p[1].y),
 					vf2d(t.p[2].x, t.p[2].y),
-					olc::WHITE
+					olc::BLACK
 				);
 			}
 		}
 
-		DrawSprite(GetMouseX(), GetMouseY(), cam1_spr);
+		if(show_render) {
+			vf2d corner(ScreenWidth()-render.getWidth(), ScreenHeight()-render.getHeight());
+			DrawSprite(corner, render_tex);
+			DrawString(corner, "Render");
+		}
 
 		if(to_time) {
 			//end timing cycle

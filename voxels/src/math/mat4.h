@@ -42,10 +42,10 @@ struct Mat4 {
 	static Mat4 makeRotZ(float theta) {
 		Mat4 m;
 		m.v[0][0]=1;
-		m.v[1][1]=std::cosf(.5f*theta);
-		m.v[1][2]=std::sinf(.5f*theta);
-		m.v[2][1]=-std::sinf(.5f*theta);
-		m.v[2][2]=std::cosf(.5f*theta);
+		m.v[1][1]=std::cosf(theta);
+		m.v[1][2]=std::sinf(theta);
+		m.v[2][1]=-std::sinf(theta);
+		m.v[2][2]=std::cosf(theta);
 		m.v[3][3]=1;
 		return m;
 	}

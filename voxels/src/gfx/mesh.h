@@ -108,5 +108,15 @@ struct Mesh {
 			for(int i=0; i<3; i++) t.p[i]*=rad;
 		}
 	}
+
+	//set triangle colors to their normals
+	void colorNormals() {
+		for(auto& t:triangles) {
+			vf3d norm=t.getNorm();
+			t.col.r=128+127*norm.x;
+			t.col.g=128+127*norm.y;
+			t.col.b=128+127*norm.z;
+		}
+	}
 };
 #endif//MESH_STRUCT_H

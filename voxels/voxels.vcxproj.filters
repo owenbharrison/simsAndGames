@@ -17,7 +17,6 @@
   <ItemGroup>
     <Text Include="assets\models\airplane.txt" />
     <Text Include="assets\models\axis.txt" />
-    <Text Include="assets\models\barrel.txt" />
     <Text Include="assets\models\bike.txt" />
     <Text Include="assets\models\car.txt" />
     <Text Include="assets\models\cube.txt" />
@@ -30,6 +29,7 @@
     <Text Include="assets\models\teapot.txt" />
     <Text Include="assets\models\torus.txt" />
     <Text Include="assets\models\video_ship.txt" />
+    <Text Include="assets\models\block.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -72,7 +72,13 @@
     <Image Include="assets\textures\mario.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\textures\barrel.png">
+    <Image Include="assets\textures\grass.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\textures\ref.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\textures\grass_border.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
