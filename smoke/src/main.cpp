@@ -42,18 +42,23 @@ struct SmokeDemo : olc::PixelGameEngine {
 
 	//simulation
 	std::list<Smoke> particles;
-	vf2d gravity{0, -120};
+	vf2d buoyancy{0, -120};
+	bool update_emitter=false;
+	bool update_physics=true;
 
+	//graphics toggles
 	bool show_sprites=true;
 	bool show_outlines=false;
 
 	bool OnUserCreate() override {
 		srand(time(0));
 
+		//"primitives" to draw with
 		prim_rect_spr=new olc::Sprite(1, 1);
 		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
 		prim_rect_dec=new olc::Decal(prim_rect_spr);
-
+		
+		//load smoke sprite
 		smoke_spr=new olc::Sprite("assets/smoke.png");
 		smoke_dec=new olc::Decal(smoke_spr);
 
@@ -78,15 +83,16 @@ struct SmokeDemo : olc::PixelGameEngine {
 		prev_mouse_pos=mouse_pos;
 		mouse_pos=GetMousePos();
 
-		const auto add_action=GetMouse(olc::Mouse::LEFT);
-		if(add_action.bPressed) {
+		const auto emit_action=GetMouse(olc::Mouse::LEFT);
+		bool emit_rainbow=GetMouse(olc::Mouse::RIGHT).bHeld;
+		if(emit_action.bPressed||emit_rainbow) {
 			//randomize col each click
 			emitter_col.r=rand()%255;
 			emitter_col.g=rand()%255;
 			emitter_col.b=rand()%255;
 		}
 		//add particles at mouse
-		if(add_action.bHeld) {
+		if(emit_action.bHeld||emit_rainbow) {
 			vf2d sub=mouse_pos-emitter_pos;
 			float dist=sub.mag();
 			vf2d dir=sub/dist;
@@ -96,30 +102,59 @@ struct SmokeDemo : olc::PixelGameEngine {
 			float rot_vel=random(-1.5f, 1.5f);
 			float size=random(10, 20);
 			float size_vel=random(15, 25);
-			Smoke s(emitter_pos, vel, rot, rot_vel, size, size_vel, emitter_col);
-			particles.push_back(s);
+			particles.push_back(Smoke(emitter_pos, vel, emitter_col, rot, rot_vel, size, size_vel));
+		}
+
+		if(GetMouse(olc::Mouse::MIDDLE).bPressed) {
+			//randomize col each click
+			olc::Pixel debris_col(
+				rand()%255,
+				rand()%255,
+				rand()%255
+			);
+			olc::Pixel smoke_col(
+				rand()%255,
+				rand()%255,
+				rand()%255
+			);
+			//spawn a random number
+			int num=20+rand()%20;
+			for(int i=0; i<num; i++) {
+				float speed=random(30, 70);
+				vf2d vel=polar(speed, random(2*Pi));
+
+				float rot=random(2*Pi);
+				float rot_vel=random(-1.5f, 1.5f);
+				float size=random(10, 20);
+				float size_vel=random(15, 25);
+				particles.push_back(Smoke(mouse_pos, vel, smoke_col, rot, rot_vel, size, size_vel));
+			}
 		}
 
 		//set emitter pos
-		if(GetKey(olc::Key::E).bPressed) emitter_pos=mouse_pos;
+		if(update_emitter) emitter_pos=mouse_pos;
 
 		//gfx toggles
+		if(GetKey(olc::Key::E).bPressed) update_emitter^=true;
 		if(GetKey(olc::Key::S).bPressed) show_sprites^=true;
 		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+		if(GetKey(olc::Key::SPACE).bPressed) update_physics^=true;
 
 		//update particles
-		for(auto& p:particles) {
-			//drag
-			p.vel*=1-.85f*dt;
-			p.rot_vel*=1-.55f*dt;
-			p.size_vel*=1-.25f*dt;
+		if(update_physics) {
+			for(auto& p:particles) {
+				//drag
+				p.vel*=1-.85f*dt;
+				p.rot_vel*=1-.55f*dt;
+				p.size_vel*=1-.25f*dt;
 
-			//kinematics
-			p.accelerate(gravity);
-			p.update(dt);
+				//kinematics
+				p.accelerate(buoyancy);
+				p.update(dt);
 
-			//aging?
-			p.life-=.25f*dt;
+				//aging?
+				p.life-=.25f*dt;
+			}
 		}
 
 		//remove offscreen particles
@@ -133,16 +168,23 @@ struct SmokeDemo : olc::PixelGameEngine {
 		Clear(olc::DARK_GREY);
 
 		//show emitter
-		FillRectDecal(emitter_pos, {4, 4}, olc::RED);
+		if(!update_emitter) {
+			float rad=4.7f;
+			vf2d norm=rad*(mouse_pos-emitter_pos).norm();
+			vf2d tang(-norm.y, norm.x);
+			DrawLineDecal(emitter_pos-norm, emitter_pos+2*norm, olc::WHITE);
+			DrawLineDecal(emitter_pos-tang, emitter_pos+tang, olc::WHITE);
+		}
 
 		//draw particles
 		const vf2d spr_sz(smoke_spr->width, smoke_spr->height);
 		for(const auto& p:particles) {
+			//to show sprite or just a box?
 			olc::Pixel fill=p.col;
 			fill.a=255*p.life;
-			//to show sprite or just a box?
 			if(show_sprites) DrawRotatedDecal(p.pos, smoke_dec, p.rot, spr_sz/2, p.size/spr_sz, fill);
 			else DrawRotatedDecal(p.pos, prim_rect_dec, p.rot, {.5f, .5f}, {p.size, p.size}, fill);
+					
 			if(show_outlines) {
 				//for each corner
 				vf2d corners[4]{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
@@ -166,6 +208,16 @@ struct SmokeDemo : olc::PixelGameEngine {
 				//draw diagonal
 				DrawLineDecal(corners[0], corners[2], outline);
 			}
+		}
+
+		//show red border to indicate physics not updating
+		if(!update_physics) {
+			float rad=4.7f;
+			FillRectDecal({0, 0}, vf2d(rad, ScreenHeight()), olc::RED);
+			FillRectDecal({0, 0}, vf2d(ScreenWidth(), rad), olc::RED);
+			vf2d btm(ScreenWidth(), ScreenHeight());
+			FillRectDecal(vf2d(0, ScreenHeight()-rad), btm, olc::RED);
+			FillRectDecal(vf2d(ScreenWidth()-rad, 0), btm, olc::RED);
 		}
 
 		return true;
