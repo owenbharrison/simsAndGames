@@ -71,6 +71,8 @@ struct VoxelGame : olc::PixelGameEngine {
 	Render render;
 	olc::Sprite* render_tex=nullptr;
 
+	std::list<vf3d> quads;
+
 	bool OnUserCreate() override {
 		srand(time(0));
 
@@ -107,7 +109,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		int x1, int y1, float u1, float v1, float w1,
 		int x2, int y2, float u2, float v2, float w2,
 		int x3, int y3, float u3, float v3, float w3,
-		olc::Sprite* s
+		olc::Pixel col//olc::Sprite*s
 	) {
 		//sort by y
 		if(y2<y1) {
@@ -188,7 +190,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					float& depth=depth_buffer[i+ScreenWidth()*j];
 					if(tex_w>depth) {
-						Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
+						Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
 						depth=tex_w;
 						u_buffer[i+ScreenWidth()*j]=tex_u;
 						v_buffer[i+ScreenWidth()*j]=tex_v;
@@ -236,7 +238,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				float& depth=depth_buffer[i+ScreenWidth()*j];
 				if(tex_w>depth) {
-					Draw(i, j, s->Sample(tex_u/tex_w, tex_v/tex_w));
+					Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
 					depth=tex_w;
 					u_buffer[i+ScreenWidth()*j]=tex_u;
 					v_buffer[i+ScreenWidth()*j]=tex_v;
@@ -279,6 +281,9 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		if(cmd=="render") {
+			Stopwatch watch;
+			watch.start();
+
 			//rerender scene
 			render.updatePos(cam_pos, cam_dir, light_pos);
 			render.resetBuffers();
@@ -295,6 +300,10 @@ struct VoxelGame : olc::PixelGameEngine {
 					));
 				}
 			}
+			
+			watch.stop();
+			auto dur=watch.getMicros();
+			std::cout<<"  took: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
 
 			return true;
 		}
@@ -305,11 +314,12 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  SHIFT    move down\n"
 				"  WASD     move camera\n"
 				"  ARROWS   look camera\n"
-				"  ENTER    set light pos\n"
+				"  L        set light pos\n"
 				"  O        toggle outlines\n"
 				"  B        depth debug view\n"
 				"  U        uv debug view\n"
 				"  N        no debug\n"
+				"  N        add quad\n"
 				"  ESC      toggle integrated console\n";
 
 			return true;
@@ -365,7 +375,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
 
 			//set light to camera
-			if(GetKey(olc::Key::ENTER).bHeld) light_pos=cam_pos;
+			if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
 			//ui toggles
 			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
@@ -374,6 +384,8 @@ struct VoxelGame : olc::PixelGameEngine {
 			if(GetKey(olc::Key::B).bPressed) debug_view=Debug::DEPTH;
 			if(GetKey(olc::Key::U).bPressed) debug_view=Debug::UV;
 			if(GetKey(olc::Key::N).bPressed) debug_view=Debug::NONE;
+
+			if(GetKey(olc::Key::Q).bPressed) quads.emplace_back(cam_pos);
 		}
 #pragma endregion
 
@@ -391,8 +403,64 @@ struct VoxelGame : olc::PixelGameEngine {
 		Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
 		Mat4 mat_view=Mat4::quickInverse(mat_cam);
 
+		std::list<Triangle> tris_to_project=model.triangles;
+		for(const auto& q:quads) {
+			float sz=.25f;
+
+			//billboarded to point at camera
+			vf3d norm=(q-cam_pos).norm();
+			vf3d up(0, 1, 0);
+			vf3d rgt=norm.cross(up).norm();
+			up=rgt.cross(norm);
+
+			//vertex positioning
+			vf3d tl=q+sz/2*rgt+sz/2*up;
+			vf3d tr=q+sz/2*rgt-sz/2*up;
+			vf3d bl=q-sz/2*rgt+sz/2*up;
+			vf3d br=q-sz/2*rgt-sz/2*up;
+
+			//tesselation
+			Triangle f1{tl, br, tr};
+			tris_to_project.emplace_back(f1);
+			Triangle f2{tl, bl, br};
+			tris_to_project.emplace_back(f2);
+		}
+		if(show_render) {
+			//camera sizing
+			float w=.5f, h=w*render.getHeight()/render.getWidth();
+			float d=w/2/std::tanf(render.getFOVRad()/2);
+
+			//camera positioning
+			vf3d pos=render.getCamPos();
+			vf3d norm=render.getCamDir();
+			vf3d up(0, 1, 0);
+			vf3d rgt=norm.cross(up).norm();
+			up=rgt.cross(norm);
+
+			//vertex positioning
+			vf3d ctr=pos+d*norm;
+			vf3d tl=ctr+w/2*rgt+h/2*up;
+			vf3d tr=ctr+w/2*rgt-h/2*up;
+			vf3d bl=ctr-w/2*rgt+h/2*up;
+			vf3d br=ctr-w/2*rgt-h/2*up;
+
+			//tesselation
+			Triangle f1{tl, tr, br};
+			tris_to_project.emplace_back(f1);
+			Triangle f2{tl, br, bl};
+			tris_to_project.emplace_back(f2);
+			Triangle s1{tl, bl, pos};
+			tris_to_project.emplace_back(s1);
+			Triangle s2{bl, br, pos};
+			tris_to_project.emplace_back(s2);
+			Triangle s3{br, tr, pos};
+			tris_to_project.emplace_back(s3);
+			Triangle s4{tr, tl, pos};
+			tris_to_project.emplace_back(s4);
+		}
+
 		std::list<Triangle> tris_to_clip;
-		for(const auto& tri:model.triangles) {
+		for(const auto& tri:tris_to_project) {
 			vf3d norm=tri.getNorm();
 
 			//is triangle pointing towards me? culling
@@ -525,7 +593,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-				model.textured?texture:white_texture
+				t.col
 			);
 		}
 		switch(debug_view) {

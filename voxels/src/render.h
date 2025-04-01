@@ -3,6 +3,9 @@
 #define RENDER_CLASS_H
 
 class Render {
+	float fov_deg=0;
+	float fov_rad=0;
+
 	int width=0, height=0;
 
 	//positioning
@@ -16,12 +19,7 @@ class Render {
 
 	void updateTransforms();
 
-	void DrawTriangle(
-		int, int, float,
-		int, int, float,
-		int, int, float,
-		olc::Pixel col
-	);
+	void DrawTriangle(const Triangle&);
 
 public:
 	//buffers
@@ -30,7 +28,10 @@ public:
 
 	Render() {}
 
-	Render(int w, int h, float fov) {
+	Render(int w, int h, float f) {
+		fov_deg=f;
+		fov_rad=fov_deg/180*Pi;
+
 		//sizing
 		width=w;
 		height=h;
@@ -42,7 +43,7 @@ public:
 
 		//setup projection matrix
 		float asp=float(height)/width;
-		mat_proj=Mat4::makeProj(fov, asp, .1f, 1000.f);
+		mat_proj=Mat4::makeProj(fov_deg, asp, .1f, 1000.f);
 		updateTransforms();
 	}
 
@@ -67,6 +68,10 @@ public:
 		return *this;
 	}
 
+	float getFOVRad() const {
+		return fov_rad;
+	}
+
 	int getWidth() const {
 		return width;
 	}
@@ -79,9 +84,17 @@ public:
 		return i+width*j;
 	}
 
+	vf3d getCamPos() const {
+		return cam_pos;
+	}
+
+	vf3d getCamDir() const {
+		return cam_dir;
+	}
+
 	void updatePos(vf3d cp, vf3d cd, vf3d lp) {
 		cam_pos=cp;
-		cam_dir=cd.norm();
+		cam_dir=cd;
 		light_pos=lp;
 
 		updateTransforms();
@@ -205,18 +218,16 @@ public:
 		}
 
 		//rasterize all triangles
-		for(const auto& tri:tris_to_draw) {
-			DrawTriangle(
-				tri.p[0].x, tri.p[0].y, tri.t[0].w,
-				tri.p[1].x, tri.p[1].y, tri.t[1].w,
-				tri.p[2].x, tri.p[2].y, tri.t[2].w,
-				tri.col
-			);
+		for(const auto& t:tris_to_draw) {
+			DrawTriangle(t);
 		}
 	}
 };
 
 void Render::copyFrom(const Render& r) {
+	fov_deg=r.fov_deg;
+	fov_rad=r.fov_rad;
+	
 	width=r.width;
 	height=r.height;
 
@@ -246,12 +257,14 @@ void Render::updateTransforms() {
 	mat_view=Mat4::quickInverse(mat_cam);
 }
 
-void Render::DrawTriangle(
-	int x1, int y1, float w1,
-	int x2, int y2, float w2,
-	int x3, int y3, float w3,
-	olc::Pixel col//olc::Sprite* s
-) {
+void Render::DrawTriangle(const Triangle& tri) {
+	int x1=tri.p[0].x, y1=tri.p[0].y;
+	int x2=tri.p[1].x, y2=tri.p[1].y;
+	int x3=tri.p[2].x, y3=tri.p[2].y;
+	float w1=tri.t[0].w;
+	float w2=tri.t[1].w;
+	float w3=tri.t[2].w;
+	
 	//sort by y
 	if(y2<y1) {
 		std::swap(x1, x2);
@@ -307,9 +320,9 @@ void Render::DrawTriangle(
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				int k=ix(i, j);
 				if(tex_w>depth_buffer[k]) {
-					pixels[3*k]=col.r;
-					pixels[1+3*k]=col.g;
-					pixels[2+3*k]=col.b;
+					pixels[3*k]=tri.col.r;
+					pixels[1+3*k]=tri.col.g;
+					pixels[2+3*k]=tri.col.b;
 					depth_buffer[k]=tex_w;
 				}
 				t+=t_step;
@@ -342,9 +355,9 @@ void Render::DrawTriangle(
 			tex_w=tex_sw+t*(tex_ew-tex_sw);
 			int k=ix(i, j);
 			if(tex_w>depth_buffer[k]) {
-				pixels[3*k]=col.r;
-				pixels[1+3*k]=col.g;
-				pixels[2+3*k]=col.b;
+				pixels[3*k]=tri.col.r;
+				pixels[1+3*k]=tri.col.g;
+				pixels[2+3*k]=tri.col.b;
 				depth_buffer[k]=tex_w;
 			}
 			t+=t_step;
