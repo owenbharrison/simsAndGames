@@ -27,7 +27,7 @@ Select your desired project, and press the `Start Without Debugging` or `Ctrl+F5
 A **pixelset** is an orientable 2d bitmap. This demo shows their adding, removing, slicing, moving, and springing actions.
 It also shows usage of debug views such as bounding boxes, local grids, mass & inertia, wireframes, & outlines.
 
-![](https://i.imgur.com/xu6iTKJ.gif)
+![](https://i.imgur.com/go5xaqX.gif)
 
 - The slicing uses Cohen-Sutherland segment clipping, Bresenham's line algorithm to draw air, & then floodfill/parts detection algorithm to seperate pieces.
 - The collision uses edge detection to make a list of the edge "pixels" to check against other pixelsets.
