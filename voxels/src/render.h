@@ -24,7 +24,7 @@ class Render {
 public:
 	//buffers
 	unsigned char* pixels=nullptr;
-	float* depth_buffer=nullptr;
+	float* depth=nullptr;
 
 	Render() {}
 
@@ -38,7 +38,7 @@ public:
 
 		//allocate buffers
 		pixels=new unsigned char[3*width*height];
-		depth_buffer=new float[width*height];
+		depth=new float[width*height];
 		resetBuffers();
 
 		//setup projection matrix
@@ -109,7 +109,7 @@ public:
 			pixels[2+3*i]=0;
 
 			//reset depth buffer
-			depth_buffer[i]=0;
+			depth[i]=0;
 		}
 	}
 
@@ -234,8 +234,8 @@ void Render::copyFrom(const Render& r) {
 	pixels=new unsigned char[3*width*height];
 	memcpy(pixels, r.pixels, sizeof(unsigned char)*3*width*height);
 
-	depth_buffer=new float[width*height];
-	memcpy(depth_buffer, r.depth_buffer, sizeof(float)*width*height);
+	depth=new float[width*height];
+	memcpy(depth, r.depth, sizeof(float)*width*height);
 
 	cam_pos=r.cam_pos;
 	cam_dir=r.cam_dir;
@@ -247,7 +247,7 @@ void Render::copyFrom(const Render& r) {
 
 void Render::clear() {
 	delete[] pixels;
-	delete[] depth_buffer;
+	delete[] depth;
 }
 
 void Render::updateTransforms() {
@@ -319,11 +319,11 @@ void Render::DrawTriangle(const Triangle& tri) {
 			for(int i=ax; i<bx; i++) {
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				int k=ix(i, j);
-				if(tex_w>depth_buffer[k]) {
+				if(tex_w>depth[k]) {
 					pixels[3*k]=tri.col.r;
 					pixels[1+3*k]=tri.col.g;
 					pixels[2+3*k]=tri.col.b;
-					depth_buffer[k]=tex_w;
+					depth[k]=tex_w;
 				}
 				t+=t_step;
 			}
@@ -354,11 +354,11 @@ void Render::DrawTriangle(const Triangle& tri) {
 		for(int i=ax; i<bx; i++) {
 			tex_w=tex_sw+t*(tex_ew-tex_sw);
 			int k=ix(i, j);
-			if(tex_w>depth_buffer[k]) {
+			if(tex_w>depth[k]) {
 				pixels[3*k]=tri.col.r;
 				pixels[1+3*k]=tri.col.g;
 				pixels[2+3*k]=tri.col.b;
-				depth_buffer[k]=tex_w;
+				depth[k]=tex_w;  
 			}
 			t+=t_step;
 		}

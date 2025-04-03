@@ -99,7 +99,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		white_texture=new olc::Sprite(1, 1);
 		white_texture->SetPixel(0, 0, olc::WHITE);
 
-		render=Render(128, 96, 90.f);
+		render=Render(128, 96, 75);
 		render_tex=new olc::Sprite(render.getWidth(), render.getWidth());
 
 		return true;
@@ -427,7 +427,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 		if(show_render) {
 			//camera sizing
-			float w=.5f, h=w*render.getHeight()/render.getWidth();
+			float w=.75f, h=w*render.getHeight()/render.getWidth();
 			float d=w/2/std::tanf(render.getFOVRad()/2);
 
 			//camera positioning
