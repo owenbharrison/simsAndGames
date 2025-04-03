@@ -425,7 +425,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 		if(cmd=="help") {
 			std::cout<<"useful commands:\n"
-				"  clear        clears the screen\n"
+				"  clear        clears the console\n"
 				"  reset        removes all pixelsets\n"
 				"  count        how many pixelsets are there?\n"
 				"  usage        % space used for all allocated pixelsets\n"
