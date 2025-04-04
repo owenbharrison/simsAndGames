@@ -148,17 +148,14 @@
   <ItemGroup>
     <Image Include="assets\arrow.png" />
     <Image Include="assets\background.png" />
-    <Image Include="assets\background2.png" />
-    <Image Include="assets\background3.png" />
     <Image Include="assets\boulder.png" />
-    <Image Include="assets\paris.png" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\graph.h" />
     <ClInclude Include="src\node.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Source.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="readme.txt" />

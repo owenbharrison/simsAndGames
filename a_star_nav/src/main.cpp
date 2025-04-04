@@ -6,7 +6,8 @@ impl references(photos)
 impl only show whats on screen?
 */
 
-#include "common/myPixelGameEngine.h"
+#define OLC_PGE_APPLICATION
+#include "common/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_PGEX_TRANSFORMEDVIEW
@@ -51,8 +52,8 @@ struct AABB {
 	}
 };
 
-struct AStarDemo : public MyPixelGameEngine {
-	AStarDemo() {
+struct AStarUI : olc::PixelGameEngine {
+	AStarUI() {
 		sAppName="A* Navigation";
 	}
 
@@ -76,6 +77,11 @@ struct AStarDemo : public MyPixelGameEngine {
 
 	olc::TransformedView tv;
 
+	olc::Sprite* prim_rect_spr=nullptr;
+	olc::Decal* prim_rect_dec=nullptr;
+	olc::Sprite* prim_circ_spr=nullptr;
+	olc::Decal* prim_circ_dec=nullptr;
+
 	olc::Sprite* arrow_sprite=nullptr;
 	olc::Decal* arrow_decal=nullptr;
 
@@ -88,27 +94,47 @@ struct AStarDemo : public MyPixelGameEngine {
 
 	bool show_ids=false;
 
-	bool on_init() override {
-		arrow_sprite=new olc::Sprite("assets/arrow.png");
-		arrow_decal=new olc::Decal(arrow_sprite);
-
+	bool OnUserCreate() override {
 		tv.Initialise(GetScreenSize());
 		tv.SetScaleExtents({.1f, .1f}, {100, 100});
 		tv.EnableScaleClamp(true);
+
+		//make some "primitives" to draw with
+		prim_rect_spr=new olc::Sprite(1, 1);
+		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
+		prim_rect_dec=new olc::Decal(prim_rect_spr);
+		{
+			int sz=1024;
+			prim_circ_spr=new olc::Sprite(sz, sz);
+			SetDrawTarget(prim_circ_spr);
+			Clear(olc::BLANK);
+			FillCircle(sz/2, sz/2, sz/2);
+			SetDrawTarget(nullptr);
+			prim_circ_dec=new olc::Decal(prim_circ_spr);
+		}
+
+		arrow_sprite=new olc::Sprite("assets/arrow.png");
+		arrow_decal=new olc::Decal(arrow_sprite);
 
 		ConsoleCaptureStdOut(true);
 
 		return true;
 	}
 
-	bool on_exit() override {
+	bool OnUserDestroy() override {
+		removeMarkers();
+
+		delete prim_rect_spr;
+		delete prim_rect_dec;
+		delete prim_circ_spr;
+		delete prim_circ_dec;
+
 		delete arrow_sprite;
 		delete arrow_decal;
 
 		delete background_sprite;
 		delete background_decal;
 
-		//i can intercept here to make sure user saves?
 		return true;
 	}
 
@@ -153,7 +179,7 @@ struct AStarDemo : public MyPixelGameEngine {
 	}
 #pragma endregion
 
-	bool on_update(float dt) override {
+	bool update(float dt) {
 		//USER INPUT
 		scr_mouse_pos=GetMousePos();
 		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
@@ -185,14 +211,11 @@ struct AStarDemo : public MyPixelGameEngine {
 				selecting=false;
 			}
 
-			//handle pan or drag nodes
+			//drag nodes
 			if(GetMouse(olc::Mouse::LEFT).bPressed) {
 				held_node=nullptr;
 				if(selection.size()) selection_start=wld_mouse_pos;
-				else {
-					held_node=map.getNode(wld_mouse_pos);
-					if(!held_node) tv.StartPan(scr_mouse_pos);
-				}
+				else held_node=map.getNode(wld_mouse_pos);
 			}
 			if(GetMouse(olc::Mouse::LEFT).bHeld) {
 				if(selection.size()) {
@@ -203,13 +226,18 @@ struct AStarDemo : public MyPixelGameEngine {
 				} else if(held_node) {
 					held_node->pos=wld_mouse_pos;
 					route.clear();
-				} else tv.UpdatePan(scr_mouse_pos);
+				}
 			}
 			if(GetMouse(olc::Mouse::LEFT).bReleased) {
-				if(!selection.size()) tv.EndPan(scr_mouse_pos);
 				map.seperate(held_node);
 				held_node=nullptr;
 			}
+
+			//handle panning
+			if(GetMouse(olc::Mouse::MIDDLE).bPressed) tv.StartPan(scr_mouse_pos);
+			if(GetMouse(olc::Mouse::MIDDLE).bHeld) tv.UpdatePan(scr_mouse_pos);
+			if(GetMouse(olc::Mouse::MIDDLE).bReleased) tv.EndPan(scr_mouse_pos);
+
 			//handle zoom
 			if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, GetMousePos());
 			if(GetMouseWheel()<0) tv.ZoomAtScreenPos(1/1.07f, GetMousePos());
@@ -379,19 +407,19 @@ struct AStarDemo : public MyPixelGameEngine {
 	}
 
 #pragma region RENDER HELPERS
-	void tvFillCircle(const vf2d& pos, float rad, olc::Pixel col=olc::WHITE) {
-		vf2d offset(rad, rad);
-		auto c=getCircleDecal();
-		tv.DrawDecal(pos-offset, c, {2*rad/c->sprite->width, 2*rad/c->sprite->height}, col);
+	void tvDrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
+		olc::vf2d sub=b-a;
+		float len=sub.mag();
+		olc::vf2d tang=sub.perp()/len;
+
+		float angle=std::atan2f(sub.y, sub.x);
+		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void tvDrawThickLine(const vf2d& a, const vf2d& b, float rad, olc::Pixel col=olc::WHITE) {
-		vf2d sub=b-a;
-		float len=sub.mag();
-		vf2d tang=sub.perp()/len;
-
-		float angle=atan2f(sub.y, sub.x);
-		tv.DrawRotatedDecal(a-rad*tang, getRectDecal(), angle, {0, 0}, {len, 2*rad}, col);
+	void tvFillCircle(const olc::vf2d& pos, float rad, olc::Pixel col) {
+		olc::vf2d offset(rad, rad);
+		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+		tv.DrawDecal(pos-offset, prim_circ_dec, scale, col);
 	}
 
 	void tvDrawArrow(const vf2d pos, float angle, float rad, olc::Pixel col) {
@@ -404,7 +432,7 @@ struct AStarDemo : public MyPixelGameEngine {
 	}
 #pragma endregion
 
-	bool on_render() override {
+	bool render() {
 		Clear(olc::Pixel(0, 100, 255));
 		if(show_background) tv.DrawDecal({0, 0}, background_decal);
 
@@ -460,7 +488,7 @@ struct AStarDemo : public MyPixelGameEngine {
 		for(const auto& n:map.nodes) {
 			for(const auto& l:n->links) {
 				float rad=.5f*(n->rad+l->rad);
-				tvDrawThickLine(n->pos, l->pos, rad);
+				tvDrawThickLine(n->pos, l->pos, rad, olc::WHITE);
 			}
 		}
 
@@ -549,11 +577,20 @@ struct AStarDemo : public MyPixelGameEngine {
 
 		return true;
 	}
+
+	bool OnUserUpdate(float dt) override {
+		update(dt);
+
+		render();
+
+		return true;
+	}
 };
 
 int main() {
-	AStarDemo asd;//vsync window
-	if(asd.Construct(800, 600, 1, 1, false, true)) asd.Start();
+	AStarUI asui;
+	bool vsync=true;
+	if(asui.Construct(800, 600, 1, 1, false, vsync)) asui.Start();
 
 	return 0;
 }

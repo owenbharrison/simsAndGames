@@ -28,16 +28,7 @@
     <Image Include="assets\background.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\background2.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\background3.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\boulder.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\paris.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
@@ -50,7 +41,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp">
+    <ClCompile Include="src\Source.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
