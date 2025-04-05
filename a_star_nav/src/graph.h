@@ -3,6 +3,7 @@
 #define GRAPH_CLASS_H
 
 #include "node.h"
+
 #include <list>
 #include <string>
 #include <fstream>
@@ -140,7 +141,7 @@ struct Graph {
 
 				//find closest point on segment
 				auto pa=pos-n->pos, ba=l->pos-n->pos;
-				float t=clamp(pa.dot(ba)/ba.dot(ba), 0, 1);
+				float t=cmn::clamp(pa.dot(ba)/ba.dot(ba), 0.f, 1.f);
 				vf2d close_pt=n->pos+t*ba;
 
 				float rad=.5f*(n->rad+l->rad);

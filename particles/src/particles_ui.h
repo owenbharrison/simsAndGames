@@ -2,13 +2,9 @@
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
 
-#include "aabb.h"
-
-#include "particle.h"
-
 #include "solver.h"
 
-#include "stopwatch.h"
+#include "common/stopwatch.h"
 
 #include "chart.h"
 
@@ -137,14 +133,14 @@ struct ParticlesUI : olc::PixelGameEngine {
 		//add random particles in radius around mouse
 		adding=GetMouse(olc::Mouse::LEFT).bHeld;
 		if(adding) {
-			float pos_rad=random(0, selection_radius);
-			vf2d offset=polar(pos_rad, random(2*Pi));
+			float pos_rad=cmn::random(selection_radius);
+			vf2d offset=cmn::polar(pos_rad, cmn::random(2*cmn::Pi));
 
 			//random size and color
-			float ptc_rad=random(5, 10);
-			float speed=dt*random(20);
+			float ptc_rad=cmn::random(5, 10);
+			float speed=dt*cmn::random(20);
 			Particle temp(mouse_pos+offset, ptc_rad);
-			temp.oldpos-=polar(speed, random(2*Pi));
+			temp.oldpos-=cmn::polar(speed, cmn::random(2*cmn::Pi));
 
 			const auto& p=solver.addParticle(temp);
 			if(p) p->id=rand()%7;
@@ -157,7 +153,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 		}
 		if(bulk_action.bReleased) {
 			if(bulk_start) {
-				AABB box;
+				cmn::AABB box;
 				box.fitToEnclose(*bulk_start);
 				box.fitToEnclose(mouse_pos);
 				float max_rad=7;
@@ -167,7 +163,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 					float x=map(i, 0, num_x-1, box.min.x, box.max.x);
 					for(int j=0; j<num_y; j++) {
 						float y=map(j, 0, num_y-1, box.min.y, box.max.y);
-						Particle temp({x, y}, random(4, max_rad));
+						Particle temp({x, y}, cmn::random(4, max_rad));
 
 						const auto& p=solver.addParticle(temp);
 						if(p) p->id=rand()%7;
@@ -253,7 +249,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 		handleUserInput(dt);
 
-		Stopwatch physics_watch;
+		cmn::Stopwatch physics_watch;
 		if(to_time) physics_watch.start();
 
 		int phys_checks=handlePhysics(dt);
@@ -313,7 +309,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 		//show bulk action
 		if(bulk_start) {
-			AABB box;
+			cmn::AABB box;
 			box.fitToEnclose(*bulk_start);
 			box.fitToEnclose(mouse_pos);
 			vf2d tr(box.max.x, box.min.y);
@@ -441,7 +437,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 		update(dt);
 
-		Stopwatch render_watch;
+		cmn::Stopwatch render_watch;
 		if(to_time) render_watch.start();
 
 		render(dt);

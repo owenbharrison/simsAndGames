@@ -17,40 +17,14 @@ using olc::vf2d;
 #include <fstream>
 #include <sstream>
 
-float random(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
-}
-
-float clamp(float x, float a, float b) {
-	if(x<a) return a;
-	if(x>b) return b;
-	return x;
-}
+#include "common/utils.h"
 
 #include "graph.h"
 
-struct AABB {
-	vf2d min{INFINITY, INFINITY}, max=-min;
-
-	vf2d getCenter() const {
-		return (min+max)/2;
-	}
-
-	void fitToEnclose(const vf2d& v) {
-		if(v.x<min.x) min.x=v.x;
-		if(v.y<min.y) min.y=v.y;
-		if(v.x>max.x) max.x=v.x;
-		if(v.y>max.y) max.y=v.y;
-	}
-
-	bool contains(const vf2d& v) const {
-		if(v.x<min.x||v.x>max.x) return false;
-		if(v.y<min.y||v.y>max.y) return false;
-		return true;
-	}
-};
+#include "common/aabb.h"
+namespace cmn {
+	using AABB=AABB_generic<vf2d>;
+}
 
 struct AStarUI : olc::PixelGameEngine {
 	AStarUI() {
@@ -154,7 +128,7 @@ struct AStarUI : olc::PixelGameEngine {
 	void zoomToFit() {
 		if(map.nodes.size()>1) {
 			const unsigned int margin=50;
-			AABB bounds;
+			cmn::AABB bounds;
 			for(const auto& n:map.nodes) {
 				bounds.fitToEnclose(n->pos);
 			}
@@ -200,7 +174,7 @@ struct AStarUI : olc::PixelGameEngine {
 				selection_start=wld_mouse_pos;
 			}
 			if(GetMouse(olc::Mouse::RIGHT).bReleased) {
-				AABB box;
+				cmn::AABB box;
 				box.fitToEnclose(selection_start);
 				box.fitToEnclose(wld_mouse_pos);
 				for(const auto& n:map.nodes) {
@@ -461,7 +435,7 @@ struct AStarUI : olc::PixelGameEngine {
 
 		//show selection box
 		if(selecting) {
-			AABB box;
+			cmn::AABB box;
 			box.fitToEnclose(selection_start);
 			box.fitToEnclose(wld_mouse_pos);
 

@@ -11,11 +11,11 @@ class Chart {
 public:
 	float* values=nullptr;
 
-	AABB bounds;
+	cmn::AABB bounds;
 
 	Chart() {}
 
-	Chart(int m, const AABB& b) : max_num(m) {
+	Chart(int m, const cmn::AABB& b) : max_num(m) {
 		values=new float[max_num];
 		bounds=b;
 	}

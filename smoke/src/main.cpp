@@ -4,21 +4,11 @@ using olc::vf2d;
 
 #include "smoke.h"
 
-constexpr float Pi=3.1415927f;
-
-//clever default param placement:
-//random()=0-1
-//random(a)=0-a
-//random(a, b)=a-b
-float random(const float& b=1, const float& a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
-}
-
-//polar to cartesian helper
-vf2d polar(const float& rad, const float& angle) {
-	return {rad*std::cosf(angle), rad*std::sinf(angle)};
+#include "common/utils.h"
+namespace cmn {
+	vf2d polar(float rad, float angle) {
+		return polar_generic<vf2d>(rad, angle);
+	}
 }
 
 struct SmokeDemo : olc::PixelGameEngine {
@@ -96,12 +86,12 @@ struct SmokeDemo : olc::PixelGameEngine {
 			vf2d sub=mouse_pos-emitter_pos;
 			float dist=sub.mag();
 			vf2d dir=sub/dist;
-			float speed=std::max(0.f, dist+random(-100, 100));
+			float speed=std::max(0.f, dist+cmn::random(-100, 100));
 			vf2d vel=speed*dir;
-			float rot=random(2*Pi);
-			float rot_vel=random(-1.5f, 1.5f);
-			float size=random(10, 20);
-			float size_vel=random(15, 25);
+			float rot=cmn::random(2*cmn::Pi);
+			float rot_vel=cmn::random(-1.5f, 1.5f);
+			float size=cmn::random(10, 20);
+			float size_vel=cmn::random(15, 25);
 			particles.push_back(Smoke(emitter_pos, vel, emitter_col, rot, rot_vel, size, size_vel));
 		}
 
@@ -120,13 +110,13 @@ struct SmokeDemo : olc::PixelGameEngine {
 			//spawn a random number
 			int num=20+rand()%20;
 			for(int i=0; i<num; i++) {
-				float speed=random(30, 70);
-				vf2d vel=polar(speed, random(2*Pi));
+				float speed=cmn::random(30, 70);
+				vf2d vel=cmn::polar(speed, cmn::random(2*cmn::Pi));
 
-				float rot=random(2*Pi);
-				float rot_vel=random(-1.5f, 1.5f);
-				float size=random(10, 20);
-				float size_vel=random(15, 25);
+				float rot=cmn::random(2*cmn::Pi);
+				float rot_vel=cmn::random(-1.5f, 1.5f);
+				float size=cmn::random(10, 20);
+				float size_vel=cmn::random(15, 25);
 				particles.push_back(Smoke(mouse_pos, vel, smoke_col, rot, rot_vel, size, size_vel));
 			}
 		}

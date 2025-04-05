@@ -5,17 +5,11 @@ using olc::vi2d;
 
 #include <stack>
 
-static constexpr float Pi=3.1415927f;
-
-float clamp(const float& x, const float& a, const float& b) {
-	if(x<a) return a;
-	if(x>b) return b;
-	return x;
-}
-
-float map(const float& x, const float& a, const float& b, const float& c, const float& d) {
-	float t=(x-a)/(b-a);
-	return c+t*(d-c);
+#include "common/utils.h"
+namespace cmn {
+	vf2d polar(float rad, float angle) {
+		return polar_generic<vf2d>(rad, angle);
+	}
 }
 
 struct Example : olc::PixelGameEngine {
@@ -50,7 +44,7 @@ struct Example : olc::PixelGameEngine {
 	float player_rot=0;
 	vf2d player_dir;
 	const float player_rad=6;
-	float player_fov=Pi*105/180;
+	float player_fov=105*cmn::Pi/180;
 
 	vf2d light_pos;
 	bool hover_light=true;
@@ -171,8 +165,8 @@ struct Example : olc::PixelGameEngine {
 
 				//find close edge point
 				vf2d close_pt(
-				clamp(pos.x, cell_size*i, cell_size*(i+1)),
-				clamp(pos.y, cell_size*j, cell_size*(j+1))
+					cmn::clamp(pos.x, cell_size*i, cell_size*(i+1)),
+					cmn::clamp(pos.y, cell_size*j, cell_size*(j+1))
 				);
 				vf2d sub=pos-close_pt;
 				float mag=sub.mag();
@@ -194,8 +188,8 @@ struct Example : olc::PixelGameEngine {
 
 		//find hypot scale factors
 		vf2d hypot(
-		std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
-		std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
+			std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
+			std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
 		);
 
 		//which way am i going
@@ -236,8 +230,7 @@ struct Example : olc::PixelGameEngine {
 		mouse_pos=GetMousePos();
 
 		//player "update"
-		player_dir.x=std::cosf(player_rot);
-		player_dir.y=std::sinf(player_rot);
+		player_dir=cmn::polar(1, player_rot);
 
 		//where is mouse in grid?
 		mi=mouse_pos.x/cell_size;
@@ -324,8 +317,8 @@ struct Example : olc::PixelGameEngine {
 		//draw circles of decreasing brightness eminating from light_pos
 		const int num=25;
 		for(int i=0; i<num; i++) {
-			float rad=map(i, 0, num-1, 250, 5);
-			float shade=map(i, 0, num-1, 0, 1);
+			float rad=cmn::map(i, 0, num-1, 250, 5);
+			float shade=cmn::map(i, 0, num-1, 0, 1);
 			FillCircleDecal(light_pos, rad, olc::PixelF(shade, shade, shade));
 		}
 	}
@@ -338,7 +331,7 @@ struct Example : olc::PixelGameEngine {
 	void renderShadows() {
 		//draw previous section
 		std::vector<vf2d> shadow;
-		auto triangulate=[this, &shadow]() {
+		auto triangulate=[this, &shadow] () {
 			for(int i=3; i<shadow.size(); i+=2) {
 				FillTriangleDecal(shadow[i-3], shadow[i-2], shadow[i-1], olc::BLACK);
 				FillTriangleDecal(shadow[i-2], shadow[i-1], shadow[i], olc::BLACK);
@@ -350,8 +343,7 @@ struct Example : olc::PixelGameEngine {
 		const int num_shadows=256;
 		for(int i=0; i<=num_shadows; i++) {
 			const vf2d orig=light_pos/cell_size;
-			float angle=2*Pi*i/num_shadows;
-			vf2d dir(std::cosf(angle), std::sinf(angle));
+			vf2d dir=cmn::polar(1, 2*cmn::Pi*i/num_shadows);
 			float dist=traceRay(orig, dir);
 			if(dist>0) {
 				//point on cell
@@ -366,7 +358,7 @@ struct Example : olc::PixelGameEngine {
 			//if we hit a gap:
 			triangulate();
 		}
-		
+
 		//could be fragmented due to initial angle
 		triangulate();
 	}
@@ -380,7 +372,7 @@ struct Example : olc::PixelGameEngine {
 			float angle01=i/(num_fov-1.f);
 			float angle55=angle01-.5f;
 			float angle=player_rot+player_fov*angle55;
-			vf2d dir(std::cosf(angle), std::sinf(angle));
+			vf2d dir=cmn::polar(1, angle);
 
 			//trace ray
 			float dist=traceRay(player_pos/cell_size, dir);
@@ -550,7 +542,7 @@ struct Example : olc::PixelGameEngine {
 		update(dt);
 
 		render(dt);
-		
+
 		return true;
 	}
 };

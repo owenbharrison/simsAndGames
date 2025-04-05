@@ -6,12 +6,7 @@ using olc::vf2d;
 
 #include "fluid.h"
 
-float map(float x, float a, float b, float c, float d) {
-	float t=(x-a)/(b-a);
-	return c+t*(d-c);
-}
-
-constexpr float Pi=3.1415927f;
+#include "common/utils.h"
 
 struct FluidUI : olc::PixelGameEngine {
 	FluidUI() {
@@ -99,8 +94,8 @@ struct FluidUI : olc::PixelGameEngine {
 
 		//change obstacle position
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
-			int x=map(GetMouseX(), 0, ScreenWidth(), 0, fluid.num_x);
-			int y=map(GetMouseY(), 0, ScreenHeight(), 0, fluid.num_y);
+			int x=cmn::map(GetMouseX(), 0, ScreenWidth(), 0, fluid.num_x);
+			int y=cmn::map(GetMouseY(), 0, ScreenHeight(), 0, fluid.num_y);
 			setObstacle(x, y, fluid.num_x/8);
 		}
 
@@ -132,19 +127,19 @@ struct FluidUI : olc::PixelGameEngine {
 
 		//show each cell as rectangle
 		for(size_t i=0; i<fluid.num_x; i++) {
-			float x=map(i, 0, fluid.num_x, 0, ScreenWidth());
+			float x=cmn::map(i, 0, fluid.num_x, 0, ScreenWidth());
 			for(size_t j=0; j<fluid.num_y; j++) {
 				if(fluid.solid[fluid.ix(i, j)]) continue;
 
-				float y=map(j, 0, fluid.num_y, 0, ScreenHeight());
+				float y=cmn::map(j, 0, fluid.num_y, 0, ScreenHeight());
 				olc::Pixel col;
 				if(show_pressure) {
 					//scientific coloring for pressure
 					float p=fluid.pressure[fluid.ix(i, j)];
-					float angle=map(p, p_min, p_max, 0, 2*Pi);
+					float angle=cmn::map(p, p_min, p_max, 0, 2*cmn::Pi);
 					float r=.5f+.5f*std::cosf(angle);
-					float g=.5f+.5f*std::cosf(angle-2*Pi/3);
-					float b=.5f+.5f*std::cosf(angle+2*Pi/3);
+					float g=.5f+.5f*std::cosf(angle-2*cmn::Pi/3);
+					float b=.5f+.5f*std::cosf(angle+2*cmn::Pi/3);
 					col=olc::PixelF(r, g, b);
 				} else {
 					//grayscale for smoke values
@@ -171,10 +166,10 @@ struct FluidUI : olc::PixelGameEngine {
 						xh+=dt*u, yh+=dt*v;
 
 						//map h values to screen values...
-						float x=map(fluid.h1*xh, 0, fluid.num_x, 0, ScreenWidth());
-						float y=map(fluid.h1*yh, 0, fluid.num_y, 0, ScreenHeight());
-						float px=map(fluid.h1*pxh, 0, fluid.num_x, 0, ScreenWidth());
-						float py=map(fluid.h1*pyh, 0, fluid.num_y, 0, ScreenHeight());
+						float x=cmn::map(fluid.h1*xh, 0, fluid.num_x, 0, ScreenWidth());
+						float y=cmn::map(fluid.h1*yh, 0, fluid.num_y, 0, ScreenHeight());
+						float px=cmn::map(fluid.h1*pxh, 0, fluid.num_x, 0, ScreenWidth());
+						float py=cmn::map(fluid.h1*pyh, 0, fluid.num_y, 0, ScreenHeight());
 						DrawLineDecal({x, y}, {px, py}, olc::BLUE);
 					}
 				}

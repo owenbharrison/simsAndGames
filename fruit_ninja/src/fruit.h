@@ -2,37 +2,22 @@
 #ifndef FRUIT_CLASS_H
 #define FRUIT_CLASS_H
 
-#include "aabb.h"
+#include "common/aabb.h"
+#include "common/utils.h"
+namespace cmn {
+	using AABB=AABB_generic<vf2d>;
 
-constexpr float Pi=3.1415927f;
+	vf2d polar(float rad, float angle) {
+		return polar_generic<vf2d>(rad, angle);
+	}
 
-//clever default param placement:
-//random()=0-1
-//random(a)=0-a
-//random(a, b)=a-b
-float random(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
+	vf2d lineLineIntersection(
+		const vf2d& a, const vf2d& b,
+		const vf2d& c, const vf2d& d) {
+		return lineLineIntersection_generic(a, b, c, d);
+	}
 }
 
-//thanks wikipedia + pattern recognition
-vf2d lineLineIntersection(
-	const vf2d& a, const vf2d& b,
-	const vf2d& c, const vf2d& d) {
-	vf2d ab=a-b, ac=a-c, cd=c-d;
-	return vf2d(
-		ac.cross(cd),
-		ac.cross(ab)
-	)/ab.cross(cd);
-}
-
-vf2d polar(float rad, float angle) {
-	return {
-		rad* std::cosf(angle),
-		rad* std::sinf(angle)
-	};
-}
 
 class Fruit {
 	int num_pts=0;
@@ -68,8 +53,8 @@ public:
 	Fruit(vf2d p, float r, int n, olc::Pixel c) : Fruit(n) {
 		pos=p;
 		for(int i=0; i<num_pts; i++) {
-			float angle=2*Pi*i/num_pts;
-			pts[i]=polar(r, angle);
+			float angle=2*cmn::Pi*i/num_pts;
+			pts[i]=cmn::polar(r, angle);
 		}
 
 		col=c;
@@ -78,7 +63,7 @@ public:
 	}
 
 	//make a rect
-	Fruit(const AABB& a, olc::Pixel c) : num_pts(4), pos(a.getCenter()), col(c) {
+	Fruit(const cmn::AABB& a, olc::Pixel c) : num_pts(4), pos(a.getCenter()), col(c) {
 		pts=new vf2d[4];
 		pts[0]=a.min;
 		pts[1]={a.max.x, a.min.y};
@@ -92,7 +77,7 @@ public:
 		pts=new vf2d[num_pts];
 
 		//find bounds of shape and copy over
-		AABB box;
+		cmn::AABB box;
 		for(int i=0; i<num_pts; i++) {
 			const auto& p=points[i];
 			pts[i]=p;
@@ -162,8 +147,8 @@ public:
 		return sum;
 	}
 
-	AABB getAABB() const {
-		AABB box;
+	cmn::AABB getAABB() const {
+		cmn::AABB box;
 		for(int i=0; i<num_pts; i++) {
 			box.fitToEnclose(localToWorld(pts[i]));
 		}
@@ -179,15 +164,15 @@ public:
 		p=worldToLocal(p);
 
 		//deterministic, but removes artifacting
-		float angle=random(2*Pi);
-		vf2d dir=polar(1, angle);
+		float angle=cmn::random(2*cmn::Pi);
+		vf2d dir=cmn::polar(1, angle);
 
 		//for every edge...
 		int num=0;
 		for(int i=0; i<num_pts; i++) {
 			const auto& a=pts[i];
 			const auto& b=pts[(i+1)%num_pts];
-			vf2d tu=lineLineIntersection(a, b, p, p+dir);
+			vf2d tu=cmn::lineLineIntersection(a, b, p, p+dir);
 			if(tu.x>0&&tu.x<1&&tu.y>0) num++;
 		}
 
@@ -198,7 +183,7 @@ public:
 	//precompute cos and sin
 	//this makes things a lot faster
 	void updateRot() {
-		cossin=polar(1, rot);
+		cossin=cmn::polar(1, rot);
 	}
 
 	void applyForce(const vf2d& f) {
@@ -219,7 +204,7 @@ public:
 
 	bool slice(const std::vector<vf2d>& slice_ref, Fruit& left, Fruit& right) {
 		//bounding box optimization
-		AABB slice_box;
+		cmn::AABB slice_box;
 		for(const auto& s:slice_ref) {
 			slice_box.fitToEnclose(s);
 		}
@@ -241,7 +226,7 @@ public:
 				const auto& f0=pts[j];
 				const auto& f1=pts[(j+1)%num_pts];
 				//find segment intersection
-				vf2d tu=lineLineIntersection(f0, f1, s0, s1);
+				vf2d tu=cmn::lineLineIntersection(f0, f1, s0, s1);
 				if(tu.x>0&&tu.x<1&&tu.y>0&&tu.y<1) {
 					//find point
 					vf2d ix=f0+tu.x*(f1-f0);

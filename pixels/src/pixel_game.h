@@ -56,16 +56,16 @@ struct PixelGame : olc::PixelGameEngine {
 	//place pixelsets such that their bounds lie inside the screen
 	void placeAllRandomly() {
 		for(const auto& p:pixelsets) {
-			p->rot=random(2*Pi);
+			p->rot=cmn::random(2*cmn::Pi);
 			p->old_rot=p->rot;
 
 			//aabb needs cossin
 			p->updateRot();
-			AABB box=p->getAABB();
+			cmn::AABB box=p->getAABB();
 
 			//easier to just offset based on where it already is
-			p->pos.x+=random(-box.min.x, ScreenWidth()-box.max.x);
-			p->pos.y+=random(-box.min.y, ScreenHeight()-box.max.y);
+			p->pos.x+=cmn::random(-box.min.x, ScreenWidth()-box.max.x);
+			p->pos.y+=cmn::random(-box.min.y, ScreenHeight()-box.max.y);
 
 			//reset vel
 			p->old_pos=p->pos;
@@ -138,11 +138,11 @@ struct PixelGame : olc::PixelGameEngine {
 		}
 
 		{//make triangle
-			float rad=random(120, 240);
+			float rad=cmn::random(120, 240);
 			std::vector<vf2d> pts;
 			for(int i=0; i<3; i++) {
-				float angle=2*Pi*i/3;
-				pts.emplace_back(polar(rad, angle));
+				float angle=2*cmn::Pi*i/3;
+				pts.emplace_back(cmn::polar(rad, angle));
 			}
 
 			PixelSet* thing=new PixelSet(PixelSet::fromPolygon(pts, 10));
@@ -396,9 +396,9 @@ struct PixelGame : olc::PixelGameEngine {
 
 		if(cmd=="keybinds") {
 			std::cout<<"useful keybinds:\n"
-				"  A      drag while making a shape to add a new pixelset\n"
+				"  A      drag polygon to add new pixelset\n"
 				"  S      drag to slice thru pixelsets\n"
-				"  X      delete pixelset\n"
+				"  X      remove pixelset\n"
 				"  R      place all pixelsets randomly\n"
 				"  B      toggle bounding box view\n"
 				"  W      toggle wireframe view\n"
@@ -429,7 +429,7 @@ struct PixelGame : olc::PixelGameEngine {
 				"  reset        removes all pixelsets\n"
 				"  count        how many pixelsets are there?\n"
 				"  usage        % space used for all allocated pixelsets\n"
-				"  time         times immediate next update and render loop\n"
+				"  time         times next update and render loop\n"
 				"  cast         casts ray from chosen position to mouse\n"
 				"  export       exports pixelsets to specified file\n"
 				"  import       imports pixelsets from specified file\n"
@@ -554,7 +554,7 @@ struct PixelGame : olc::PixelGameEngine {
 			//ensure its a polygon
 			if(addition.size()>=3) {
 				//choose random scale
-				float scale=random(1, 10);
+				float scale=cmn::random(1, 10);
 				PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, scale));
 
 				pixelsets.emplace_back(thing);
@@ -753,7 +753,7 @@ struct PixelGame : olc::PixelGameEngine {
 		//draw rectangle bounding box
 		if(show_bounds) {
 			//color if it overlaps
-			AABB box=p.getAABB();
+			cmn::AABB box=p.getAABB();
 			olc::Pixel col=olc::GREEN;
 			for(const auto& o:pixelsets) {
 				//dont check self

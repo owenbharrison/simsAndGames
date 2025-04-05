@@ -22,7 +22,6 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\aabb.h" />
     <ClInclude Include="src\fruit.h" />
     <ClInclude Include="src\particles.h" />
   </ItemGroup>

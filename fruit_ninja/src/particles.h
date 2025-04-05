@@ -7,7 +7,6 @@ struct Particle {
 protected:
 	int id=0;
 
-	virtual void setID()=0;
 public:
 	vf2d pos, vel, acc;
 	float lifespan=0, age=0;
@@ -55,12 +54,7 @@ public:
 };
 
 //string and rotation
-class Message : public Particle {
-	void setID() override {
-		id=MESSAGE;
-	}
-
-public:
+struct Message : Particle {
 	std::string msg;
 	float rot=0, rot_vel=0;
 
@@ -69,7 +63,7 @@ public:
 	Message(vf2d p, vf2d v, olc::Pixel c, float l, const std::string& m, float r) : Particle(p, v, c, l) {
 		msg=m;
 		rot_vel=r;
-		setID();
+		id=MESSAGE;
 	}
 
 	void update(float dt) override {
@@ -83,19 +77,14 @@ public:
 };
 
 //this just has a radius
-class Splatter : public Particle {
-	void setID() override {
-		id=SPLATTER;
-	}
-
-public:
+struct Splatter : Particle {
 	float rad=0;
 
 	Splatter()=default;
 
 	Splatter(vf2d p, vf2d v, olc::Pixel c, float l, float r) : Particle(p, v, c, l) {
 		rad=r;
-		setID();
+		id=SPLATTER;
 	}
 };
 

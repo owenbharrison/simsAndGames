@@ -2,26 +2,21 @@
 #ifndef SOLVER_CLASS_H
 #define SOLVER_CLASS_H
 
-#include "aabb.h"
+#include "common/aabb.h"
+#include "common/utils.h"
+namespace cmn {
+	using AABB=AABB_generic<vf2d>;
+
+	vf2d polar(float angle, float length) {
+		return polar_generic<vf2d>(angle, length);
+	}
+}
 
 #include "particle.h"
 
 #include <list>
 #include <vector>
 
-//clever default param placement:
-//random()=0-1
-//random(a)=0-a
-//random(a, b)=a-b
-float random(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
-}
-
-vf2d polar(float rad, float angle) {
-	return {rad*std::cosf(angle), rad*std::sinf(angle)};
-}
 
 vf2d reflect(const vf2d& in, const vf2d& norm) {
 	return in-2*norm.dot(in)*norm;
@@ -44,7 +39,7 @@ class Solver {
 public:
 	std::vector<Particle> particles;
 
-	AABB bounds;
+	cmn::AABB bounds;
 
 	Solver() {
 		reallocateCells();
@@ -145,7 +140,7 @@ public:
 
 			//dont divide by 0
 			vf2d norm;
-			if(dist<1e-6f) norm=polar(1, random(2*Pi));
+			if(dist<1e-6f) norm=cmn::polar(1, cmn::random(2*cmn::Pi));
 			else norm=sub/dist;
 
 			float inv_sum=a.inv_mass+b.inv_mass;

@@ -6,34 +6,11 @@ using olc::vf2d;
 
 #include "message_effect.h"
 
-float map(float x, float a, float b, float c, float d) {
-	float t=(x-a)/(b-a);
-	return c+t*(d-c);
-}
-
-float clamp(float x, float a, float b) {
-	if(x<a) return a;
-	if(x>b) return b;
-	return x;
-}
-
-constexpr float Pi=3.1415927f;
-
-//clever default param placement:
-//random()=0-1
-//random(a)=0-a
-//random(a, b)=a-b
-float random(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
-}
-
-vf2d polar(float rad, float angle) {
-	return {
-		rad*std::cosf(angle),
-		rad*std::sinf(angle)
-	};
+#include "common/utils.h"
+namespace cmn{
+	vf2d polar(float rad, float angle) {
+		return polar_generic<vf2d>(rad, angle);
+	}
 }
 
 struct WordleUI : olc::PixelGameEngine {
@@ -93,16 +70,16 @@ struct WordleUI : olc::PixelGameEngine {
 
 	void addEffect(std::string msg, olc::Pixel col, vf2d pos) {
 		//random velocities
-		float angle=random(2*Pi);
-		float speed=random(25, 50);
-		vf2d vel=polar(speed, angle);
-		float rot_vel=random(-Pi, Pi);
+		float angle=cmn::random(2*cmn::Pi);
+		float speed=cmn::random(25, 50);
+		vf2d vel=cmn::polar(speed, angle);
+		float rot_vel=cmn::random(-cmn::Pi, cmn::Pi);
 
 		//random size
-		float scl=random(5, 10);
+		float scl=cmn::random(5, 10);
 
 		//random time
-		float lifespan=random(3, 5);
+		float lifespan=cmn::random(3, 5);
 		msg_fx.emplace_back(msg, col, pos, vel, rot_vel, scl, lifespan);
 	}
 
@@ -235,7 +212,7 @@ struct WordleUI : olc::PixelGameEngine {
 			vf2d offset(4*m.msg.length(), 4);
 			float t=1-m.age/m.lifespan;
 			olc::Pixel fill=m.col;
-			fill.a=255*clamp(t, 0, 1);
+			fill.a=255*cmn::clamp(t, 0.f, 1.f);
 			DrawRotatedStringDecal(m.pos, m.msg, m.rot, offset, fill, {m.scl, m.scl});
 		}
 

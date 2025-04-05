@@ -20,13 +20,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\stopwatch.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\particle.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\aabb.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\solver.h">

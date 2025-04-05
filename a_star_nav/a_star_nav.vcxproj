@@ -139,11 +139,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="boulder.nav" />
-    <None Include="cloverleaf.nav" />
-    <None Include="cloverleaf2.nav" />
-    <None Include="map.nav" />
-    <None Include="roundabout.nav" />
+    <None Include="assets\boulder.nav" />
+    <None Include="assets\cloverleaf.nav" />
+    <None Include="assets\cloverleaf2.nav" />
+    <None Include="assets\map.nav" />
+    <None Include="assets\roundabout.nav" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\arrow.png" />
@@ -155,10 +155,10 @@
     <ClInclude Include="src\node.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Source.cpp" />
+    <Text Include="assets\readme.txt" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="readme.txt" />
+    <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

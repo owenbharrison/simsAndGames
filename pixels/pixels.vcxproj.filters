@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\aabb.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\pixel_set.h">
       <Filter>Header Files</Filter>
     </ClInclude>

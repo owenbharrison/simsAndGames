@@ -11,38 +11,23 @@ impl polygon to PixelSet
 
 typedef unsigned char byte;
 
-#include "aabb.h"
+#include "common/aabb.h"
+#include "common/utils.h"
+namespace cmn {
+	using AABB=AABB_generic<vf2d>;
+
+	vf2d polar(float rad, float angle) {
+		return polar_generic<vf2d>(rad, angle);
+	}
+
+	vf2d lineLineIntersection(
+		const vf2d& a, const vf2d& b,
+		const vf2d& c, const vf2d& d) {
+		return lineLineIntersection_generic(a, b, c, d);
+	}
+}
 
 #include <stack>
-
-//clever default param placement:
-//random()=0-1
-//random(a)=0-a
-//random(a, b)=a-b
-float random(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
-}
-
-constexpr float Pi=3.1415927f;
-
-//polar to cartesian helper
-vf2d polar(float rad, float angle) {
-	return {rad*std::cosf(angle), rad*std::sinf(angle)};
-}
-
-//thanks wikipedia + pattern recognition
-//NOTE: this returns t and u, NOT the point.
-vf2d lineLineIntersection(
-	const vf2d& a, const vf2d& b,
-	const vf2d& c, const vf2d& d) {
-	vf2d ab=a-b, ac=a-c, cd=c-d;
-	return vf2d(
-		ac.cross(cd),
-		ac.cross(ab)
-	)/ab.cross(cd);
-}
 
 //this is alr def in the lib
 //but i want it explicitly stated
@@ -136,7 +121,7 @@ public:
 	//could make this faster with scanline rasterization...
 	static PixelSet fromPolygon(const std::vector<vf2d>& polygon, float scale) {
 		//get bounds of polygon
-		AABB box;
+		cmn::AABB box;
 		for(const auto& p:polygon) box.fitToEnclose(p);
 
 		//determine spacing
@@ -153,15 +138,15 @@ public:
 				vf2d pos=p.localToWorld(vf2d(i, j));
 
 				//deterministic, but less artifacting
-				float angle=random(2*Pi);
-				vf2d dir=polar(1, angle);
+				float angle=cmn::random(2*cmn::Pi);
+				vf2d dir=cmn::polar(1, angle);
 
 				//polygon raycast algorithm
 				int num=0;
 				for(int k=0; k<polygon.size(); k++) {
 					const auto& a=polygon[k];
 					const auto& b=polygon[(k+1)%polygon.size()];
-					vf2d tu=lineLineIntersection(a, b, pos, pos+dir);
+					vf2d tu=cmn::lineLineIntersection(a, b, pos, pos+dir);
 					if(tu.x>0&&tu.x<1&&tu.y>0) num++;
 				}
 
@@ -204,8 +189,8 @@ public:
 		return true;
 	}
 
-	[[nodiscard]] AABB getAABB() const {
-		AABB box;
+	[[nodiscard]] cmn::AABB getAABB() const {
+		cmn::AABB box;
 		box.fitToEnclose(localToWorld(vf2d(0, 0)));
 		box.fitToEnclose(localToWorld(vf2d(w, 0)));
 		box.fitToEnclose(localToWorld(vf2d(w, h)));
@@ -299,7 +284,7 @@ public:
 	//https://en.wikipedia.org/wiki/Bresenham's_line_algorithm
 	[[nodiscard]] bool slice(vf2d s1, vf2d s2) {
 		//find bounds of segment
-		AABB seg_box;
+		cmn::AABB seg_box;
 		seg_box.fitToEnclose(s1);
 		seg_box.fitToEnclose(s2);
 
@@ -816,7 +801,7 @@ public:
 
 	void updateRot() {
 		//precompute trig
-		cossin=polar(1, rot);
+		cossin=cmn::polar(1, rot);
 	}
 
 	void update(float dt) {

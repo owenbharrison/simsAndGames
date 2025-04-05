@@ -22,7 +22,6 @@ using olc::vf2d;
 #define OLC_SOUNDWAVE
 #include "common/olcSoundWaveEngine.h"
 
-#include "aabb.h"
 #include "fruit.h"
 
 float clamp(float x, float a, float b) {
@@ -57,7 +56,7 @@ struct FruitNinja : olc::PixelGameEngine {
 	float throw_timer=0;
 
 	vf2d gravity{0, 64};
-	AABB screen_bounds;
+	cmn::AABB screen_bounds;
 
 	//visual things
 	olc::Sprite* prim_circ_spr=nullptr;
@@ -195,13 +194,31 @@ struct FruitNinja : olc::PixelGameEngine {
 			for(auto it=fruits.begin(); it!=fruits.end();) {
 				const auto& f=*it;
 				if(f->slice(slice_vec, fa, fb)) {
-					//determine score
-					int pct=100*fa.mass/(fa.mass+fb.mass);
-					//how close to 50/50?
-					int diff=abs(50-pct);
+					//add splatter near fruit
+					{
+						cmn::AABB box=f->getAABB();
+						vf2d ctr=box.getCenter();
+						float rad=(box.max-ctr).mag();
+						int num=cmn::random(20, 35);
+						for(int i=0; i<num; i++) {
+							float pos_rad=cmn::random(rad);
+							vf2d offset=cmn::polar(pos_rad, cmn::random(2*cmn::Pi));
+							float speed=cmn::random(5, 15);
+							vf2d vel=cmn::polar(speed, cmn::random(2*cmn::Pi));
+							float lifespan=cmn::random(2, 3);
+							float rad=cmn::random(3, 4);
+							particles.emplace_back(new Splatter(ctr+offset, vel, f->col, lifespan, rad));
+						}
+					}
 
 					//add message
 					{
+						//determine score
+						int pct=100*fa.mass/(fa.mass+fb.mass);
+						//how close to 50/50?
+						int diff=abs(50-pct);
+
+						//string feedback
 						std::string msg; olc::Pixel col;
 						if(diff<5) msg="awesome!!", col=olc::BLUE;
 						else if(diff<10) msg="nice!", col=olc::CYAN;
@@ -209,25 +226,22 @@ struct FruitNinja : olc::PixelGameEngine {
 						else if(diff<30) msg="meh.", col=olc::YELLOW;
 						else msg="bad!", col=olc::RED;
 
-						float angle=random(2*Pi);
-						float speed=random(50, 75);
-						vf2d vel=polar(speed, angle);
-						float rot_vel=random(-.5f*Pi, .5f*Pi);
-
-						float lifespan=random(2, 4);
+						//random movement
+						float speed=cmn::random(50, 75);
+						vf2d vel=cmn::polar(speed, cmn::random(2*cmn::Pi));
+						float rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
+						float lifespan=cmn::random(2, 4);
 						particles.push_back(new Message(f->pos, vel, col, lifespan, msg, rot_vel));
 					}
 
-					//find new velocities
+					//update new fruit velocities
 					{
-						float angle_a=random(2*Pi);
-						float speed_a=random(40, 70);
-						fa.vel=polar(speed_a, angle_a);
-						fa.rot_vel=random(-.5f*Pi, .5f*Pi);
-						float angle_b=random(2*Pi);
-						float speed_b=random(40, 70);
-						fb.vel=polar(speed_b, angle_b);
-						fb.rot_vel=random(-.5f*Pi, .5f*Pi);
+						float speed_a=cmn::random(40, 70);
+						fa.vel=cmn::polar(speed_a, cmn::random(2*cmn::Pi));
+						fa.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
+						float speed_b=cmn::random(40, 70);
+						fb.vel=cmn::polar(speed_b, cmn::random(2*cmn::Pi));
+						fb.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
 						//point opposite directions
 						if(fa.vel.dot(fb.vel)>0) fb.vel*=-1;
 						if(fa.rot_vel*fb.rot_vel>0) fb.rot_vel*=-1;
@@ -237,29 +251,12 @@ struct FruitNinja : olc::PixelGameEngine {
 					fruits.emplace_front(new Fruit(fa));
 					fruits.emplace_front(new Fruit(fb));
 
-					//add splatter near fruit
-					{
-						AABB box=f->getAABB();
-						vf2d ctr=box.getCenter();
-						float rad=(box.max-ctr).mag();
-						int num=random(20, 35);
-						for(int i=0; i<num; i++) {
-							float pos_rad=random(rad);
-							vf2d offset=polar(pos_rad, random(2*Pi));
-							float speed=random(5, 15);
-							vf2d vel=polar(speed, random(2*Pi));
-							float lifespan=random(2, 3);
-							float rad=random(3, 4);
-							particles.emplace_back(new Splatter(ctr+offset, vel, f->col, lifespan, rad));
-						}
-					}
-
 					//remove old fruit
 					delete f;
 					it=fruits.erase(it);
 
 					//play random slide noise
-					if(random()<.5f) sound_engine.PlayWaveform(&slice1_sound);
+					if(cmn::random()<.5f) sound_engine.PlayWaveform(&slice1_sound);
 					else sound_engine.PlayWaveform(&slice2_sound);
 				} else it++;
 			}
@@ -285,31 +282,30 @@ struct FruitNinja : olc::PixelGameEngine {
 	void automaticUpdate(float dt) {
 		//every now and then throw a fruit
 		if(throw_timer<0) {
-			throw_timer=random(1, 4);
+			throw_timer=cmn::random(1, 4);
 
 			//make random polygon
 			int num=4+rand()%16;
-			float r_min=random(20, 30);
-			float r_max=random(40, 60);
+			float r_min=cmn::random(20, 30);
+			float r_max=cmn::random(40, 60);
 			Fruit f(num);
 			for(int i=0; i<num; i++) {
-				float angle=2*Pi*i/num;
-				vf2d dir(std::cosf(angle), std::sinf(angle));
-				float r=random(r_min, r_max);
+				vf2d dir=cmn::polar(1, 2*cmn::Pi*i/num);
+				float r=cmn::random(r_min, r_max);
 				f.pts[i]=r*dir;
 			}
 			f.init();
 
-			AABB box=f.getAABB();
+			cmn::AABB box=f.getAABB();
 			//place on bottom
 			f.pos.y=screen_bounds.max.y-box.max.y;
 			//random along bottom
-			f.pos.x=random(-box.min.x, screen_bounds.max.x-box.max.x);
+			f.pos.x=cmn::random(-box.min.x, screen_bounds.max.x-box.max.x);
 
 			//random velocity
-			f.vel.x=random(-50, 50);
-			f.vel.y=random(-220, -150);
-			f.rot_vel=random(-.5f*Pi, .5f*Pi);
+			f.vel.x=cmn::random(-50, 50);
+			f.vel.y=cmn::random(-220, -150);
+			f.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
 
 			//random col	
 			f.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
@@ -431,7 +427,7 @@ struct FruitNinja : olc::PixelGameEngine {
 		for(const auto& f:fruits) {
 			//show bounding box rectangle
 			if(show_bounds) {
-				AABB box=f->getAABB();
+				cmn::AABB box=f->getAABB();
 				DrawRectDecal(box.min, box.max-box.min, olc::RED);
 			}
 
@@ -512,7 +508,7 @@ struct FruitNinja : olc::PixelGameEngine {
 
 		//show ultra
 		{
-			AABB box{{20, 20}, vf2d(screen_bounds.max.x-20, 40)};
+			cmn::AABB box{{20, 20}, vf2d(screen_bounds.max.x-20, 40)};
 			//draw usage rect
 			{
 				float t=clamp(ultra/total_ultra, 0, 1);

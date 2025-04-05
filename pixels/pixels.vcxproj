@@ -143,7 +143,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="src\aabb.h" />
     <ClInclude Include="src\pixel_game.h" />
     <ClInclude Include="src\pixel_set.h" />
   </ItemGroup>

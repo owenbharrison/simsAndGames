@@ -2,8 +2,6 @@
 #ifndef PARTICLE_CLASS_H
 #define PARTICLE_CLASS_H
 
-constexpr float Pi=3.1415927f;
-
 struct Particle {
 	vf2d pos, oldpos, forces;
 	float rad=0;
@@ -16,7 +14,7 @@ struct Particle {
 		pos=p;
 		oldpos=p;
 		rad=r;
-		mass=Pi*rad*rad;
+		mass=cmn::Pi*rad*rad;
 		inv_mass=1/mass;
 	}
 
@@ -37,7 +35,7 @@ struct Particle {
 		forces={0, 0};
 	}
 
-	void keepIn(const AABB& box) {
+	void keepIn(const cmn::AABB& box) {
 		vf2d vel=pos-oldpos;
 		if(pos.x<box.min.x+rad) {
 			pos.x=box.min.x+rad;
