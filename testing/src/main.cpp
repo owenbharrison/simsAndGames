@@ -2,24 +2,31 @@
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
 
-#include <cmath>
-
 static constexpr float Pi=3.1415927f;
 
-#include <sstream>
-#include <string>
-#include <iomanip>
+//polar to cartesian helper
+vf2d polar(float rad, float angle) {
+	return {rad*std::cosf(angle), rad*std::sinf(angle)};
+}
 
-//rotation matrix
-vf2d rotate(const vf2d& v, float f) {
-	float c=std::cosf(f), s=std::sinf(f);
-	return {
-		v.x*c-v.y*s,
-		v.x*s+v.y*c
-	};
+//clever default param placement:
+//random()=0-1
+//random(a)=0-a
+//random(a, b)=a-b
+float random(float b=1, float a=0) {
+	static const float rand_max=RAND_MAX;
+	float t=rand()/rand_max;
+	return a+t*(b-a);
+}
+
+float clamp(float x, float a, float b) {
+	if(x<a) return a;
+	if(x>b) return b;
+	return x;
 }
 
 //thanks wikipedia + pattern recognition
+//NOTE: this returns t and u, NOT the point.
 vf2d lineLineIntersection(
 	const vf2d& a, const vf2d& b,
 	const vf2d& c, const vf2d& d) {
@@ -37,118 +44,169 @@ vf2d lineLineIntersection(
 	)/denom;
 }
 
-struct Example : olc::PixelGameEngine {
+struct Example :olc::PixelGameEngine {
 	Example() {
-		sAppName="Example";
+		sAppName="jelly car testing";
 	}
 
-	vf2d a, b, c, d;
+	vf2d pt_orig, pt_copy;
+	std::vector<vf2d> shape_orig, shape_copy;
+
+	bool collide=false;
 
 	bool OnUserCreate() override {
 		return true;
 	}
 
 	bool OnUserUpdate(float dt) override {
-		vf2d mouse_pos=GetMousePos();
+		const vf2d mouse_pos=GetMousePos();
 
-		if(GetKey(olc::Key::A).bHeld) a=mouse_pos;
-		if(GetKey(olc::Key::B).bHeld) b=mouse_pos;
-		if(GetKey(olc::Key::C).bHeld) c=mouse_pos;
-		if(GetKey(olc::Key::D).bHeld) d=mouse_pos;
-
-		if(GetKey(olc::Key::ENTER).bPressed) {
-			//get curr angle
-			vf2d ab=b-a;
-			vf2d cd=d-c;
-			float curr=std::acosf(ab.dot(cd)/ab.mag()/cd.mag());
-
-			//find difference
-			static const float angle=Pi/2;//90deg
-			float diff=(angle-curr)/2;
-
-			//rot a,b about their mid
-			vf2d m_ab=(a+b)/2;
-			a=m_ab+rotate(a-m_ab, -diff);
-			b=m_ab+rotate(b-m_ab, -diff);
-
-			//rot c,d about their mid
-			vf2d m_cd=(c+d)/2;
-			c=m_cd+rotate(c-m_cd, diff);
-			d=m_cd+rotate(d-m_cd, diff);
+		//set point
+		if(GetKey(olc::Key::P).bHeld) {
+			pt_orig=mouse_pos;
+			collide=false;
 		}
 
+		//draw shape
+		if(GetMouse(olc::Mouse::LEFT).bPressed) {
+			shape_orig.emplace_back(mouse_pos);
+			collide=false;
+		}
+
+		//clear shape
+		if(GetKey(olc::Key::HOME).bPressed) {
+			shape_orig.clear();
+			collide=false;
+		}
+
+		//exit collide
+		if(GetKey(olc::Key::ESCAPE).bPressed) collide=false;
+
+		//RENDER
 		Clear(olc::GREY);
 
-		DrawLine(a, b, olc::CYAN);
-		DrawLine(c, d, olc::MAGENTA);
+		//show collide background
+		if(collide) DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::RED);
 
-		static const vf2d offset(3, 3);
-		FillCircle(a, 7, olc::RED);
-		DrawCircle(a, 7, olc::BLACK);
-		DrawString(a-offset, "A", olc::BLACK);
+		auto& said_pt=collide?pt_copy:pt_orig;
+		auto& said_shape=collide?shape_copy:shape_orig;
 
-		FillCircle(b, 7, olc::GREEN);
-		DrawCircle(b, 7, olc::BLACK);
-		DrawString(b-offset, "B", olc::BLACK);
+		//show point
+		DrawString(said_pt.x-4, said_pt.y-4, "P");
 
-		FillCircle(c, 7, olc::BLUE);
-		DrawCircle(c, 7, olc::BLACK);
-		DrawString(c-offset, "C", olc::BLACK);
-
-		FillCircle(d, 7, olc::YELLOW);
-		DrawCircle(d, 7, olc::BLACK);
-		DrawString(d-offset, "D", olc::BLACK);
-
-		{
-			//draw ix pt
-			vf2d tu=lineLineIntersection(a, b, c, d);
-			vf2d ix=a+tu.x*(b-a);
-
-			//draw t diagram
-			FillCircle(ScreenWidth()-75, ScreenHeight()-25, 25, tu.x>=0&&tu.x<=1?olc::GREEN:olc::RED);
-			DrawCircle(ScreenWidth()-75, ScreenHeight()-25, 25, olc::BLACK);
-			DrawString(ScreenWidth()-83, ScreenHeight()-33, "t:", olc::BLACK);
-			auto t_str=std::to_string(int(100*tu.x))+"%";
-			DrawString(ScreenWidth()-75-4*t_str.length(), ScreenHeight()-25, t_str, olc::BLACK);
-
-			//draw u diagram
-			FillCircle(ScreenWidth()-25, ScreenHeight()-25, 25, tu.y>=0&&tu.y<=1?olc::GREEN:olc::RED);
-			DrawCircle(ScreenWidth()-25, ScreenHeight()-25, 25, olc::BLACK);
-			DrawString(ScreenWidth()-33, ScreenHeight()-33, "u:", olc::BLACK);
-			auto u_str=std::to_string(int(100*tu.y))+"%";
-			DrawString(ScreenWidth()-25-4*u_str.length(), ScreenHeight()-25, u_str, olc::BLACK);
-
-			//draw arc
-			DrawLine(ix.x-3, ix.y, ix.x+3, ix.y, olc::BLACK);
-			DrawLine(ix.x, ix.y-3, ix.x, ix.y+3, olc::BLACK);
-			float sum=0;
-			int num=2;
-			if(tu.x<0||tu.x>1) sum+=(a-ix).mag()+(b-ix).mag(), num++;
-			else if(tu.x<.5) sum+=(b-ix).mag();
-			else sum+=(a-ix).mag();
-			if(tu.y<0||tu.y>1) sum+=(c-ix).mag()+(d-ix).mag(), num++;
-			else if(tu.y<.5) sum+=(c-ix).mag();
-			else sum+=(d-ix).mag();
-			float rad=sum/num;
-			DrawCircle(ix, rad);
-
-			/*
-			float angle_ab=std::atan2f(a.y-ix.y, a.x-ix.x);
-			float angle_cd=std::atan2f(c.y-ix.y, c.x-ix.x);
-			int res=48;
-			float angle=angle_ab, step=(angle_cd-angle_ab)/res;
-			vf2d prev;
-			for(int i=0; i<res; i++) {
-				vf2d curr=ix+rad*vf2d(std::cosf(angle), std::sinf(angle));
-				if(i!=0) DrawLine(prev, curr);
-				prev=curr, angle+=step;
-			}*/
+		//shape outlines
+		for(int i=0; i<said_shape.size(); i++) {
+			DrawLine(said_shape[i], said_shape[(i+1)%said_shape.size()]);
 		}
 
-		if(false) {
-			vf2d ab=b-a, cd=d-c;
-			bool left=ab.x*cd.y-cd.x*ab.y>0;
-			FillCircle(ScreenWidth()-50, ScreenHeight()-50, 50, left?olc::GREEN:olc::RED);
+		//check if inside
+		bool inside=false;
+		{
+			vf2d dir=polar(1, random(2*Pi));
+			int num_ix=0;
+			for(int i=0; i<said_shape.size(); i++) {
+				const auto& a=said_shape[i];
+				const auto& b=said_shape[(i+1)%said_shape.size()];
+				vf2d tu=lineLineIntersection(a, b, said_pt, said_pt+dir);
+				if(tu.x>0&&tu.x<1&&tu.y>0) num_ix++;
+			}
+			inside=num_ix%2;
+		}
+		if(inside&&!collide) {
+			//find close segment
+			int idx=-1;
+			float record;
+			for(int i=0; i<said_shape.size(); i++) {
+				const auto& a=said_shape[i];
+				const auto& b=said_shape[(i+1)%said_shape.size()];
+				vf2d pa=said_pt-a, ba=b-a;
+				float t=clamp(pa.dot(ba)/ba.dot(ba), 0, 1);
+				vf2d close_pt=a+t*ba;
+				float dist=(close_pt-said_pt).mag();
+				if(idx<0||dist<record) {
+					record=dist;
+					idx=i;
+				}
+			}
+
+			//show close segment
+			const auto& a=said_shape[idx];
+			const auto& b=said_shape[(idx+1)%said_shape.size()];
+			DrawLine(said_shape[idx], said_shape[(idx+1)%said_shape.size()], olc::GREEN);
+
+			//show close pt
+			vf2d pa=said_pt-a, ba=b-a;
+			float t=clamp(pa.dot(ba)/ba.dot(ba), 0, 1);
+			vf2d close_pt=a+t*ba;
+			DrawString(close_pt.x-4, close_pt.y-4, "C", olc::BLUE);
+		}
+
+		//show vertexes
+		for(int i=0; i<said_shape.size(); i++) {
+			const auto& s=said_shape[i];
+			auto str=std::to_string(i);
+			DrawString(s.x-4*str.size(), s.y-4, str, olc::BLACK);
+		}
+
+		//run collision
+		if(inside&&GetKey(olc::Key::ENTER).bPressed) {
+			collide=true;
+
+			//copy config
+			pt_copy=pt_orig;
+			shape_copy=shape_orig;
+
+			{//ensure winding
+				float area=0;
+				for(int i=0; i<shape_copy.size(); i++) {
+					const auto& a=shape_copy[i];
+					const auto& b=shape_copy[(i+1)%shape_copy.size()];
+					area+=a.x*b.y-a.y*b.x;
+				}
+				if(area<0) std::reverse(shape_copy.begin(), shape_copy.end());
+			}
+
+			//find closest segment
+			float record;
+			int said_idx=-1;
+			float said_t;
+			vf2d said_sub;
+			for(int i=0; i<shape_copy.size(); i++) {
+				const auto& a=shape_copy[i];
+				const auto& b=shape_copy[(i+1)%shape_copy.size()];
+				vf2d pa=pt_copy-a, ba=b-a;
+				float t=clamp(pa.dot(ba)/ba.dot(ba), 0, 1);
+				vf2d close_pt=a+t*ba;
+				vf2d sub=close_pt-pt_copy;
+				float dist=sub.mag();
+				if(said_idx<0||dist<record) {
+					record=dist;
+					said_idx=i;
+					said_t=t;
+					said_sub=sub;
+				}
+			}
+
+			//get close segment
+			auto& a=shape_copy[said_idx];
+			float ma=1, mb=ma;
+			auto& b=shape_copy[(said_idx+1)%shape_copy.size()];
+			float mp=1;
+
+			//inverse mass weighting
+			float m1s=1/(ma+mb);
+			float m1p=1/mp;
+			float m1t=m1s+m1p;
+
+			//find contributions
+			float a_cont=(1-said_t)*m1s/m1t;
+			float b_cont=said_t*m1s/m1t;
+			float p_cont=m1p/m1t;
+
+			//updating
+			a-=a_cont*said_sub;
+			b-=b_cont*said_sub;
+			pt_copy+=p_cont*said_sub;
 		}
 
 		return true;
@@ -156,8 +214,8 @@ struct Example : olc::PixelGameEngine {
 };
 
 int main() {
-	Example demo;
-	if(demo.Construct(300, 300, 2, 2, false, true)) demo.Start();
+	Example e;
+	if(e.Construct(320, 240, 2, 2, false, true)) e.Start();
 
 	return 0;
 }
