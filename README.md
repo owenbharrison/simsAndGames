@@ -27,9 +27,7 @@ Select your desired project, and press the `Start Without Debugging` or `Ctrl+F5
 A **pixelset** is an orientable 2d bitmap. This demo shows their adding, removing, slicing, moving, and springing actions.
 It also shows usage of debug views such as bounding boxes, local grids, mass & inertia, wireframes, & outlines.
 
-*note: the framerate is terrible only because the demo was converted to a gif to be shown here.*
-
-![](https://i.imgur.com/go5xaqX.gif)
+![](https://i.imgur.com/sJRF1EZ.gif)
 
 - The slicing uses Cohen-Sutherland segment clipping, Bresenham's line algorithm to draw air, & then floodfill/parts detection algorithm to seperate pieces.
 - The collision uses edge detection to make a list of the edge "pixels" to check against other pixelsets.
@@ -45,8 +43,6 @@ It also shows usage of debug views such as bounding boxes, local grids, mass & i
 For now, this project is more of an engine that I'd like to use for 3d simulations.
 It is based on [javidx9](https://github.com/onelonecoder)'s [3D Graphics Engine](https://www.youtube.com/watch?v=ih20l3pJoeU) series.
 This demo shows the movement, render, import, and outline features. The render camera is shown like blender cameras in the viewport.
-
-*note: the framerate is terrible only because the demo was converted to a gif to be shown here.*
 
 ![](https://i.imgur.com/mMSlrVN.gif)
 
