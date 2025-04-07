@@ -2,9 +2,6 @@
 #ifndef CONSTRAINT_STRUCT_H
 #define CONSTRAINT_STRUCT_H
 
-//didnt think i'd have to include this...
-#include "common/olcPixelGameEngine.h"
-
 #include "point_mass.h"
 
 struct Constraint {
@@ -13,20 +10,21 @@ struct Constraint {
 
 	Constraint() {}
 
-	Constraint(PointMass* _a, PointMass* _b) : a(_a), b(_b) {
+	Constraint(PointMass* _a, PointMass* _b) :
+		a(_a), b(_b) {
 		rest_len=(a->pos-b->pos).mag();
 	}
 
-	olc::vf2d getCorrection() const {
-		olc::vf2d axis=a->pos-b->pos;
+	vf2d getCorrection() const {
+		vf2d axis=a->pos-b->pos;
 		float dist=axis.mag();
-		olc::vf2d norm=axis/dist;
+		vf2d norm=axis/dist;
 		float delta=rest_len-dist;
 		return .5f*delta*norm;
 	}
 
 	void update() {
-		olc::vf2d correction=getCorrection();
+		vf2d correction=getCorrection();
 		if(!a->locked) a->pos+=correction;
 		if(!b->locked) b->pos-=correction;
 	}

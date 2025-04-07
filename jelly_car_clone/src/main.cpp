@@ -2,42 +2,51 @@
 #include "common/olcPixelGameEngine.h"
 using olc::vf2d;
 
-#include "point_mass.h"
-#include "shape.h"
+#define OLC_PGEX_TRANSFORMEDVIEW
+#include "common/olcPGEX_TransformedView.h"
 
-struct Example : olc::PixelGameEngine {
-	Example() {
-		sAppName="Example";
+#include "phys/shape.h"
+
+struct JellyCarGame : olc::PixelGameEngine {
+	JellyCarGame() {
+		sAppName="Jelly Car";
 	}
 
-	//ui stuff
-	vf2d mouse_pos;
-
-	std::list<vf2d> addition;
-	float addition_timer=0;
-
-	PointMass mouse_point;
-	std::list<Constraint> mouse_constraint;
-
-	//simulation stuff
-	std::list<Shape*> shapes;
-
-	//graphics stuff
+	//rendering "primitives"
 	olc::Sprite* prim_rect_spr=nullptr;
 	olc::Decal* prim_rect_dec=nullptr;
 	olc::Sprite* prim_circ_spr=nullptr;
 	olc::Decal* prim_circ_dec=nullptr;
 
-	bool show_vertexes=false;
+	//user input stuff
+	olc::TransformedView tv;
+
+	vf2d scr_mouse_pos, wld_mouse_pos;
+
+	vf2d rect_start;
+
+	//simulation stuff
+	std::list<Shape*> shapes;
+	cmn::AABB phys_bounds;
+	vf2d gravity;
+
+	std::list<Constraint> mouse_constraint;
+	PointMass mouse_point;
+
+	//graphics stuff
+	bool show_grid=true;
 	bool show_springs=false;
+	bool show_mass=false;
 
 	bool OnUserCreate() override {
-		//make some "primitives" to draw with
+		srand(time(0));
+		
+		//setup some primitives to draw with
 		prim_rect_spr=new olc::Sprite(1, 1);
 		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
 		prim_rect_dec=new olc::Decal(prim_rect_spr);
 		{
-			int sz=1024;
+			const unsigned int sz=1024;
 			prim_circ_spr=new olc::Sprite(sz, sz);
 			SetDrawTarget(prim_circ_spr);
 			Clear(olc::BLANK);
@@ -46,20 +55,62 @@ struct Example : olc::PixelGameEngine {
 			prim_circ_dec=new olc::Decal(prim_circ_spr);
 		}
 
+		//initialize transformed view
+		tv.Initialise(GetScreenSize(), {1, 1});
+		tv.SetScaleExtents({5, 5}, {1000, 1000});
+		tv.EnableScaleClamp(true);
+
+		//initialize physics stuff
 		mouse_point.locked=true;
+		gravity={0, 9.8f};
+		
+		//zoom to phys_bounds
+		phys_bounds={{-14, -10}, {14, 10}};
+		zoomToFit();
+
+		//std::cout goes into console
+		ConsoleCaptureStdOut(true);
 
 		return true;
 	}
 
-	void resetMarkers() {
-		mouse_constraint.clear();
-	}
-
 	void reset() {
-		resetMarkers();
+		mouse_constraint.clear();
 
 		for(const auto& s:shapes) delete s;
 		shapes.clear();
+	}
+
+	void zoomToFit() {
+		//find scene bounds
+		cmn::AABB bounds;
+		int num=0;
+		for(const auto& s:shapes) {
+			for(int i=0; i<s->getNum(); i++) {
+				bounds.fitToEnclose(s->points[i].pos);
+				num++;
+			}
+		}
+		//default behavior
+		if(num<2) bounds=phys_bounds;
+
+		//zoom into view
+		const auto margin=30;
+		vf2d bounds_size=bounds.max-bounds.min;
+		float num_x=ScreenWidth()/bounds_size.x;
+		float num_y=ScreenHeight()/bounds_size.y;
+		float scale;
+		if(num_x>num_y) {//zoom to height
+			scale=(ScreenHeight()-2*margin)/bounds_size.y;
+		} else {//zoom to width
+			scale=(ScreenWidth()-2*margin)/bounds_size.x;
+		}
+		tv.SetWorldScale({scale, scale});
+
+		//pan into view
+		vf2d mid_scr=GetScreenSize()/2;
+		vf2d mid_wld=tv.ScreenToWorld(mid_scr);
+		tv.MoveWorldOffset(bounds.getCenter()-mid_wld);
 	}
 
 	bool OnUserDestroy() override {
@@ -73,120 +124,220 @@ struct Example : olc::PixelGameEngine {
 		return true;
 	}
 
-	void update(float dt) {
-		mouse_pos=GetMousePos();
+	//nothing profound here yet.
+	bool OnConsoleCommand(const std::string& line) override {
+		std::stringstream line_str(line);
+		std::string cmd; line_str>>cmd;
+
+		if(cmd=="count") {
+			std::cout<<"there are "<<shapes.size()<<" shapes\n";
+		}
+
+		else if(cmd=="reset") {
+			std::cout<<"removed "<<shapes.size()<<" shapes\n";
+			reset();
+		}
+
+		else if(cmd=="clear") ConsoleClear();
+
+		return true;
+	}
+
+	void handleUserInput() {
+		//adding ngons
+		if(GetKey(olc::Key::A).bPressed) {
+			int num=4+rand()%9;
+			float rad=cmn::random(1, 2.5f);
+			shapes.emplace_back(new Shape(wld_mouse_pos, rad, num));
+		}
+
+		//adding rectangles
+		const auto rect_action=GetKey(olc::Key::R);
+		if(rect_action.bPressed) rect_start=wld_mouse_pos;
+		if(rect_action.bReleased) {
+			cmn::AABB box;
+			box.fitToEnclose(rect_start);
+			box.fitToEnclose(wld_mouse_pos);
+			shapes.emplace_back(new Shape(box));
+		}
+
+		//removing stuff
+		if(GetKey(olc::Key::X).bHeld) {
+			mouse_constraint.clear();
+			for(auto sit=shapes.begin(); sit!=shapes.end();) {
+				const auto& s=*sit;
+				if(s->contains(wld_mouse_pos)) {
+					delete s;
+					sit=shapes.erase(sit);
+				} else sit++;
+			}
+		}
 
 		//mouse constraint
-		const auto mouse_constraint_action=GetMouse(olc::Mouse::LEFT);
-		if(mouse_constraint_action.bPressed) {
+		const auto grab_action=GetMouse(olc::Mouse::LEFT);
+		if(grab_action.bPressed) {
+			//reset
 			mouse_constraint.clear();
 
-			Shape* said_shape=nullptr;
+			//for every shape under mouse
+			mouse_point.pos=wld_mouse_pos;
 			for(const auto& s:shapes) {
-				if(s->contains(mouse_pos)) {
-					said_shape=s;
-					break;
-				}
-			}
-			if(said_shape) {
-				for(size_t i=0; i<said_shape->getNum(); i++) {
-					mouse_constraint.emplace_back(&mouse_point, &said_shape->points[i]);
+				if(!s->contains(wld_mouse_pos)) continue;
+
+				//add all of its points to the list
+				for(int i=0; i<s->getNum(); i++) {
+					mouse_constraint.emplace_back(&mouse_point, &s->points[i]);
 				}
 			}
 		}
-		if(mouse_constraint_action.bReleased) {
+		if(grab_action.bReleased) {
+			//reset
 			mouse_constraint.clear();
 		}
 
-		//shape addition
-		const auto add_action=GetKey(olc::Key::A);
-		if(add_action.bPressed) {
-			addition.clear();
-		}
-		//every now and then,
-		if(add_action.bHeld) {
-			//ensure points not "overlapping"
-			bool unique=true;
-			for(const auto& a:addition) {
-				if((mouse_pos-a).mag()<10) {
-					unique=false;
-					break;
-				}
-			}
-			//add if "unique"
-			if(unique) addition.push_back(mouse_pos);
-		}
-		if(add_action.bReleased) {
-			if(addition.size()>=3) {
-				//check later for self intersection?
-				//or we could do that in the sanitize step
-				shapes.push_back(new Shape(addition));
-			}
-			addition.clear();
-		}
+		//reset view
+		if(GetKey(olc::Key::HOME).bPressed) zoomToFit();
 
-		//shape removal
-		if(GetKey(olc::Key::X).bHeld) {
-			resetMarkers();
+		//zooming
+		if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, scr_mouse_pos);
+		if(GetMouseWheel()<0) tv.ZoomAtScreenPos(1/1.07f, scr_mouse_pos);
 
-			//remove shape if mouse inside polygon
-			for(auto it=shapes.begin(); it!=shapes.end();) {
-				auto& s=*it;
-				if(s->contains(mouse_pos)) {
-					delete s;
-					it=shapes.erase(it);
-				} else it++;
-			}
-		}
+		//panning
+		const auto pan_action=GetMouse(olc::Mouse::MIDDLE);
+		if(pan_action.bPressed) tv.StartPan(scr_mouse_pos);
+		if(pan_action.bHeld) tv.UpdatePan(scr_mouse_pos);
+		if(pan_action.bReleased) tv.EndPan(scr_mouse_pos);
 
-		//ui toggles
-		if(GetKey(olc::Key::V).bPressed) show_vertexes^=true;
+		//visual toggles
+		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 		if(GetKey(olc::Key::S).bPressed) show_springs^=true;
+		if(GetKey(olc::Key::M).bPressed) show_mass^=true;
+	}
 
-		//physics
-		mouse_point.pos=mouse_pos;
-		mouse_point.old_pos=mouse_pos;
+	void handlePhysics(float dt) {
+		//sanitize?
+		for(auto it=shapes.begin(); it!=shapes.end();) {
+			if((*it)->getArea()<0) it=shapes.erase(it);
+			else it++;
+		}
 
-		//update mouse_constraint
+		//update mouse constraint
+		mouse_point.pos=wld_mouse_pos;
 		for(auto& m:mouse_constraint) {
 			m.update();
 		}
 
-		//update shapes
-		for(auto& s:shapes) {
-			s->update(dt);
+		//shape collision
+		for(const auto& a:shapes) {
+			for(const auto& b:shapes) {
+				if(b==a) continue;
+
+				a->collide(*b);
+			}
+		}
+
+		//shape updating + gravity
+		for(const auto& shp:shapes) {
+			for(auto& c:shp->constraints) {
+				c.update();
+			}
+
+			for(auto& s:shp->springs) {
+				s.update(dt);
+			}
+
+			for(int i=0; i<shp->getNum(); i++) {
+				auto& p=shp->points[i];
+				p.applyForce(p.mass*gravity);
+				p.update(dt);
+				p.keepIn(phys_bounds);
+			}
 		}
 	}
 
-	void DrawThickLineDecal(const olc::vf2d& a, const olc::vf2d& b, float w, olc::Pixel col) {
-		olc::vf2d sub=b-a;
+	void update(float dt) {
+		//make sure simulation doesnt blow up?
+		const float max_dt=1/60.f;
+		if(dt>max_dt) dt=max_dt;
+
+		scr_mouse_pos=GetMousePos();
+		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
+
+		//only allow input when console closed
+		if(!IsConsoleShowing()) handleUserInput();
+
+		//open integrated console
+		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
+
+		//only update physics when console closed
+		if(!IsConsoleShowing()) handlePhysics(dt);
+	}
+
+#pragma region RENDER HELPERS
+	void tvDrawThickLine(const vf2d& a, const vf2d& b, float rad, const olc::Pixel& col=olc::WHITE) {
+		vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=sub.perp()/len;
+		vf2d tang=sub.perp()/len;
 
-		float angle=std::atan2f(sub.y, sub.x);
-		DrawRotatedDecal(a-w/2*tang, prim_rect_dec, angle, {0, 0}, {len, w}, col);
+		float angle=atan2f(sub.y, sub.x);
+		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
-		DrawDecal(pos-offset, prim_circ_dec, scale, col);
+	void tvFillCircle(const vf2d& pos, float rad, const olc::Pixel& col=olc::WHITE) {
+		vf2d offset(rad, rad);
+		tv.DrawDecal(pos-offset, prim_circ_dec, {2*rad/prim_circ_dec->sprite->width, 2*rad/prim_circ_dec->sprite->height}, col);
 	}
+
+	void tvDrawString(const vf2d& pos, const std::string& str, const olc::Pixel& col=olc::WHITE, float scale=1) {
+		vf2d offset(4*str.length(), 4);
+		tv.DrawStringDecal(pos-scale*offset, str, col, {scale, scale});
+	}
+
+	void tvDrawAABB(const cmn::AABB& aabb, float rad, const olc::Pixel& col=olc::WHITE) {
+		vf2d tr(aabb.max.x, aabb.min.y), bl(aabb.min.x, aabb.max.y);
+		tvDrawThickLine(aabb.min, tr, rad, col), tvFillCircle(aabb.min, rad, col);
+		tvDrawThickLine(tr, aabb.max, rad, col), tvFillCircle(tr, rad, col);
+		tvDrawThickLine(aabb.max, bl, rad, col), tvFillCircle(aabb.max, rad, col);
+		tvDrawThickLine(bl, aabb.min, rad, col), tvFillCircle(bl, rad, col);
+	}
+#pragma endregion
 
 	void render() {
-		Clear(olc::GREY);
+		Clear(olc::Pixel(0, 100, 255));
 
-		//show addition
-		for(const auto& a:addition) {
-			FillRectDecal(a, {2, 2});
+		if(show_grid) {
+			const auto grid_spacing=1;
+
+			//screen bounds in world space, snap to nearest
+			vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
+			int i_s=std::floor(tl.x/grid_spacing), j_s=std::floor(tl.y/grid_spacing);
+			int i_e=std::ceil(br.x/grid_spacing), j_e=std::ceil(br.y/grid_spacing);
+
+			//vert
+			for(int i=i_s; i<=i_e; i++) {
+				float x=grid_spacing*i;
+				vf2d top{x, tl.y}, btm{x, br.y};
+				if(i%10==0) tvDrawThickLine(top, btm, .1f, olc::GREY);
+				else tv.DrawLineDecal(top, btm, olc::GREY);
+			}
+
+			//horiz
+			for(int j=j_s; j<=j_e; j++) {
+				float y=grid_spacing*j;
+				vf2d lft{tl.x, y}, rgt{br.x, y};
+				if(j%10==0) tvDrawThickLine(lft, rgt, .1f, olc::GREY);
+				else tv.DrawLineDecal(lft, rgt, olc::GREY);
+			}
 		}
 
-		//show all shapes
+		//show phys bounds
+		tvDrawAABB(phys_bounds, .1f, olc::RED);
+
+		//draw shapes
 		for(const auto& shp:shapes) {
-			//fill
 			//initialize indexes
-			std::list<size_t> indexes;
-			for(size_t i=0; i<shp->getNum(); i++) indexes.push_back(i);
+			std::list<int> indexes;
+			for(int i=0; i<shp->getNum(); i++) indexes.emplace_back(i);
 
 			//ear clipping triangulation
 			for(auto curr=indexes.begin(); curr!=indexes.end();) {
@@ -222,7 +373,7 @@ struct Example : olc::PixelGameEngine {
 
 				//this is an ear!
 				if(!contains) {
-					FillTriangleDecal(pt_p, pt_c, pt_n);
+					tv.DrawWarpedDecal(prim_rect_dec, {pt_p, pt_c, pt_n, pt_n});
 
 					//remove this index and start over
 					indexes.erase(curr);
@@ -230,37 +381,32 @@ struct Example : olc::PixelGameEngine {
 				} else curr++;
 			}
 
-			if(show_springs) {
-				for(const auto& s:shp->springs) {
-					DrawLineDecal(s.a->pos, s.b->pos, olc::GREEN);
-				}
-			}
-
 			//constraints
 			for(const auto& c:shp->constraints) {
-				DrawThickLineDecal(c.a->pos, c.b->pos, 4, olc::BLACK);
-				FillCircleDecal(c.a->pos, 2, olc::BLACK);
+				tvDrawThickLine(c.a->pos, c.b->pos, .1f, olc::BLACK);
+				tvFillCircle(c.a->pos, .1f, olc::BLACK);
 			}
 
-			if(show_vertexes) {
-				for(size_t i=0; i<shp->getNum(); i++) {
-					auto str=std::to_string(i);
-					vf2d offset(4*str.length(), 4);
-					DrawStringDecal(shp->points[i].pos-offset, str, olc::BLACK);
+			//springs
+			if(show_springs) {
+				for(const auto& s:shp->springs) {
+					tv.DrawLineDecal(s.a->pos, s.b->pos, olc::RED);
 				}
 			}
-		}
 
-		//show mouse_constraint
-		for(const auto& m:mouse_constraint) {
-			DrawLineDecal(m.a->pos, m.b->pos, olc::CYAN);
-		}
-
-		//show mass
-		for(const auto& s:shapes) {
-			vf2d pos=s->getCOM();
-			float mass=s->getMass();
-			DrawStringDecal(pos, std::to_string(int(s->getMass())), olc::BLACK);
+			//mass
+			if(show_mass) {
+				float mass=0;
+				vf2d ctr=shp->getCOM();
+				float r_sum=0;
+				for(int i=0; i<shp->getNum(); i++) {
+					r_sum+=(shp->points[i].pos-ctr).mag();
+					mass+=shp->points[i].mass;
+				}
+				float rad=r_sum/shp->getNum(), scale=rad/8;
+				std::string mass_str=std::to_string(int(mass));
+				tvDrawString(ctr, mass_str, olc::DARK_GREY, scale/mass_str.length());
+			}
 		}
 	}
 
@@ -273,10 +419,11 @@ struct Example : olc::PixelGameEngine {
 	}
 };
 
+
 int main() {
-	Example demo;
+	JellyCarGame jcg;
 	bool vsync=true;
-	if(demo.Construct(400, 400, 1, 1, false, vsync)) demo.Start();
+	if(jcg.Construct(640, 480, 1, 1, false, vsync)) jcg.Start();
 
 	return 0;
 }
