@@ -2,6 +2,16 @@
 #ifndef RENDER_CLASS_H
 #define RENDER_CLASS_H
 
+//vector-matrix multiplication
+vf3d operator*(const vf3d& v, const Mat4& m) {
+	vf3d r;
+	r.x=v.x*m.v[0][0]+v.y*m.v[1][0]+v.z*m.v[2][0]+v.w*m.v[3][0];
+	r.y=v.x*m.v[0][1]+v.y*m.v[1][1]+v.z*m.v[2][1]+v.w*m.v[3][1];
+	r.z=v.x*m.v[0][2]+v.y*m.v[1][2]+v.z*m.v[2][2]+v.w*m.v[3][2];
+	r.w=v.x*m.v[0][3]+v.y*m.v[1][3]+v.z*m.v[2][3]+v.w*m.v[3][3];
+	return r;
+}
+
 class Render {
 	float fov_deg=0;
 	float fov_rad=0;
@@ -167,7 +177,7 @@ public:
 					}
 					tri_proj.col=clipped[i].col;
 
-					tris_to_clip.emplace_back(tri_proj);
+					tris_to_clip.push_back(tri_proj);
 				}
 			}
 		}
@@ -227,7 +237,7 @@ public:
 void Render::copyFrom(const Render& r) {
 	fov_deg=r.fov_deg;
 	fov_rad=r.fov_rad;
-	
+
 	width=r.width;
 	height=r.height;
 
@@ -264,7 +274,7 @@ void Render::DrawTriangle(const Triangle& tri) {
 	float w1=tri.t[0].w;
 	float w2=tri.t[1].w;
 	float w3=tri.t[2].w;
-	
+
 	//sort by y
 	if(y2<y1) {
 		std::swap(x1, x2);
@@ -358,7 +368,7 @@ void Render::DrawTriangle(const Triangle& tri) {
 				pixels[3*k]=tri.col.r;
 				pixels[1+3*k]=tri.col.g;
 				pixels[2+3*k]=tri.col.b;
-				depth[k]=tex_w;  
+				depth[k]=tex_w;
 			}
 			t+=t_step;
 		}

@@ -45,10 +45,10 @@ struct Mesh {
 				for(std::string vtn; line_str>>vtn; num++) {
 					std::stringstream vtn_str(vtn);
 					int v_ix;
-					if(vtn_str>>v_ix) v_ixs.emplace_back(v_ix-1);
+					if(vtn_str>>v_ix) v_ixs.push_back(v_ix-1);
 					char junk; vtn_str>>junk;
 					int vt_ix;
-					if(vtn_str>>vt_ix) vt_ixs.emplace_back(vt_ix-1);
+					if(vtn_str>>vt_ix) vt_ixs.push_back(vt_ix-1);
 				}
 
 				//triangulate

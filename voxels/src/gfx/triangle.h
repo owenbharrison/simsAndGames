@@ -61,8 +61,7 @@ struct Triangle {
 			default:
 				//tri behind plane
 				return 0;
-			case 1:
-			{
+			case 1: {
 				//form tri
 				a.p[0]=*in_pts[0];
 				a.t[0]=*in_tex[0];
@@ -84,8 +83,7 @@ struct Triangle {
 				a.col=col;
 				return 1;
 			}
-			case 2:
-			{
+			case 2: {
 				//form quad
 				a.p[0]=*in_pts[0];
 				a.t[0]=*in_tex[0];

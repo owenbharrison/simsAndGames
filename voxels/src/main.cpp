@@ -8,19 +8,11 @@ using olc::vf2d;
 
 #include "gfx/mesh.h"
 
-#include "stopwatch.h"
-
 #include "math/v2d.h"
 
-//vector-matrix multiplication
-vf3d operator*(const vf3d& v, const Mat4& m) {
-	vf3d r;
-	r.x=v.x*m.v[0][0]+v.y*m.v[1][0]+v.z*m.v[2][0]+v.w*m.v[3][0];
-	r.y=v.x*m.v[0][1]+v.y*m.v[1][1]+v.z*m.v[2][1]+v.w*m.v[3][1];
-	r.z=v.x*m.v[0][2]+v.y*m.v[1][2]+v.z*m.v[2][2]+v.w*m.v[3][2];
-	r.w=v.x*m.v[0][3]+v.y*m.v[1][3]+v.z*m.v[2][3]+v.w*m.v[3][3];
-	return r;
-}
+#include "render.h"
+
+#include "common/stopwatch.h"
 
 vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
@@ -31,7 +23,64 @@ float map(float x, float a, float b, float c, float d) {
 	return c+t*(d-c);
 }
 
-#include "render.h"
+struct Line {
+	vf3d p[2];
+	v2d t[2];
+	olc::Pixel col=olc::WHITE;
+
+	int clipAgainstPlane(const vf3d& ctr, const vf3d& norm, Line& a, Line& b) const {
+		const vf3d* in_pts[2];
+		const v2d* in_tex[2];
+		int in_ct=0;
+		const vf3d* out_pts[2];
+		const v2d* out_tex[2];
+		int out_ct=0;
+
+		//classify each point based on
+		for(int i=0; i<2; i++) {
+			//what side of plane it is on
+			if(norm.dot(p[i]-ctr)>0) {
+				in_pts[in_ct]=&p[i];
+				in_tex[in_ct]=&t[i];
+				in_ct++;
+			} else {
+				out_pts[out_ct]=&p[i];
+				out_tex[out_ct]=&t[i];
+				out_ct++;
+			}
+		}
+
+		switch(in_ct) {
+			default:
+				//line behind plane
+				return 0;
+			case 1: {
+				//form 2 lines
+				a.p[0]=*in_pts[0];
+				a.t[0]=*in_tex[0];
+				float t=0;
+				a.p[1]=segIntersectPlane(*in_pts[0], *out_pts[0], ctr, norm, &t);
+				//interpolate tex coords
+				a.t[1].u=in_tex[0]->u+t*(out_tex[0]->u-in_tex[0]->u);
+				a.t[1].v=in_tex[0]->v+t*(out_tex[0]->v-in_tex[0]->v);
+				a.t[1].w=in_tex[0]->w+t*(out_tex[0]->w-in_tex[0]->w);
+				a.col=col;
+
+				b.p[0]=a.p[1];
+				b.t[0]=a.t[1];
+				b.p[1]=*out_pts[0];
+				b.t[1]=*out_tex[0];
+				b.col=col;
+
+				return 2;
+			}
+			case 2:
+				//line infront of plane
+				a=*this;
+				return 1;
+		}
+	}
+};
 
 struct VoxelGame : olc::PixelGameEngine {
 	VoxelGame() {
@@ -55,9 +104,13 @@ struct VoxelGame : olc::PixelGameEngine {
 
 	//graphics stuff
 	vf3d light_pos=cam_pos;
+
 	bool show_outlines=false;
 	bool show_render=false;
+	bool show_edges=false;
+
 	bool to_time=false;
+
 	enum struct Debug {
 		NONE=0,
 		DEPTH,
@@ -68,10 +121,13 @@ struct VoxelGame : olc::PixelGameEngine {
 	olc::Sprite* texture=nullptr;
 	olc::Sprite* white_texture=nullptr;
 
+	//render stuff
 	Render render;
 	olc::Sprite* render_tex=nullptr;
 
 	std::list<vf3d> quads;
+
+	const olc::Pixel orange_col=olc::Pixel(255, 115, 0);
 
 	bool OnUserCreate() override {
 		srand(time(0));
@@ -93,7 +149,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		model=Mesh::loadFromOBJ("assets/models/block.txt");
 		model.normalize(2);
 		model.colorNormals();
-		
+
 		//load texture
 		texture=new olc::Sprite("assets/textures/grass.png");
 		white_texture=new olc::Sprite(1, 1);
@@ -103,6 +159,70 @@ struct VoxelGame : olc::PixelGameEngine {
 		render_tex=new olc::Sprite(render.getWidth(), render.getWidth());
 
 		return true;
+	}
+
+#pragma region RENDER HELPERS
+	void DepthLine(
+		int x1, int y1, float w1,
+		int x2, int y2, float w2,
+		olc::Pixel col
+	) {
+		auto draw=[&] (int x, int y, float t) {
+			if(x<0||y<0||x>=ScreenWidth()||y>=ScreenHeight()) return;
+
+			float& depth=depth_buffer[x+ScreenWidth()*y];
+			float w=w1+t*(w2-w1);
+			if(w>depth) {
+				Draw(x, y, col);
+				depth=w;
+			}
+		};
+		int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
+		dx=x2-x1; dy=y2-y1;
+		dx1=abs(dx), dy1=abs(dy);
+		px=2*dy1-dx1, py=2*dx1-dy1;
+		if(dy1<=dx1) {
+			if(dx>=0) x=x1, y=y1, xe=x2;
+			else x=x2, y=y2, xe=x1;
+			draw(x, y, 0);
+			float t_step=1.f/dx1;
+			for(i=0; x<xe; i++) {
+				x++;
+				if(px<0) px+=2*dy1;
+				else {
+					if((dx<0&&dy<0)||(dx>0&&dy>0)) y++;
+					else y--;
+					px+=2*(dy1-dx1);
+				}
+				draw(x, y, t_step*i);
+			}
+		} else {
+			if(dy>=0) x=x1, y=y1, ye=y2;
+			else x=x2, y=y2, ye=y1;
+			draw(x, y, 0);
+			float t_step=1.f/dy1;
+			for(i=0; y<ye; i++) {
+				y++;
+				if(py<=0) py+=2*dx1;
+				else {
+					if((dx<0&&dy<0)||(dx>0&&dy>0)) x++;
+					else x--;
+					py+=2*(dx1-dy1);
+				}
+				draw(x, y, i*t_step);
+			}
+		}
+	}
+
+	void DepthTriangle(
+		int x1, int y1, float w1,
+		int x2, int y2, float w2,
+		int x3, int y3, float w3,
+		olc::Pixel col
+	) {
+		DepthLine(x1, y1, w1, x2, y2, w2, col);
+		DepthLine(x2, y2, w2, x3, y3, w3, col);
+		DepthLine(x3, y3, w3, x1, y1, w1, col);
 	}
 
 	void TexturedTriangle(
@@ -247,6 +367,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 	}
+#pragma endregion
 
 	bool OnConsoleCommand(const std::string& line) override {
 		std::stringstream line_str(line);
@@ -281,7 +402,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		if(cmd=="render") {
-			Stopwatch watch;
+			cmn::Stopwatch watch;
 			watch.start();
 
 			//rerender scene
@@ -300,7 +421,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					));
 				}
 			}
-			
+
 			watch.stop();
 			auto dur=watch.getMicros();
 			std::cout<<"  took: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
@@ -314,12 +435,14 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  SHIFT    move down\n"
 				"  WASD     move camera\n"
 				"  ARROWS   look camera\n"
+				"  Q        add quad\n"
 				"  L        set light pos\n"
-				"  O        toggle outlines\n"
+				"  O        toggle wireframe view\n"
+				"  R        toggle render view"
+				"  E        toggle edge view\n"
 				"  B        depth debug view\n"
 				"  U        uv debug view\n"
 				"  N        no debug\n"
-				"  N        add quad\n"
 				"  ESC      toggle integrated console\n";
 
 			return true;
@@ -341,55 +464,57 @@ struct VoxelGame : olc::PixelGameEngine {
 		return false;
 	}
 
-	bool OnUserUpdate(float dt) override {
-		Stopwatch geom_watch, render_watch;
+	void handleUserInput(float dt) {
+		//look up, down
+		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
+		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
+		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
 
-#pragma region USER INPUT
+		//look left, right
+		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
+		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
+
+		//move up, down
+		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+
+		//move forward, backward
+		vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
+		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+
+		//move left, right
+		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+
+		//add quad at camera
+		if(GetKey(olc::Key::Q).bPressed) quads.push_back(cam_pos);
+
+		//set light to camera
+		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
+
+		//ui toggles
+		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+		if(GetKey(olc::Key::R).bPressed) show_render^=true;
+		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
+
+		if(GetKey(olc::Key::B).bPressed) debug_view=Debug::DEPTH;
+		if(GetKey(olc::Key::U).bPressed) debug_view=Debug::UV;
+		if(GetKey(olc::Key::N).bPressed) debug_view=Debug::NONE;
+	}
+
+	bool OnUserUpdate(float dt) override {
+
 		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
 
 		//only allow input when console NOT open
-		if(!IsConsoleShowing()) {
-			//look up, down
-			if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-			if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
-			if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-			if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
-
-			//look left, right
-			if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
-			if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
-
-			//move up, down
-			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
-
-			//move forward, backward
-			vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
-			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
-
-			//move left, right
-			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
-
-			//set light to camera
-			if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
-
-			//ui toggles
-			if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
-			if(GetKey(olc::Key::R).bPressed) show_render^=true;
-
-			if(GetKey(olc::Key::B).bPressed) debug_view=Debug::DEPTH;
-			if(GetKey(olc::Key::U).bPressed) debug_view=Debug::UV;
-			if(GetKey(olc::Key::N).bPressed) debug_view=Debug::NONE;
-
-			if(GetKey(olc::Key::Q).bPressed) quads.emplace_back(cam_pos);
-		}
-#pragma endregion
+		if(!IsConsoleShowing()) handleUserInput(dt);
 
 #pragma region GEOMETRY AND CLIPPING
+		cmn::Stopwatch geom_watch;
 		if(to_time) geom_watch.start();
 
 		const vf3d up(0, 1, 0);
@@ -421,10 +546,12 @@ struct VoxelGame : olc::PixelGameEngine {
 
 			//tesselation
 			Triangle f1{tl, br, tr};
-			tris_to_project.emplace_back(f1);
+			tris_to_project.push_back(f1);
 			Triangle f2{tl, bl, br};
-			tris_to_project.emplace_back(f2);
+			tris_to_project.push_back(f2);
 		}
+
+		std::list<Line> lines_to_project;
 		if(show_render) {
 			//camera sizing
 			float w=.75f, h=w*render.getHeight()/render.getWidth();
@@ -444,19 +571,23 @@ struct VoxelGame : olc::PixelGameEngine {
 			vf3d bl=ctr-w/2*rgt+h/2*up;
 			vf3d br=ctr-w/2*rgt-h/2*up;
 
-			//tesselation
-			Triangle f1{tl, tr, br};
-			tris_to_project.emplace_back(f1);
-			Triangle f2{tl, br, bl};
-			tris_to_project.emplace_back(f2);
-			Triangle s1{tl, bl, pos};
-			tris_to_project.emplace_back(s1);
-			Triangle s2{bl, br, pos};
-			tris_to_project.emplace_back(s2);
-			Triangle s3{br, tr, pos};
-			tris_to_project.emplace_back(s3);
-			Triangle s4{tr, tl, pos};
-			tris_to_project.emplace_back(s4);
+			//show camera wireframe
+			Line l1{tl, tr}; l1.col=orange_col;
+			lines_to_project.push_back(l1);
+			Line l2{tr, br}; l2.col=orange_col;
+			lines_to_project.push_back(l2);
+			Line l3{br, bl}; l3.col=orange_col;
+			lines_to_project.push_back(l3);
+			Line l4{bl, tl}; l4.col=orange_col;
+			lines_to_project.push_back(l4);
+			Line l5{tl, pos}; l5.col=orange_col;
+			lines_to_project.push_back(l5);
+			Line l6{tr, pos}; l6.col=orange_col;
+			lines_to_project.push_back(l6);
+			Line l7{br, pos}; l7.col=orange_col;
+			lines_to_project.push_back(l7);
+			Line l8{bl, pos}; l8.col=orange_col;
+			lines_to_project.push_back(l8);
 		}
 
 		std::list<Triangle> tris_to_clip;
@@ -510,17 +641,57 @@ struct VoxelGame : olc::PixelGameEngine {
 					}
 					tri_proj.col=clipped[i].col;
 
-					tris_to_clip.emplace_back(tri_proj);
+					tris_to_clip.push_back(tri_proj);
 				}
 			}
 		}
 
-		/*painters algorithm?
-		tris_to_clip.sort([] (const Triangle& a, const Triangle& b) {
-			float a_z=a.p[0].z+a.p[1].z+a.p[2].z;
-			float b_z=b.p[0].z+b.p[1].z+b.p[2].z;
-			return a_z>b_z;
-		});*/
+		std::list<Line> lines_to_clip;
+		for(const auto& line:lines_to_project) {
+			//transform triangles given camera positioning
+			Line line_view;
+			for(int i=0; i<2; i++) {
+				line_view.p[i]=line.p[i]*mat_view;
+				line_view.t[i]=line.t[i];
+			}
+			line_view.col=line.col;
+
+			//clip against near plane
+			Line clipped[2];
+			int num=line_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
+			for(int i=0; i<num; i++) {
+				Line line_proj;
+				//for each vert
+				for(int j=0; j<2; j++) {
+					//project
+					line_proj.p[j]=clipped[i].p[j]*mat_proj;
+
+					//copy over texture stuff
+					line_proj.t[j]=clipped[i].t[j];
+
+					//w normalization?
+					float w=line_proj.p[j].w;
+					line_proj.t[j].u/=w;
+					line_proj.t[j].v/=w;
+					line_proj.t[j].w=1/w;
+
+					//scale into view
+					line_proj.p[j]/=w;
+
+					//x/y inverted so put them back
+					line_proj.p[j].x*=-1;
+					line_proj.p[j].y*=-1;
+
+					//offset into visible normalized space
+					line_proj.p[j]+=vf3d(1, 1, 0);
+					line_proj.p[j].x*=ScreenWidth()/2;
+					line_proj.p[j].y*=ScreenHeight()/2;
+				}
+				line_proj.col=clipped[i].col;
+
+				lines_to_clip.push_back(line_proj);
+			}
+		}
 
 		if(to_time) {
 			geom_watch.stop();
@@ -530,6 +701,7 @@ struct VoxelGame : olc::PixelGameEngine {
 #pragma endregion
 
 #pragma region RENDER
+		cmn::Stopwatch render_watch;
 		if(to_time) render_watch.start();
 
 		//dark grey background
@@ -578,7 +750,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					num_new--;
 
 					int num_clip=test.clipAgainstPlane(ctr, norm, clipped[0], clipped[1]);
-					for(int j=0; j<num_clip; j++) tri_queue.emplace_back(clipped[j]);
+					for(int j=0; j<num_clip; j++) tri_queue.push_back(clipped[j]);
 				}
 				num_new=tri_queue.size();
 			}
@@ -587,8 +759,61 @@ struct VoxelGame : olc::PixelGameEngine {
 			tris_to_draw.insert(tris_to_draw.end(), tri_queue.begin(), tri_queue.end());
 		}
 
+		//screen space clipping!
+		std::list<Line> line_queue;
+		std::list<Line> lines_to_draw;
+		for(const auto& l:lines_to_clip) {
+			Line clipped[2];
+			line_queue={l};
+			int num_new=1;
+			for(int i=0; i<4; i++) {
+				//choose plane on screen edge to clip with
+				vf3d ctr, norm;
+				switch(i) {
+					case 0://left
+						ctr=vf3d(0, 0, 0);
+						norm=vf3d(1, 0, 0);
+						break;
+					case 1://right
+						ctr=vf3d(ScreenWidth(), 0, 0);
+						norm=vf3d(-1, 0, 0);
+						break;
+					case 2://top
+						ctr=vf3d(0, 0, 0);
+						norm=vf3d(0, 1, 0);
+						break;
+					case 3://bottom
+						ctr=vf3d(0, ScreenHeight(), 0);
+						norm=vf3d(0, -1, 0);
+						break;
+				}
+
+				//iteratively clip all lines
+				while(num_new>0) {
+					Line test=line_queue.front();
+					line_queue.pop_front();
+					num_new--;
+
+					int num_clip=test.clipAgainstPlane(ctr, norm, clipped[0], clipped[1]);
+					for(int j=0; j<num_clip; j++) line_queue.push_back(clipped[j]);
+				}
+				num_new=line_queue.size();
+			}
+
+			//add to conglomerate
+			lines_to_draw.insert(lines_to_draw.end(), line_queue.begin(), line_queue.end());
+		}
+
 		//rasterize all triangles
 		for(const auto& t:tris_to_draw) {
+			if(show_outlines) {
+				DepthTriangle(
+					t.p[0].x, t.p[0].y, t.t[0].w,
+					t.p[1].x, t.p[1].y, t.t[1].w,
+					t.p[2].x, t.p[2].y, t.t[2].w,
+					olc::BLACK
+				);
+			}
 			TexturedTriangle(
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
@@ -596,6 +821,15 @@ struct VoxelGame : olc::PixelGameEngine {
 				t.col
 			);
 		}
+		for(const auto& l:lines_to_draw) {
+			DepthLine(
+				l.p[0].x, l.p[0].y, l.t[0].w,
+				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.col
+			);
+		}
+
+		//debug options
 		switch(debug_view) {
 			case Debug::DEPTH: {
 				//find min and max values
@@ -640,15 +874,19 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 
-		//show white triangle outlines
-		if(show_outlines) {
-			for(const auto& t:tris_to_draw) {
-				DrawTriangle(
-					vf2d(t.p[0].x, t.p[0].y),
-					vf2d(t.p[1].x, t.p[1].y),
-					vf2d(t.p[2].x, t.p[2].y),
-					olc::BLACK
-				);
+		if(show_edges) {
+			//edge detection based on depth values
+			for(int i=1; i<ScreenWidth()-1; i++) {
+				for(int j=1; j<ScreenHeight()-1; j++) {
+					bool curr=depth_buffer[i+ScreenWidth()*j]==0;
+					bool lft=depth_buffer[i-1+ScreenWidth()*j]==0;
+					bool rgt=depth_buffer[i+1+ScreenWidth()*j]==0;
+					bool top=depth_buffer[i+ScreenWidth()*(j-1)]==0;
+					bool btm=depth_buffer[i+ScreenWidth()*(j+1)]==0;
+					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
+						Draw(i, j, orange_col);
+					}
+				}
 			}
 		}
 
