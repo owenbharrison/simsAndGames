@@ -7,6 +7,8 @@ using olc::vf2d;
 
 #include "pixel_set.h"
 
+#include "common/stopwatch.h"
+
 struct PixelGame : olc::PixelGameEngine {
 	PixelGame() {
 		sAppName="Pixels";
@@ -192,7 +194,7 @@ struct PixelGame : olc::PixelGameEngine {
 	void resetCommand() {
 		//english + logic = grammar :D
 		int num=pixelsets.size();
-		std::cout<<"removed ";
+		std::cout<<"  removed ";
 		std::cout<<num;
 		std::cout<<" pixelset";
 		if(num!=1) std::cout<<'s';
@@ -204,7 +206,7 @@ struct PixelGame : olc::PixelGameEngine {
 	void countCommand() {
 		//english + logic = grammar :D
 		int num=pixelsets.size();
-		std::cout<<"there ";
+		std::cout<<"  there ";
 		std::cout<<(num==1?"is ":"are ");
 		std::cout<<num;
 		std::cout<<" pixelset";
@@ -214,7 +216,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 	bool usageCommand() {
 		if(pixelsets.empty()) {
-			std::cout<<"n/a\n";
+			std::cout<<"  n/a\n";
 
 			return false;
 		}
@@ -230,23 +232,21 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 		}
 		int pct=100.f*num/total;
-		std::cout<<pct<<"% usage\n";
+		std::cout<<"  "<<pct<<"% usage\n";
 
 		return true;
 	}
 
-	bool exportCommand(std::stringstream& line_str) {
-		std::string filename;
-		line_str>>filename;
+	bool exportCommand(std::string& filename) {
 		if(filename.empty()) {
-			std::cout<<"no filename. try using:\n  export <filename>\n";
+			std::cout<<"  no filename. try using:\n  export <filename>\n";
 
 			return false;
 		}
 
 		std::ofstream file_out(filename);
 		if(file_out.fail()) {
-			std::cout<<"invalid filename.\n";
+			std::cout<<"  invalid filename.\n";
 
 			return false;
 		}
@@ -270,23 +270,21 @@ struct PixelGame : olc::PixelGameEngine {
 		}
 		file_out.close();
 
-		std::cout<<"successfully exported to: "<<filename<<'\n';
+		std::cout<<"  successfully exported to: "<<filename<<'\n';
 
 		return true;
 	}
 
-	bool importCommand(std::stringstream& line_str) {
-		std::string filename;
-		line_str>>filename;
+	bool importCommand(std::string& filename) {
 		if(filename.empty()) {
-			std::cout<<"no filename. try using:\n  import <filename>\n";
+			std::cout<<"  no filename. try using:\n  import <filename>\n";
 
 			return false;
 		}
 
 		std::ifstream file_in(filename);
 		if(file_in.fail()) {
-			std::cout<<"invalid filename.\n";
+			std::cout<<"  invalid filename.\n";
 
 			return false;
 		}
@@ -320,7 +318,7 @@ struct PixelGame : olc::PixelGameEngine {
 				//read h lines
 				for(int j=0; j<h; j++) {
 					std::getline(file_in, line);
-					line_str.clear(), line_str<<line;
+					line_str.str(line);
 					//read w "bits"
 					for(int i=0; i<w; i++) {
 						p(i, j)=line[i]=='1';
@@ -338,7 +336,7 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 		}
 
-		std::cout<<"successfully imported from: "<<filename<<'\n';
+		std::cout<<"  successfully imported from: "<<filename<<'\n';
 
 		return true;
 	}
@@ -377,29 +375,25 @@ struct PixelGame : olc::PixelGameEngine {
 			return true;
 		}
 
-		if(cmd=="cast") {
-			if(ray_orig) {
-				delete ray_orig;
-				ray_orig=nullptr;
-				std::cout<<"raycasting off\n";
-			} else {
-				ray_orig=new vf2d(wld_mouse_pos);
-				std::cout<<"raycasting on\n";
-			}
-
-			return true;
+		if(cmd=="export") {
+			std::string filename;
+			line_str>>filename;
+			return exportCommand(filename);
 		}
 
-		if(cmd=="export") return exportCommand(line_str);
-
-		if(cmd=="import") return importCommand(line_str);
+		if(cmd=="import") {
+			std::string filename;
+			line_str>>filename;
+			return importCommand(filename);
+		}
 
 		if(cmd=="keybinds") {
-			std::cout<<"useful keybinds:\n"
+			std::cout<<
 				"  A      drag polygon to add new pixelset\n"
 				"  S      drag to slice thru pixelsets\n"
 				"  X      remove pixelset\n"
 				"  R      place all pixelsets randomly\n"
+				"  C      cast ray from chosen position to mouse\n"
 				"  B      toggle bounding box view\n"
 				"  W      toggle wireframe view\n"
 				"  G      toggle local grids view\n"
@@ -415,7 +409,7 @@ struct PixelGame : olc::PixelGameEngine {
 		}
 
 		if(cmd=="mousebinds") {
-			std::cout<<"useful mousebinds:\n"
+			std::cout<<
 				"  LEFT     drag to move pixelsets\n"
 				"  RIGHT    apply spring force to pixelset\n"
 				"  MIDDLE   scroll to zoom, drag to pan\n";
@@ -424,7 +418,7 @@ struct PixelGame : olc::PixelGameEngine {
 		}
 
 		if(cmd=="help") {
-			std::cout<<"useful commands:\n"
+			std::cout<<
 				"  clear        clears the console\n"
 				"  reset        removes all pixelsets\n"
 				"  count        how many pixelsets are there?\n"
@@ -439,7 +433,7 @@ struct PixelGame : olc::PixelGameEngine {
 			return true;
 		}
 
-		std::cout<<"unknown command. type help for list of commands.\n";
+		std::cout<<"  unknown command. type help for list of commands.\n";
 
 		return false;
 	}
@@ -612,6 +606,18 @@ struct PixelGame : olc::PixelGameEngine {
 				}
 
 				it++;
+			}
+		}
+
+		//toggle raycast feature
+		if(GetKey(olc::Key::C).bPressed) {
+			//if allocated, delete and reset
+			if(ray_orig) {
+				delete ray_orig;
+				ray_orig=nullptr;
+			} else {
+				//else allocate at mouse as flag to show
+				ray_orig=new vf2d(wld_mouse_pos);
 			}
 		}
 
@@ -825,7 +831,7 @@ struct PixelGame : olc::PixelGameEngine {
 		//draw grey background
 		Clear(olc::Pixel(143, 201, 255));
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
-		
+
 		renderWorldGrid(olc::Pixel(25, 131, 230));
 
 		//show addition
@@ -942,24 +948,22 @@ struct PixelGame : olc::PixelGameEngine {
 
 	//just a wrapper for timing and logic separation
 	bool OnUserUpdate(float dt) override {
-		auto update_start=std::chrono::steady_clock::now();
+		cmn::Stopwatch update_watch;
+		update_watch.start();
 		update(dt);
 		if(to_time) {
-			auto end=std::chrono::steady_clock::now();
-			auto dur=std::chrono::duration_cast<std::chrono::microseconds>(end-update_start);
-			auto us=dur.count();
-			auto ms=us/1000.f;
-			std::cout<<"update: "<<us<<"us ("<<ms<<"ms)\n";
+			update_watch.stop();
+			auto us=update_watch.getMicros();
+			std::cout<<"  update: "<<us<<"us ("<<(us/1000.f)<<"ms)\n";
 		}
 
-		auto render_start=std::chrono::steady_clock::now();
+		cmn::Stopwatch render_watch;
+		render_watch.start();
 		render(dt);
 		if(to_time) {
-			auto end=std::chrono::steady_clock::now();
-			auto dur=std::chrono::duration_cast<std::chrono::microseconds>(end-render_start);
-			auto us=dur.count();
-			auto ms=us/1000.f;
-			std::cout<<"render: "<<us<<"us ("<<ms<<"ms)\n";
+			render_watch.stop();
+			auto us=render_watch.getMicros();
+			std::cout<<"  render: "<<us<<"us ("<<(us/1000.f)<<"ms)\n";
 
 			to_time=false;
 		}
