@@ -1,6 +1,6 @@
 #pragma once
-#ifndef SHAPE_STRUCT_H
-#define SHAPE_STRUCT_H
+#ifndef SHAPE_CLASS_H
+#define SHAPE_CLASS_H
 
 #include "constraint.h"
 #include "spring.h"
@@ -26,16 +26,25 @@ vf2d reflect(const vf2d& in, const vf2d& norm) {
 
 class Shape {
 	int num_pts=0;
-	
-	void copyFrom(const Shape&), clear();
 
-	void updateMass();
+	//construction helpers
+	void initMass();
+	void initAnchors();
 	void connectConstraints(), connectSprings();
+
+	//copy helpers
+	void copyFrom(const Shape&), clear();
 
 public:
 	PointMass* points=nullptr;
 	std::list<Constraint> constraints;
 	std::list<Spring> springs;
+
+	//shape matching stuff
+	vf2d* anchors=nullptr;
+	bool anchored=false;
+	vf2d anchor_pos;
+	float anchor_rot=0;
 
 	Shape(vf2d pos, float rad, int n=24) :
 		num_pts(n) {
@@ -47,7 +56,9 @@ public:
 			points[i]=PointMass(pos+off);
 		}
 
-		updateMass();
+		initMass();
+
+		initAnchors();
 
 		connectConstraints();
 		connectSprings();
@@ -60,7 +71,9 @@ public:
 		points[2]=PointMass(a.max);
 		points[3]=PointMass({a.min.x, a.max.y});
 
-		updateMass();
+		initMass();
+
+		initAnchors();
 
 		connectConstraints();
 		connectSprings();
@@ -96,7 +109,7 @@ public:
 		for(int i=0; i<num_pts; i++) {
 			const auto& a=points[i].pos;
 			const auto& b=points[(i+1)%num_pts].pos;
-			sum+=a.cross(b);
+			sum+=a.x*b.y-a.y*b.x;
 		}
 		return sum;
 	}
@@ -135,6 +148,61 @@ public:
 
 		//odd?
 		return num_ix%2;
+	}
+
+	//apply same "force" to all points
+	//i.e. gravity or bouyancy
+	void accelerate(const vf2d& f) {
+		for(int i=0; i<num_pts; i++) {
+			points[i].accelerate(f);
+		}
+	}
+
+	void update(float dt) {
+		if(anchored) {
+			//rotation matrix
+			vf2d cosin=cmn::polar(1, anchor_rot);
+			auto rotate=[cosin] (const vf2d& p) {
+				return vf2d(
+					p.x*cosin.x-p.y*cosin.y,
+					p.x*cosin.y+p.y*cosin.x
+				);
+			};
+
+			//spring toward anchors
+			for(int i=0; i<num_pts; i++) {
+				const auto& p=points[i];
+				//bring anchor from local->world
+				PointMass p_temp(anchor_pos+rotate(anchors[i]), p.mass);
+				Spring s_temp(&points[i], &p_temp);
+				s_temp.rest_len=0;
+				s_temp.update();
+			}
+		} else {
+			//store when NOT anchored
+			getOrientation(anchor_pos, anchor_rot);
+		}
+
+		//update all constraints
+		for(auto& c:constraints) {
+			c.update();
+		}
+
+		//update all springs
+		for(auto& s:springs) {
+			s.update();
+		}
+
+		//update all particles
+		for(int i=0; i<num_pts; i++) {
+			points[i].update(dt);
+		}
+	}
+
+	void keepIn(const cmn::AABB& a) {
+		for(int i=0; i<num_pts; i++) {
+			points[i].keepIn(a);
+		}
 	}
 
 	//check point aginst MY polygon
@@ -202,14 +270,79 @@ public:
 			collide(s.points[i]);
 		}
 	}
+
+	void getOrientation(vf2d& pos, float& rot) {
+		//pos=center of mass
+		pos=getCOM();
+
+		//rot=avg angle between anchor and current points
+		float dot=0, cross=0;
+		for(int i=0; i<num_pts; i++) {
+			const auto& anc=anchors[i];
+			vf2d sub=points[i].pos-pos;
+			//accumulate direction
+			dot+=anc.x*sub.x+anc.y*sub.y;
+			cross+=anc.x*sub.y-anc.y*sub.x;
+		}
+		//signed angle
+		rot=std::atan2f(cross, dot);
+	}
 };
+
+void Shape::initMass() {
+	//ensure winding
+	float area=getArea();
+	if(area<0) {
+		area*=-1;
+		std::reverse(points, points+num_pts);
+	}
+
+	//distribute evenly
+	float ind_mass=area/num_pts;
+	for(int i=0; i<num_pts; i++) {
+		points[i].mass=ind_mass;
+	}
+}
+
+void Shape::initAnchors() {
+	anchors=new vf2d[num_pts];
+	vf2d ctr=getCOM();
+	for(int i=0; i<num_pts; i++) {
+		anchors[i]=points[i].pos-ctr;
+	}
+}
+
+void Shape::connectConstraints() {
+	for(int i=0; i<num_pts; i++) {
+		constraints.push_back(Constraint(&points[i], &points[(i+1)%num_pts]));
+	}
+}
+
+void Shape::connectSprings() {
+	for(int i=0; i<num_pts; i++) {
+		for(int j=i+2; j<num_pts-(i==0); j++) {
+			springs.push_back(Spring(&points[i], &points[j]));
+		}
+	}
+}
 
 void Shape::copyFrom(const Shape& shp) {
 	num_pts=shp.num_pts;
+
+	//copy points
 	points=new PointMass[num_pts];
 	for(int i=0; i<num_pts; i++) {
 		points[i]=shp.points[i];
 	}
+
+	//copy anchors
+	anchors=new vf2d[num_pts];
+	for(int i=0; i<num_pts; i++) {
+		anchors[i]=shp.anchors[i];
+	}
+	anchored=shp.anchored;
+	anchor_pos=shp.anchor_pos;
+	anchor_rot=shp.anchor_rot;
 
 	//pointer lookup to copy over constraints and springs
 	std::unordered_map<PointMass*, PointMass*> shp_to_me;
@@ -242,36 +375,9 @@ void Shape::copyFrom(const Shape& shp) {
 void Shape::clear() {
 	delete[] points;
 
+	delete[] anchors;
+
 	constraints.clear();
 	springs.clear();
-}
-
-void Shape::updateMass() {
-	//ensure winding
-	float area=getArea();
-	if(area<0) {
-		area*=-1;
-		std::reverse(points, points+num_pts);
-	}
-
-	//distribute evenly
-	float ind_mass=area/num_pts;
-	for(int i=0; i<num_pts; i++) {
-		points[i].mass=ind_mass;
-	}
-}
-
-void Shape::connectConstraints() {
-	for(int i=0; i<num_pts; i++) {
-		constraints.emplace_back(&points[i], &points[(i+1)%num_pts]);
-	}
-}
-
-void Shape::connectSprings() {
-	for(int i=0; i<num_pts; i++) {
-		for(int j=i+2; j<num_pts-(i==0); j++) {
-			springs.emplace_back(&points[i], &points[j]);
-		}
-	}
 }
 #endif//SHAPE_STRUCT_H

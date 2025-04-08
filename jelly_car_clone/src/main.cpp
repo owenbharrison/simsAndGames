@@ -37,10 +37,11 @@ struct JellyCarGame : olc::PixelGameEngine {
 	bool show_grid=true;
 	bool show_springs=false;
 	bool show_mass=false;
+	bool show_anchors=false;
 
 	bool OnUserCreate() override {
 		srand(time(0));
-		
+
 		//setup some primitives to draw with
 		prim_rect_spr=new olc::Sprite(1, 1);
 		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
@@ -63,7 +64,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 		//initialize physics stuff
 		mouse_point.locked=true;
 		gravity={0, 9.8f};
-		
+
 		//zoom to phys_bounds
 		phys_bounds={{-14, -10}, {14, 10}};
 		zoomToFit();
@@ -145,7 +146,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 	void handleUserInput() {
 		//adding ngons
-		if(GetKey(olc::Key::A).bPressed) {
+		if(GetMouse(olc::Mouse::RIGHT).bPressed) {
 			int num=4+rand()%9;
 			float rad=cmn::random(1, 2.5f);
 			shapes.emplace_back(new Shape(wld_mouse_pos, rad, num));
@@ -195,8 +196,18 @@ struct JellyCarGame : olc::PixelGameEngine {
 			mouse_constraint.clear();
 		}
 
+		//anchoring
+		if(GetKey(olc::Key::A).bPressed) {
+			for(const auto& s:shapes) {
+				//toggle anchor status
+				if(s->contains(wld_mouse_pos)) {
+					s->anchored^=true;
+				}
+			}
+		}
+
 		//reset view
-		if(GetKey(olc::Key::HOME).bPressed) zoomToFit();
+		if(GetKey(olc::Key::Z).bHeld) zoomToFit();
 
 		//zooming
 		if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, scr_mouse_pos);
@@ -236,29 +247,19 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 		}
 
-		//shape updating + gravity
+		//gravity, update, check bounds
 		for(const auto& shp:shapes) {
-			for(auto& c:shp->constraints) {
-				c.update();
-			}
+			shp->accelerate(gravity);
 
-			for(auto& s:shp->springs) {
-				s.update(dt);
-			}
+			shp->update(dt);
 
-			for(int i=0; i<shp->getNum(); i++) {
-				auto& p=shp->points[i];
-				p.applyForce(p.mass*gravity);
-				p.update(dt);
-				p.keepIn(phys_bounds);
-			}
+			shp->keepIn(phys_bounds);
 		}
 	}
 
 	void update(float dt) {
 		//make sure simulation doesnt blow up?
-		const float max_dt=1/60.f;
-		if(dt>max_dt) dt=max_dt;
+		dt=cmn::clamp(dt, 1/165.f, 1/60.f);
 
 		scr_mouse_pos=GetMousePos();
 		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
@@ -307,6 +308,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 		if(show_grid) {
 			const auto grid_spacing=1;
+			const olc::Pixel grid_col(0, 255, 255);
 
 			//screen bounds in world space, snap to nearest
 			vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
@@ -317,16 +319,16 @@ struct JellyCarGame : olc::PixelGameEngine {
 			for(int i=i_s; i<=i_e; i++) {
 				float x=grid_spacing*i;
 				vf2d top{x, tl.y}, btm{x, br.y};
-				if(i%10==0) tvDrawThickLine(top, btm, .1f, olc::GREY);
-				else tv.DrawLineDecal(top, btm, olc::GREY);
+				if(i%10==0) tvDrawThickLine(top, btm, .1f, grid_col);
+				else tv.DrawLineDecal(top, btm, grid_col);
 			}
 
 			//horiz
 			for(int j=j_s; j<=j_e; j++) {
 				float y=grid_spacing*j;
 				vf2d lft{tl.x, y}, rgt{br.x, y};
-				if(j%10==0) tvDrawThickLine(lft, rgt, .1f, olc::GREY);
-				else tv.DrawLineDecal(lft, rgt, olc::GREY);
+				if(j%10==0) tvDrawThickLine(lft, rgt, .1f, grid_col);
+				else tv.DrawLineDecal(lft, rgt, grid_col);
 			}
 		}
 
@@ -335,66 +337,87 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 		//draw shapes
 		for(const auto& shp:shapes) {
-			//initialize indexes
-			std::list<int> indexes;
-			for(int i=0; i<shp->getNum(); i++) indexes.emplace_back(i);
-
-			//ear clipping triangulation
-			for(auto curr=indexes.begin(); curr!=indexes.end();) {
-				//get previous and next points
-				auto prev=std::prev(curr==indexes.begin()?indexes.end():curr);
-				auto next=std::next(curr); if(next==indexes.end()) next=indexes.begin();
-				const auto& pt_p=shp->points[*prev].pos;
-				const auto& pt_c=shp->points[*curr].pos;
-				const auto& pt_n=shp->points[*next].pos;
-
-				//make sure this is a convex angle
-				if((pt_p-pt_c).cross(pt_n-pt_c)>0) {
-					curr++;
-					continue;
+			//show anchors
+			if(shp->anchored) {
+				//rotation matrix
+				vf2d cosin=cmn::polar(1, shp->anchor_rot);
+				auto rotate=[cosin] (const vf2d& p) {
+					return vf2d(
+						p.x*cosin.x-p.y*cosin.y,
+						p.x*cosin.y+p.y*cosin.x
+					);
+				};
+				
+				//outlines
+				for(int i=0; i<shp->getNum(); i++) {
+					vf2d a=shp->anchor_pos+rotate(shp->anchors[i]);
+					vf2d b=shp->anchor_pos+rotate(shp->anchors[(i+1)%shp->getNum()]);
+					tvDrawThickLine(a, b, .1f, olc::GREY);
+					tvFillCircle(a, .1f, olc::GREY);
 				}
-
-				//make sure this triangle doesnt contain any pts
-				bool contains=false;
-				for(auto other=std::next(curr); other!=indexes.end(); other++) {
-					//dont check self
-					if(other==next) continue;
-
-					//is this point to the left/right of all trilines
-					const auto& pt_o=shp->points[*other].pos;
-					bool side1=(pt_c-pt_p).cross(pt_o-pt_p)>0;
-					bool side2=(pt_n-pt_c).cross(pt_o-pt_c)>0;
-					bool side3=(pt_p-pt_n).cross(pt_o-pt_n)>0;
-					if(side1==side2&&side2==side3) {
-						contains=true;
-						break;
-					}
-				}
-
-				//this is an ear!
-				if(!contains) {
-					tv.DrawWarpedDecal(prim_rect_dec, {pt_p, pt_c, pt_n, pt_n});
-
-					//remove this index and start over
-					indexes.erase(curr);
-					curr=indexes.begin();
-				} else curr++;
 			}
 
-			//constraints
+			//fill
+			{
+				//initialize indexes
+				std::list<int> indexes;
+				for(int i=0; i<shp->getNum(); i++) indexes.emplace_back(i);
+
+				//ear clipping triangulation
+				for(auto curr=indexes.begin(); curr!=indexes.end();) {
+					//get previous and next points
+					auto prev=std::prev(curr==indexes.begin()?indexes.end():curr);
+					auto next=std::next(curr); if(next==indexes.end()) next=indexes.begin();
+					const auto& pt_p=shp->points[*prev].pos;
+					const auto& pt_c=shp->points[*curr].pos;
+					const auto& pt_n=shp->points[*next].pos;
+
+					//make sure this is a convex angle
+					if((pt_p-pt_c).cross(pt_n-pt_c)>0) {
+						curr++;
+						continue;
+					}
+
+					//make sure this triangle doesnt contain any pts
+					bool contains=false;
+					for(auto other=std::next(curr); other!=indexes.end(); other++) {
+						//dont check self
+						if(other==next) continue;
+
+						//is this point to the left/right of all trilines
+						const auto& pt_o=shp->points[*other].pos;
+						bool side1=(pt_c-pt_p).cross(pt_o-pt_p)>0;
+						bool side2=(pt_n-pt_c).cross(pt_o-pt_c)>0;
+						bool side3=(pt_p-pt_n).cross(pt_o-pt_n)>0;
+						if(side1==side2&&side2==side3) {
+							contains=true;
+							break;
+						}
+					}
+
+					//this is an ear!
+					if(!contains) {
+						tv.DrawWarpedDecal(prim_rect_dec, {pt_p, pt_c, pt_n, pt_n});
+
+						//remove this index and start over
+						indexes.erase(curr);
+						curr=indexes.begin();
+					} else curr++;
+				}
+			}
+
+			//constraint outlines
 			for(const auto& c:shp->constraints) {
 				tvDrawThickLine(c.a->pos, c.b->pos, .1f, olc::BLACK);
 				tvFillCircle(c.a->pos, .1f, olc::BLACK);
 			}
 
-			//springs
 			if(show_springs) {
 				for(const auto& s:shp->springs) {
-					tv.DrawLineDecal(s.a->pos, s.b->pos, olc::RED);
+					tv.DrawLineDecal(s.a->pos, s.b->pos, olc::GREEN);
 				}
 			}
 
-			//mass
 			if(show_mass) {
 				float mass=0;
 				vf2d ctr=shp->getCOM();

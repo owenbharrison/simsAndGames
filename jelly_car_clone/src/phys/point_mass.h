@@ -14,9 +14,24 @@ struct PointMass {
 
 	PointMass() {}
 
-	PointMass(vf2d p) : pos(p), oldpos(p) {}
+	PointMass(vf2d p) {
+		pos=p;
+		oldpos=p;
+	}
+	
+	PointMass(vf2d p, float m) {
+		pos=p;
+		oldpos=p;
+		mass=m;
+	}
 
-	void applyForce(const vf2d& f) { force+=f; }
+	void applyForce(const vf2d& f) {
+		force+=f;
+	}
+
+	void accelerate(const vf2d& f) {
+		applyForce(mass*f);
+	}
 
 	void update(float dt) {
 		//update pos store
