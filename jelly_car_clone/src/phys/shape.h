@@ -46,6 +46,8 @@ public:
 	float anchor_rot=0;
 	bool anchored=false;
 
+	olc::Pixel col=olc::WHITE;
+
 	Shape() {}
 
 	Shape(int n) {
@@ -352,6 +354,9 @@ void Shape::copyFrom(const Shape& shp) {
 	anchor_pos=shp.anchor_pos;
 	anchor_rot=shp.anchor_rot;
 	anchored=shp.anchored;
+
+	//copy colors
+	col=shp.col;
 
 	//pointer lookup to copy over constraints and springs
 	std::unordered_map<PointMass*, PointMass*> shp_to_me;

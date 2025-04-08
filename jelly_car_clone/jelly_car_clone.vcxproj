@@ -28,7 +28,8 @@
     <ClInclude Include="src\phys\spring.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\thing.txt" />
+    <Text Include="assets\bridge.txt" />
+    <Text Include="assets\stacked.txt" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

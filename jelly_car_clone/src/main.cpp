@@ -10,6 +10,33 @@ using olc::vf2d;
 #include <sstream>
 #include <fstream>
 
+//https://www.rapidtables.com/convert/color/hsv-to-rgb.html
+olc::Pixel hsv2rgb(int h, float s, float v) {
+	float c=v*s;
+	float x=c*(1-std::fabsf(1-std::fmodf(h/60.f, 2.f)));
+	float m=v-c;
+	float r=0, g=0, b=0;
+	switch(h/60) {
+		case 0: r=c, g=x, b=0; break;
+		case 1: r=x, g=c, b=0; break;
+		case 2: r=0, g=c, b=x; break;
+		case 3: r=0, g=x, b=c; break;
+		case 4: r=x, g=0, b=c; break;
+		case 5: r=c, g=0, b=x; break;
+	}
+	return olc::PixelF(m+r, m+g, m+b);
+}
+
+olc::Pixel randomPastel() {
+	//hue=pure color
+	int h=rand()%360;
+	//saturation=intensity
+	float s=cmn::random(.1f, .4f);
+	//value=brightness
+	float v=cmn::random(.75f, 1);
+	return hsv2rgb(h, s, v);
+}
+
 struct JellyCarGame : olc::PixelGameEngine {
 	JellyCarGame() {
 		sAppName="Jelly Car Clone";
@@ -40,7 +67,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 	bool show_grid=true;
 	bool show_springs=false;
 	bool show_mass=false;
-	bool show_anchors=false;
+	bool show_wireframes=false;
 
 	bool OnUserCreate() override {
 		srand(time(0));
@@ -72,7 +99,9 @@ struct JellyCarGame : olc::PixelGameEngine {
 		phys_bounds={{-14, -10}, {14, 10}};
 		zoomToFit();
 
-		//std::cout goes into console
+		std::cout<<"Press ESC for integrated console.\n"
+			"  then type help for help.\n";
+		//std::cout diverted to console
 		ConsoleCaptureStdOut(true);
 
 		return true;
@@ -144,12 +173,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 		//print shapes line by line
 		for(const auto& shp:shapes) {
 			//shape designation
-			//s <#pts> <#csts> <#sprs>
+			//shp <#pts> <#csts> <#sprs>
 			file_out<<"shp "<<shp->getNum()<<' '
 				<<shp->constraints.size()<<' '
 				<<shp->springs.size()<<'\n';
 			//print points
-			//<x> <y> <mass> <?locked>
+			//p <x> <y> <mass> <?locked>
 			for(int i=0; i<shp->getNum(); i++) {
 				const auto& p=shp->points[i];
 				file_out<<"  p "<<
@@ -166,7 +195,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 
 			//print constraints
-			//<a> <b> <len>
+			//c <a> <b> <len>
 			for(const auto& c:shp->constraints) {
 				file_out<<"  c "<<
 					indexes[c.a]<<' '<<
@@ -175,7 +204,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 
 			//print springs
-			//<a> <b> <len> <stiff> <damp>
+			//s <a> <b> <len> <stiff> <damp>
 			for(const auto& s:shp->springs) {
 				file_out<<"  s "<<
 					indexes[s.a]<<' '<<
@@ -186,7 +215,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 
 			//print anchors
-			//<x> <y>
+			//a <x> <y>
 			for(int i=0; i<shp->getNum(); i++) {
 				const auto& a=shp->anchors[i];
 				file_out<<"  a "<<
@@ -195,12 +224,19 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 
 			//print orientation
-			//<x> <y> <rot> <?anchored>
+			//o <x> <y> <rot> <?anchored>
 			file_out<<"  o "<<
 				shp->anchor_pos.x<<' '<<
 				shp->anchor_pos.y<<' '<<
 				shp->anchor_rot<<' '<<
 				shp->anchored<<'\n';
+
+			//print tint
+			//t <r> <g> <b>
+			file_out<<"  t "<<
+				int(shp->col.r)<<' '<<
+				int(shp->col.g)<<' '<<
+				int(shp->col.b)<<'\n';
 		}
 
 		std::cout<<"  successfully exported to "<<filename<<'\n';
@@ -225,10 +261,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 		//parse file line by line
 		std::string line;
-		int line_nbr=0;
 		while(std::getline(file_in, line)) {
-			line_nbr++;
-
 			//get header
 			std::stringstream line_str(line);
 
@@ -253,13 +286,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 				//points
 				for(int i=0; i<num_pts; i++) {
 					std::getline(file_in, line);
-					line_nbr++;
 					line_str.str(line), line_str.clear();
 
 					//ensure type
 					line_str>>type;
 					if(type!="p") {
-						std::cout<<"  invalid point\n";
+						std::cout<<"  expected point.\n";
 						return false;
 					}
 
@@ -276,13 +308,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 				//constraints
 				for(int i=0; i<num_csts; i++) {
 					std::getline(file_in, line);
-					line_nbr++;
 					line_str.str(line), line_str.clear();
 
 					//ensure type
 					line_str>>type;
 					if(type!="c") {
-						std::cout<<"  invalid constraint\n";
+						std::cout<<"  expected constraint.\n";
 						return false;
 					}
 
@@ -291,7 +322,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 					float l;
 					line_str>>a>>b>>l;
 					if(a<0||b<0||a>=num_pts||b>=num_pts) {
-						std::cout<<"  invalid constraint\n";
+						std::cout<<"  invalid constraint.\n";
 						return false;
 					}
 
@@ -306,13 +337,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 				//springs
 				for(int i=0; i<num_sprs; i++) {
 					std::getline(file_in, line);
-					line_nbr++;
 					line_str.str(line), line_str.clear();
 
 					//ensure type
 					line_str>>type;
 					if(type!="s") {
-						std::cout<<"  invalid spring\n";
+						std::cout<<"  expected spring.\n";
 						return false;
 					}
 
@@ -321,7 +351,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 					float l, k, d;
 					line_str>>a>>b>>l>>k>>d;
 					if(a<0||b<0||a>=num_pts||b>=num_pts) {
-						std::cout<<"  invalid spring\n";
+						std::cout<<"  invalid spring.\n";
 						return false;
 					}
 
@@ -338,13 +368,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 				//anchors
 				for(int i=0; i<num_pts; i++) {
 					std::getline(file_in, line);
-					line_nbr++;
 					line_str.str(line), line_str.clear();
 
 					//ensure type
 					line_str>>type;
 					if(type!="a") {
-						std::cout<<"  invalid anchor\n";
+						std::cout<<"  expected anchor.\n";
 						return false;
 					}
 
@@ -358,13 +387,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 				//orientation
 				{
 					std::getline(file_in, line);
-					line_nbr++;
 					line_str.str(line), line_str.clear();
 
 					//ensure type
 					line_str>>type;
 					if(type!="o") {
-						std::cout<<"  invalid orientation\n";
+						std::cout<<"  expected orientation.\n";
 						return false;
 					}
 
@@ -376,12 +404,34 @@ struct JellyCarGame : olc::PixelGameEngine {
 						shp.anchored;
 				}
 
+				//tint
+				{
+					std::getline(file_in, line);
+					line_str.str(line), line_str.clear();
+
+					//ensure type
+					line_str>>type;
+					if(type!="t") {
+						std::cout<<"  expected tint.\n";
+						return false;
+					}
+
+					//parse data
+					int r, g, b;
+					line_str>>r>>g>>b;
+
+					//construct
+					shp.col.r=r;
+					shp.col.g=g;
+					shp.col.b=b;
+				}
+
 				//add to list
 				shapes.push_back(new Shape(shp));
 			}
 		}
 
-		std::cout<<"successfully imported from "<<filename<<'\n';
+		std::cout<<"  successfully imported from "<<filename<<'\n';
 
 		file_in.close();
 		return true;
@@ -392,15 +442,33 @@ struct JellyCarGame : olc::PixelGameEngine {
 		std::stringstream line_str(line);
 		std::string cmd; line_str>>cmd;
 
-		if(cmd=="clear") ConsoleClear();
+		if(cmd=="clear") {
+			ConsoleClear();
 
-		else if(cmd=="count") {
-			std::cout<<"there are "<<shapes.size()<<" shapes\n";
+			return true;
 		}
 
 		else if(cmd=="reset") {
-			std::cout<<"removed "<<shapes.size()<<" shapes\n";
+			//english+logic=grammar :D
+			int num=shapes.size();
+			std::cout<<"  removed "<<num<<" shape";
+			if(num!=1) std::cout<<'s';
+			std::cout<<'\n';
 			reset();
+
+			return true;
+		}
+
+		else if(cmd=="count") {
+			//english + logic = grammar :D
+			int num=shapes.size();
+			std::cout<<"  there ";
+			std::cout<<(num==1?"is":"are");
+			std::cout<<' '<<num<<" shape";
+			if(num!=1) std::cout<<'s';
+			std::cout<<'\n';
+
+			return true;
 		}
 
 		if(cmd=="export") {
@@ -415,16 +483,57 @@ struct JellyCarGame : olc::PixelGameEngine {
 			return importCommand(filename);
 		}
 
-		return true;
+		if(cmd=="keybinds") {
+			std::cout<<"useful keybinds:\n"
+				"  R     drag to add rect\n"
+				"  A     anchor shape\n"
+				"  X     remove shape\n"
+				"  G     toggle grid\n"
+				"  S     toggle spring view\n"
+				"  W     toggle wireframe view\n"
+				"  M     toggle mass view\n"
+				"  Z     zoom to fit\n"
+				"  ESC   toggle integrated console\n";
+
+			return true;
+		}
+
+		if(cmd=="mousebinds") {
+			std::cout<<"useful mousebinds:\n"
+				"  LEFT     drag to move shapes\n"
+				"  RIGHT    add random ngon\n"
+				"  MIDDLE   scroll to zoom, drag to pan\n";
+
+			return true;
+		}
+
+		if(cmd=="help") {
+			std::cout<<"useful commands:\n"
+				"  clear        clears the console\n"
+				"  reset        removes all shapes\n"
+				"  count        how many shapes are there?\n"
+				"  export       exports shapes to specified file\n"
+				"  import       imports shapes from specified file\n"
+				"  keybinds     which keys to press for this program?\n"
+				"  mousebinds   which buttons to press for this program?\n";
+
+			return true;
+		}
+
+		std::cout<<"  unknown command. type help for list of commands.\n";
+
+		return false;
 	}
 
 #pragma region UPDATE HELPERS
 	void handleUserInput() {
 		//adding ngons
 		if(GetMouse(olc::Mouse::RIGHT).bPressed) {
-			int num=4+rand()%9;
-			float rad=cmn::random(1, 2.5f);
-			shapes.emplace_back(new Shape(wld_mouse_pos, rad, num));
+			int num=3+rand()%9;
+			float rad=cmn::random(1, 3);
+			Shape* s=new Shape(wld_mouse_pos, rad, num);
+			s->col=randomPastel();
+			shapes.emplace_back(s);
 		}
 
 		//adding rectangles
@@ -498,6 +607,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 		if(GetKey(olc::Key::S).bPressed) show_springs^=true;
 		if(GetKey(olc::Key::M).bPressed) show_mass^=true;
+		if(GetKey(olc::Key::W).bPressed) show_wireframes^=true;
 	}
 
 	void handlePhysics(float dt) {
@@ -580,11 +690,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 #pragma endregion
 
 	void render() {
-		Clear(olc::Pixel(0, 100, 255));
+		Clear(olc::WHITE);
+		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
 
 		if(show_grid) {
 			const auto grid_spacing=1;
-			const olc::Pixel grid_col(0, 255, 255);
+			const olc::Pixel grid_col(0, 187, 255);
 
 			//screen bounds in world space, snap to nearest
 			vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
@@ -609,7 +720,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 		}
 
 		//show phys bounds
-		tvDrawAABB(phys_bounds, .1f, olc::RED);
+		tvDrawAABB(phys_bounds, .1f, olc::Pixel(255, 33, 122));
 
 		//draw shapes
 		for(const auto& shp:shapes) {
@@ -628,8 +739,8 @@ struct JellyCarGame : olc::PixelGameEngine {
 				for(int i=0; i<shp->getNum(); i++) {
 					vf2d a=shp->anchor_pos+rotate(shp->anchors[i]);
 					vf2d b=shp->anchor_pos+rotate(shp->anchors[(i+1)%shp->getNum()]);
-					tvDrawThickLine(a, b, .1f, olc::GREY);
-					tvFillCircle(a, .1f, olc::GREY);
+					tvDrawThickLine(a, b, .05f, olc::GREY);
+					tvFillCircle(a, .05f, olc::GREY);
 				}
 			}
 
@@ -673,7 +784,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 					//this is an ear!
 					if(!contains) {
-						tv.DrawWarpedDecal(prim_rect_dec, {pt_p, pt_c, pt_n, pt_n});
+						tv.DrawWarpedDecal(prim_rect_dec, {pt_p, pt_c, pt_n, pt_n}, shp->col);
 
 						//remove this index and start over
 						indexes.erase(curr);

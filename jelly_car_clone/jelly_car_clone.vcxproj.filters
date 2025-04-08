@@ -34,6 +34,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\thing.txt" />
+    <Text Include="assets\stacked.txt" />
+    <Text Include="assets\bridge.txt" />
   </ItemGroup>
 </Project>
