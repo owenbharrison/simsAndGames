@@ -12,7 +12,7 @@ using olc::vf2d;
 
 struct JellyCarGame : olc::PixelGameEngine {
 	JellyCarGame() {
-		sAppName="Jelly Car";
+		sAppName="Jelly Car Clone";
 	}
 
 	//rendering "primitives"
@@ -131,13 +131,13 @@ struct JellyCarGame : olc::PixelGameEngine {
 #pragma region COMMAND HELPERS
 	bool exportCommand(std::string& filename) {
 		if(filename.empty()) {
-			std::cout<<"no filename. try using:\n  export <filename>\n";
+			std::cout<<"  no filename. try using:\n  export <filename>\n";
 			return false;
 		}
 
 		std::ofstream file_out(filename);
 		if(file_out.fail()) {
-			std::cout<<"invalid filename.\n";
+			std::cout<<"  invalid filename.\n";
 			return false;
 		}
 
@@ -145,29 +145,19 @@ struct JellyCarGame : olc::PixelGameEngine {
 		for(const auto& shp:shapes) {
 			//shape designation
 			//s <#pts> <#csts> <#sprs>
-			file_out<<"s "<<shp->getNum()<<' '
+			file_out<<"shp "<<shp->getNum()<<' '
 				<<shp->constraints.size()<<' '
 				<<shp->springs.size()<<'\n';
 			//print points
 			//<x> <y> <mass> <?locked>
 			for(int i=0; i<shp->getNum(); i++) {
 				const auto& p=shp->points[i];
-				file_out<<p.pos.x<<' '<<p.pos.y<<' '<<p.mass<<' '<<p.locked<<'\n';
+				file_out<<"  p "<<
+					p.pos.x<<' '<<
+					p.pos.y<<' '<<
+					p.mass<<' '<<
+					p.locked<<'\n';
 			}
-
-			//print anchors
-			//<x> <y>
-			for(int i=0; i<shp->getNum(); i++) {
-				const auto& a=shp->anchors[i];
-				file_out<<a.x<<' '<<a.y<<'\n';
-			}
-
-			//print orientation
-			//<x> <y> <rot> <?anchored>
-			file_out<<shp->anchor_pos.x<<' '
-				<<shp->anchor_pos.y<<' '
-				<<shp->anchor_rot<<' '
-				<<shp->anchored<<'\n';
 
 			//make lookup table
 			std::unordered_map<PointMass*, int> indexes;
@@ -178,25 +168,222 @@ struct JellyCarGame : olc::PixelGameEngine {
 			//print constraints
 			//<a> <b> <len>
 			for(const auto& c:shp->constraints) {
-				file_out<<indexes[c.a]<<' '
-					<<indexes[c.b]<<' '
-					<<c.rest_len<<'\n';
+				file_out<<"  c "<<
+					indexes[c.a]<<' '<<
+					indexes[c.b]<<' '<<
+					c.rest_len<<'\n';
 			}
 
 			//print springs
 			//<a> <b> <len> <stiff> <damp>
 			for(const auto& s:shp->springs) {
-				file_out<<indexes[s.a]<<' '
-					<<indexes[s.b]<<' '
-					<<s.rest_len<<' '
-					<<s.stiffness<<' '
-					<<s.damping<<'\n';
+				file_out<<"  s "<<
+					indexes[s.a]<<' '<<
+					indexes[s.b]<<' '<<
+					s.rest_len<<' '<<
+					s.stiffness<<' '<<
+					s.damping<<'\n';
 			}
+
+			//print anchors
+			//<x> <y>
+			for(int i=0; i<shp->getNum(); i++) {
+				const auto& a=shp->anchors[i];
+				file_out<<"  a "<<
+					a.x<<' '<<
+					a.y<<'\n';
+			}
+
+			//print orientation
+			//<x> <y> <rot> <?anchored>
+			file_out<<"  o "<<
+				shp->anchor_pos.x<<' '<<
+				shp->anchor_pos.y<<' '<<
+				shp->anchor_rot<<' '<<
+				shp->anchored<<'\n';
 		}
 
 		std::cout<<"  successfully exported to "<<filename<<'\n';
 
 		file_out.close();
+		return true;
+	}
+
+	bool importCommand(std::string& filename) {
+		if(filename.empty()) {
+			std::cout<<"  no filename. try using:\n  import <filename>\n";
+			return false;
+		}
+
+		std::ifstream file_in(filename);
+		if(file_in.fail()) {
+			std::cout<<"  invalid filename.\n";
+			return false;
+		}
+
+		reset();
+
+		//parse file line by line
+		std::string line;
+		int line_nbr=0;
+		while(std::getline(file_in, line)) {
+			line_nbr++;
+
+			//get header
+			std::stringstream line_str(line);
+
+			//is this a shape?
+			std::string type;
+			line_str>>type;
+			if(type=="shp") {
+				//parse header
+				int num_pts=-1, num_csts=-1, num_sprs=-1;
+				line_str>>
+					num_pts>>
+					num_csts>>
+					num_sprs;
+				if(num_pts<=0||num_csts<0||num_sprs<0) {
+					std::cout<<"  invalid header.\n";
+					return false;
+				}
+
+				//construct
+				Shape shp(num_pts);
+
+				//points
+				for(int i=0; i<num_pts; i++) {
+					std::getline(file_in, line);
+					line_nbr++;
+					line_str.str(line), line_str.clear();
+
+					//ensure type
+					line_str>>type;
+					if(type!="p") {
+						std::cout<<"  invalid point\n";
+						return false;
+					}
+
+					//parse data & construct
+					PointMass& p=shp.points[i];
+					line_str>>
+						p.pos.x>>
+						p.pos.y>>
+						p.mass>>
+						p.locked;
+					p.oldpos=p.pos;
+				}
+
+				//constraints
+				for(int i=0; i<num_csts; i++) {
+					std::getline(file_in, line);
+					line_nbr++;
+					line_str.str(line), line_str.clear();
+
+					//ensure type
+					line_str>>type;
+					if(type!="c") {
+						std::cout<<"  invalid constraint\n";
+						return false;
+					}
+
+					//parse data
+					int a, b;
+					float l;
+					line_str>>a>>b>>l;
+					if(a<0||b<0||a>=num_pts||b>=num_pts) {
+						std::cout<<"  invalid constraint\n";
+						return false;
+					}
+
+					//construct
+					Constraint c;
+					c.a=&shp.points[a];
+					c.b=&shp.points[b];
+					c.rest_len=l;
+					shp.constraints.push_back(c);
+				}
+
+				//springs
+				for(int i=0; i<num_sprs; i++) {
+					std::getline(file_in, line);
+					line_nbr++;
+					line_str.str(line), line_str.clear();
+
+					//ensure type
+					line_str>>type;
+					if(type!="s") {
+						std::cout<<"  invalid spring\n";
+						return false;
+					}
+
+					//parse data
+					int a, b;
+					float l, k, d;
+					line_str>>a>>b>>l>>k>>d;
+					if(a<0||b<0||a>=num_pts||b>=num_pts) {
+						std::cout<<"  invalid spring\n";
+						return false;
+					}
+
+					//construct
+					Spring s;
+					s.a=&shp.points[a];
+					s.b=&shp.points[b];
+					s.rest_len=l;
+					s.stiffness=k;
+					s.damping=d;
+					shp.springs.push_back(s);
+				}
+
+				//anchors
+				for(int i=0; i<num_pts; i++) {
+					std::getline(file_in, line);
+					line_nbr++;
+					line_str.str(line), line_str.clear();
+
+					//ensure type
+					line_str>>type;
+					if(type!="a") {
+						std::cout<<"  invalid anchor\n";
+						return false;
+					}
+
+					//parse data
+					vf2d& a=shp.anchors[i];
+					line_str>>
+						a.x>>
+						a.y;
+				}
+
+				//orientation
+				{
+					std::getline(file_in, line);
+					line_nbr++;
+					line_str.str(line), line_str.clear();
+
+					//ensure type
+					line_str>>type;
+					if(type!="o") {
+						std::cout<<"  invalid orientation\n";
+						return false;
+					}
+
+					//parse data
+					line_str>>
+						shp.anchor_pos.x>>
+						shp.anchor_pos.y>>
+						shp.anchor_rot>>
+						shp.anchored;
+				}
+
+				//add to list
+				shapes.push_back(new Shape(shp));
+			}
+		}
+
+		std::cout<<"successfully imported from "<<filename<<'\n';
+
+		file_in.close();
 		return true;
 	}
 #pragma endregion
@@ -220,6 +407,12 @@ struct JellyCarGame : olc::PixelGameEngine {
 			std::string filename;
 			line_str>>filename;
 			return exportCommand(filename);
+		}
+
+		if(cmd=="import") {
+			std::string filename;
+			line_str>>filename;
+			return importCommand(filename);
 		}
 
 		return true;

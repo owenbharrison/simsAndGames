@@ -27,6 +27,9 @@
     <ClInclude Include="src\phys\shape.h" />
     <ClInclude Include="src\phys\spring.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\thing.txt" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

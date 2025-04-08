@@ -42,9 +42,17 @@ public:
 
 	//shape matching stuff
 	vf2d* anchors=nullptr;
-	bool anchored=false;
 	vf2d anchor_pos;
 	float anchor_rot=0;
+	bool anchored=false;
+
+	Shape() {}
+
+	Shape(int n) {
+		num_pts=n;
+		points=new PointMass[num_pts];
+		anchors=new vf2d[num_pts];
+	}
 
 	Shape(vf2d pos, float rad, int n=24) :
 		num_pts(n) {
@@ -58,6 +66,7 @@ public:
 
 		initMass();
 
+		anchors=new vf2d[num_pts];
 		initAnchors();
 
 		connectConstraints();
@@ -73,6 +82,7 @@ public:
 
 		initMass();
 
+		anchors=new vf2d[num_pts];
 		initAnchors();
 
 		connectConstraints();
@@ -305,7 +315,6 @@ void Shape::initMass() {
 }
 
 void Shape::initAnchors() {
-	anchors=new vf2d[num_pts];
 	vf2d ctr=getCOM();
 	for(int i=0; i<num_pts; i++) {
 		anchors[i]=points[i].pos-ctr;
@@ -340,9 +349,9 @@ void Shape::copyFrom(const Shape& shp) {
 	for(int i=0; i<num_pts; i++) {
 		anchors[i]=shp.anchors[i];
 	}
-	anchored=shp.anchored;
 	anchor_pos=shp.anchor_pos;
 	anchor_rot=shp.anchor_rot;
+	anchored=shp.anchored;
 
 	//pointer lookup to copy over constraints and springs
 	std::unordered_map<PointMass*, PointMass*> shp_to_me;
