@@ -30,4 +30,7 @@
   <ItemGroup>
     <None Include="README.md" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="cast_scene.txt" />
+  </ItemGroup>
 </Project>
