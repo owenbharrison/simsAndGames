@@ -7,6 +7,9 @@ using olc::vf2d;
 
 #include "phys/shape.h"
 
+#include <sstream>
+#include <fstream>
+
 struct JellyCarGame : olc::PixelGameEngine {
 	JellyCarGame() {
 		sAppName="Jelly Car";
@@ -125,12 +128,86 @@ struct JellyCarGame : olc::PixelGameEngine {
 		return true;
 	}
 
-	//nothing profound here yet.
+#pragma region COMMAND HELPERS
+	bool exportCommand(std::string& filename) {
+		if(filename.empty()) {
+			std::cout<<"no filename. try using:\n  export <filename>\n";
+			return false;
+		}
+
+		std::ofstream file_out(filename);
+		if(file_out.fail()) {
+			std::cout<<"invalid filename.\n";
+			return false;
+		}
+
+		//print shapes line by line
+		for(const auto& shp:shapes) {
+			//shape designation
+			//s <#pts> <#csts> <#sprs>
+			file_out<<"s "<<shp->getNum()<<' '
+				<<shp->constraints.size()<<' '
+				<<shp->springs.size()<<'\n';
+			//print points
+			//<x> <y> <mass> <?locked>
+			for(int i=0; i<shp->getNum(); i++) {
+				const auto& p=shp->points[i];
+				file_out<<p.pos.x<<' '<<p.pos.y<<' '<<p.mass<<' '<<p.locked<<'\n';
+			}
+
+			//print anchors
+			//<x> <y>
+			for(int i=0; i<shp->getNum(); i++) {
+				const auto& a=shp->anchors[i];
+				file_out<<a.x<<' '<<a.y<<'\n';
+			}
+
+			//print orientation
+			//<x> <y> <rot> <?anchored>
+			file_out<<shp->anchor_pos.x<<' '
+				<<shp->anchor_pos.y<<' '
+				<<shp->anchor_rot<<' '
+				<<shp->anchored<<'\n';
+
+			//make lookup table
+			std::unordered_map<PointMass*, int> indexes;
+			for(int i=0; i<shp->getNum(); i++) {
+				indexes[&shp->points[i]]=i;
+			}
+
+			//print constraints
+			//<a> <b> <len>
+			for(const auto& c:shp->constraints) {
+				file_out<<indexes[c.a]<<' '
+					<<indexes[c.b]<<' '
+					<<c.rest_len<<'\n';
+			}
+
+			//print springs
+			//<a> <b> <len> <stiff> <damp>
+			for(const auto& s:shp->springs) {
+				file_out<<indexes[s.a]<<' '
+					<<indexes[s.b]<<' '
+					<<s.rest_len<<' '
+					<<s.stiffness<<' '
+					<<s.damping<<'\n';
+			}
+		}
+
+		std::cout<<"  successfully exported to "<<filename<<'\n';
+
+		file_out.close();
+		return true;
+	}
+#pragma endregion
+
 	bool OnConsoleCommand(const std::string& line) override {
 		std::stringstream line_str(line);
 		std::string cmd; line_str>>cmd;
 
-		if(cmd=="count") {
+		if(cmd=="clear") ConsoleClear();
+
+		else if(cmd=="count") {
 			std::cout<<"there are "<<shapes.size()<<" shapes\n";
 		}
 
@@ -139,11 +216,16 @@ struct JellyCarGame : olc::PixelGameEngine {
 			reset();
 		}
 
-		else if(cmd=="clear") ConsoleClear();
+		if(cmd=="export") {
+			std::string filename;
+			line_str>>filename;
+			return exportCommand(filename);
+		}
 
 		return true;
 	}
 
+#pragma region UPDATE HELPERS
 	void handleUserInput() {
 		//adding ngons
 		if(GetMouse(olc::Mouse::RIGHT).bPressed) {
@@ -256,6 +338,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			shp->keepIn(phys_bounds);
 		}
 	}
+#pragma endregion
 
 	void update(float dt) {
 		//make sure simulation doesnt blow up?
@@ -347,7 +430,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 						p.x*cosin.y+p.y*cosin.x
 					);
 				};
-				
+
 				//outlines
 				for(int i=0; i<shp->getNum(); i++) {
 					vf2d a=shp->anchor_pos+rotate(shp->anchors[i]);
