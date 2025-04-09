@@ -26,10 +26,12 @@
     <ClInclude Include="src\phys\point_mass.h" />
     <ClInclude Include="src\phys\shape.h" />
     <ClInclude Include="src\phys\spring.h" />
+    <ClInclude Include="src\scene.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\bridge.txt" />
-    <Text Include="assets\stacked.txt" />
+    <Text Include="assets\bridge.jcs" />
+    <Text Include="assets\stacked.jcs" />
+    <Text Include="assets\stacked2.jcs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

@@ -32,9 +32,13 @@
     <ClInclude Include="src\phys\spring.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\scene.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\stacked.txt" />
-    <Text Include="assets\bridge.txt" />
+    <Text Include="assets\stacked.jcs" />
+    <Text Include="assets\bridge.jcs" />
+    <Text Include="assets\stacked2.jcs" />
   </ItemGroup>
 </Project>
