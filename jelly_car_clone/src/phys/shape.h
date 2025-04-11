@@ -28,9 +28,7 @@ class Shape {
 	int num_pts=0;
 
 	//construction helpers
-	void initMass();
-	void initAnchors();
-	void connectConstraints(), connectSprings();
+	void windConstraints(), connectSprings();
 
 	//copy helpers
 	void copyFrom(const Shape&), clear();
@@ -66,12 +64,13 @@ public:
 			points[i]=PointMass(pos+off);
 		}
 
+		windConstraints();
+
 		initMass();
 
 		anchors=new vf2d[num_pts];
 		initAnchors();
 
-		connectConstraints();
 		connectSprings();
 	}
 
@@ -82,12 +81,13 @@ public:
 		points[2]=PointMass(a.max);
 		points[3]=PointMass({a.min.x, a.max.y});
 
+		windConstraints();
+
 		initMass();
 
 		anchors=new vf2d[num_pts];
 		initAnchors();
 
-		connectConstraints();
 		connectSprings();
 	}
 
@@ -112,15 +112,50 @@ public:
 		return *this;
 	}
 
+	void initMass() {
+		//ensure winding
+		float area=getArea();
+		if(area<0) {
+			area*=-1;
+			//is this the right data structure?
+			std::unordered_map<PointMass*, int> idx;
+			std::unordered_map<int, PointMass*> ptr;
+			for(int i=0; i<num_pts; i++) {
+				idx[&points[i]]=i;
+				ptr[i]=&points[i];
+			}
+			std::reverse(points, points+num_pts);
+			//reverse constraints
+			for(auto& c:constraints) {
+				c.a=ptr[num_pts-1-idx[c.a]];
+				c.b=ptr[num_pts-1-idx[c.b]];
+			}
+		}
+
+		//distribute evenly
+		float ind_mass=area/num_pts;
+		for(int i=0; i<num_pts; i++) {
+			points[i].mass=ind_mass;
+		}
+	}
+
+	//localize anchors
+	void initAnchors() {
+		vf2d ctr=getCOM();
+		for(int i=0; i<num_pts; i++) {
+			anchors[i]=points[i].pos-ctr;
+		}
+	}
+
 	int getNum() const {
 		return num_pts;
 	}
 
+	//requires constraints be initialized
 	float getArea() const {
 		float sum=0;
-		for(int i=0; i<num_pts; i++) {
-			const auto& a=points[i].pos;
-			const auto& b=points[(i+1)%num_pts].pos;
+		for(const auto& c:constraints) {
+			const auto& a=c.a->pos, & b=c.b->pos;
 			sum+=a.x*b.y-a.y*b.x;
 		}
 		return sum;
@@ -151,10 +186,8 @@ public:
 		vf2d dir=cmn::polar(1, cmn::random(2*cmn::Pi));
 
 		int num_ix=0;
-		for(int i=0; i<num_pts; i++) {
-			const auto& a=points[i].pos;
-			const auto& b=points[(i+1)%num_pts].pos;
-			vf2d tu=cmn::lineLineIntersection(a, b, p, p+dir);
+		for(const auto& c:constraints) {
+			vf2d tu=cmn::lineLineIntersection(c.a->pos, c.b->pos, p, p+dir);
 			if(tu.x>=0&&tu.x<=1&&tu.y>=0) num_ix++;
 		}
 
@@ -223,30 +256,27 @@ public:
 
 		//find closest segment
 		float record;
-		int said_j=-1;
+		Constraint* said_seg=nullptr;
 		float said_t;
 		vf2d said_sub;
-		for(int j=0; j<num_pts; j++) {
-			const auto& a=points[j].pos;
-			const auto& b=points[(j+1)%num_pts].pos;
-			vf2d pa=p.pos-a, ba=b-a;
+		for(auto& c:constraints) {
+			vf2d pa=p.pos-c.a->pos, ba=c.b->pos-c.a->pos;
 			float t=cmn::clamp(pa.dot(ba)/ba.dot(ba), 0.f, 1.f);
-			vf2d close_pt=a+t*ba;
+			vf2d close_pt=c.a->pos+t*ba;
 			vf2d sub=close_pt-p.pos;
 			float dist=sub.mag();
-			if(said_j<0||dist<record) {
+			if(!said_seg||dist<record) {
 				record=dist;
-				said_j=j;
+				said_seg=&c;
 				said_t=t;
 				said_sub=sub;
 			}
 		}
 		//shouldnt happen
-		if(said_j==-1) return;
+		if(!said_seg) return;
 
-		//get close segment
-		auto& a=points[said_j];
-		auto& b=points[(said_j+1)%num_pts];
+		auto& a=*said_seg->a;
+		auto& b=*said_seg->b;
 
 		//inverse mass weighting
 		float m1a=1/a.mass;
@@ -301,35 +331,15 @@ public:
 	}
 };
 
-void Shape::initMass() {
-	//ensure winding
-	float area=getArea();
-	if(area<0) {
-		area*=-1;
-		std::reverse(points, points+num_pts);
-	}
-
-	//distribute evenly
-	float ind_mass=area/num_pts;
-	for(int i=0; i<num_pts; i++) {
-		points[i].mass=ind_mass;
-	}
-}
-
-void Shape::initAnchors() {
-	vf2d ctr=getCOM();
-	for(int i=0; i<num_pts; i++) {
-		anchors[i]=points[i].pos-ctr;
-	}
-}
-
-void Shape::connectConstraints() {
+void Shape::windConstraints() {
+	constraints.clear();
 	for(int i=0; i<num_pts; i++) {
 		constraints.push_back(Constraint(&points[i], &points[(i+1)%num_pts]));
 	}
 }
 
 void Shape::connectSprings() {
+	springs.clear();
 	for(int i=0; i<num_pts; i++) {
 		for(int j=i+2; j<num_pts-(i==0); j++) {
 			springs.push_back(Spring(&points[i], &points[j]));

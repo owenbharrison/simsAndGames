@@ -167,7 +167,8 @@ public:
 			throw std::runtime_error("invalid filename");
 		}
 
-		Scene scene;
+		Scene scn;
+		bool has_bounds=false;
 
 		//parse file line by line
 		std::string line;
@@ -181,10 +182,11 @@ public:
 
 			if(type=="bnd") {
 				line_str>>
-					scene.phys_bounds.min.x>>
-					scene.phys_bounds.min.y>>
-					scene.phys_bounds.max.x>>
-					scene.phys_bounds.max.y;
+					scn.phys_bounds.min.x>>
+					scn.phys_bounds.min.y>>
+					scn.phys_bounds.max.x>>
+					scn.phys_bounds.max.y;
+				has_bounds=true;
 			}
 
 			if(type=="shp") {
@@ -337,11 +339,22 @@ public:
 				}
 
 				//add to list
-				scene.shapes.push_back(new Shape(shp));
+				scn.shapes.push_back(new Shape(shp));
 			}
 		}
-	
-		return scene;
+
+		//if bounds not provided, shrinkwrap.
+		if(!has_bounds) {
+			cmn::AABB box;
+			for(const auto& s:scn.shapes) {
+				cmn::AABB s_box=s->getAABB();
+				box.fitToEnclose(s_box.min);
+				box.fitToEnclose(s_box.max);
+			}
+			scn.phys_bounds=box;
+		}
+
+		return scn;
 	}
 };
 

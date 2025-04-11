@@ -9,6 +9,8 @@ using olc::vf2d;
 
 #include "scene.h"
 
+#include "common/stopwatch.h"
+
 //https://www.rapidtables.com/convert/color/hsv-to-rgb.html
 olc::Pixel hsv2rgb(int h, float s, float v) {
 	float c=v*s;
@@ -68,6 +70,8 @@ struct JellyCarGame : olc::PixelGameEngine {
 	bool show_mass=false;
 	bool show_wireframes=false;
 	bool show_bounds=false;
+	bool show_vertexes=false;
+	bool to_time=false;
 
 	bool OnUserCreate() override {
 		srand(time(0));
@@ -108,28 +112,23 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 	void reset() {
 		mouse_constraint.clear();
-		
+
 		scene.clear();
 	}
 
-	void zoomToFit(bool fit_given=false) {
+	void zoomToFit(bool fit_shapes=true) {
 		//find scene bounds
 		cmn::AABB bounds;
-		if(!fit_given) {
+		if(fit_shapes&&scene.shapes.size()) {
 			//wrap aabb around points
-			int num=0;
 			for(const auto& s:scene.shapes) {
-				for(int i=0; i<s->getNum(); i++) {
-					bounds.fitToEnclose(s->points[i].pos);
-					num++;
-				}
+				cmn::AABB box=s->getAABB();
+				bounds.fitToEnclose(box.min);
+				bounds.fitToEnclose(box.max);
 			}
-			//too few points
-			fit_given=num<2;
 		}
-
 		//default behavior
-		if(fit_given) bounds=scene.phys_bounds;
+		else bounds=scene.phys_bounds;
 
 		//zoom into view
 		const auto margin=30;
@@ -171,7 +170,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			return true;
 		}
 
-		else if(cmd=="reset") {
+		if(cmd=="reset") {
 			//english+logic=grammar :D
 			int num=scene.shapes.size();
 			std::cout<<"  removed "<<num<<" shape";
@@ -182,7 +181,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			return true;
 		}
 
-		else if(cmd=="count") {
+		if(cmd=="count") {
 			//english + logic = grammar :D
 			int num=scene.shapes.size();
 			std::cout<<"  there ";
@@ -194,14 +193,20 @@ struct JellyCarGame : olc::PixelGameEngine {
 			return true;
 		}
 
+		if(cmd=="time") {
+			to_time=true;
+
+			return true;
+		}
+
 		if(cmd=="export") {
 			std::string filename;
 			line_str>>filename;
 			try {
 				scene.save(filename);
-				
+
 				std::cout<<"  successfully exported to: "<<filename<<'\n';
-				
+
 				return true;
 			} catch(const std::exception& e) {
 				std::cout<<"  "<<e.what()<<'\n';
@@ -214,11 +219,11 @@ struct JellyCarGame : olc::PixelGameEngine {
 			line_str>>filename;
 			try {
 				scene=Scene::load(filename);
-				
-				zoomToFit(true);
-				
+
+				zoomToFit(false);
+
 				std::cout<<"  successfully imported from: "<<filename<<'\n';
-				
+
 				return true;
 			} catch(const std::exception& e) {
 				std::cout<<"  "<<e.what()<<'\n';
@@ -236,6 +241,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 				"  W     toggle wireframe view\n"
 				"  B     toggle bounds view\n"
 				"  M     toggle mass view\n"
+				"  V     toggle vertex view\n"
 				"  Z     zoom to fit\n"
 				"  ESC   toggle integrated console\n";
 
@@ -256,6 +262,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 				"  clear        clears the console\n"
 				"  reset        removes all shapes\n"
 				"  count        how many shapes are there?\n"
+				"  time         times update and render cycle\n"
 				"  export       exports scene to specified file\n"
 				"  import       imports scene from specified file\n"
 				"  keybinds     which keys to press for this program?\n"
@@ -286,10 +293,67 @@ struct JellyCarGame : olc::PixelGameEngine {
 			rect_start=new vf2d(wld_mouse_pos);
 		}
 		if(rect_action.bReleased) {
+			//get bounds
 			cmn::AABB box;
 			box.fitToEnclose(*rect_start);
 			box.fitToEnclose(wld_mouse_pos);
-			scene.shapes.push_back(new Shape(box));
+
+			//determine sizing
+			float size=cmn::random(1, 2.5f);
+			const int w=1+(box.max.x-box.min.x)/size;
+			const int h=1+(box.max.y-box.min.y)/size;
+			auto ix=[&w] (int i, int j) {
+				return i+w*j;
+			};
+			Shape* shp=new Shape(w*h);
+
+			//fill point grid
+			for(int i=0; i<w; i++) {
+				for(int j=0; j<h; j++) {
+					vf2d pos=box.min+size*vf2d(i, j);
+					shp->points[ix(i, j)]=PointMass(pos);
+				}
+			}
+
+			//attach constraints
+			for(int i=1; i<w; i++) {
+				shp->constraints.emplace_back(&shp->points[ix(i-1, 0)], &shp->points[ix(i, 0)]);
+			}
+			for(int j=1; j<h; j++) {
+				shp->constraints.emplace_back(&shp->points[ix(w-1, j-1)], &shp->points[ix(w-1, j)]);
+			}
+			for(int i=w-1; i>=1; i--) {
+				shp->constraints.emplace_back(&shp->points[ix(i, h-1)], &shp->points[ix(i-1, h-1)]);
+			}
+			for(int j=h-1; j>=1; j--) {
+				shp->constraints.emplace_back(&shp->points[ix(0, j)], &shp->points[ix(0, j-1)]);
+			}
+
+			shp->initMass();
+
+			//attach springs
+			for(int i=1; i<w; i++) {
+				for(int j=1; j<h; j++) {
+					//rows
+					if(j<h-1) shp->springs.emplace_back(&shp->points[ix(i-1, j)], &shp->points[ix(i, j)]);
+					//columns
+					if(i<w-1) shp->springs.emplace_back(&shp->points[ix(i, j-1)], &shp->points[ix(i, j)]);
+					//boxes
+					shp->springs.emplace_back(&shp->points[ix(i-1, j-1)], &shp->points[ix(i, j)]);
+					shp->springs.emplace_back(&shp->points[ix(i-1, j)], &shp->points[ix(i, j-1)]);
+				}
+			}
+
+			//proportional to perim/area
+			float coeff=w*h/float(w+h);
+			for(auto& s:shp->springs) {
+				s.stiffness*=coeff;
+				s.damping*=coeff;
+			}
+			shp->initAnchors();
+
+			//add
+			scene.shapes.push_back(shp);
 
 			//reset
 			delete rect_start;
@@ -387,9 +451,6 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 		}
 
-		//reset view
-		if(GetKey(olc::Key::Z).bHeld) zoomToFit();
-
 		//zooming
 		if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, scr_mouse_pos);
 		if(GetMouseWheel()<0) tv.ZoomAtScreenPos(1/1.07f, scr_mouse_pos);
@@ -400,12 +461,16 @@ struct JellyCarGame : olc::PixelGameEngine {
 		if(pan_action.bHeld) tv.UpdatePan(scr_mouse_pos);
 		if(pan_action.bReleased) tv.EndPan(scr_mouse_pos);
 
+		//reset view
+		if(GetKey(olc::Key::Z).bHeld) zoomToFit();
+
 		//visual toggles
 		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 		if(GetKey(olc::Key::S).bPressed) show_springs^=true;
-		if(GetKey(olc::Key::M).bPressed) show_mass^=true;
 		if(GetKey(olc::Key::W).bPressed) show_wireframes^=true;
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		if(GetKey(olc::Key::M).bPressed) show_mass^=true;
+		if(GetKey(olc::Key::V).bPressed) show_vertexes^=true;
 	}
 
 	void handlePhysics(float dt) {
@@ -415,13 +480,17 @@ struct JellyCarGame : olc::PixelGameEngine {
 			m.update();
 		}
 
-		scene.update(dt);
+		const int sub_steps=4;
+		float sub_dt=dt/sub_steps;
+		for(int i=0; i<sub_steps; i++) {
+			scene.update(sub_dt);
+		}
 	}
 #pragma endregion
 
 	void update(float dt) {
 		//make sure simulation doesnt blow up?
-		dt=cmn::clamp(dt, 1/165.f, 1/60.f);
+		dt=cmn::clamp(dt, 1/165.f, 1/30.f);
 
 		scr_mouse_pos=GetMousePos();
 		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
@@ -432,8 +501,8 @@ struct JellyCarGame : olc::PixelGameEngine {
 		//open integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
 
-		//only update physics when console closed
-		if(!IsConsoleShowing()) handlePhysics(dt);
+		//update physics when console closed or timing
+		if(!IsConsoleShowing()||to_time) handlePhysics(dt);
 	}
 
 #pragma region RENDER HELPERS
@@ -442,7 +511,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 		float len=sub.mag();
 		vf2d tang=sub.perp()/len;
 
-		float angle=atan2f(sub.y, sub.x);
+		float angle=std::atan2f(sub.y, sub.x);
 		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
@@ -537,8 +606,14 @@ struct JellyCarGame : olc::PixelGameEngine {
 			//fill
 			{
 				//initialize indexes
+				std::unordered_map<PointMass*, int> idx;
+				for(int i=0; i<shp->getNum(); i++) {
+					idx[&shp->points[i]]=i;
+				}
 				std::list<int> indexes;
-				for(int i=0; i<shp->getNum(); i++) indexes.push_back(i);
+				for(const auto& c:shp->constraints) {
+					indexes.push_back(idx[c.a]);
+				}
 
 				//ear clipping triangulation
 				for(auto curr=indexes.begin(); curr!=indexes.end();) {
@@ -607,6 +682,16 @@ struct JellyCarGame : olc::PixelGameEngine {
 				std::string mass_str=std::to_string(int(mass));
 				tvDrawString(ctr, mass_str, olc::DARK_GREY, scale/mass_str.length());
 			}
+
+			if(show_vertexes) {
+				for(int i=0; i<shp->getNum(); i++) {
+					auto str=std::to_string(i);
+					vf2d size(8*str.length(), 8);
+					float scale=.05f;
+					tv.FillRectDecal(shp->points[i].pos-scale*(size+1)/2, scale*size, olc::WHITE);
+					tv.DrawStringDecal(shp->points[i].pos-scale*size/2, str, olc::BLACK, {scale, scale});
+				}
+			}
 		}
 
 		//show mouse constriant
@@ -624,9 +709,25 @@ struct JellyCarGame : olc::PixelGameEngine {
 	}
 
 	bool OnUserUpdate(float dt) override {
+		cmn::Stopwatch update_watch;
+		update_watch.start();
 		update(dt);
+		if(to_time) {
+			update_watch.stop();
+			auto us=update_watch.getMicros();
+			std::cout<<"  update: "<<us<<"us ("<<(us/1000.f)<<"ms)\n";
+		}
 
+		cmn::Stopwatch render_watch;
+		render_watch.start();
 		render();
+		if(to_time) {
+			render_watch.stop();
+			auto us=render_watch.getMicros();
+			std::cout<<"  render: "<<us<<"us ("<<(us/1000.f)<<"ms)\n";
+
+			to_time=false;
+		}
 
 		return true;
 	}
