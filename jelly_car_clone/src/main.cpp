@@ -11,6 +11,8 @@ using olc::vf2d;
 
 #include "common/stopwatch.h"
 
+#include <deque>
+
 //https://www.rapidtables.com/convert/color/hsv-to-rgb.html
 olc::Pixel hsv2rgb(int h, float s, float v) {
 	float c=v*s;
@@ -61,10 +63,15 @@ struct JellyCarGame : olc::PixelGameEngine {
 	std::list<Constraint> mouse_constraint;
 	PointMass mouse_point;
 
+	std::deque<vf2d> cut;
+
+	float cut_timer=0;
+	bool cut_anim=false;
+
 	//simulation stuff
 	Scene scene;
 
-	//graphics stuff
+	//graphics toggles
 	bool show_grid=true;
 	bool show_springs=false;
 	bool show_mass=false;
@@ -72,6 +79,11 @@ struct JellyCarGame : olc::PixelGameEngine {
 	bool show_bounds=false;
 	bool show_vertexes=false;
 	bool to_time=false;
+
+	//cut animation
+	float smooth_dx=0, smooth_dy=0;
+	olc::Sprite* cut_spr=nullptr;
+	olc::Decal* cut_dec=nullptr;
 
 	bool OnUserCreate() override {
 		srand(time(0));
@@ -106,6 +118,9 @@ struct JellyCarGame : olc::PixelGameEngine {
 			"  then type help for help.\n";
 		//std::cout diverted to console
 		ConsoleCaptureStdOut(true);
+
+		cut_spr=new olc::Sprite("assets/scissor.png");
+		cut_dec=new olc::Decal(cut_spr);
 
 		return true;
 	}
@@ -151,6 +166,9 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 	bool OnUserDestroy() override {
 		reset();
+
+		delete cut_dec;
+		delete cut_spr;
 
 		delete prim_rect_dec;
 		delete prim_rect_spr;
@@ -277,7 +295,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 	}
 
 #pragma region UPDATE HELPERS
-	void handleUserInput() {
+	void handleUserInput(float dt) {
 		//adding ngons
 		if(GetMouse(olc::Mouse::RIGHT).bPressed) {
 			int num=3+rand()%9;
@@ -299,7 +317,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			box.fitToEnclose(wld_mouse_pos);
 
 			//determine sizing
-			float size=cmn::random(1, 2.5f);
+			float size=cmn::random(.75f, 2);
 			const int w=1+(box.max.x-box.min.x)/size;
 			const int h=1+(box.max.y-box.min.y)/size;
 			auto ix=[&w] (int i, int j) {
@@ -359,6 +377,38 @@ struct JellyCarGame : olc::PixelGameEngine {
 			delete rect_start;
 			rect_start=nullptr;
 		}
+
+		//every now and then, add cut point
+		const auto cut_action=GetKey(olc::Key::C);
+		if(cut_action.bHeld) {
+			//make sure points are far enough away
+			bool unique=true;
+			for(const auto& c:cut) {
+				if((c-wld_mouse_pos).mag()<.75f) {
+					unique=false;
+					break;
+				}
+			}
+			if(unique) cut.push_back(wld_mouse_pos);
+		}
+		if(cut_action.bReleased) cut.clear();
+
+		//sanitize cut
+		{
+			float length=0;
+			for(int i=1; i<cut.size(); i++) {
+				length+=(cut[i]-cut[i-1]).mag();
+			}
+			if(length>20) cut.pop_front();
+		}
+
+		//cut animation
+		if(cut_timer<0) {
+			cut_timer+=.5f;
+
+			cut_anim^=true;
+		}
+		cut_timer-=dt;
 
 		//removing stuff
 		if(GetKey(olc::Key::X).bHeld) {
@@ -492,11 +542,22 @@ struct JellyCarGame : olc::PixelGameEngine {
 		//make sure simulation doesnt blow up?
 		dt=cmn::clamp(dt, 1/165.f, 1/30.f);
 
-		scr_mouse_pos=GetMousePos();
-		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
+		{//smooth mouse derivatives
+			vf2d new_scr_mouse_pos=GetMousePos();
 
+			float dx=new_scr_mouse_pos.x-scr_mouse_pos.x;
+			float dy=new_scr_mouse_pos.y-scr_mouse_pos.y;
+
+			float smoothing=.1f;
+			smooth_dx+=smoothing*(dx-smooth_dx);
+			smooth_dy+=smoothing*(dy-smooth_dy);
+
+			scr_mouse_pos=GetMousePos();
+		}
+		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
+		
 		//only allow input when console closed
-		if(!IsConsoleShowing()) handleUserInput();
+		if(!IsConsoleShowing()) handleUserInput(dt);
 
 		//open integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
@@ -705,6 +766,22 @@ struct JellyCarGame : olc::PixelGameEngine {
 			box.fitToEnclose(*rect_start);
 			box.fitToEnclose(wld_mouse_pos);
 			tvDrawAABB(box, .05f, olc::DARK_GREY);
+		}
+
+		//show cut
+		for(int i=1; i<cut.size(); i++) {
+			tvDrawThickLine(cut[i-1], cut[i], .05f, olc::RED);
+		}
+
+		//this was super finicky
+		if(cut.size()) {
+			float angle=cmn::Pi+std::atan2f(smooth_dy, smooth_dx);
+			float diff=cut_anim?.017f:.352f;
+			vf2d sz(cut_spr->width, cut_spr->height);
+			vf2d ctr(.5047f, .1917f);
+			float scl=40;
+			DrawRotatedDecal(scr_mouse_pos, cut_dec, angle-diff, ctr*sz, {scl/sz.x, -scl/sz.x}, olc::BLACK);
+			DrawRotatedDecal(scr_mouse_pos, cut_dec, angle+diff, ctr*sz, {scl/sz.x, scl/sz.x}, olc::BLACK);
 		}
 	}
 

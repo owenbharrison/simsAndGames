@@ -29,9 +29,14 @@
     <ClInclude Include="src\scene.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="assets\benchmark.jcs" />
     <Text Include="assets\bridge.jcs" />
     <Text Include="assets\stacked.jcs" />
     <Text Include="assets\stacked2.jcs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\scissor.png" />
+    <Image Include="assets\scissor_ref.jpg" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

@@ -40,5 +40,14 @@
     <Text Include="assets\stacked.jcs" />
     <Text Include="assets\bridge.jcs" />
     <Text Include="assets\stacked2.jcs" />
+    <Text Include="assets\benchmark.jcs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\scissor_ref.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\scissor.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
