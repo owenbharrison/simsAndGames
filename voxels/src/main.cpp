@@ -28,7 +28,7 @@ struct Line {
 	v2d t[2];
 	olc::Pixel col=olc::WHITE;
 
-	int clipAgainstPlane(const vf3d& ctr, const vf3d& norm, Line& a, Line& b) const {
+	bool clipAgainstPlane(const vf3d& ctr, const vf3d& norm, Line& a) const {
 		const vf3d* in_pts[2];
 		const v2d* in_tex[2];
 		int in_ct=0;
@@ -53,31 +53,26 @@ struct Line {
 		switch(in_ct) {
 			default:
 				//line behind plane
-				return 0;
+				return false;
 			case 1: {
-				//form 2 lines
+				//reconstruct half of it
 				a.p[0]=*in_pts[0];
 				a.t[0]=*in_tex[0];
 				float t=0;
 				a.p[1]=segIntersectPlane(*in_pts[0], *out_pts[0], ctr, norm, &t);
+				
 				//interpolate tex coords
 				a.t[1].u=in_tex[0]->u+t*(out_tex[0]->u-in_tex[0]->u);
 				a.t[1].v=in_tex[0]->v+t*(out_tex[0]->v-in_tex[0]->v);
 				a.t[1].w=in_tex[0]->w+t*(out_tex[0]->w-in_tex[0]->w);
 				a.col=col;
 
-				b.p[0]=a.p[1];
-				b.t[0]=a.t[1];
-				b.p[1]=*out_pts[0];
-				b.t[1]=*out_tex[0];
-				b.col=col;
-
-				return 2;
+				return true;
 			}
 			case 2:
 				//line infront of plane
 				a=*this;
-				return 1;
+				return true;
 		}
 	}
 };
@@ -108,6 +103,7 @@ struct VoxelGame : olc::PixelGameEngine {
 	bool show_outlines=false;
 	bool show_render=false;
 	bool show_edges=false;
+	bool show_grid=false;
 
 	bool to_time=false;
 
@@ -155,14 +151,14 @@ struct VoxelGame : olc::PixelGameEngine {
 		white_texture=new olc::Sprite(1, 1);
 		white_texture->SetPixel(0, 0, olc::WHITE);
 
-		render=Render(128, 96, 75);
-		render_tex=new olc::Sprite(render.getWidth(), render.getWidth());
+		render=Render(128, 96, 90);
+		render_tex=new olc::Sprite(render.getWidth(), render.getHeight());
 
 		return true;
 	}
 
 #pragma region RENDER HELPERS
-	void DepthLine(
+	void DrawDepthLine(
 		int x1, int y1, float w1,
 		int x2, int y2, float w2,
 		olc::Pixel col
@@ -182,9 +178,10 @@ struct VoxelGame : olc::PixelGameEngine {
 		dx1=abs(dx), dy1=abs(dy);
 		px=2*dy1-dx1, py=2*dx1-dy1;
 		if(dy1<=dx1) {
+			bool flip=false;
 			if(dx>=0) x=x1, y=y1, xe=x2;
-			else x=x2, y=y2, xe=x1;
-			draw(x, y, 0);
+			else x=x2, y=y2, xe=x1, flip=true;
+			draw(x, y, flip);
 			float t_step=1.f/dx1;
 			for(i=0; x<xe; i++) {
 				x++;
@@ -194,12 +191,13 @@ struct VoxelGame : olc::PixelGameEngine {
 					else y--;
 					px+=2*(dy1-dx1);
 				}
-				draw(x, y, t_step*i);
+				draw(x, y, flip?1-t_step*i:t_step*i);
 			}
 		} else {
+			bool flip=false;
 			if(dy>=0) x=x1, y=y1, ye=y2;
-			else x=x2, y=y2, ye=y1;
-			draw(x, y, 0);
+			else x=x2, y=y2, ye=y1, flip=true;
+			draw(x, y, flip);
 			float t_step=1.f/dy1;
 			for(i=0; y<ye; i++) {
 				y++;
@@ -209,23 +207,23 @@ struct VoxelGame : olc::PixelGameEngine {
 					else x--;
 					py+=2*(dx1-dy1);
 				}
-				draw(x, y, i*t_step);
+				draw(x, y, flip?1-t_step*i:t_step*i);
 			}
 		}
 	}
 
-	void DepthTriangle(
+	void DrawDepthTriangle(
 		int x1, int y1, float w1,
 		int x2, int y2, float w2,
 		int x3, int y3, float w3,
 		olc::Pixel col
 	) {
-		DepthLine(x1, y1, w1, x2, y2, w2, col);
-		DepthLine(x2, y2, w2, x3, y3, w3, col);
-		DepthLine(x3, y3, w3, x1, y1, w1, col);
+		DrawDepthLine(x1, y1, w1, x2, y2, w2, col);
+		DrawDepthLine(x2, y2, w2, x3, y3, w3, col);
+		DrawDepthLine(x3, y3, w3, x1, y1, w1, col);
 	}
 
-	void TexturedTriangle(
+	void FillDepthTriangle(
 		int x1, int y1, float u1, float v1, float w1,
 		int x2, int y2, float u2, float v2, float w2,
 		int x3, int y3, float u3, float v3, float w3,
@@ -499,6 +497,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
 		if(GetKey(olc::Key::R).bPressed) show_render^=true;
 		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
+		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 
 		if(GetKey(olc::Key::B).bPressed) debug_view=Debug::DEPTH;
 		if(GetKey(olc::Key::U).bPressed) debug_view=Debug::UV;
@@ -589,6 +588,15 @@ struct VoxelGame : olc::PixelGameEngine {
 			Line l8{bl, pos}; l8.col=orange_col;
 			lines_to_project.push_back(l8);
 		}
+		if(show_grid) {
+			float rad=5;
+			Line x_axis{vf3d(-rad, 0, 0), vf3d(rad, 0, 0)}; x_axis.col=olc::RED;
+			lines_to_project.push_back(x_axis);
+			Line y_axis{vf3d(0, -rad, 0), vf3d(0, rad, 0)}; y_axis.col=olc::GREEN;
+			lines_to_project.push_back(y_axis);
+			Line z_axis{vf3d(0, 0, -rad), vf3d(0, 0, rad)}; z_axis.col=olc::BLUE;
+			lines_to_project.push_back(z_axis);
+		}
 
 		std::list<Triangle> tris_to_clip;
 		for(const auto& tri:tris_to_project) {
@@ -657,17 +665,16 @@ struct VoxelGame : olc::PixelGameEngine {
 			line_view.col=line.col;
 
 			//clip against near plane
-			Line clipped[2];
-			int num=line_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
-			for(int i=0; i<num; i++) {
+			Line clipped;
+			if(line_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped)){
 				Line line_proj;
 				//for each vert
 				for(int j=0; j<2; j++) {
 					//project
-					line_proj.p[j]=clipped[i].p[j]*mat_proj;
+					line_proj.p[j]=clipped.p[j]*mat_proj;
 
 					//copy over texture stuff
-					line_proj.t[j]=clipped[i].t[j];
+					line_proj.t[j]=clipped.t[j];
 
 					//w normalization?
 					float w=line_proj.p[j].w;
@@ -687,7 +694,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					line_proj.p[j].x*=ScreenWidth()/2;
 					line_proj.p[j].y*=ScreenHeight()/2;
 				}
-				line_proj.col=clipped[i].col;
+				line_proj.col=clipped.col;
 
 				lines_to_clip.push_back(line_proj);
 			}
@@ -763,7 +770,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		std::list<Line> line_queue;
 		std::list<Line> lines_to_draw;
 		for(const auto& l:lines_to_clip) {
-			Line clipped[2];
+			Line clipped;
 			line_queue={l};
 			int num_new=1;
 			for(int i=0; i<4; i++) {
@@ -794,8 +801,9 @@ struct VoxelGame : olc::PixelGameEngine {
 					line_queue.pop_front();
 					num_new--;
 
-					int num_clip=test.clipAgainstPlane(ctr, norm, clipped[0], clipped[1]);
-					for(int j=0; j<num_clip; j++) line_queue.push_back(clipped[j]);
+					if(test.clipAgainstPlane(ctr, norm, clipped)) {
+						line_queue.push_back(clipped);
+					}
 				}
 				num_new=line_queue.size();
 			}
@@ -807,22 +815,24 @@ struct VoxelGame : olc::PixelGameEngine {
 		//rasterize all triangles
 		for(const auto& t:tris_to_draw) {
 			if(show_outlines) {
-				DepthTriangle(
+				DrawDepthTriangle(
 					t.p[0].x, t.p[0].y, t.t[0].w,
 					t.p[1].x, t.p[1].y, t.t[1].w,
 					t.p[2].x, t.p[2].y, t.t[2].w,
 					olc::BLACK
 				);
 			}
-			TexturedTriangle(
+			FillDepthTriangle(
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
 				t.col
 			);
 		}
+
+		//rasterize all lines
 		for(const auto& l:lines_to_draw) {
-			DepthLine(
+			DrawDepthLine(
 				l.p[0].x, l.p[0].y, l.t[0].w,
 				l.p[1].x, l.p[1].y, l.t[1].w,
 				l.col
@@ -832,6 +842,9 @@ struct VoxelGame : olc::PixelGameEngine {
 		//debug options
 		switch(debug_view) {
 			case Debug::DEPTH: {
+				//how can one normalize depth values???
+				 
+				
 				//find min and max values
 				float min_depth=INFINITY, max_depth=-min_depth;
 				for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
