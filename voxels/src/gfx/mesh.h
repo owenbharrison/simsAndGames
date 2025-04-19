@@ -9,6 +9,8 @@
 #include <fstream>
 #include <sstream>
 
+#include <exception>
+
 #include "triangle.h"
 
 struct Mesh {
@@ -19,7 +21,7 @@ struct Mesh {
 		Mesh m;
 
 		std::ifstream file(filename);
-		if(file.fail()) return m;
+		if(file.fail()) throw std::runtime_error("invalid filename");
 
 		std::vector<vf3d> verts;
 		std::vector<v2d> texs;

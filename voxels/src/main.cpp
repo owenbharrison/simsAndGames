@@ -14,13 +14,10 @@ using olc::vf2d;
 
 #include "common/stopwatch.h"
 
+#include "common/utils.h"
+
 vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
-}
-
-float map(float x, float a, float b, float c, float d) {
-	float t=(x-a)/(b-a);
-	return c+t*(d-c);
 }
 
 struct Line {
@@ -123,7 +120,18 @@ struct VoxelGame : olc::PixelGameEngine {
 
 	std::list<vf3d> quads;
 
+	AABB3 scene_bounds;
+
 	const olc::Pixel orange_col=olc::Pixel(255, 115, 0);
+
+	void fitBounds() {
+		scene_bounds=AABB3();
+		for(const auto& t:model.triangles) {
+			AABB3 box=t.getAABB();
+			scene_bounds.fitToEnclose(box.min);
+			scene_bounds.fitToEnclose(box.max);
+		}
+	}
 
 	bool OnUserCreate() override {
 		srand(time(0));
@@ -141,10 +149,16 @@ struct VoxelGame : olc::PixelGameEngine {
 		u_buffer=new float[ScreenWidth()*ScreenHeight()];
 		v_buffer=new float[ScreenWidth()*ScreenHeight()];
 
-		//load model, rescale
-		model=Mesh::loadFromOBJ("assets/models/block.txt");
-		model.normalize(2);
-		model.colorNormals();
+		try {
+			//load model, rescale
+			model=Mesh::loadFromOBJ("assets/models/block.txt");
+			model.normalize(2);
+			model.colorNormals();
+			fitBounds();
+		} catch(std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
+		}
 
 		//load texture
 		texture=new olc::Sprite("assets/textures/grass.png");
@@ -392,11 +406,22 @@ struct VoxelGame : olc::PixelGameEngine {
 				return false;
 			}
 
-			model=Mesh::loadFromOBJ(filename);
-			model.normalize(2);
-			model.colorNormals();
+			try {
+				Mesh m=Mesh::loadFromOBJ(filename);
+				m.normalize(2);
+				m.colorNormals();
+				model=m;
+				
+				fitBounds();
 
-			return true;
+				std::cout<<"  successfully loaded model\n";
+
+				return true;
+			} catch(const std::exception& e) {
+				std::cout<<"  "<<e.what()<<'\n';
+
+				return false;
+			}
 		}
 
 		if(cmd=="render") {
@@ -589,6 +614,35 @@ struct VoxelGame : olc::PixelGameEngine {
 			lines_to_project.push_back(l8);
 		}
 		if(show_grid) {
+			const float res=.5f;
+			int num_x=1+(scene_bounds.max.x-scene_bounds.min.x)/res;
+			int num_y=1+(scene_bounds.max.y-scene_bounds.min.y)/res;
+			int num_z=1+(scene_bounds.max.z-scene_bounds.min.z)/res;
+
+			for(int i=0; i<num_x; i++) {
+				float x=cmn::map(i, 0, num_x-1, scene_bounds.min.x, scene_bounds.max.x);
+				Line ly{vf3d(x, scene_bounds.min.y, 0), vf3d(x, scene_bounds.max.y, 0)};
+				lines_to_project.push_back(ly);
+				Line lz{vf3d(x, 0, scene_bounds.min.z), vf3d(x, 0, scene_bounds.max.z)};
+				lines_to_project.push_back(lz);
+			}
+
+			for(int i=0; i<num_y; i++) {
+				float y=cmn::map(i, 0, num_y-1, scene_bounds.min.y, scene_bounds.max.y);
+				Line lx{vf3d(scene_bounds.min.x, y, 0), vf3d(scene_bounds.max.x, y, 0)};
+				lines_to_project.push_back(lx);
+				Line lz{vf3d(0, y, scene_bounds.min.z), vf3d(0, y, scene_bounds.max.z)};
+				lines_to_project.push_back(lz);
+			}
+
+			for(int i=0; i<num_z; i++) {
+				float z=cmn::map(i, 0, num_z-1, scene_bounds.min.z, scene_bounds.max.z);
+				Line lx{vf3d(scene_bounds.min.x, 0, z), vf3d(scene_bounds.max.x, 0, z)};
+				lines_to_project.push_back(lx);
+				Line ly{vf3d(0, scene_bounds.min.y, z), vf3d(0, scene_bounds.max.y, z)};
+				lines_to_project.push_back(ly);
+			}
+
 			float rad=5;
 			Line x_axis{vf3d(-rad, 0, 0), vf3d(rad, 0, 0)}; x_axis.col=olc::RED;
 			lines_to_project.push_back(x_axis);
@@ -857,7 +911,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				for(int i=0; i<ScreenWidth(); i++) {
 					for(int j=0; j<ScreenHeight(); j++) {
 						float depth=depth_buffer[i+ScreenWidth()*j];
-						float shade=map(depth, min_depth, max_depth, 0, 1);
+						float shade=cmn::map(depth, min_depth, max_depth, 0, 1);
 						Draw(i, j, olc::PixelF(shade, shade, shade));
 					}
 				}
