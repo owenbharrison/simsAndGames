@@ -256,6 +256,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  O        toggle wireframe view\n"
 				"  R        toggle render view"
 				"  E        toggle edge view\n"
+				"  G        toggle grid view\n"
 				"  B        depth debug view\n"
 				"  U        uv debug view\n"
 				"  N        no debug\n"
@@ -956,11 +957,34 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 
 	bool OnUserUpdate(float dt) override {
+		cmn::Stopwatch update_watch;
+		update_watch.start();
 		update(dt);
+		if(to_time) {
+			update_watch.stop();
+			auto dur=update_watch.getMicros();
+			std::cout<<"  update: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
+		}
 
+		cmn::Stopwatch geom_watch;
+		geom_watch.start();
 		geometryAndClipping();
+		if(to_time) {
+			geom_watch.stop();
+			auto dur=geom_watch.getMicros();
+			std::cout<<"  geom: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
+		}
 
+		cmn::Stopwatch render_watch;
+		render_watch.start();
 		render();
+		if(to_time) {
+			render_watch.stop();
+			auto dur=render_watch.getMicros();
+			std::cout<<"  render: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
+
+			to_time=false;
+		}
 
 		return true;
 	}
