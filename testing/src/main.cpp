@@ -284,7 +284,7 @@ struct Example : olc::PixelGameEngine {
 		sAppName="meshing testing";
 	}
 
-	float rad=20;
+	float rad=10;
 
 	std::vector<vf2d> outer;
 
@@ -294,6 +294,54 @@ struct Example : olc::PixelGameEngine {
 
 	bool OnUserCreate() override {
 		return true;
+	}
+
+	void DepthLine(
+		int x1, int y1,
+		int x2, int y2
+	) {
+		auto draw=[&] (int x, int y, float t) {
+			if(x<0||y<0||x>=ScreenWidth()||y>=ScreenHeight()) return;
+
+			Draw(x, y, olc::PixelF(t, t, t));
+		};
+		int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
+		dx=x2-x1; dy=y2-y1;
+		dx1=abs(dx), dy1=abs(dy);
+		px=2*dy1-dx1, py=2*dx1-dy1;
+		if(dy1<=dx1) {
+			bool flip=false;
+			if(dx>=0) x=x1, y=y1, xe=x2;
+			else x=x2, y=y2, xe=x1, flip=true;
+			draw(x, y, flip);
+			float t_step=1.f/dx1;
+			for(i=0; x<xe; i++) {
+				x++;
+				if(px<0) px+=2*dy1;
+				else {
+					if((dx<0&&dy<0)||(dx>0&&dy>0)) y++;
+					else y--;
+					px+=2*(dy1-dx1);
+				}
+				draw(x, y, flip?1-t_step*i:t_step*i);
+			}
+		} else {
+			bool flip=false;
+			if(dy>=0) x=x1, y=y1, ye=y2;
+			else x=x2, y=y2, ye=y1, flip=true;
+			draw(x, y, flip);
+			float t_step=1.f/dy1;
+			for(i=0; y<ye; i++) {
+				y++;
+				if(py<=0) py+=2*dx1;
+				else {
+					if((dx<0&&dy<0)||(dx>0&&dy>0)) x++;
+					else x--;
+					py+=2*(dx1-dy1);
+				}
+				draw(x, y, flip?1-t_step*i:t_step*i);
+			}
+		}
 	}
 
 	bool OnUserUpdate(float dt) override {
@@ -428,7 +476,7 @@ struct Example : olc::PixelGameEngine {
 			outer.clear();
 		}
 
-		Clear(olc::WHITE);
+		Clear(olc::GREY);
 
 		//show outer
 		for(const auto& o:outer) {
@@ -437,11 +485,11 @@ struct Example : olc::PixelGameEngine {
 
 		if(points) {
 			for(const auto& s:springs) {
-				DrawLine(points[s.p[0]], points[s.p[1]], olc::GREY);
+				DrawLine(points[s.p[0]], points[s.p[1]], olc::BLACK);
 			}
 
 			for(const auto& c:constraints) {
-				DrawLine(points[c.p[0]], points[c.p[1]], olc::BLACK);
+				DrawLine(points[c.p[0]], points[c.p[1]], olc::WHITE);
 			}
 
 			for(int i=0; i<num_pts; i++) {
@@ -449,13 +497,15 @@ struct Example : olc::PixelGameEngine {
 			}
 		}
 		
+		DepthLine(ScreenWidth()/2, ScreenHeight()/2, mouse_pos.x, mouse_pos.y);
+
 		return true;
 	}
 };
 
 int main() {
 	Example e;
-	if(e.Construct(400, 400, 1, 1, false, true)) e.Start();
+	if(e.Construct(640, 480, 1, 1, false, true)) e.Start();
 
 	return 0;
 }
