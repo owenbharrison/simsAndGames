@@ -17,8 +17,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rigid_bodies", "rigid_bodie
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "testing", "testing\testing.vcxproj", "{ABF008F1-BF34-494F-B85B-8EA15F08ECC3}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cad", "cad\cad.vcxproj", "{A0305168-F75A-444E-B442-5A3F04A798E6}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "procedural_audio", "procedural_audio\procedural_audio.vcxproj", "{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "raycasting", "raycasting\raycasting.vcxproj", "{9108DB91-7166-4A96-92ED-195B87A9C28C}"
@@ -105,14 +103,6 @@ Global
 		{ABF008F1-BF34-494F-B85B-8EA15F08ECC3}.Release|x64.Build.0 = Release|x64
 		{ABF008F1-BF34-494F-B85B-8EA15F08ECC3}.Release|x86.ActiveCfg = Release|Win32
 		{ABF008F1-BF34-494F-B85B-8EA15F08ECC3}.Release|x86.Build.0 = Release|Win32
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Debug|x64.ActiveCfg = Debug|x64
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Debug|x64.Build.0 = Debug|x64
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Debug|x86.ActiveCfg = Debug|Win32
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Debug|x86.Build.0 = Debug|Win32
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Release|x64.ActiveCfg = Release|x64
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Release|x64.Build.0 = Release|x64
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Release|x86.ActiveCfg = Release|Win32
-		{A0305168-F75A-444E-B442-5A3F04A798E6}.Release|x86.Build.0 = Release|Win32
 		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Debug|x64.ActiveCfg = Debug|x64
 		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Debug|x64.Build.0 = Debug|x64
 		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Debug|x86.ActiveCfg = Debug|Win32
