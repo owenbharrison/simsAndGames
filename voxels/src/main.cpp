@@ -149,7 +149,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		try {
 			//load model, rescale
-			model=Mesh::loadFromOBJ("assets/models/teapot.txt");
+			model=Mesh::loadFromOBJ("assets/models/mountains.txt");
 			model.normalize(2);
 			model.colorNormals();
 			fitBounds();
@@ -352,7 +352,29 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(!IsConsoleShowing()) handleUserInput(dt);
 
 		//particle collisions
-		for(const auto& p:particles) {}
+		for(auto& p:particles) {
+			vf3d vel=p.pos-p.oldpos;
+			for(const auto& tri:model.triangles) {
+				float t=segIntersectTri(p.oldpos, p.pos, tri);
+				if(t>0&&t<1) {
+					//find intersection point
+					vf3d ix=p.oldpos+t*vel;
+					
+					//push away from surface a little bit
+					vf3d norm=tri.getNorm();
+					p.pos=ix+1e-6f*norm;
+
+					//reflect velocity
+					p.oldpos=p.pos-reflect(vel, norm);
+
+					//randomize color on bounce
+					p.col.r=rand()%255;
+					p.col.g=rand()%255;
+					p.col.b=rand()%255;
+					break;
+				}
+			}
+		}
 
 		//particle kinematics
 		for(auto& p:particles) {
@@ -361,7 +383,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			p.update(dt);
 
 			//or when it falls out delete it??
-			p.keepIn(scene_bounds);
+			//p.keepIn(scene_bounds);
 		}
 	}
 
@@ -397,9 +419,9 @@ struct VoxelGame : olc::PixelGameEngine {
 			vf3d br=p.pos-sz/2*rgt-sz/2*up;
 
 			//tesselation
-			Triangle f1{tl, br, tr};
+			Triangle f1{tl, br, tr}; f1.col=p.col;
 			tris_to_project.push_back(f1);
-			Triangle f2{tl, bl, br};
+			Triangle f2{tl, bl, br}; f2.col=p.col;
 			tris_to_project.push_back(f2);
 		}
 
@@ -443,7 +465,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			lines_to_project.push_back(l8);
 		}
 
-		//add grid lines
+		//grid lines on xy, yz, zx planes
 		if(show_grid) {
 			const float res=.5f;
 			int num_x=1+(scene_bounds.max.x-scene_bounds.min.x)/res;
