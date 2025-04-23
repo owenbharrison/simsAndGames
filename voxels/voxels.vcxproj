@@ -175,10 +175,11 @@
     <ClInclude Include="src\geom\aabb3.h" />
     <ClInclude Include="src\gfx\mesh.h" />
     <ClInclude Include="src\gfx\triangle.h" />
+    <ClInclude Include="src\gfx\line.h" />
     <ClInclude Include="src\math\mat4.h" />
     <ClInclude Include="src\math\v2d.h" />
     <ClInclude Include="src\math\vf3d.h" />
-    <ClInclude Include="src\render.h" />
+    <ClInclude Include="src\gfx\render.h" />
     <ClInclude Include="src\voxel_set.h" />
   </ItemGroup>
   <ItemGroup>

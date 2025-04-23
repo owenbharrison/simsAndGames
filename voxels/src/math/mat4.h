@@ -11,6 +11,25 @@ constexpr float Pi=3.1415927f;
 struct Mat4 {
 	float v[4][4]={0};
 
+	float minor(int row, int col) const {
+		float m[3][3];
+		int subi=0;
+		for(int i=0; i<4; ++i) {
+			if(i==row) continue;
+			int subj=0;
+			for(int j=0; j<4; ++j) {
+				if(j==col) continue;
+				m[subi][subj]=v[i][j];
+				subj++;
+			}
+			subi++;
+		}
+		return
+			m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])-
+			m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])+
+			m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+	}
+
 	static Mat4 identity() {
 		Mat4 m;
 		for(int i=0; i<4; i++) {
@@ -63,11 +82,12 @@ struct Mat4 {
 	}
 
 	static Mat4 makeProj(float fov_deg, float aspect, float near, float far) {
-		float fov_rad=1/std::tanf(fov_deg/2/180*Pi);
+		float fov_rad=fov_deg*Pi/180;
+		float inv_tan=1/std::tanf(fov_rad/2);
 
 		Mat4 m;
-		m.v[0][0]=aspect*fov_rad;
-		m.v[1][1]=fov_rad;
+		m.v[0][0]=aspect*inv_tan;
+		m.v[1][1]=inv_tan;
 		m.v[2][2]=far/(far-near);
 		m.v[3][2]=-far*near/(far-near);
 		m.v[2][3]=1;
@@ -89,7 +109,6 @@ struct Mat4 {
 		m.v[3][0]=pos.x, m.v[3][1]=pos.y, m.v[3][2]=pos.z;
 		m.v[3][3]=1;
 		return m;
-
 	}
 
 	//only for rot/proj
@@ -103,6 +122,45 @@ struct Mat4 {
 		b.v[3][2]=-(a.v[3][0]*b.v[0][2]+a.v[3][1]*b.v[1][2]+a.v[3][2]*b.v[2][2]);
 		b.v[3][3]=1;
 		return b;
+	}
+
+	static Mat4 inverse(const Mat4& m) {
+		Mat4 cofactors;
+
+		//get cofactor matrix
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				cofactors.v[i][j]=((i+j)%2?-1:1)*m.minor(i, j);
+			}
+		}
+
+		//transpose of cofactor
+		Mat4 adjugate;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				adjugate.v[i][j]=cofactors.v[j][i];
+			}
+		}
+
+		//get determinant using first row and cofactors
+		float det=0;
+		for(int j=0; j<4; j++) {
+			det+=m.v[0][j]*cofactors.v[0][j];
+		}
+
+		if(std::abs(det)<1e-6f) {
+			throw std::runtime_error("matrix is singular");
+		}
+
+		//divide adjugate by determinant
+		Mat4 inv;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				inv.v[i][j]=adjugate.v[i][j]/det;
+			}
+		}
+
+		return inv;
 	}
 };
 

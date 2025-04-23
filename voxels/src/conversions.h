@@ -13,59 +13,6 @@ float random(float b=1, float a=0) {
 	return a+t*(b-a);
 }
 
-float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
-	/*segment equation
-	s0+t(s1-s0)=p
-	triangle equation
-	t0+u(t1-t0)+v(t2-t0)
-	set equal
-	s0+t(s1-s0)=t0+u(t1-t0)+v(t2-t0)
-	rearrange
-	t(s1-s0)+u(t0-t1)+v(t0-t2)=t0-s0
-	solve like matrix!
-	*/
-	static const float epsilon=1e-6f;
-	//column vectors
-	vf3d a=s1-s0;
-	vf3d b=tri.p[0]-tri.p[1];
-	vf3d c=tri.p[0]-tri.p[2];
-	vf3d d=tri.p[0]-s0;
-	float det=a.x*(b.y*c.z-c.y*b.z)
-		-b.x*(a.y*c.z-c.y*a.z)
-		+c.x*(a.y*b.z-b.y*a.z);
-	//parallel
-	if(std::abs(det)<epsilon) return -1;
-
-	//row vectors
-	vf3d f=vf3d(
-		a.z*c.y-c.z*a.y,
-		a.x*c.z-c.x*a.z,
-		a.y*c.x-c.y*a.x
-	)/det;
-	float u=f.dot(d);
-	//out of range
-	if(u<0||u>1) return -1;
-
-	vf3d g=vf3d(
-		a.y*b.z-b.y*a.z,
-		a.z*b.x-b.z*a.x,
-		a.x*b.y-b.x*a.y
-	)/det;
-	float v=g.dot(d);
-	//out of range
-	if(v<0||v>1) return -1;
-
-	//barycentric uv coordinates
-	if(u+v>1) return -1;
-
-	vf3d e=vf3d(
-		b.y*c.z-c.y*b.z,
-		b.z*c.x-c.z*b.x,
-		b.x*c.y-c.x*b.y
-	)/det;
-	return e.dot(d);
-}
-
 [[nodiscard]] VoxelSet meshToVoxels(const Mesh& m, float resolution) {
 	//find mesh bounds
 	AABB3 box=m.getAABB();

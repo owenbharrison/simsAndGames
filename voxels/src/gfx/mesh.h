@@ -17,6 +17,64 @@ struct Mesh {
 	std::list<Triangle> triangles;
 	bool textured=true;
 
+	AABB3 getAABB() const {
+		AABB3 a;
+		for(const auto& t:triangles) {
+			for(int i=0; i<3; i++) {
+				a.fitToEnclose(t.p[i]);
+			}
+		}
+		return a;
+	}
+
+	void normalize(float rad=1) {
+		AABB3 box=getAABB();
+
+		//center abour origin
+		vf3d ctr=box.getCenter();
+		for(auto& t:triangles) {
+			for(int i=0; i<3; i++) t.p[i]-=ctr;
+		}
+
+		//divide by maximum dimension
+		vf3d size=box.max-box.min;
+		float max_dim=std::max(size.x, std::max(size.y, size.z))/2;
+		for(auto& t:triangles) {
+			for(int i=0; i<3; i++) t.p[i]/=max_dim;
+		}
+
+		//scale up to radius
+		//divide by maximum dimension
+		for(auto& t:triangles) {
+			for(int i=0; i<3; i++) t.p[i]*=rad;
+		}
+	}
+
+	//set triangle colors to their normals
+	void colorNormals() {
+		for(auto& t:triangles) {
+			vf3d norm=t.getNorm();
+			t.col.r=128+127*norm.x;
+			t.col.g=128+127*norm.y;
+			t.col.b=128+127*norm.z;
+		}
+	}
+
+	//these obj helpers will fundamentally change when
+	//i update triangles such that they store indexes
+	void saveToOBJ(const std::string& filename) {
+		std::ofstream file(filename);
+		if(file.fail()) throw std::runtime_error("invalid filename");
+
+		int j=1;
+		for(const auto& t:triangles) {
+			for(int i=0; i<3; i++) {
+				file<<"v "<<t.p[i].x<<' '<<t.p[i].y<<' '<<t.p[i].z<<'\n';
+			}
+			file<<"f "<<(j++)<<' '<<(j++)<<' '<<(j++)<<'\n';
+		}
+	}
+
 	static Mesh loadFromOBJ(const std::string& filename) {
 		Mesh m;
 
@@ -76,49 +134,6 @@ struct Mesh {
 
 		file.close();
 		return m;
-	}
-
-	AABB3 getAABB() const {
-		AABB3 a;
-		for(const auto& t:triangles) {
-			for(int i=0; i<3; i++) {
-				a.fitToEnclose(t.p[i]);
-			}
-		}
-		return a;
-	}
-
-	void normalize(float rad=1) {
-		AABB3 box=getAABB();
-
-		//center abour origin
-		vf3d ctr=box.getCenter();
-		for(auto& t:triangles) {
-			for(int i=0; i<3; i++) t.p[i]-=ctr;
-		}
-
-		//divide by maximum dimension
-		vf3d size=box.max-box.min;
-		float max_dim=std::max(size.x, std::max(size.y, size.z))/2;
-		for(auto& t:triangles) {
-			for(int i=0; i<3; i++) t.p[i]/=max_dim;
-		}
-
-		//scale up to radius
-		//divide by maximum dimension
-		for(auto& t:triangles) {
-			for(int i=0; i<3; i++) t.p[i]*=rad;
-		}
-	}
-
-	//set triangle colors to their normals
-	void colorNormals() {
-		for(auto& t:triangles) {
-			vf3d norm=t.getNorm();
-			t.col.r=128+127*norm.x;
-			t.col.g=128+127*norm.y;
-			t.col.b=128+127*norm.z;
-		}
 	}
 };
 #endif//MESH_STRUCT_H

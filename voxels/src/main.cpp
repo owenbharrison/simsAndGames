@@ -9,11 +9,13 @@ namespace olc {
 
 #include "math/mat4.h"
 
-#include "gfx/mesh.h"
-
 #include "math/v2d.h"
 
-#include "render.h"
+#include "gfx/mesh.h"
+
+#include "gfx/line.h"
+
+#include "gfx/render.h"
 
 #include "common/stopwatch.h"
 
@@ -23,56 +25,58 @@ vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
 }
 
-struct Line {
-	vf3d p[2];
-	v2d t[2];
+struct Particle {
+	vf3d pos, oldpos, acc;
 	olc::Pixel col=olc::WHITE;
 
-	bool clipAgainstPlane(const vf3d& ctr, const vf3d& norm, Line& a) const {
-		const vf3d* in_pts[2];
-		const v2d* in_tex[2];
-		int in_ct=0;
-		const vf3d* out_pts[2];
-		const v2d* out_tex[2];
-		int out_ct=0;
+	Particle() {}
 
-		//classify each point based on
-		for(int i=0; i<2; i++) {
-			//what side of plane it is on
-			if(norm.dot(p[i]-ctr)>0) {
-				in_pts[in_ct]=&p[i];
-				in_tex[in_ct]=&t[i];
-				in_ct++;
-			} else {
-				out_pts[out_ct]=&p[i];
-				out_tex[out_ct]=&t[i];
-				out_ct++;
-			}
+	Particle(vf3d p) {
+		pos=p;
+		oldpos=p;
+	}
+
+	void accelerate(const vf3d& f) {
+		acc+=f;
+	}
+
+	void update(float dt) {
+		//position store
+		vf3d vel=pos-oldpos;
+		oldpos=pos;
+
+		//verlet integration
+		pos+=vel+acc*dt*dt;
+
+		//reset forces
+		acc*=0;
+	}
+
+	void keepIn(const AABB3& a) {
+		vf3d vel=pos-oldpos;
+		if(pos.x<a.min.x) {
+			pos.x=a.min.x;
+			oldpos.x=a.min.x+vel.x;
 		}
-
-		switch(in_ct) {
-			default:
-				//line behind plane
-				return false;
-			case 1: {
-				//reconstruct half of it
-				a.p[0]=*in_pts[0];
-				a.t[0]=*in_tex[0];
-				float t=0;
-				a.p[1]=segIntersectPlane(*in_pts[0], *out_pts[0], ctr, norm, &t);
-
-				//interpolate tex coords
-				a.t[1].u=in_tex[0]->u+t*(out_tex[0]->u-in_tex[0]->u);
-				a.t[1].v=in_tex[0]->v+t*(out_tex[0]->v-in_tex[0]->v);
-				a.t[1].w=in_tex[0]->w+t*(out_tex[0]->w-in_tex[0]->w);
-				a.col=col;
-
-				return true;
-			}
-			case 2:
-				//line infront of plane
-				a=*this;
-				return true;
+		if(pos.y<a.min.y) {
+			pos.y=a.min.y;
+			oldpos.y=a.min.y+vel.y;
+		}
+		if(pos.x>a.max.x) {
+			pos.x=a.max.x;
+			oldpos.x=a.max.x+vel.x;
+		}
+		if(pos.y>a.max.y) {
+			pos.y=a.max.y;
+			oldpos.y=a.max.y+vel.y;
+		}
+		if(pos.z>a.max.z) {
+			pos.z=a.max.z;
+			oldpos.z=a.max.z+vel.z;
+		}
+		if(pos.z>a.max.y) {
+			pos.z=a.max.z;
+			oldpos.z=a.max.z+vel.z;
 		}
 	}
 };
@@ -82,50 +86,44 @@ struct VoxelGame : olc::PixelGameEngine {
 		sAppName="Voxel Game";
 	}
 
-	Mesh model;
-
-	float* depth_buffer=nullptr;
-	float* u_buffer=nullptr;
-	float* v_buffer=nullptr;
-
-	//camera matrix
-	Mat4 mat_proj;
-
 	//camera positioning
 	vf3d cam_pos{0, 0, -5};
 	float cam_yaw=0;
 	float cam_pitch=0;
 	vf3d cam_dir;
 
+	//camera matrices
+	Mat4 mat_proj, mat_view;
+
 	//graphics stuff
+	Mesh model;
+	AABB3 scene_bounds;
 	vf3d light_pos=cam_pos;
+
+	std::list<Triangle> tris_to_project;
+	std::list<Line> lines_to_project;
 	std::list<Triangle> tris_to_draw;
 	std::list<Line> lines_to_draw;
 
-	bool show_outlines=false;
-	bool show_render=false;
-	bool show_edges=false;
-	bool show_grid=false;
-
-	bool to_time=false;
-
-	enum struct Debug {
-		NONE=0,
-		DEPTH,
-		UV
-	};
-	Debug debug_view=Debug::NONE;
-
-	olc::Sprite* texture=nullptr;
-	olc::Sprite* white_texture=nullptr;
+	float* depth_buffer=nullptr;
 
 	//render stuff
 	Render renderer;
 	olc::Sprite* renderer_tex=nullptr;
 
-	std::list<vf3d> quads;
+	//toggles
+	bool show_outlines=false;
+	bool show_render=false;
+	bool show_edges=false;
+	bool show_grid=false;
+	bool show_depth=false;
 
-	AABB3 scene_bounds;
+	//diagnostic flag
+	bool to_time=false;
+
+	//experimental
+	std::list<Particle> particles;
+	vf3d gravity{0, -1, 0};
 
 	void fitBounds() {
 		scene_bounds=AABB3();
@@ -144,17 +142,14 @@ struct VoxelGame : olc::PixelGameEngine {
 		ConsoleCaptureStdOut(true);
 
 		//make projection matrix
-		float fov=90.f;
 		float asp=float(ScreenHeight())/ScreenWidth();
-		mat_proj=Mat4::makeProj(fov, asp, .1f, 1000.f);
+		mat_proj=Mat4::makeProj(90, asp, .1f, 1000.f);
 
 		depth_buffer=new float[ScreenWidth()*ScreenHeight()];
-		u_buffer=new float[ScreenWidth()*ScreenHeight()];
-		v_buffer=new float[ScreenWidth()*ScreenHeight()];
 
 		try {
 			//load model, rescale
-			model=Mesh::loadFromOBJ("assets/models/block.txt");
+			model=Mesh::loadFromOBJ("assets/models/teapot.txt");
 			model.normalize(2);
 			model.colorNormals();
 			fitBounds();
@@ -162,11 +157,6 @@ struct VoxelGame : olc::PixelGameEngine {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
 		}
-
-		//load texture
-		texture=new olc::Sprite("assets/textures/grass.png");
-		white_texture=new olc::Sprite(1, 1);
-		white_texture->SetPixel(0, 0, olc::WHITE);
 
 		renderer=Render(128, 96, 90);
 		renderer_tex=new olc::Sprite(renderer.getWidth(), renderer.getHeight());
@@ -180,6 +170,13 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		if(cmd=="clear") {
 			ConsoleClear();
+
+			return true;
+		}
+
+		if(cmd=="reset") {
+			particles.clear();
+			std::cout<<"  removing particles\n";
 
 			return true;
 		}
@@ -251,15 +248,13 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  SHIFT    move down\n"
 				"  WASD     move camera\n"
 				"  ARROWS   look camera\n"
-				"  Q        add quad\n"
+				"  P        add particle\n"
 				"  L        set light pos\n"
 				"  O        toggle wireframe view\n"
 				"  R        toggle render view"
 				"  E        toggle edge view\n"
 				"  G        toggle grid view\n"
-				"  B        depth debug view\n"
-				"  U        uv debug view\n"
-				"  N        no debug\n"
+				"  B        toggle depth view\n"
 				"  ESC      toggle integrated console\n";
 
 			return true;
@@ -268,6 +263,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(cmd=="help") {
 			std::cout<<"useful commands:\n"
 				"  clear      clears the console\n"
+				"  reset      removes all particles\n"
 				"  time       times immediate next update and render loop\n"
 				"  import     import model from file\n"
 				"  render     update camera render\n"
@@ -307,7 +303,9 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
 
 		//add quad at camera
-		if(GetKey(olc::Key::Q).bPressed) quads.push_back(cam_pos);
+		if(GetKey(olc::Key::P).bPressed) {
+			particles.push_back({cam_pos});
+		}
 
 		//set light to camera
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
@@ -317,10 +315,33 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::R).bPressed) show_render^=true;
 		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
 		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
+		if(GetKey(olc::Key::B).bPressed) show_depth^=true;
 
-		if(GetKey(olc::Key::B).bPressed) debug_view=Debug::DEPTH;
-		if(GetKey(olc::Key::U).bPressed) debug_view=Debug::UV;
-		if(GetKey(olc::Key::N).bPressed) debug_view=Debug::NONE;
+		//mouse painting?
+		if(GetMouse(olc::Mouse::LEFT).bHeld) {
+			//screen -> world with inverse matrix
+			Mat4 invPV=Mat4::inverse(mat_view*mat_proj);
+			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+			vf3d clip(ndc_x, ndc_y, 1);
+			vf3d world=clip*invPV;
+			world/=world.w;
+
+			//check every tri against segment
+			vf3d start=cam_pos;
+			float record=INFINITY;
+			Triangle* closest=nullptr;
+			for(auto& t:model.triangles) {
+				float dist=segIntersectTri(start, world, t);
+				if(dist>0&&dist<record) {
+					record=dist;
+					closest=&t;
+				}
+			}
+
+			//if found, paint
+			if(closest) closest->col=olc::WHITE;
+		}
 	}
 
 	bool update(float dt) {
@@ -329,35 +350,51 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//only allow input when console NOT open
 		if(!IsConsoleShowing()) handleUserInput(dt);
+
+		//particle collisions
+		for(const auto& p:particles) {}
+
+		//particle kinematics
+		for(auto& p:particles) {
+			p.accelerate(gravity);
+
+			p.update(dt);
+
+			//or when it falls out delete it??
+			p.keepIn(scene_bounds);
+		}
 	}
 
-	void geometryAndClipping() {
-		const vf3d up(0, 1, 0);
-		cam_dir=vf3d(
-			std::sinf(cam_yaw)*std::cosf(cam_pitch),
-			std::sinf(cam_pitch),
-			std::cosf(cam_yaw)*std::cosf(cam_pitch)
-		);
-		vf3d target=cam_pos+cam_dir;
+	void geometry() {
+		//recalculate matrices
+		{
+			const vf3d up(0, 1, 0);
+			cam_dir=vf3d(
+				std::sinf(cam_yaw)*std::cosf(cam_pitch),
+				std::sinf(cam_pitch),
+				std::cosf(cam_yaw)*std::cosf(cam_pitch)
+			);
+			vf3d target=cam_pos+cam_dir;
+			Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
+			mat_view=Mat4::quickInverse(mat_cam);
+		}
 
-		Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
-		Mat4 mat_view=Mat4::quickInverse(mat_cam);
-
-		std::list<Triangle> tris_to_project=model.triangles;
-		for(const auto& q:quads) {
-			float sz=.25f;
+		//add each particle as a quad
+		tris_to_project=model.triangles;
+		for(const auto& p:particles) {
+			const float sz=.25f;
 
 			//billboarded to point at camera
-			vf3d norm=(q-cam_pos).norm();
+			vf3d norm=(p.pos-cam_pos).norm();
 			vf3d up(0, 1, 0);
 			vf3d rgt=norm.cross(up).norm();
 			up=rgt.cross(norm);
 
 			//vertex positioning
-			vf3d tl=q+sz/2*rgt+sz/2*up;
-			vf3d tr=q+sz/2*rgt-sz/2*up;
-			vf3d bl=q-sz/2*rgt+sz/2*up;
-			vf3d br=q-sz/2*rgt-sz/2*up;
+			vf3d tl=p.pos+sz/2*rgt+sz/2*up;
+			vf3d tr=p.pos+sz/2*rgt-sz/2*up;
+			vf3d bl=p.pos-sz/2*rgt+sz/2*up;
+			vf3d br=p.pos-sz/2*rgt-sz/2*up;
 
 			//tesselation
 			Triangle f1{tl, br, tr};
@@ -366,7 +403,8 @@ struct VoxelGame : olc::PixelGameEngine {
 			tris_to_project.push_back(f2);
 		}
 
-		std::list<Line> lines_to_project;
+		//add blender-like viewport camera "frustum" lines
+		lines_to_project.clear();
 		if(show_render) {
 			//camera sizing
 			float w=.75f, h=w*renderer.getHeight()/renderer.getWidth();
@@ -405,6 +443,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			lines_to_project.push_back(l8);
 		}
 
+		//add grid lines
 		if(show_grid) {
 			const float res=.5f;
 			int num_x=1+(scene_bounds.max.x-scene_bounds.min.x)/res;
@@ -443,7 +482,10 @@ struct VoxelGame : olc::PixelGameEngine {
 			Line z_axis{vf3d(0, 0, -rad), vf3d(0, 0, rad)}; z_axis.col=olc::BLUE;
 			lines_to_project.push_back(z_axis);
 		}
+	}
 
+	void projectAndClip() {
+		//clip triangles against near plane 
 		std::list<Triangle> tris_to_clip;
 		for(const auto& tri:tris_to_project) {
 			vf3d norm=tri.getNorm();
@@ -462,7 +504,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				}
 				tri_view.col=tri.col*dp;
 
-				//clip against near plane
+				//clip
 				Triangle clipped[2];
 				int num=tri_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
 				for(int i=0; i<num; i++) {
@@ -500,6 +542,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 
+		//clip lines against near plane
 		std::list<Line> lines_to_clip;
 		for(const auto& line:lines_to_project) {
 			//transform triangles given camera positioning
@@ -510,7 +553,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 			line_view.col=line.col;
 
-			//clip against near plane
+			//clip
 			Line clipped;
 			if(line_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped)) {
 				Line line_proj;
@@ -546,7 +589,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 
-		//screen space clipping!
+		//clip tris against edges of screen
 		std::list<Triangle> tri_queue;
 		tris_to_draw.clear();
 		for(const auto& t:tris_to_clip) {
@@ -591,7 +634,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			tris_to_draw.insert(tris_to_draw.end(), tri_queue.begin(), tri_queue.end());
 		}
 
-		//screen space clipping!
+		//clip lines against edges of screen
 		std::list<Line> line_queue;
 		lines_to_draw.clear();
 		for(const auto& l:lines_to_clip) {
@@ -791,8 +834,6 @@ struct VoxelGame : olc::PixelGameEngine {
 					if(tex_w>depth) {
 						Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
 						depth=tex_w;
-						u_buffer[i+ScreenWidth()*j]=tex_u;
-						v_buffer[i+ScreenWidth()*j]=tex_v;
 					}
 					t+=t_step;
 				}
@@ -839,8 +880,6 @@ struct VoxelGame : olc::PixelGameEngine {
 				if(tex_w>depth) {
 					Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
 					depth=tex_w;
-					u_buffer[i+ScreenWidth()*j]=tex_u;
-					v_buffer[i+ScreenWidth()*j]=tex_v;
 				}
 				t+=t_step;
 			}
@@ -852,24 +891,22 @@ struct VoxelGame : olc::PixelGameEngine {
 		//dark grey background
 		Clear(olc::Pixel(90, 90, 90));
 
-		//reset buffers
+		//reset depth buffer
 		for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
 			depth_buffer[i]=0;
-			u_buffer[i]=0;
-			v_buffer[i]=0; 
 		}
 
 		//rasterize all triangles
 		for(const auto& t:tris_to_draw) {
 			if(show_outlines) {
+				//these arent SUPER visible, but its not a big deal...
 				DrawDepthTriangle(
 					t.p[0].x, t.p[0].y, t.t[0].w,
 					t.p[1].x, t.p[1].y, t.t[1].w,
 					t.p[2].x, t.p[2].y, t.t[2].w,
-					olc::BLACK
+					t.col
 				);
-			}
-			FillDepthTriangle(
+			} else FillDepthTriangle(
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
@@ -887,54 +924,29 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		//debug options
-		switch(debug_view) {
-			case Debug::DEPTH: {
-				//how to convert to actual depth?
+		if(show_depth) {
+			//how to convert to actual depth?
 
-				//find min and max values
-				float min_depth=INFINITY, max_depth=-min_depth;
-				for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
-					const auto& depth=depth_buffer[i];
-					if(depth<min_depth) min_depth=depth;
-					if(depth>max_depth) max_depth=depth;
-				}
-
-				//show all depth values
-				for(int i=0; i<ScreenWidth(); i++) {
-					for(int j=0; j<ScreenHeight(); j++) {
-						float depth=depth_buffer[i+ScreenWidth()*j];
-						float shade=cmn::map(depth, min_depth, max_depth, 0, 1);
-						Draw(i, j, olc::PixelF(shade, shade, shade));
-					}
-				}
-
-				//debug view string
-				DrawString({0, 0}, "showing depth", olc::WHITE);
-
-				break;
+			//find min and max values
+			float min_depth=INFINITY, max_depth=-min_depth;
+			for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
+				const auto& depth=depth_buffer[i];
+				if(depth<min_depth) min_depth=depth;
+				if(depth>max_depth) max_depth=depth;
 			}
-			case Debug::UV: {
-				//show all uv as red and green values
-				for(int i=0; i<ScreenWidth(); i++) {
-					for(int j=0; j<ScreenHeight(); j++) {
-						olc::Pixel col=olc::PixelF(
-							u_buffer[i+ScreenWidth()*j],
-							v_buffer[i+ScreenWidth()*j],
-							0
-						);
-						Draw(i, j, col);
-					}
+
+			//show all depth values
+			for(int i=0; i<ScreenWidth(); i++) {
+				for(int j=0; j<ScreenHeight(); j++) {
+					float depth=depth_buffer[i+ScreenWidth()*j];
+					float shade=cmn::map(depth, min_depth, max_depth, 0, 1);
+					Draw(i, j, olc::PixelF(shade, shade, shade));
 				}
-
-				//debug view string
-				DrawString({0, 0}, "showing uv", olc::WHITE);
-
-				break;
 			}
 		}
 
+		//edge detection based on depth values
 		if(show_edges) {
-			//edge detection based on depth values
 			for(int i=1; i<ScreenWidth()-1; i++) {
 				for(int j=1; j<ScreenHeight()-1; j++) {
 					bool curr=depth_buffer[i+ScreenWidth()*j]==0;
@@ -949,6 +961,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 
+		//little camera render in bottom of screen
 		if(show_render) {
 			vf2d corner(ScreenWidth()-renderer.getWidth(), ScreenHeight()-renderer.getHeight());
 			DrawSprite(corner, renderer_tex);
@@ -956,6 +969,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 	}
 
+	//wrapper for timing and encapsulation
 	bool OnUserUpdate(float dt) override {
 		cmn::Stopwatch update_watch;
 		update_watch.start();
@@ -968,11 +982,20 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		cmn::Stopwatch geom_watch;
 		geom_watch.start();
-		geometryAndClipping();
+		geometry();
 		if(to_time) {
 			geom_watch.stop();
 			auto dur=geom_watch.getMicros();
 			std::cout<<"  geom: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
+		}
+
+		cmn::Stopwatch pc_watch;
+		pc_watch.start();
+		projectAndClip();
+		if(to_time) {
+			pc_watch.stop();
+			auto dur=pc_watch.getMicros();
+			std::cout<<"  project & clip: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
 		}
 
 		cmn::Stopwatch render_watch;

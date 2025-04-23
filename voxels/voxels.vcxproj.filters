@@ -61,7 +61,10 @@
     <ClInclude Include="src\math\v2d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\render.h">
+    <ClInclude Include="src\gfx\render.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gfx\line.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
