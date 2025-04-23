@@ -204,7 +204,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 				fitBounds();
 
-				std::cout<<"  successfully loaded model\n";
+				std::cout<<"  successfully loaded model w/ "<<model.triangles.size()<<"tris\n";
 
 				return true;
 			} catch(const std::exception& e) {
@@ -243,7 +243,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		if(cmd=="keybinds") {
-			std::cout<<"useful keybinds:\n"
+			std::cout<<
 				"  SPACE    move up\n"
 				"  SHIFT    move down\n"
 				"  WASD     move camera\n"
@@ -251,7 +251,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  P        add particle\n"
 				"  L        set light pos\n"
 				"  O        toggle wireframe view\n"
-				"  R        toggle render view"
+				"  R        toggle render view\n"
 				"  E        toggle edge view\n"
 				"  G        toggle grid view\n"
 				"  B        toggle depth view\n"
@@ -260,14 +260,22 @@ struct VoxelGame : olc::PixelGameEngine {
 			return true;
 		}
 
+		if(cmd=="mousebinds") {
+			std::cout<<
+				"  LEFT   paint triangles white\n";
+
+			return true;
+		}
+
 		if(cmd=="help") {
-			std::cout<<"useful commands:\n"
-				"  clear      clears the console\n"
-				"  reset      removes all particles\n"
-				"  time       times immediate next update and render loop\n"
-				"  import     import model from file\n"
-				"  render     update camera render\n"
-				"  keybinds   which keys to press for this program?\n";
+			std::cout<<
+				"  clear        clears the console\n"
+				"  reset        removes all particles\n"
+				"  time         get timing info for next update cycle\n"
+				"  import       import model from file\n"
+				"  render       update camera render\n"
+				"  keybinds     which keys to press for this program?\n"
+				"  mousebinds   which buttons to press for this program?\n";
 
 			return true;
 		}
@@ -365,7 +373,8 @@ struct VoxelGame : olc::PixelGameEngine {
 					p.pos=ix+1e-6f*norm;
 
 					//reflect velocity
-					p.oldpos=p.pos-reflect(vel, norm);
+					float restitution=.95f;
+					p.oldpos=p.pos-restitution*reflect(vel, norm);
 
 					//randomize color on bounce
 					p.col.r=rand()%255;
