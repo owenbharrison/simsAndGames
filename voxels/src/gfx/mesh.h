@@ -27,26 +27,21 @@ struct Mesh {
 		return a;
 	}
 
-	void normalize(float rad=1) {
-		AABB3 box=getAABB();
+	void fitToBounds(const AABB3& box) {
+		vf3d box_ctr=box.getCenter();
 
-		//center abour origin
-		vf3d ctr=box.getCenter();
-		for(auto& t:triangles) {
-			for(int i=0; i<3; i++) t.p[i]-=ctr;
-		}
+		AABB3 me=getAABB();
+		vf3d me_ctr=me.getCenter();
 
-		//divide by maximum dimension
-		vf3d size=box.max-box.min;
-		float max_dim=std::max(size.x, std::max(size.y, size.z))/2;
-		for(auto& t:triangles) {
-			for(int i=0; i<3; i++) t.p[i]/=max_dim;
-		}
+		//which is the constraining dimension?
+		vf3d num=(box.max-box.min)/(me.max-me.min);
+		float scl=std::min(num.x, std::min(num.y, num.z));
 
-		//scale up to radius
-		//divide by maximum dimension
+		//scale about box center.
 		for(auto& t:triangles) {
-			for(int i=0; i<3; i++) t.p[i]*=rad;
+			for(int i=0; i<3; i++) {
+				t.p[i]=box_ctr+scl*(t.p[i]-me_ctr);
+			}
 		}
 	}
 

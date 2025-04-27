@@ -122,9 +122,53 @@ struct Triangle {
 				return 1;
 		}
 	}
+
+	//https://stackoverflow.com/a/74395029
+	vf3d getClosePt(const vf3d& pt) const {
+		vf3d ab=p[1]-p[0];
+		vf3d ac=p[2]-p[0];
+
+		vf3d ap=pt-p[0];
+		float d1=ab.dot(ap);
+		float d2=ac.dot(ap);
+		if(d1<=0&&d2<=0) return p[0];
+
+		vf3d bp=pt-p[1];
+		float d3=ab.dot(bp);
+		float d4=ac.dot(bp);
+		if(d3>=0&&d4<=d3) return p[1];
+
+		vf3d cp=pt-p[2];
+		float d5=ab.dot(cp);
+		float d6=ac.dot(cp);
+		if(d6>=0&&d5<=d6) return p[2];
+
+		float vc=d1*d4-d3*d2;
+		if(vc<=0&&d1>=0&&d3<=0) {
+			float v=d1/(d1-d3);
+			return p[0]+v*ab;
+		}
+
+		float vb=d5*d2-d1*d6;
+		if(vb<=0&&d2>=0&&d6<=0) {
+			float v=d2/(d2-d6);
+			return p[0]+v*ac;
+		}
+
+		float va=d3*d6-d5*d4;
+		if(va<=0&&(d4-d3)>=0&&(d5-d6)>=0) {
+			float v=(d4-d3)/((d4-d3)+(d5-d6));
+			return p[1]+v*(p[2]-p[1]);
+		}
+
+		float denom=1/(va+vb+vc);
+		float v=vb*denom;
+		float w=vc*denom;
+		return p[0]+v*ab+w*ac;
+	}
 };
 
-float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri) {
+float segIntersectTri(const vf3d& s0, const vf3d& s1, const Triangle& tri, float* uptr=nullptr, float* vptr=nullptr) {
 	/*segment equation
 	s0+t(s1-s0)=p
 	triangle equation

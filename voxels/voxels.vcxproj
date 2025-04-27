@@ -155,6 +155,7 @@
     <Text Include="assets\models\axis.txt" />
     <Text Include="assets\models\bike.txt" />
     <Text Include="assets\models\block.txt" />
+    <Text Include="assets\models\bunny.txt" />
     <Text Include="assets\models\car.txt" />
     <Text Include="assets\models\cube.txt" />
     <Text Include="assets\models\digger.txt" />
@@ -162,8 +163,10 @@
     <Text Include="assets\models\house.txt" />
     <Text Include="assets\models\motorcycle.txt" />
     <Text Include="assets\models\mountains.txt" />
+    <Text Include="assets\models\suzanne.txt" />
     <Text Include="assets\models\table.txt" />
     <Text Include="assets\models\teapot.txt" />
+    <Text Include="assets\models\teapot_voxel.txt" />
     <Text Include="assets\models\torus.txt" />
     <Text Include="assets\models\video_ship.txt" />
   </ItemGroup>
@@ -180,6 +183,7 @@
     <ClInclude Include="src\math\v2d.h" />
     <ClInclude Include="src\math\vf3d.h" />
     <ClInclude Include="src\gfx\render.h" />
+    <ClInclude Include="src\particle.h" />
     <ClInclude Include="src\voxel_set.h" />
   </ItemGroup>
   <ItemGroup>

@@ -19,22 +19,6 @@ struct v3d_generic {
 
 	v3d_generic& operator=(const v3d_generic& v)=default;
 
-	const float& operator[](int i) const {
-		assert(i==0||i==1||i==2);
-
-		if(i==1) return y;
-		if(i==2) return z;
-		return x;
-	}
-
-	float& operator[](int i) {
-		assert(i==0||i==1||i==2);
-
-		if(i==1) return y;
-		if(i==2) return z;
-		return x;
-	}
-
 	T dot(const v3d_generic& v) const { return x*v.x+y*v.y+z*v.z; }
 	T mag2() const { return this->dot(*this); }
 	T mag() const { return std::sqrtf(mag2()); }

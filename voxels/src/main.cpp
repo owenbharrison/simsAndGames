@@ -21,65 +21,11 @@ namespace olc {
 
 #include "common/utils.h"
 
+#include "particle.h"
+
 vf3d reflect(const vf3d& in, const vf3d& norm) {
 	return in-2*norm.dot(in)*norm;
 }
-
-struct Particle {
-	vf3d pos, oldpos, acc;
-	olc::Pixel col=olc::WHITE;
-
-	Particle() {}
-
-	Particle(vf3d p) {
-		pos=p;
-		oldpos=p;
-	}
-
-	void accelerate(const vf3d& f) {
-		acc+=f;
-	}
-
-	void update(float dt) {
-		//position store
-		vf3d vel=pos-oldpos;
-		oldpos=pos;
-
-		//verlet integration
-		pos+=vel+acc*dt*dt;
-
-		//reset forces
-		acc*=0;
-	}
-
-	void keepIn(const AABB3& a) {
-		vf3d vel=pos-oldpos;
-		if(pos.x<a.min.x) {
-			pos.x=a.min.x;
-			oldpos.x=a.min.x+vel.x;
-		}
-		if(pos.y<a.min.y) {
-			pos.y=a.min.y;
-			oldpos.y=a.min.y+vel.y;
-		}
-		if(pos.x>a.max.x) {
-			pos.x=a.max.x;
-			oldpos.x=a.max.x+vel.x;
-		}
-		if(pos.y>a.max.y) {
-			pos.y=a.max.y;
-			oldpos.y=a.max.y+vel.y;
-		}
-		if(pos.z>a.max.z) {
-			pos.z=a.max.z;
-			oldpos.z=a.max.z+vel.z;
-		}
-		if(pos.z>a.max.y) {
-			pos.z=a.max.z;
-			oldpos.z=a.max.z+vel.z;
-		}
-	}
-};
 
 struct VoxelGame : olc::PixelGameEngine {
 	VoxelGame() {
@@ -97,7 +43,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 	//graphics stuff
 	Mesh model;
-	AABB3 scene_bounds;
+	const AABB3 scene_bounds{{-5, -5, -5}, {5, 5, 5}};
 	vf3d light_pos=cam_pos;
 
 	std::list<Triangle> tris_to_project;
@@ -105,9 +51,12 @@ struct VoxelGame : olc::PixelGameEngine {
 	std::list<Triangle> tris_to_draw;
 	std::list<Line> lines_to_draw;
 
+	//depth buffering
 	float* depth_buffer=nullptr;
+	bool inRangeX(int x) const { return x>=0&&x<ScreenWidth(); }
+	bool inRangeY(int y) const { return y>=0&&y<ScreenHeight(); }
 
-	//render stuff
+	//renderer stuff
 	Render renderer;
 	olc::Sprite* renderer_tex=nullptr;
 
@@ -125,14 +74,13 @@ struct VoxelGame : olc::PixelGameEngine {
 	std::list<Particle> particles;
 	vf3d gravity{0, -1, 0};
 
-	void fitBounds() {
-		scene_bounds=AABB3();
-		for(const auto& t:model.triangles) {
-			AABB3 box=t.getAABB();
-			scene_bounds.fitToEnclose(box.min);
-			scene_bounds.fitToEnclose(box.max);
-		}
-	}
+	bool player_camera=false;
+	vf3d player_pos;
+	vf3d player_vel;
+	const float player_rad=.1f;
+	const float player_height=.25f;
+	bool player_on_ground=false;
+	float player_airtime=0;
 
 	bool OnUserCreate() override {
 		srand(time(0));
@@ -143,21 +91,23 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//make projection matrix
 		float asp=float(ScreenHeight())/ScreenWidth();
-		mat_proj=Mat4::makeProj(90, asp, .1f, 1000.f);
+		mat_proj=Mat4::makeProj(90, asp, .001f, 1000.f);
 
 		depth_buffer=new float[ScreenWidth()*ScreenHeight()];
 
+		//try load model
 		try {
-			//load model, rescale
 			model=Mesh::loadFromOBJ("assets/models/mountains.txt");
-			model.normalize(2);
-			model.colorNormals();
-			fitBounds();
-		} catch(std::exception& e) {
+		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
 		}
 
+		//rescale
+		model.fitToBounds(scene_bounds);
+		model.colorNormals();
+
+		//setup renderer stuff
 		renderer=Render(128, 96, 90);
 		renderer_tex=new olc::Sprite(renderer.getWidth(), renderer.getHeight());
 
@@ -196,22 +146,24 @@ struct VoxelGame : olc::PixelGameEngine {
 				return false;
 			}
 
+			//try load model
+			Mesh m;
 			try {
-				Mesh m=Mesh::loadFromOBJ(filename);
-				m.normalize(2);
-				m.colorNormals();
-				model=m;
-
-				fitBounds();
-
-				std::cout<<"  successfully loaded model w/ "<<model.triangles.size()<<"tris\n";
-
-				return true;
+				m=Mesh::loadFromOBJ(filename);
 			} catch(const std::exception& e) {
 				std::cout<<"  "<<e.what()<<'\n';
 
 				return false;
 			}
+
+			//rescale
+			m.fitToBounds(scene_bounds);
+			m.colorNormals();
+			model=m;
+
+			std::cout<<"  successfully loaded model w/ "<<model.triangles.size()<<"tris\n";
+
+			return true;
 		}
 
 		if(cmd=="render") {
@@ -255,6 +207,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  E        toggle edge view\n"
 				"  G        toggle grid view\n"
 				"  B        toggle depth view\n"
+				"  C        toggle player camera\n"
 				"  ESC      toggle integrated console\n";
 
 			return true;
@@ -296,19 +249,70 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
 		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
 
-		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+		if(player_camera) {
+			//xz movement
+			vf3d movement;
 
-		//move forward, backward
-		vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+			//move forward, backward
+			vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) movement+=.5f*dt*fb_dir;
+			if(GetKey(olc::Key::S).bHeld) movement-=.3f*dt*fb_dir;
 
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+			//move left, right
+			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) movement+=.4f*dt*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) movement-=.4f*dt*lr_dir;
+			
+			//walk up hill
+			if(player_on_ground) {
+				//find closest triangle
+				float record;
+				const Triangle* closest=nullptr;
+				for(const auto& t:model.triangles) {
+					vf3d close_pt=t.getClosePt(player_pos);
+					vf3d sub=close_pt-player_pos;
+					float dist2=sub.mag2();
+					if(!closest||dist2<record) {
+						record=dist2;
+						closest=&t;
+					}
+				}
+
+				if(closest) {
+					//project movement onto triangle plane
+					vf3d norm=closest->getNorm();
+					movement-=norm*norm.dot(movement);
+				}
+			}
+			
+			player_pos+=movement;
+
+			//jumping??
+			if(GetKey(olc::Key::SPACE).bPressed) {
+				//no double jump.
+				if(player_airtime<.1f) {
+					player_vel.y=175*dt;
+					player_on_ground=false;
+				}
+			}
+
+			//player pos is at feet, so offset camera to head
+			cam_pos=player_pos+vf3d(0, player_height, 0);
+		} else {
+			//move up, down
+			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+
+			//move forward, backward
+			vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+
+			//move left, right
+			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+		}
 
 		//add quad at camera
 		if(GetKey(olc::Key::P).bPressed) {
@@ -324,7 +328,14 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
 		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 		if(GetKey(olc::Key::B).bPressed) show_depth^=true;
-
+		if(GetKey(olc::Key::C).bPressed) {
+			if(!player_camera) {
+				player_pos=cam_pos-vf3d(0, player_height, 0);
+				player_vel={0, 0, 0};
+			}
+			player_camera^=true;
+		}
+		
 		//mouse painting?
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
 			//screen -> world with inverse matrix
@@ -359,6 +370,39 @@ struct VoxelGame : olc::PixelGameEngine {
 		//only allow input when console NOT open
 		if(!IsConsoleShowing()) handleUserInput(dt);
 
+		if(player_camera) {
+			//player kinematics
+			if(!player_on_ground) {
+				player_vel+=gravity*dt;
+			}
+			player_pos+=player_vel*dt;
+
+			//airtimer
+			player_airtime+=dt;
+
+			//player collisions
+			player_on_ground=false;
+			for(const auto& t:model.triangles) {
+				vf3d close_pt=t.getClosePt(player_pos);
+				vf3d sub=player_pos-close_pt;
+				float dist2=sub.mag2();
+				if(dist2<player_rad*player_rad) {
+					float fix=player_rad-std::sqrtf(dist2);
+					player_pos+=fix*t.getNorm();
+					player_vel={0, 0, 0};
+					player_on_ground=true;
+					player_airtime=0;
+				}
+			}
+		}
+
+		//"sanitize" particles
+		for(auto it=particles.begin(); it!=particles.end(); it++) {
+			if(!scene_bounds.contains(it->pos)) {
+				it=particles.erase(it);
+			} else it++;
+		}
+
 		//particle collisions
 		for(auto& p:particles) {
 			vf3d vel=p.pos-p.oldpos;
@@ -367,10 +411,10 @@ struct VoxelGame : olc::PixelGameEngine {
 				if(t>0&&t<1) {
 					//find intersection point
 					vf3d ix=p.oldpos+t*vel;
-					
+
 					//push away from surface a little bit
 					vf3d norm=tri.getNorm();
-					p.pos=ix+1e-6f*norm;
+					p.pos=ix+1e-5f*norm;
 
 					//reflect velocity
 					float restitution=.95f;
@@ -390,26 +434,10 @@ struct VoxelGame : olc::PixelGameEngine {
 			p.accelerate(gravity);
 
 			p.update(dt);
-
-			//or when it falls out delete it??
-			//p.keepIn(scene_bounds);
 		}
 	}
 
 	void geometry() {
-		//recalculate matrices
-		{
-			const vf3d up(0, 1, 0);
-			cam_dir=vf3d(
-				std::sinf(cam_yaw)*std::cosf(cam_pitch),
-				std::sinf(cam_pitch),
-				std::cosf(cam_yaw)*std::cosf(cam_pitch)
-			);
-			vf3d target=cam_pos+cam_dir;
-			Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
-			mat_view=Mat4::quickInverse(mat_cam);
-		}
-
 		//add each particle as a quad
 		tris_to_project=model.triangles;
 		for(const auto& p:particles) {
@@ -476,11 +504,12 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//grid lines on xy, yz, zx planes
 		if(show_grid) {
-			const float res=.5f;
+			const float res=1;
 			int num_x=1+(scene_bounds.max.x-scene_bounds.min.x)/res;
 			int num_y=1+(scene_bounds.max.y-scene_bounds.min.y)/res;
 			int num_z=1+(scene_bounds.max.z-scene_bounds.min.z)/res;
 
+			//slice thru x: draw y&z lines
 			for(int i=0; i<num_x; i++) {
 				float x=cmn::map(i, 0, num_x-1, scene_bounds.min.x, scene_bounds.max.x);
 				Line ly{vf3d(x, scene_bounds.min.y, 0), vf3d(x, scene_bounds.max.y, 0)};
@@ -489,14 +518,16 @@ struct VoxelGame : olc::PixelGameEngine {
 				lines_to_project.push_back(lz);
 			}
 
+			//slice thru y: draw z&x lines
 			for(int i=0; i<num_y; i++) {
 				float y=cmn::map(i, 0, num_y-1, scene_bounds.min.y, scene_bounds.max.y);
-				Line lx{vf3d(scene_bounds.min.x, y, 0), vf3d(scene_bounds.max.x, y, 0)};
-				lines_to_project.push_back(lx);
 				Line lz{vf3d(0, y, scene_bounds.min.z), vf3d(0, y, scene_bounds.max.z)};
 				lines_to_project.push_back(lz);
+				Line lx{vf3d(scene_bounds.min.x, y, 0), vf3d(scene_bounds.max.x, y, 0)};
+				lines_to_project.push_back(lx);
 			}
 
+			//slice thru z: draw x&y lines
 			for(int i=0; i<num_z; i++) {
 				float z=cmn::map(i, 0, num_z-1, scene_bounds.min.z, scene_bounds.max.z);
 				Line lx{vf3d(scene_bounds.min.x, 0, z), vf3d(scene_bounds.max.x, 0, z)};
@@ -505,7 +536,8 @@ struct VoxelGame : olc::PixelGameEngine {
 				lines_to_project.push_back(ly);
 			}
 
-			float rad=5;
+			//draw xyz axes
+			const float rad=1000;
 			Line x_axis{vf3d(-rad, 0, 0), vf3d(rad, 0, 0)}; x_axis.col=olc::RED;
 			lines_to_project.push_back(x_axis);
 			Line y_axis{vf3d(0, -rad, 0), vf3d(0, rad, 0)}; y_axis.col=olc::GREEN;
@@ -516,7 +548,20 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 
 	void projectAndClip() {
-		//clip triangles against near plane 
+		//recalculate matrices
+		{
+			const vf3d up(0, 1, 0);
+			cam_dir=vf3d(
+				std::sinf(cam_yaw)*std::cosf(cam_pitch),
+				std::sinf(cam_pitch),
+				std::cosf(cam_yaw)*std::cosf(cam_pitch)
+			);
+			vf3d target=cam_pos+cam_dir;
+			Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
+			mat_view=Mat4::quickInverse(mat_cam);
+		}
+
+		//clip triangles against near plane
 		std::list<Triangle> tris_to_clip;
 		for(const auto& tri:tris_to_project) {
 			vf3d norm=tri.getNorm();
@@ -719,7 +764,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		olc::Pixel col
 	) {
 		auto draw=[&] (int x, int y, float t) {
-			if(x<0||y<0||x>=ScreenWidth()||y>=ScreenHeight()) return;
+			if(!inRangeX(x)||!inRangeY(y)) return;
 
 			float& depth=depth_buffer[x+ScreenWidth()*y];
 			float w=w1+t*(w2-w1);
@@ -861,10 +906,12 @@ struct VoxelGame : olc::PixelGameEngine {
 					tex_u=tex_su+t*(tex_eu-tex_su);
 					tex_v=tex_sv+t*(tex_ev-tex_sv);
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					float& depth=depth_buffer[i+ScreenWidth()*j];
-					if(tex_w>depth) {
-						Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
-						depth=tex_w;
+					if(inRangeX(i)&&inRangeY(j)) {
+						float& depth=depth_buffer[i+ScreenWidth()*j];
+						if(tex_w>depth) {
+							Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
+							depth=tex_w;
+						}
 					}
 					t+=t_step;
 				}
@@ -907,10 +954,12 @@ struct VoxelGame : olc::PixelGameEngine {
 				tex_u=tex_su+t*(tex_eu-tex_su);
 				tex_v=tex_sv+t*(tex_ev-tex_sv);
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
-				float& depth=depth_buffer[i+ScreenWidth()*j];
-				if(tex_w>depth) {
-					Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
-					depth=tex_w;
+				if(inRangeX(i)&&inRangeY(j)) {
+					float& depth=depth_buffer[i+ScreenWidth()*j];
+					if(tex_w>depth) {
+						Draw(i, j, col);//s->Sample(tex_u/tex_w, tex_v/tex_w));
+						depth=tex_w;
+					}
 				}
 				t+=t_step;
 			}

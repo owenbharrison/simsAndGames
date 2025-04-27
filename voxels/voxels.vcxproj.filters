@@ -30,6 +30,9 @@
     <Text Include="assets\models\torus.txt" />
     <Text Include="assets\models\video_ship.txt" />
     <Text Include="assets\models\block.txt" />
+    <Text Include="assets\models\teapot_voxel.txt" />
+    <Text Include="assets\models\suzanne.txt" />
+    <Text Include="assets\models\bunny.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -65,6 +68,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\gfx\line.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\particle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
