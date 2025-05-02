@@ -4,6 +4,7 @@
 struct Particle {
 	vf3d pos, oldpos, acc;
 	olc::Pixel col=olc::WHITE;
+	float rad=.1f;
 
 	Particle() {}
 

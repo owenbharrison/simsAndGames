@@ -5,20 +5,27 @@ namespace olc {
 	static const Pixel ORANGE(255, 115, 0);
 }
 
-#include "math/vf3d.h"
+#include "math/v3d.h"
 
 #include "math/mat4.h"
+
+//vector-matrix multiplication
+vf3d operator*(const vf3d& v, const Mat4& m) {
+	vf3d r;
+	r.x=v.x*m.v[0][0]+v.y*m.v[1][0]+v.z*m.v[2][0]+v.w*m.v[3][0];
+	r.y=v.x*m.v[0][1]+v.y*m.v[1][1]+v.z*m.v[2][1]+v.w*m.v[3][1];
+	r.z=v.x*m.v[0][2]+v.y*m.v[1][2]+v.z*m.v[2][2]+v.w*m.v[3][2];
+	r.w=v.x*m.v[0][3]+v.y*m.v[1][3]+v.z*m.v[2][3]+v.w*m.v[3][3];
+	return r;
+}
 
 #include "math/v2d.h"
 
 #include "gfx/mesh.h"
-
 #include "gfx/line.h"
-
 #include "gfx/render.h"
 
 #include "common/stopwatch.h"
-
 #include "common/utils.h"
 
 #include "particle.h"
@@ -66,6 +73,7 @@ struct VoxelGame : olc::PixelGameEngine {
 	bool show_edges=false;
 	bool show_grid=false;
 	bool show_depth=false;
+	bool show_normals=false;
 
 	//diagnostic flag
 	bool to_time=false;
@@ -100,6 +108,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			model=Mesh::loadFromOBJ("assets/models/mountains.txt");
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
+
 			return false;
 		}
 
@@ -196,18 +205,19 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		if(cmd=="keybinds") {
 			std::cout<<
-				"  SPACE    move up\n"
+				"  ARROWS   look up, down, left, right\n"
+				"  WASD     move forward, back, left, right\n"
+				"  SPACE    move up/jump\n"
 				"  SHIFT    move down\n"
-				"  WASD     move camera\n"
-				"  ARROWS   look camera\n"
 				"  P        add particle\n"
 				"  L        set light pos\n"
-				"  O        toggle wireframe view\n"
-				"  R        toggle render view\n"
-				"  E        toggle edge view\n"
-				"  G        toggle grid view\n"
-				"  B        toggle depth view\n"
 				"  C        toggle player camera\n"
+				"  O        toggle outlines\n"
+				"  G        toggle grid\n"
+				"  N        toggle normals\n"
+				"  E        toggle edge view\n"
+				"  R        toggle render view\n"
+				"  B        toggle depth view\n"
 				"  ESC      toggle integrated console\n";
 
 			return true;
@@ -224,9 +234,9 @@ struct VoxelGame : olc::PixelGameEngine {
 			std::cout<<
 				"  clear        clears the console\n"
 				"  reset        removes all particles\n"
-				"  time         get timing info for next update cycle\n"
 				"  import       import model from file\n"
 				"  render       update camera render\n"
+				"  time         get diagnostics for each stage of game loop\n"
 				"  keybinds     which keys to press for this program?\n"
 				"  mousebinds   which buttons to press for this program?\n";
 
@@ -262,7 +272,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
 			if(GetKey(olc::Key::A).bHeld) movement+=.4f*dt*lr_dir;
 			if(GetKey(olc::Key::D).bHeld) movement-=.4f*dt*lr_dir;
-			
+
 			//walk up hill
 			if(player_on_ground) {
 				//find closest triangle
@@ -284,7 +294,7 @@ struct VoxelGame : olc::PixelGameEngine {
 					movement-=norm*norm.dot(movement);
 				}
 			}
-			
+
 			player_pos+=movement;
 
 			//jumping??
@@ -322,12 +332,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		//set light to camera
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
-		//ui toggles
-		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
-		if(GetKey(olc::Key::R).bPressed) show_render^=true;
-		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
-		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
-		if(GetKey(olc::Key::B).bPressed) show_depth^=true;
+		//toggle player camera
 		if(GetKey(olc::Key::C).bPressed) {
 			if(!player_camera) {
 				player_pos=cam_pos-vf3d(0, player_height, 0);
@@ -335,7 +340,15 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 			player_camera^=true;
 		}
-		
+
+		//ui toggles
+		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
+		if(GetKey(olc::Key::N).bPressed) show_normals^=true;
+		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
+		if(GetKey(olc::Key::R).bPressed) show_render^=true;
+		if(GetKey(olc::Key::B).bPressed) show_depth^=true;
+
 		//mouse painting?
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
 			//screen -> world with inverse matrix
@@ -397,43 +410,32 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		//"sanitize" particles
-		for(auto it=particles.begin(); it!=particles.end(); it++) {
+		for(auto it=particles.begin(); it!=particles.end();) {
 			if(!scene_bounds.contains(it->pos)) {
 				it=particles.erase(it);
 			} else it++;
 		}
 
-		//particle collisions
+		//for each particle...
 		for(auto& p:particles) {
-			vf3d vel=p.pos-p.oldpos;
-			for(const auto& tri:model.triangles) {
-				float t=segIntersectTri(p.oldpos, p.pos, tri);
-				if(t>0&&t<1) {
-					//find intersection point
-					vf3d ix=p.oldpos+t*vel;
+			//kinematics
+			p.accelerate(gravity);
+			p.update(dt);
 
-					//push away from surface a little bit
-					vf3d norm=tri.getNorm();
-					p.pos=ix+1e-5f*norm;
-
-					//reflect velocity
-					float restitution=.95f;
-					p.oldpos=p.pos-restitution*reflect(vel, norm);
-
-					//randomize color on bounce
-					p.col.r=rand()%255;
-					p.col.g=rand()%255;
-					p.col.b=rand()%255;
+			//collisions
+			for(const auto& t:model.triangles) {
+				vf3d close_pt=t.getClosePt(p.pos);
+				vf3d sub=p.pos-close_pt;
+				float dist2=sub.mag2();
+				if(dist2<p.rad*p.rad) {
+					float fix=p.rad-std::sqrtf(dist2);
+					vf3d norm=t.getNorm();
+					p.pos+=fix*norm;
+					vf3d vel=p.pos-p.oldpos;
+					p.oldpos=p.pos-reflect(vel, norm);
 					break;
 				}
 			}
-		}
-
-		//particle kinematics
-		for(auto& p:particles) {
-			p.accelerate(gravity);
-
-			p.update(dt);
 		}
 	}
 
@@ -441,8 +443,6 @@ struct VoxelGame : olc::PixelGameEngine {
 		//add each particle as a quad
 		tris_to_project=model.triangles;
 		for(const auto& p:particles) {
-			const float sz=.25f;
-
 			//billboarded to point at camera
 			vf3d norm=(p.pos-cam_pos).norm();
 			vf3d up(0, 1, 0);
@@ -450,10 +450,10 @@ struct VoxelGame : olc::PixelGameEngine {
 			up=rgt.cross(norm);
 
 			//vertex positioning
-			vf3d tl=p.pos+sz/2*rgt+sz/2*up;
-			vf3d tr=p.pos+sz/2*rgt-sz/2*up;
-			vf3d bl=p.pos-sz/2*rgt+sz/2*up;
-			vf3d br=p.pos-sz/2*rgt-sz/2*up;
+			vf3d tl=p.pos+p.rad*(rgt+up);
+			vf3d tr=p.pos+p.rad*(rgt-up);
+			vf3d bl=p.pos+p.rad*(-rgt+up);
+			vf3d br=p.pos+p.rad*(-rgt-up);
 
 			//tesselation
 			Triangle f1{tl, br, tr}; f1.col=p.col;
@@ -544,6 +544,16 @@ struct VoxelGame : olc::PixelGameEngine {
 			lines_to_project.push_back(y_axis);
 			Line z_axis{vf3d(0, 0, -rad), vf3d(0, 0, rad)}; z_axis.col=olc::BLUE;
 			lines_to_project.push_back(z_axis);
+		}
+
+		if(show_normals) {
+			const float sz=.2f;
+			for(const auto& t:tris_to_project) {
+				vf3d ctr=t.getCtr();
+				Line l{ctr, ctr+sz*t.getNorm()};
+				l.col=t.col;
+				lines_to_project.push_back(l);
+			}
 		}
 	}
 
@@ -758,7 +768,7 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 
 #pragma region RENDER HELPERS
-	void DrawDepthLine(
+	void DrawDepthLine( 
 		int x1, int y1, float w1,
 		int x2, int y2, float w2,
 		olc::Pixel col
@@ -1003,7 +1013,6 @@ struct VoxelGame : olc::PixelGameEngine {
 			);
 		}
 
-		//debug options
 		if(show_depth) {
 			//how to convert to actual depth?
 
@@ -1049,43 +1058,47 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 	}
 
-	//wrapper for timing and encapsulation
+	//this function serves as a wrapper for timing
+	//and encapsulation of the stages of the graphics pipeline
 	bool OnUserUpdate(float dt) override {
-		cmn::Stopwatch update_watch;
-		update_watch.start();
+		//setup timers
+		cmn::Stopwatch update_timer, geom_timer, pc_timer, render_timer;
+		
+		//user update, physics
+		update_timer.start();
 		update(dt);
-		if(to_time) {
-			update_watch.stop();
-			auto dur=update_watch.getMicros();
-			std::cout<<"  update: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
-		}
+		update_timer.stop();
 
-		cmn::Stopwatch geom_watch;
-		geom_watch.start();
+		//adding temporary geometry
+		geom_timer.start();
 		geometry();
-		if(to_time) {
-			geom_watch.stop();
-			auto dur=geom_watch.getMicros();
-			std::cout<<"  geom: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
-		}
+		geom_timer.stop();
 
-		cmn::Stopwatch pc_watch;
-		pc_watch.start();
+		//project to screen 
+		//  and clip against frustum
+		pc_timer.start();
 		projectAndClip();
-		if(to_time) {
-			pc_watch.stop();
-			auto dur=pc_watch.getMicros();
-			std::cout<<"  project & clip: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
-		}
+		pc_timer.stop();
 
-		cmn::Stopwatch render_watch;
-		render_watch.start();
+		//render triangles, lines
+		//  and debug stuff to screen
+		render_timer.start();
 		render();
-		if(to_time) {
-			render_watch.stop();
-			auto dur=render_watch.getMicros();
-			std::cout<<"  render: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
+		render_timer.stop();
 
+		if(to_time) {
+			//get elapsed time for each stage and print
+			auto update_dur=update_timer.getMicros(),
+				geom_dur=geom_timer.getMicros(),
+				pc_dur=pc_timer.getMicros(),
+				render_dur=pc_timer.getMicros();
+			std::cout<<
+				"  update: "<<update_dur<<"us ("<<(update_dur/1000.f)<<"ms)\n"
+				"  geom: "<<geom_dur<<"us ("<<(geom_dur/1000.f)<<"ms)\n"
+				"  project & clip: "<<pc_dur<<"us ("<<(pc_dur/1000.f)<<"ms)\n"
+				"  render: "<<render_dur<<"us ("<<(render_dur/1000.f)<<"ms)\n";
+
+			//turn of timing flag
 			to_time=false;
 		}
 

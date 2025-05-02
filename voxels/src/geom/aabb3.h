@@ -2,7 +2,7 @@
 #ifndef AABB3_STRUCT_H
 #define AABB3_STRUCT_H
 
-#include "../math/vf3d.h"
+#include "../math/v3d.h"
 
 struct AABB3 {
 	vf3d min{INFINITY, INFINITY, INFINITY}, max=-min;

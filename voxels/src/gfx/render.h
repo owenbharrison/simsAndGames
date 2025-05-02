@@ -1,17 +1,6 @@
 #pragma once
 #ifndef RENDER_CLASS_H
 #define RENDER_CLASS_H
-
-//vector-matrix multiplication
-vf3d operator*(const vf3d& v, const Mat4& m) {
-	vf3d r;
-	r.x=v.x*m.v[0][0]+v.y*m.v[1][0]+v.z*m.v[2][0]+v.w*m.v[3][0];
-	r.y=v.x*m.v[0][1]+v.y*m.v[1][1]+v.z*m.v[2][1]+v.w*m.v[3][1];
-	r.z=v.x*m.v[0][2]+v.y*m.v[1][2]+v.z*m.v[2][2]+v.w*m.v[3][2];
-	r.w=v.x*m.v[0][3]+v.y*m.v[1][3]+v.z*m.v[2][3]+v.w*m.v[3][3];
-	return r;
-}
-
 class Render {
 	float fov_deg=0;
 	float fov_rad=0;

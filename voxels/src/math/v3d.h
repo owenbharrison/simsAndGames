@@ -5,8 +5,6 @@
 //trying to copy the javid one, but 3d...
 
 #include <cmath>
-#undef assert
-#define assert(cond) { if(!(cond)) exit(1); }
 
 template<typename T>
 struct v3d_generic {
@@ -16,6 +14,18 @@ struct v3d_generic {
 	v3d_generic() {}
 	v3d_generic(T _x, T _y, T _z) : x(_x), y(_y), z(_z) {}
 	v3d_generic(const v3d_generic& v) : x(v.x), y(v.y), z(v.z) {}
+
+	float& operator[](int i) {
+		if(i==1) return y;
+		if(i==2) return z;
+		return x;
+	}
+
+	const float& operator[](int i) const {
+		if(i==1) return y;
+		if(i==2) return z;
+		return x;
+	}
 
 	v3d_generic& operator=(const v3d_generic& v)=default;
 
@@ -59,5 +69,4 @@ template<typename T> v3d_generic<T> operator*(const T& s, const v3d_generic<T>& 
 template<typename T> v3d_generic<T> operator/(const T& s, const v3d_generic<T>& v) { return {s/v.x, s/v.y, s.v.z}; }
 
 typedef v3d_generic<float> vf3d;
-
 #endif//V3D_STRUCT

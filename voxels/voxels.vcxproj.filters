@@ -43,7 +43,7 @@
     <ClInclude Include="src\voxel_set.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\math\vf3d.h">
+    <ClInclude Include="src\math\v3d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\geom\aabb3.h">
@@ -71,6 +71,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\particle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\chunk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

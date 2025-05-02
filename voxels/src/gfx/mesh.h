@@ -15,8 +15,7 @@
 
 struct Mesh {
 	std::list<Triangle> triangles;
-	bool textured=true;
-
+	
 	AABB3 getAABB() const {
 		AABB3 a;
 		for(const auto& t:triangles) {
@@ -124,8 +123,6 @@ struct Mesh {
 				}
 			}
 		}
-
-		m.textured=!texs.empty();
 
 		file.close();
 		return m;
