@@ -210,10 +210,22 @@ struct Example : olc::PixelGameEngine {
 		//grey background, black slice box
 		Clear(olc::WHITE);
 		vf2d dim=box.max-box.min;
-		FillRect(box.min, dim, olc::BLACK);
+		FillRect(box.min, dim, olc::GREY);
+
+		//show underlying grid
+		vf2d sz=dim/vf2d(width, depth);
+		for(int i=0; i<=width; i++) {
+			float x=cmn::map(i, 0, width, box.min.x, box.max.x);
+			vf2d top(x, box.min.y), btm(x, box.max.y);
+			DrawLineDecal(top, btm, olc::BLACK);
+		}
+		for(int j=0; j<=depth; j++) {
+			float y=cmn::map(j, 0, depth, box.min.y, box.max.y);
+			vf2d lft(box.min.x, y), rgt(box.max.x, y);
+			DrawLineDecal(lft, rgt, olc::BLACK);
+		}
 
 		//show slice rects
-		vf2d sz=dim/vf2d(width, depth);
 		for(const auto& r:rects[list_index]) {
 			//choose color based on efficiency?
 			olc::Pixel col=olc::RED;
@@ -225,17 +237,17 @@ struct Example : olc::PixelGameEngine {
 			//show rect with outline
 			vf2d xy=box.min+sz*r.ij;
 			vf2d wh=sz*r.wh;
-			FillRectDecal(xy, wh, olc::GREY);
+			FillRectDecal(xy, wh, olc::DARK_GREY);
 			DrawThickRect(xy, wh, 1, col);
 
 			//show size on it
 			std::string str=std::to_string(r.wh.x)+"x"+std::to_string(r.wh.y);
 			vf2d offset(4*str.length(), 4);
-			DrawStringDecal(xy+wh/2-offset, str, olc::BLACK);
+			DrawStringDecal(xy+wh/2-offset, str);
 		}
 
 		//show layer
-		DrawString(0, 0, "layer "+std::to_string(list_index));
+		DrawString(0, 0, "layer "+std::to_string(list_index), olc::BLACK);
 
 		return true;
 	}
