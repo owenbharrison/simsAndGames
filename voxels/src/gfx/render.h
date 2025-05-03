@@ -113,9 +113,9 @@ public:
 	}
 
 	//cull, clip, project, clip, raster
-	void render(const std::list<Triangle>& tris) {
+	void render(const std::vector<Triangle>& tris) {
 		//cull, clip, and project
-		std::list<Triangle> tris_to_clip;
+		std::vector<Triangle> tris_to_clip;
 		for(const auto& tri:tris) {
 			vf3d norm=tri.getNorm();
 
@@ -171,49 +171,45 @@ public:
 			}
 		}
 
+		//left,right,top,bottom
+		const vf3d ctrs[4]{
+			vf3d(0, 0, 0),
+			vf3d(width, 0, 0),
+			vf3d(0, 0, 0),
+			vf3d(0, height, 0)
+		};
+		const vf3d norms[4]{
+			vf3d(1, 0, 0),
+			vf3d(-1, 0, 0),
+			vf3d(0, 1, 0),
+			vf3d(0, -1, 0)
+		};
+
 		//screen space clipping
-		std::list<Triangle> tri_queue;
-		std::list<Triangle> tris_to_draw;
+		std::stack<Triangle> tri_queue;
+		std::vector<Triangle> tris_to_draw;
 		for(const auto& tri:tris_to_clip) {
 			Triangle clipped[2];
-			tri_queue={tri};
+			tri_queue.push(tri);
 			int num_new=1;
 			for(int i=0; i<4; i++) {
-				//choose plane on screen edge to clip with
-				vf3d ctr, norm;
-				switch(i) {
-					case 0://left
-						ctr=vf3d(0, 0, 0);
-						norm=vf3d(1, 0, 0);
-						break;
-					case 1://right
-						ctr=vf3d(width, 0, 0);
-						norm=vf3d(-1, 0, 0);
-						break;
-					case 2://top
-						ctr=vf3d(0, 0, 0);
-						norm=vf3d(0, 1, 0);
-						break;
-					case 3://bottom
-						ctr=vf3d(0, height, 0);
-						norm=vf3d(0, -1, 0);
-						break;
-				}
-
 				//iteratively clip all tris
 				while(num_new>0) {
-					Triangle test=tri_queue.front();
-					tri_queue.pop_front();
+					Triangle test=tri_queue.top();
+					tri_queue.pop();
 					num_new--;
 
-					int num_clip=test.clipAgainstPlane(ctr, norm, clipped[0], clipped[1]);
-					for(int j=0; j<num_clip; j++) tri_queue.emplace_back(clipped[j]);
+					int num_clip=test.clipAgainstPlane(ctrs[i], norms[i], clipped[0], clipped[1]);
+					for(int j=0; j<num_clip; j++) tri_queue.push(clipped[j]);
 				}
 				num_new=tri_queue.size();
 			}
 
 			//add to conglomerate
-			tris_to_draw.insert(tris_to_draw.end(), tri_queue.begin(), tri_queue.end());
+			while(!tri_queue.empty()) {
+				tris_to_draw.push_back(tri_queue.top());
+				tri_queue.pop();
+			}
 		}
 
 		//rasterize all triangles

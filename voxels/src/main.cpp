@@ -5,6 +5,8 @@ namespace olc {
 	static const Pixel ORANGE(255, 115, 0);
 }
 
+#include <stack>
+
 #include "math/v3d.h"
 
 #include "math/mat4.h"
@@ -53,10 +55,11 @@ struct VoxelGame : olc::PixelGameEngine {
 	const AABB3 scene_bounds{{-5, -5, -5}, {5, 5, 5}};
 	vf3d light_pos=cam_pos;
 
-	std::list<Triangle> tris_to_project;
-	std::list<Line> lines_to_project;
-	std::list<Triangle> tris_to_draw;
-	std::list<Line> lines_to_draw;
+	//vector is faster than list!
+	std::vector<Triangle> tris_to_project;
+	std::vector<Line> lines_to_project;
+	std::vector<Triangle> tris_to_draw;
+	std::vector<Line> lines_to_draw;
 
 	//depth buffering
 	float* depth_buffer=nullptr;
@@ -572,7 +575,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		//clip triangles against near plane
-		std::list<Triangle> tris_to_clip;
+		std::vector<Triangle> tris_to_clip;
 		for(const auto& tri:tris_to_project) {
 			vf3d norm=tri.getNorm();
 
@@ -629,7 +632,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 
 		//clip lines against near plane
-		std::list<Line> lines_to_clip;
+		std::vector<Line> lines_to_clip;
 		for(const auto& line:lines_to_project) {
 			//transform triangles given camera positioning
 			Line line_view;
@@ -675,95 +678,73 @@ struct VoxelGame : olc::PixelGameEngine {
 			}
 		}
 
+		//left,right,top,bottom
+		const vf3d ctrs[4]{
+			vf3d(0, 0, 0),
+			vf3d(ScreenWidth(), 0, 0),
+			vf3d(0, 0, 0),
+			vf3d(0, ScreenHeight(), 0)
+		};
+		const vf3d norms[4]{
+			vf3d(1, 0, 0),
+			vf3d(-1, 0, 0),
+			vf3d(0, 1, 0),
+			vf3d(0, -1, 0)
+		};
+
 		//clip tris against edges of screen
-		std::list<Triangle> tri_queue;
+		std::stack<Triangle> tri_queue;
 		tris_to_draw.clear();
 		for(const auto& t:tris_to_clip) {
-			Triangle clipped[2];
-			tri_queue={t};
+			tri_queue.push(t);
 			int num_new=1;
+			Triangle clipped[2];
 			for(int i=0; i<4; i++) {
-				//choose plane on screen edge to clip with
-				vf3d ctr, norm;
-				switch(i) {
-					case 0://left
-						ctr=vf3d(0, 0, 0);
-						norm=vf3d(1, 0, 0);
-						break;
-					case 1://right
-						ctr=vf3d(ScreenWidth(), 0, 0);
-						norm=vf3d(-1, 0, 0);
-						break;
-					case 2://top
-						ctr=vf3d(0, 0, 0);
-						norm=vf3d(0, 1, 0);
-						break;
-					case 3://bottom
-						ctr=vf3d(0, ScreenHeight(), 0);
-						norm=vf3d(0, -1, 0);
-						break;
-				}
-
 				//iteratively clip all tris
 				while(num_new>0) {
-					Triangle test=tri_queue.front();
-					tri_queue.pop_front();
+					Triangle test=tri_queue.top();
+					tri_queue.pop();
 					num_new--;
 
-					int num_clip=test.clipAgainstPlane(ctr, norm, clipped[0], clipped[1]);
-					for(int j=0; j<num_clip; j++) tri_queue.push_back(clipped[j]);
+					int num_clip=test.clipAgainstPlane(ctrs[i], norms[i], clipped[0], clipped[1]);
+					for(int j=0; j<num_clip; j++) tri_queue.push(clipped[j]);
 				}
 				num_new=tri_queue.size();
 			}
 
 			//add to conglomerate
-			tris_to_draw.insert(tris_to_draw.end(), tri_queue.begin(), tri_queue.end());
+			while(!tri_queue.empty()) {
+				tris_to_draw.push_back(tri_queue.top());
+				tri_queue.pop();
+			}
 		}
 
 		//clip lines against edges of screen
-		std::list<Line> line_queue;
+		std::stack<Line> line_queue;
 		lines_to_draw.clear();
 		for(const auto& l:lines_to_clip) {
 			Line clipped;
-			line_queue={l};
+			line_queue.push(l);
 			int num_new=1;
 			for(int i=0; i<4; i++) {
-				//choose plane on screen edge to clip with
-				vf3d ctr, norm;
-				switch(i) {
-					case 0://left
-						ctr=vf3d(0, 0, 0);
-						norm=vf3d(1, 0, 0);
-						break;
-					case 1://right
-						ctr=vf3d(ScreenWidth(), 0, 0);
-						norm=vf3d(-1, 0, 0);
-						break;
-					case 2://top
-						ctr=vf3d(0, 0, 0);
-						norm=vf3d(0, 1, 0);
-						break;
-					case 3://bottom
-						ctr=vf3d(0, ScreenHeight(), 0);
-						norm=vf3d(0, -1, 0);
-						break;
-				}
-
 				//iteratively clip all lines
 				while(num_new>0) {
-					Line test=line_queue.front();
-					line_queue.pop_front();
+					Line test=line_queue.top();
+					line_queue.pop();
 					num_new--;
 
-					if(test.clipAgainstPlane(ctr, norm, clipped)) {
-						line_queue.push_back(clipped);
+					if(test.clipAgainstPlane(ctrs[i], norms[i], clipped)) {
+						line_queue.push(clipped);
 					}
 				}
 				num_new=line_queue.size();
 			}
 
 			//add to conglomerate
-			lines_to_draw.insert(lines_to_draw.end(), line_queue.begin(), line_queue.end());
+			while(!line_queue.empty()) {
+				lines_to_draw.push_back(line_queue.top());
+				line_queue.pop();
+			}
 		}
 	}
 
@@ -1091,7 +1072,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			auto update_dur=update_timer.getMicros(),
 				geom_dur=geom_timer.getMicros(),
 				pc_dur=pc_timer.getMicros(),
-				render_dur=pc_timer.getMicros();
+				render_dur=render_timer.getMicros();
 			std::cout<<
 				"  update: "<<update_dur<<"us ("<<(update_dur/1000.f)<<"ms)\n"
 				"  geom: "<<geom_dur<<"us ("<<(geom_dur/1000.f)<<"ms)\n"
@@ -1108,7 +1089,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 int main() {
 	VoxelGame vg;
-	bool vsync=true;
+	bool vsync=false;
 	if(vg.Construct(640, 480, 1, 1, false, vsync)) vg.Start();
 
 	return 0;

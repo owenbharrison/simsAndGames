@@ -4,7 +4,6 @@
 #ifndef MESH_STRUCT_H
 #define MESH_STRUCT_H
 
-#include <list>
 #include <vector>
 #include <fstream>
 #include <sstream>
@@ -14,7 +13,7 @@
 #include "triangle.h"
 
 struct Mesh {
-	std::list<Triangle> triangles;
+	std::vector<Triangle> triangles;
 	
 	AABB3 getAABB() const {
 		AABB3 a;
