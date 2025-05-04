@@ -858,7 +858,7 @@ struct PixelGame : olc::PixelGameEngine {
 					vf2d size(p->scale, p->scale);
 					tv.DrawRotatedDecal(pos, prim_rect_dec, p->rot, {0, 0}, size, olc::RED);
 				}
-			}
+			} 
 
 			//show hover block
 			//is mouse in bounds?

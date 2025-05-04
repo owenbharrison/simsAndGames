@@ -418,7 +418,7 @@ public:
 					p(bi-i_min, bj-j_min)=true;
 				}
 				p.updateTypes();
-				
+
 				//copy over scale
 				p.rot=rot;
 				p.cossin=cossin;
@@ -437,7 +437,7 @@ public:
 			}
 		}
 		delete[] filled;
-		
+
 		//update rotations
 		if(pixelsets.size()) {
 			//store dynamics
@@ -475,7 +475,7 @@ public:
 		//inside tile
 		bool was_inside=inRangeX(ci)&&inRangeY(cj);
 		if(was_inside&&grid[ix(ci, cj)]!=PixelSet::Empty) return 1e-6f;
-		
+
 		//unrotate dir
 		dir={
 			cossin.x*dir.x+cossin.y*dir.y,
@@ -484,8 +484,8 @@ public:
 
 		//find hypot scale factors
 		vf2d hypot(
-		std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
-		std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
+			std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
+			std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
 		);
 
 		//which way am i going
@@ -518,6 +518,63 @@ public:
 
 			//hit block?
 			if(inside&&grid[ix(ci, cj)]!=PixelSet::Empty) return scale*dist;
+		}
+
+		return -1;
+	}
+
+	//start inside, walk OUT
+	float raycast_out(vf2d orig, vf2d dir) {
+		//localize orig
+		orig=worldToLocal(orig);
+
+		//which tile am i checking?
+		int ci=std::floor(orig.x), cj=std::floor(orig.y);
+
+		//must start in shape. 
+		if(!inRangeX(ci)||!inRangeX(ci)||grid[ix(ci, cj)]==PixelSet::Empty) {
+			return -1;
+		}
+
+		//unrotate dir
+		dir={
+			cossin.x*dir.x+cossin.y*dir.y,
+			cossin.x*dir.y-cossin.y*dir.x
+		};
+
+		//find hypot scale factors
+		vf2d hypot(
+			std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
+			std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
+		);
+
+		//which way am i going
+		vf2d stepped;
+		int step_i=-1, step_j=-1;
+
+		//start conditions
+		if(dir.x<0) stepped.x=hypot.x*(orig.x-ci);
+		else step_i=1, stepped.x=hypot.x*(1+ci-orig.x);
+		if(dir.y<0) stepped.y=hypot.y*(orig.y-cj);
+		else step_j=1, stepped.y=hypot.y*(1+cj-orig.y);
+
+		//walk w/ max iter
+		for(int iter=0; iter<1000; iter++) {
+			float dist;
+			if(stepped.x<stepped.y) {
+				ci+=step_i;
+				dist=stepped.x;
+				stepped.x+=hypot.x;
+			} else {
+				cj+=step_j;
+				dist=stepped.y;
+				stepped.y+=hypot.y;
+			}
+
+			//exit shape or hit air?
+			if(!inRangeX(ci)||!inRangeX(ci)||grid[ix(ci, cj)]==PixelSet::Empty) {
+				return scale*dist;
+			}
 		}
 
 		return -1;
