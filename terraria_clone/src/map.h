@@ -366,17 +366,5 @@ struct Map {
 			}
 		}
 	}
-
-	std::vector<AABB> getIntersectingTilesX(const AABB& r) {
-		olc::vf2d sz=r.max-r.min;
-
-		std::vector<AABB> a;
-		a.reserve(int(1+sz.x)*int(1+sz.y));
-		for(int i=0; i<=sz.x; i++) {
-			for(int j=0; j<=sz.y; j++) {
-
-			}
-		}
-	}
 };
 #endif//MAP_CLASS_H
