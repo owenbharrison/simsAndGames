@@ -28,14 +28,14 @@ class Shape {
 	int num_pts=0;
 
 	//construction helpers
-	void windConstraints(), connectSprings();
+	void windShell(), connectSprings();
 
 	//copy helpers
 	void copyFrom(const Shape&), clear();
 
 public:
 	PointMass* points=nullptr;
-	std::list<Constraint> constraints;
+	std::list<Constraint> shell;
 	std::list<Spring> springs;
 
 	//shape matching stuff
@@ -46,6 +46,7 @@ public:
 
 	olc::Pixel col=olc::WHITE;
 
+#pragma region CONSTRUCTION
 	Shape() {}
 
 	Shape(int n) {
@@ -64,7 +65,7 @@ public:
 			points[i]=PointMass(pos+off);
 		}
 
-		windConstraints();
+		windShell();
 
 		initMass();
 
@@ -74,21 +75,62 @@ public:
 		connectSprings();
 	}
 
-	Shape(const cmn::AABB& a) : num_pts(4) {
-		points=new PointMass[4];
-		points[0]=PointMass(a.min);
-		points[1]=PointMass({a.max.x, a.min.y});
-		points[2]=PointMass(a.max);
-		points[3]=PointMass({a.min.x, a.max.y});
+	Shape(const cmn::AABB& box, float res) {
+		//determine sizing
+		const int w=1+(box.max.x-box.min.x)/res;
+		const int h=1+(box.max.y-box.min.y)/res;
+		auto ix=[&w] (int i, int j) {
+			return i+w*j;
+		};
+		num_pts=w*h;
+		points=new PointMass[num_pts];
 
-		windConstraints();
+		//fill point grid
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				vf2d pos=box.min+res*vf2d(i, j);
+				points[ix(i, j)]=PointMass(pos);
+			}
+		}
+
+		//wind shell
+		for(int i=1; i<w; i++) {
+			shell.emplace_back(&points[ix(i-1, 0)], &points[ix(i, 0)]);
+		}
+		for(int j=1; j<h; j++) {
+			shell.emplace_back(&points[ix(w-1, j-1)], &points[ix(w-1, j)]);
+		}
+		for(int i=w-1; i>=1; i--) {
+			shell.emplace_back(&points[ix(i, h-1)], &points[ix(i-1, h-1)]);
+		}
+		for(int j=h-1; j>=1; j--) {
+			shell.emplace_back(&points[ix(0, j)], &points[ix(0, j-1)]);
+		}
 
 		initMass();
 
+		//attach springs
+		for(int i=1; i<w; i++) {
+			for(int j=1; j<h; j++) {
+				//rows
+				if(j<h-1) springs.emplace_back(&points[ix(i-1, j)], &points[ix(i, j)]);
+				//columns
+				if(i<w-1) springs.emplace_back(&points[ix(i, j-1)], &points[ix(i, j)]);
+				//boxes
+				springs.emplace_back(&points[ix(i-1, j-1)], &points[ix(i, j)]);
+				springs.emplace_back(&points[ix(i-1, j)], &points[ix(i, j-1)]);
+			}
+		}
+
+		//proportional to perim/area
+		float coeff=2.f*num_pts/shell.size();
+		for(auto& s:springs) {
+			s.stiffness*=coeff;
+			s.damping*=coeff;
+		}
+
 		anchors=new vf2d[num_pts];
 		initAnchors();
-
-		connectSprings();
 	}
 
 	//1
@@ -117,22 +159,15 @@ public:
 		float area=getArea();
 		if(area<0) {
 			area*=-1;
-			//is this the right data structure?
-			std::unordered_map<PointMass*, int> idx;
-			std::unordered_map<int, PointMass*> ptr;
-			for(int i=0; i<num_pts; i++) {
-				idx[&points[i]]=i;
-				ptr[i]=&points[i];
+			//reverse each constraint
+			for(auto& c:shell) {
+				std::swap(c.a, c.b);
 			}
-			std::reverse(points, points+num_pts);
-			//reverse constraints
-			for(auto& c:constraints) {
-				c.a=ptr[num_pts-1-idx[c.a]];
-				c.b=ptr[num_pts-1-idx[c.b]];
-			}
+			//reverse shell
+			std::reverse(shell.begin(), shell.end());
 		}
 
-		//distribute evenly
+		//distribute mass evenly
 		float ind_mass=area/num_pts;
 		for(int i=0; i<num_pts; i++) {
 			points[i].mass=ind_mass;
@@ -146,15 +181,16 @@ public:
 			anchors[i]=points[i].pos-ctr;
 		}
 	}
+#pragma endregion
 
 	int getNum() const {
 		return num_pts;
 	}
 
-	//requires constraints be initialized
+	//requires shell be initialized
 	float getArea() const {
 		float sum=0;
-		for(const auto& c:constraints) {
+		for(const auto& c:shell) {
 			const auto& a=c.a->pos, & b=c.b->pos;
 			sum+=a.x*b.y-a.y*b.x;
 		}
@@ -179,6 +215,23 @@ public:
 		return a;
 	}
 
+	void getOrientation(vf2d& pos, float& rot) {
+		//pos=center of mass
+		pos=getCOM();
+
+		//rot=avg angle between anchor and current points
+		float dot=0, cross=0;
+		for(int i=0; i<num_pts; i++) {
+			const auto& anc=anchors[i];
+			vf2d sub=points[i].pos-pos;
+			//accumulate direction
+			dot+=anc.x*sub.x+anc.y*sub.y;
+			cross+=anc.x*sub.y-anc.y*sub.x;
+		}
+		//signed angle
+		rot=std::atan2f(cross, dot);
+	}
+
 	bool contains(const vf2d& p) const {
 		if(!getAABB().contains(p)) return false;
 
@@ -186,7 +239,7 @@ public:
 		vf2d dir=cmn::polar(1, cmn::random(2*cmn::Pi));
 
 		int num_ix=0;
-		for(const auto& c:constraints) {
+		for(const auto& c:shell) {
 			vf2d tu=cmn::lineLineIntersection(c.a->pos, c.b->pos, p, p+dir);
 			if(tu.x>=0&&tu.x<=1&&tu.y>=0) num_ix++;
 		}
@@ -229,7 +282,7 @@ public:
 		}
 
 		//update all constraints
-		for(auto& c:constraints) {
+		for(auto& c:shell) {
 			c.update();
 		}
 
@@ -259,7 +312,7 @@ public:
 		Constraint* said_seg=nullptr;
 		float said_t;
 		vf2d said_sub;
-		for(auto& c:constraints) {
+		for(auto& c:shell) {
 			vf2d pa=p.pos-c.a->pos, ba=c.b->pos-c.a->pos;
 			float t=cmn::clamp(pa.dot(ba)/ba.dot(ba), 0.f, 1.f);
 			vf2d close_pt=c.a->pos+t*ba;
@@ -313,28 +366,13 @@ public:
 		}
 	}
 
-	void getOrientation(vf2d& pos, float& rot) {
-		//pos=center of mass
-		pos=getCOM();
-
-		//rot=avg angle between anchor and current points
-		float dot=0, cross=0;
-		for(int i=0; i<num_pts; i++) {
-			const auto& anc=anchors[i];
-			vf2d sub=points[i].pos-pos;
-			//accumulate direction
-			dot+=anc.x*sub.x+anc.y*sub.y;
-			cross+=anc.x*sub.y-anc.y*sub.x;
-		}
-		//signed angle
-		rot=std::atan2f(cross, dot);
-	}
+	bool cut(const std::vector<vf2d>& cut_ref, Shape& left, Shape& right);
 };
 
-void Shape::windConstraints() {
-	constraints.clear();
+void Shape::windShell() {
+	shell.clear();
 	for(int i=0; i<num_pts; i++) {
-		constraints.push_back(Constraint(&points[i], &points[(i+1)%num_pts]));
+		shell.push_back(Constraint(&points[i], &points[(i+1)%num_pts]));
 	}
 }
 
@@ -375,13 +413,13 @@ void Shape::copyFrom(const Shape& shp) {
 		shp_to_me[&shp.points[i]]=&points[i];
 	}
 
-	//copy over constraints
-	for(const auto& cst:shp.constraints) {
+	//copy over shell
+	for(const auto& cst:shp.shell) {
 		Constraint c;
 		c.a=shp_to_me[cst.a];
 		c.b=shp_to_me[cst.b];
 		c.rest_len=cst.rest_len;
-		constraints.push_back(c);
+		shell.push_back(c);
 	}
 
 	//copy over springs
@@ -401,7 +439,7 @@ void Shape::clear() {
 
 	delete[] anchors;
 
-	constraints.clear();
+	shell.clear();
 	springs.clear();
 }
 #endif//SHAPE_STRUCT_H

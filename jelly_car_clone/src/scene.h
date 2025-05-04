@@ -92,7 +92,7 @@ public:
 			//shp <#pts> <#csts> <#sprs>
 			file_out<<"shp "<<
 				shp->getNum()<<' '<<
-				shp->constraints.size()<<' '<<
+				shp->shell.size()<<' '<<
 				shp->springs.size()<<'\n';
 			//print points
 			//p <x> <y> <mass> <?locked>
@@ -113,7 +113,7 @@ public:
 
 			//print constraints
 			//c <a> <b> <len>
-			for(const auto& c:shp->constraints) {
+			for(const auto& c:shp->shell) {
 				file_out<<"  c "<<
 					indexes[c.a]<<' '<<
 					indexes[c.b]<<' '<<
@@ -248,7 +248,7 @@ public:
 					c.a=&shp.points[a];
 					c.b=&shp.points[b];
 					c.rest_len=l;
-					shp.constraints.push_back(c);
+					shp.shell.push_back(c);
 				}
 
 				//springs

@@ -253,6 +253,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			std::cout<<
 				"  R     drag to add rect\n"
 				"  A     anchor shape\n"
+				"  C     cut shape by curve\n"
 				"  X     remove shape\n"
 				"  G     toggle grid\n"
 				"  S     toggle spring view\n"
@@ -316,62 +317,9 @@ struct JellyCarGame : olc::PixelGameEngine {
 			box.fitToEnclose(*rect_start);
 			box.fitToEnclose(wld_mouse_pos);
 
-			//determine sizing
-			float size=cmn::random(.75f, 2);
-			const int w=1+(box.max.x-box.min.x)/size;
-			const int h=1+(box.max.y-box.min.y)/size;
-			auto ix=[&w] (int i, int j) {
-				return i+w*j;
-			};
-			Shape* shp=new Shape(w*h);
-
-			//fill point grid
-			for(int i=0; i<w; i++) {
-				for(int j=0; j<h; j++) {
-					vf2d pos=box.min+size*vf2d(i, j);
-					shp->points[ix(i, j)]=PointMass(pos);
-				}
-			}
-
-			//attach constraints
-			for(int i=1; i<w; i++) {
-				shp->constraints.emplace_back(&shp->points[ix(i-1, 0)], &shp->points[ix(i, 0)]);
-			}
-			for(int j=1; j<h; j++) {
-				shp->constraints.emplace_back(&shp->points[ix(w-1, j-1)], &shp->points[ix(w-1, j)]);
-			}
-			for(int i=w-1; i>=1; i--) {
-				shp->constraints.emplace_back(&shp->points[ix(i, h-1)], &shp->points[ix(i-1, h-1)]);
-			}
-			for(int j=h-1; j>=1; j--) {
-				shp->constraints.emplace_back(&shp->points[ix(0, j)], &shp->points[ix(0, j-1)]);
-			}
-
-			shp->initMass();
-
-			//attach springs
-			for(int i=1; i<w; i++) {
-				for(int j=1; j<h; j++) {
-					//rows
-					if(j<h-1) shp->springs.emplace_back(&shp->points[ix(i-1, j)], &shp->points[ix(i, j)]);
-					//columns
-					if(i<w-1) shp->springs.emplace_back(&shp->points[ix(i, j-1)], &shp->points[ix(i, j)]);
-					//boxes
-					shp->springs.emplace_back(&shp->points[ix(i-1, j-1)], &shp->points[ix(i, j)]);
-					shp->springs.emplace_back(&shp->points[ix(i-1, j)], &shp->points[ix(i, j-1)]);
-				}
-			}
-
-			//proportional to perim/area
-			float coeff=w*h/float(w+h);
-			for(auto& s:shp->springs) {
-				s.stiffness*=coeff;
-				s.damping*=coeff;
-			}
-			shp->initAnchors();
-
 			//add
-			scene.shapes.push_back(shp);
+			float res=cmn::random(.75f, 2);
+			scene.shapes.push_back(new Shape(box, res));
 
 			//reset
 			delete rect_start;
@@ -391,7 +339,9 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 			if(unique) cut.push_back(wld_mouse_pos);
 		}
-		if(cut_action.bReleased) cut.clear();
+		if(cut_action.bReleased) {
+			cut.clear();
+		}
 
 		//sanitize cut
 		{
@@ -672,7 +622,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 					idx[&shp->points[i]]=i;
 				}
 				std::list<int> indexes;
-				for(const auto& c:shp->constraints) {
+				for(const auto& c:shp->shell) {
 					indexes.push_back(idx[c.a]);
 				}
 
@@ -720,7 +670,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			}
 
 			//constraint outlines
-			for(const auto& c:shp->constraints) {
+			for(const auto& c:shp->shell) {
 				tvDrawThickLine(c.a->pos, c.b->pos, .1f, olc::BLACK);
 				tvFillCircle(c.a->pos, .1f, olc::BLACK);
 			}
@@ -746,11 +696,11 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 			if(show_vertexes) {
 				for(int i=0; i<shp->getNum(); i++) {
+					vf2d pos=tv.WorldToScreen(shp->points[i].pos);
 					auto str=std::to_string(i);
-					vf2d size(8*str.length(), 8);
-					float scale=.05f;
-					tv.FillRectDecal(shp->points[i].pos-scale*(size+1)/2, scale*size, olc::WHITE);
-					tv.DrawStringDecal(shp->points[i].pos-scale*size/2, str, olc::BLACK, {scale, scale});
+					vf2d size(2+8*str.size(), 10);
+					FillRectDecal(pos-size/2, size, olc::WHITE);
+					DrawStringDecal(pos-size/2+1, str, olc::BLACK);
 				}
 			}
 		}
