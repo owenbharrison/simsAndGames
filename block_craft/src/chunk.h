@@ -1,6 +1,14 @@
 #pragma once
 #ifndef CHUNK_CLASS_H
 #define CHUNK_CLASS_H
+struct ChunkCoord {
+	int x=0, y=0, z=0;
+
+	bool operator==(const ChunkCoord& other) const {
+		return x==other.x&&y==other.y&&z==other.z;
+	}
+};
+
 class Chunk {
 	void copyFrom(const Chunk&), clear();
 
@@ -16,7 +24,7 @@ public:
 	Chunk* left=nullptr, * right=nullptr;//x
 	Chunk* bottom=nullptr, * top=nullptr;//y
 	Chunk* back=nullptr, * front=nullptr;//z
-	int x=0, y=0, z=0;
+	ChunkCoord coord;
 
 	std::vector<Triangle> triangles;
 
@@ -25,8 +33,8 @@ public:
 		for(int i=0; i<size; i++) blocks[i]=false;
 	}
 
-	Chunk(int x_, int y_, int z_) : Chunk() {
-		x=x_, y=y_, z=z_;
+	Chunk(int x, int y, int z) : Chunk() {
+		coord={x, y, z};
 	}
 
 	//1
@@ -146,7 +154,7 @@ public:
 							}
 
 							//tesselate
-							vf3d v0(width*x, height*y, depth*z);
+							vf3d v0(width*coord.x, height*coord.y, depth*coord.z);
 							v0[axis_a]+=a, v0[axis_b]+=b, v0[axis_c]+=c;
 							vf3d v1=v0; v1[axis_b]+=sz_b;
 							vf3d v2=v0; v2[axis_b]+=sz_b, v2[axis_c]+=sz_c;
@@ -180,7 +188,7 @@ void Chunk::copyFrom(const Chunk& c) {
 	bottom=c.bottom, top=c.top;
 	back=c.back, front=c.front;
 
-	x=c.x, y=c.y, z=c.z;
+	coord=c.coord;
 
 	triangles=c.triangles;
 }

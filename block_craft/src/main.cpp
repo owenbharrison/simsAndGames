@@ -27,6 +27,22 @@ vf3d operator*(const vf3d& v, const Mat4& m) {
 
 #include <stack>
 
+#include <unordered_map>
+
+//hash function for unordered_map
+namespace std {
+	template<>
+	struct hash<ChunkCoord> {
+		size_t operator()(const ChunkCoord& c) const {
+			return ((std::hash<int>()(c.x)^(std::hash<int>()(c.y)<<1))>>1)^(std::hash<int>()(c.z)<<1);
+		}
+	};
+}
+
+int neg_mod(int a, int b) {
+	return (b+a%b)%b;
+}
+
 struct VoxelGame : olc::PixelGameEngine {
 	VoxelGame() {
 		sAppName="Voxel Game";
@@ -64,14 +80,24 @@ struct VoxelGame : olc::PixelGameEngine {
 	//diagnostic flag
 	bool to_time=false;
 
+	//game stuff
 	std::list<Chunk> chunks;
+	std::unordered_map<ChunkCoord, Chunk*> chunk_map;
+
+	bool player_flying=true;
+	vf3d player_pos;
+	vf3d player_vel;
+	vf3d player_acc;
+	const vf3d player_size{.9f, 1.8f, .9f};
+	const vf3d player_head_factor{.5f, .9f, .5f};
+	float player_airtimer=0;
 
 	bool OnUserCreate() override {
 		srand(time(0));
 
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
-		ConsoleCaptureStdOut(true);
+		//ConsoleCaptureStdOut(true);
 
 		//make projection matrix
 		float asp=float(ScreenHeight())/ScreenWidth();
@@ -79,10 +105,12 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		depth_buffer=new float[ScreenWidth()*ScreenHeight()];
 
+		//multithread this?
+#pragma region CHUNK GENERATION
 		//load chunks
-		const int num_x=5;
-		const int num_y=2;
-		const int num_z=5;
+		const int num_x=1;
+		const int num_y=1;
+		const int num_z=1;
 		Chunk** grid=nullptr;
 		grid=new Chunk*[num_x*num_y*num_z];
 		auto ix=[&] (int i, int j, int k) {
@@ -94,7 +122,9 @@ struct VoxelGame : olc::PixelGameEngine {
 			for(int j=0; j<num_y; j++) {
 				for(int k=0; k<num_z; k++) {
 					chunks.push_back(Chunk(i, j, k));
-					grid[ix(i, j, k)]=&chunks.back();
+					auto c=&chunks.back();
+					grid[ix(i, j, k)]=c;
+					chunk_map[c->coord]=c;
 				}
 			}
 		}
@@ -137,6 +167,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		for(auto& c:chunks) {
 			c.triangulate();
 		}
+#pragma endregion
 
 		return true;
 	}
@@ -161,9 +192,10 @@ struct VoxelGame : olc::PixelGameEngine {
 			std::cout<<
 				"  ARROWS   look up, down, left, right\n"
 				"  WASD     move forward, back, left, right\n"
-				"  SPACE    move up\n"
-				"  SHIFT    move down\n"
+				"  SPACE    move up/jump\n"
+				"  SHIFT    move down \n"
 				"  L        set light pos\n"
+				"  C        toggle player collisons\n"
 				"  O        toggle outlines\n"
 				"  G        toggle grid\n"
 				"  N        toggle normals\n"
@@ -173,19 +205,11 @@ struct VoxelGame : olc::PixelGameEngine {
 			return true;
 		}
 
-		if(cmd=="mousebinds") {
-			std::cout<<
-				"  LEFT   paint triangles white\n";
-
-			return true;
-		}
-
 		if(cmd=="help") {
 			std::cout<<
 				"  clear        clears the console\n"
 				"  time         get diagnostics for each stage of game loop\n"
-				"  keybinds     which keys to press for this program?\n"
-				"  mousebinds   which buttons to press for this program?\n";
+				"  keybinds     which keys to press for this program?\n";
 
 			return true;
 		}
@@ -196,6 +220,15 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 
 	void handleUserInput(float dt) {
+		if(GetKey(olc::Key::C).bPressed) {
+			if(player_flying) {
+				//account for camera disparity
+				player_pos=cam_pos-player_head_factor*player_size;
+				player_vel*=0;
+			}
+			player_flying^=true;
+		}
+
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
 		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
@@ -206,19 +239,43 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
 		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
 
-		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+		if(!player_flying) {
+			//walk forwards, backwards
+			vf2d movement;
+			vf2d fb_dir(std::sinf(cam_yaw), std::cosf(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) movement+=5.f*fb_dir;
+			else if(GetKey(olc::Key::S).bHeld) movement-=3.f*fb_dir;
 
-		//move forward, backward
-		vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+			//walk left, right
+			vf2d lr_dir(fb_dir.y, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) movement+=4.f*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) movement-=4.f*lr_dir;
 
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+			player_vel.x=movement.x;
+			player_vel.z=movement.y;
+
+			//jumping
+			if(GetKey(olc::Key::SPACE).bPressed&&player_airtimer<.05f) {
+				player_vel.y=4;
+			}
+
+			//account for camera disparity
+			cam_pos=player_pos+player_head_factor*player_size;
+		} else {
+			//move up, down
+			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+
+			//move forward, backward
+			vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+
+			//move left, right
+			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+		}
 
 		//set light to camera
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
@@ -236,7 +293,189 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//only allow input when console NOT open
 		if(!IsConsoleShowing()) handleUserInput(dt);
+
+		if(!player_flying) {
+			//gravity
+			player_acc.y-=3.2f;
+
+			//kinematics
+			player_vel+=player_acc*dt;
+
+			//reset forces
+			player_acc*=0;
+
+			//increment airtimer
+			player_airtimer+=dt;
+
+			//how in the world to shorten these functions???
+			auto collideInX=[&] () {
+				for(int wj=player_pos.y; wj<=player_pos.y+player_size.y-.1f; wj++) {
+					int cj=wj/Chunk::height;
+					int j=neg_mod(wj, Chunk::height);
+					for(int wk=player_pos.z; wk<=player_pos.z+player_size.z-.1f; wk++) {
+						int ck=wk/Chunk::depth;
+						int k=neg_mod(wk, Chunk::depth);
+						if(player_vel.x<0) {
+							int wi=player_pos.x;
+							int ci=wi/Chunk::width;
+							auto it=chunk_map.find({ci, cj, ck});
+							if(it!=chunk_map.end()) {
+								Chunk* c=it->second;
+								int i=neg_mod(wi, Chunk::width);
+								if(c->blocks[Chunk::ix(i, j, k)]) {
+									player_pos.x=1+wi;
+									player_vel.x=0;
+									break;
+								}
+							}
+						} else {
+							int wi=player_pos.x+player_size.x;
+							int ci=wi/Chunk::width;
+							auto it=chunk_map.find({ci, cj, ck});
+							if(it!=chunk_map.end()) {
+								Chunk* c=it->second;
+								int i=neg_mod(wi, Chunk::width);
+								if(c->blocks[Chunk::ix(i, j, k)]) {
+									player_pos.x=wi-player_size.x;
+									player_vel.x=0;
+									break;
+								}
+							}
+						}
+					}
+				}
+			};
+			auto collideInZ=[&] () {
+				for(int wj=player_pos.y; wj<=player_pos.y+player_size.y-.1f; wj++) {
+					int cj=wj/Chunk::height;
+					int j=neg_mod(wj, Chunk::height);
+					for(int wi=player_pos.x; wi<=player_pos.x+player_size.x-.1f; wi++) {
+						int ci=wi/Chunk::width;
+						int i=neg_mod(wi, Chunk::width);
+						if(player_vel.z<0) {
+							int wk=player_pos.z;
+							int ck=wk/Chunk::depth;
+							auto it=chunk_map.find({ci, cj, ck});
+							if(it!=chunk_map.end()) {
+								Chunk* c=it->second;
+								int k=neg_mod(wk, Chunk::depth);
+								if(c->blocks[Chunk::ix(i, j, k)]) {
+									player_pos.z=1+wk;
+									player_vel.z=0;
+									break;
+								}
+							}
+						} else {
+							int wk=player_pos.z+player_size.z;
+							int ck=wk/Chunk::depth;
+							auto it=chunk_map.find({ci, cj, ck});
+							if(it!=chunk_map.end()) {
+								Chunk* c=it->second;
+								int k=neg_mod(wk, Chunk::depth);
+								if(c->blocks[Chunk::ix(i, j, k)]) {
+									player_pos.z=wk-player_size.z;
+									player_vel.z=0;
+									break;
+								}
+							}
+						}
+					}
+				}
+			};
+
+			//prioritize speedy zx direction
+			bool x_first=std::fabsf(player_vel.x)>std::fabsf(player_vel.z);
+			if(x_first) {
+				player_pos.x+=player_vel.x*dt;
+				collideInX();
+			}
+			player_pos.z+=player_vel.z*dt;
+			collideInZ();
+			if(!x_first) {
+				player_pos.x+=player_vel.x*dt;
+				collideInX();
+			}
+
+			//always do y after?
+			player_pos.y+=player_vel.y*dt;
+			for(int wi=player_pos.x; wi<=player_pos.x+player_size.x-.1f; wi++) {
+				int ci=wi/Chunk::width;
+				int i=neg_mod(wi, Chunk::width);
+				for(int wk=player_pos.z; wk<=player_pos.z+player_size.z-.1f; wk++) {
+					int ck=wk/Chunk::depth;
+					int k=neg_mod(wk, Chunk::depth);
+					if(player_vel.y<0) {
+						int wj=player_pos.y;
+						int cj=wj/Chunk::height;
+						auto it=chunk_map.find({ci, cj, ck});
+						if(it!=chunk_map.end()) {
+							Chunk* c=it->second;
+							int j=neg_mod(wj, Chunk::height);
+							if(c->blocks[Chunk::ix(i, j, k)]) {
+								player_pos.y=1+wj;
+								player_vel.y=0;
+								player_airtimer=0;
+								break;
+							}
+						}
+					} else {
+						int wj=player_pos.y+player_size.y;
+						int cj=wj/Chunk::height;
+						auto it=chunk_map.find({ci, cj, ck});
+						if(it!=chunk_map.end()) {
+							Chunk* c=it->second;
+							int j=neg_mod(wj, Chunk::height);
+							if(c->blocks[Chunk::ix(i, j, k)]) {
+								player_pos.y=wj-player_size.y;
+								player_vel.y=0;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
 	}
+
+#pragma region GEOMETRY HELPERS
+	void addAABB(const AABB3& box, const olc::Pixel& col) {
+		//corner vertexes
+		vf3d v0=box.min, v7=box.max;
+		vf3d v1(v7.x, v0.y, v0.z);
+		vf3d v2(v0.x, v7.y, v0.z);
+		vf3d v3(v7.x, v7.y, v0.z);
+		vf3d v4(v0.x, v0.y, v7.z);
+		vf3d v5(v7.x, v0.y, v7.z);
+		vf3d v6(v0.x, v7.y, v7.z);
+		//bottom
+		Line l1{v0, v1}; l1.col=col;
+		lines_to_project.push_back(l1);
+		Line l2{v1, v3}; l2.col=col;
+		lines_to_project.push_back(l2);
+		Line l3{v3, v2}; l3.col=col;
+		lines_to_project.push_back(l3);
+		Line l4{v2, v0}; l4.col=col;
+		lines_to_project.push_back(l4);
+		//sides
+		Line l5{v0, v4}; l5.col=col;
+		lines_to_project.push_back(l5);
+		Line l6{v1, v5}; l6.col=col;
+		lines_to_project.push_back(l6);
+		Line l7{v2, v6}; l7.col=col;
+		lines_to_project.push_back(l7);
+		Line l8{v3, v7}; l8.col=col;
+		lines_to_project.push_back(l8);
+		//top
+		Line l9{v4, v5}; l9.col=col;
+		lines_to_project.push_back(l9);
+		Line l10{v5, v7}; l10.col=col;
+		lines_to_project.push_back(l10);
+		Line l11{v7, v6}; l11.col=col;
+		lines_to_project.push_back(l11);
+		Line l12{v6, v4}; l12.col=col;
+		lines_to_project.push_back(l12);
+	}
+#pragma endregion
 
 	void geometry() {
 		//add all chunk meshes
@@ -245,8 +484,11 @@ struct VoxelGame : olc::PixelGameEngine {
 			tris_to_project.insert(tris_to_project.end(), c.triangles.begin(), c.triangles.end());
 		}
 
-		//grid lines on xy, yz, zx planes
+		//add player aabb
 		lines_to_project.clear();
+		if(player_flying) addAABB({player_pos, player_pos+player_size}, olc::GREEN);
+
+		//grid lines on xy, yz, zx planes
 		if(show_normals) {
 			const float sz=.2f;
 			for(const auto& t:tris_to_project) {
@@ -655,7 +897,8 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 #pragma endregion
 
-	void render() {
+	float cout_timer=0;
+	void render(float dt) {
 		//dark grey background
 		Clear(olc::Pixel(90, 90, 90));
 
@@ -664,17 +907,21 @@ struct VoxelGame : olc::PixelGameEngine {
 			depth_buffer[i]=0;
 		}
 
-		//rasterize all triangles
-		for(const auto& t:tris_to_draw) {
-			if(show_outlines) {
-				//these arent SUPER visible, but its not a big deal...
+		//draw triangle outlines
+		if(show_outlines) {
+			for(const auto& t:tris_to_draw) {
 				DrawDepthTriangle(
 					t.p[0].x, t.p[0].y, t.t[0].w,
 					t.p[1].x, t.p[1].y, t.t[1].w,
 					t.p[2].x, t.p[2].y, t.t[2].w,
-					t.col
+					olc::BLACK
 				);
-			} else FillDepthTriangle(
+			}
+		}
+
+		//rasterize triangles
+		for(const auto& t:tris_to_draw) {
+			FillDepthTriangle(
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
@@ -690,6 +937,14 @@ struct VoxelGame : olc::PixelGameEngine {
 				l.col
 			);
 		}
+
+		if(cout_timer<0) {
+			cout_timer+=1.f;
+
+			std::cout<<"tris: "<<tris_to_draw.size()<<'\n';
+			std::cout<<"lines	: "<<lines_to_draw.size()<<'\n';
+		}
+		cout_timer-=dt;
 	}
 
 	//this function serves as a wrapper for timing
@@ -717,7 +972,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		//render triangles, lines
 		//  and debug stuff to screen
 		render_timer.start();
-		render();
+		render(dt);
 		render_timer.stop();
 
 		if(to_time) {
@@ -742,7 +997,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 int main() {
 	VoxelGame vg;
-	bool vsync=false;
+	bool vsync=true;
 	if(vg.Construct(640, 480, 1, 1, false, vsync)) vg.Start();
 
 	return 0;
