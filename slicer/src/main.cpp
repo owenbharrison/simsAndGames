@@ -17,8 +17,7 @@ struct Rect {
 
 //sorted by descending area?
 static const std::list<vi2d> allowed_sizes{
-	{2, 10}, {2, 8}, {4, 4}, {2, 6},
-	{3, 4}, {1, 10}, {3, 3}, {1, 8},
+	{2, 8},  {2, 6}, {1, 8},
 	{2, 4}, {1, 6}, {2, 3}, {1, 4},
 	{2, 2}, {1, 3}, {1, 2}, {1, 1}
 };
@@ -43,7 +42,49 @@ struct Example : olc::PixelGameEngine {
 	cmn::AABB box;
 	vf2d box_start;
 
-	void reset() {
+	//spiral tower!
+	void makeTower() {
+		delete[] grid;
+
+		//width&depth= 10-50
+		width=5+rand()%16;
+		depth=width;
+		height=width*width;
+		grid=new bool[width*height*depth];
+		memset(grid, false, sizeof(bool)*width*height*depth);
+
+		auto makeColumn=[&] (int i, int k, int h) {
+			for(int j=0; j<h; j++) grid[ix(i, j, k)]=true;
+		};
+
+		int lft=0, rgt=width-1, back=0, front=depth-1;
+		int num=width*depth;
+		for(int s=0; s<num;) {
+			for(int i=lft; i<=rgt&&s<num; i++, s++) {
+				makeColumn(i, back, s+1);
+			}
+			back++;
+
+			for(int k=back; k<=front&&s<num; k++, s++) {
+				makeColumn(rgt, k, s+1);
+			}
+			rgt--;
+
+			for(int i=rgt; i>=lft&&s<num; i--, s++) {
+				makeColumn(i, front, s+1);
+			}
+			front--;
+
+			for(int k=front; k>=back&&s<num; k--, s++) {
+				makeColumn(lft, k, s+1);
+			}
+			lft++;
+		}
+
+		reslice();
+	}
+
+	void makeEllipsoid() {
 		delete[] grid;
 
 		//size for each dimension: 10-50
@@ -161,7 +202,7 @@ struct Example : olc::PixelGameEngine {
 		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
 		prim_rect_dec=new olc::Decal(prim_rect_spr);
 
-		reset();
+		makeEllipsoid();
 
 		auto margin=23;
 		vf2d offset(margin, margin);
@@ -200,7 +241,20 @@ struct Example : olc::PixelGameEngine {
 		const vf2d mouse_pos=GetMousePos();
 
 		//reset grid
-		if(GetKey(olc::Key::R).bPressed) reset();
+		if(GetKey(olc::Key::T).bPressed) {
+			cmn::Stopwatch watch; watch.start();
+			makeTower();
+			watch.stop();
+			auto dur=watch.getMicros();
+			std::cout<<"tower took: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+		}
+		if(GetKey(olc::Key::E).bPressed) {
+			cmn::Stopwatch watch; watch.start();
+			makeEllipsoid();
+			watch.stop();
+			auto dur=watch.getMicros();
+			std::cout<<"ellipsoid took: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+		}
 		
 		//slice thru layers
 		if(GetKey(olc::Key::UP).bPressed||GetMouseWheel()>0) list_index++;
