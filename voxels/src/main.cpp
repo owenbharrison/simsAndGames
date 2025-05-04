@@ -42,9 +42,9 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 
 	//camera positioning
-	vf3d cam_pos{0, 0, -5};
+	vf3d cam_pos{0, 2, -9};
 	float cam_yaw=0;
-	float cam_pitch=0;
+	float cam_pitch=-.3f;
 	vf3d cam_dir;
 
 	//camera matrices
@@ -267,7 +267,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			vf3d movement;
 
 			//move forward, backward
-			vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
+			vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
 			if(GetKey(olc::Key::W).bHeld) movement+=.5f*dt*fb_dir;
 			if(GetKey(olc::Key::S).bHeld) movement-=.3f*dt*fb_dir;
 
@@ -317,7 +317,7 @@ struct VoxelGame : olc::PixelGameEngine {
 			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 			//move forward, backward
-			vf3d fb_dir(std::sinf(cam_yaw), 0, std::cosf(cam_yaw));
+			vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
 			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -565,9 +565,9 @@ struct VoxelGame : olc::PixelGameEngine {
 		{
 			const vf3d up(0, 1, 0);
 			cam_dir=vf3d(
-				std::sinf(cam_yaw)*std::cosf(cam_pitch),
+				std::cosf(cam_yaw)*std::cosf(cam_pitch),
 				std::sinf(cam_pitch),
-				std::cosf(cam_yaw)*std::cosf(cam_pitch)
+				std::sinf(cam_yaw)*std::cosf(cam_pitch)
 			);
 			vf3d target=cam_pos+cam_dir;
 			Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
@@ -1089,7 +1089,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 int main() {
 	VoxelGame vg;
-	bool vsync=false;
+	bool vsync=true;
 	if(vg.Construct(640, 480, 1, 1, false, vsync)) vg.Start();
 
 	return 0;
