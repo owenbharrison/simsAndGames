@@ -174,7 +174,6 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\chunk.h" />
     <ClInclude Include="src\conversions.h" />
     <ClInclude Include="src\geom\aabb3.h" />
     <ClInclude Include="src\gfx\mesh.h" />

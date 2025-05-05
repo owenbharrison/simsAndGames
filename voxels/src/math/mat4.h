@@ -11,13 +11,14 @@ constexpr float Pi=3.1415927f;
 struct Mat4 {
 	float v[4][4]={0};
 
+	//compute determinant of sub matrix
 	float minor(int row, int col) const {
 		float m[3][3];
 		int subi=0;
-		for(int i=0; i<4; ++i) {
+		for(int i=0; i<4; i++) {
 			if(i==row) continue;
 			int subj=0;
-			for(int j=0; j<4; ++j) {
+			for(int j=0; j<4; j++) {
 				if(j==col) continue;
 				m[subi][subj]=v[i][j];
 				subj++;
@@ -37,7 +38,8 @@ struct Mat4 {
 		}
 		return m;
 	}
-
+	
+	//rotation in all axes helpers
 	static Mat4 makeRotX(float theta) {
 		Mat4 m;
 		m.v[0][0]=std::cosf(theta);
@@ -69,6 +71,7 @@ struct Mat4 {
 		return m;
 	}
 
+	//translation matrix helper
 	static Mat4 makeTrans(float x, float y, float z) {
 		Mat4 m;
 		m.v[0][0]=1;
@@ -81,6 +84,7 @@ struct Mat4 {
 		return m;
 	}
 
+	//projection matrix helper
 	static Mat4 makeProj(float fov_deg, float aspect, float near, float far) {
 		float fov_rad=fov_deg*Pi/180;
 		float inv_tan=1/std::tanf(fov_rad/2);
@@ -94,6 +98,7 @@ struct Mat4 {
 		return m;
 	}
 
+	//model space -> world space
 	static Mat4 makePointAt(const vf3d& pos, const vf3d& target, const vf3d& _up) {
 		vf3d forward=(target-pos).norm();
 
@@ -112,6 +117,7 @@ struct Mat4 {
 	}
 
 	//only for rot/proj
+	//transpose of rotation, negative rotation&translation.
 	static Mat4 quickInverse(const Mat4& a) {
 		Mat4 b;
 		b.v[0][0]=a.v[0][0], b.v[0][1]=a.v[1][0], b.v[0][2]=a.v[2][0];

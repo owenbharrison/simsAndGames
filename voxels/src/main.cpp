@@ -1,5 +1,5 @@
 #define OLC_PGE_APPLICATION
-#include "common/olcPixelGameEngine.h"
+#include "olcPixelGameEngine.h"
 using olc::vf2d;
 namespace olc {
 	static const Pixel ORANGE(255, 115, 0);
@@ -43,7 +43,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 	//camera positioning
 	vf3d cam_pos{0, 2, -9};
-	float cam_yaw=0;
+	float cam_yaw=cmn::Pi/2;
 	float cam_pitch=-.3f;
 	vf3d cam_dir;
 
