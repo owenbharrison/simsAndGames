@@ -7,11 +7,11 @@ impl only show whats on screen?
 */
 
 #define OLC_PGE_APPLICATION
-#include "common/olcPixelGameEngine.h"
+#include "olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_PGEX_TRANSFORMEDVIEW
-#include "common/olcPGEX_TransformedView.h"
+#include "olcPGEX_TransformedView.h"
 
 #include <list>
 #include <fstream>

@@ -1,5 +1,5 @@
 #define OLC_SOUNDWAVE
-#include "common/olcSoundWaveEngine.h"
+#include "olcSoundWaveEngine.h"
 
 #include <string>
 #include <chrono>
