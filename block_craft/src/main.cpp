@@ -1,5 +1,5 @@
 #define OLC_PGE_APPLICATION
-#include "common/olcPixelGameEngine.h"
+#include "olcPixelGameEngine.h"
 using olc::vf2d;
 
 #include "math/v3d.h"
@@ -45,7 +45,7 @@ int neg_mod(int a, int b) {
 
 struct VoxelGame : olc::PixelGameEngine {
 	VoxelGame() {
-		sAppName="Voxel Game";
+		sAppName="Block Craft";
 	}
 
 	//camera positioning
@@ -97,7 +97,7 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
-		//ConsoleCaptureStdOut(true);
+		ConsoleCaptureStdOut(true);
 
 		//make projection matrix
 		float asp=float(ScreenHeight())/ScreenWidth();
@@ -498,6 +498,17 @@ struct VoxelGame : olc::PixelGameEngine {
 				lines_to_project.push_back(l);
 			}
 		}
+
+		if(show_outlines) {
+			for(const auto& t:tris_to_project) {
+				Line l1{t.p[0], t.p[1]}; l1.col=olc::BLACK;
+				lines_to_project.push_back(l1);
+				Line l2{t.p[1], t.p[2]}; l2.col=olc::BLACK;
+				lines_to_project.push_back(l2);
+				Line l3{t.p[2], t.p[0]}; l3.col=olc::BLACK;
+				lines_to_project.push_back(l3);
+			}
+		}
 	}
 
 	void projectAndClip() {
@@ -742,17 +753,6 @@ struct VoxelGame : olc::PixelGameEngine {
 		}
 	}
 
-	void DrawDepthTriangle(
-		int x1, int y1, float w1,
-		int x2, int y2, float w2,
-		int x3, int y3, float w3,
-		olc::Pixel col
-	) {
-		DrawDepthLine(x1, y1, w1, x2, y2, w2, col);
-		DrawDepthLine(x2, y2, w2, x3, y3, w3, col);
-		DrawDepthLine(x3, y3, w3, x1, y1, w1, col);
-	}
-
 	void FillDepthTriangle(
 		int x1, int y1, float u1, float v1, float w1,
 		int x2, int y2, float u2, float v2, float w2,
@@ -897,7 +897,6 @@ struct VoxelGame : olc::PixelGameEngine {
 	}
 #pragma endregion
 
-	float cout_timer=0;
 	void render(float dt) {
 		//dark grey background
 		Clear(olc::Pixel(90, 90, 90));
@@ -905,18 +904,6 @@ struct VoxelGame : olc::PixelGameEngine {
 		//reset depth buffer
 		for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
 			depth_buffer[i]=0;
-		}
-
-		//draw triangle outlines
-		if(show_outlines) {
-			for(const auto& t:tris_to_draw) {
-				DrawDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].w,
-					olc::BLACK
-				);
-			}
 		}
 
 		//rasterize triangles
@@ -937,14 +924,6 @@ struct VoxelGame : olc::PixelGameEngine {
 				l.col
 			);
 		}
-
-		if(cout_timer<0) {
-			cout_timer+=1.f;
-
-			std::cout<<"tris: "<<tris_to_draw.size()<<'\n';
-			std::cout<<"lines	: "<<lines_to_draw.size()<<'\n';
-		}
-		cout_timer-=dt;
 	}
 
 	//this function serves as a wrapper for timing
