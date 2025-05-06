@@ -1,6 +1,9 @@
 #pragma once
 #ifndef CHUNK_CLASS_H
 #define CHUNK_CLASS_H
+
+#include <unordered_map>
+
 struct ChunkCoord {
 	int x=0, y=0, z=0;
 
@@ -8,6 +11,16 @@ struct ChunkCoord {
 		return x==other.x&&y==other.y&&z==other.z;
 	}
 };
+
+//hash function for unordered_map
+namespace std {
+	template<>
+	struct hash<ChunkCoord> {
+		size_t operator()(const ChunkCoord& c) const {
+			return ((std::hash<int>()(c.x)^(std::hash<int>()(c.y)<<1))>>1)^(std::hash<int>()(c.z)<<1);
+		}
+	};
+}
 
 class Chunk {
 	void copyFrom(const Chunk&), clear();
