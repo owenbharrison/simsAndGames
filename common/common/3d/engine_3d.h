@@ -190,6 +190,7 @@ namespace cmn {
 					tri_view.t[i]=tri.t[i];
 				}
 				tri_view.col=tri.col*dp;
+				tri_view.id=tri.id;
 
 				//clip
 				Triangle clipped[2];
@@ -223,6 +224,7 @@ namespace cmn {
 						tri_proj.p[j].y*=ScreenHeight()/2;
 					}
 					tri_proj.col=clipped[i].col;
+					tri_proj.id=clipped[i].id;
 
 					tris_to_clip.push_back(tri_proj);
 				}
@@ -239,6 +241,7 @@ namespace cmn {
 				line_view.t[i]=line.t[i];
 			}
 			line_view.col=line.col;
+			line_view.id=line.id;
 
 			//clip
 			Line clipped;
@@ -271,6 +274,7 @@ namespace cmn {
 					line_proj.p[j].y*=ScreenHeight()/2;
 				}
 				line_proj.col=clipped.col;
+				line_proj.id=clipped.id;
 
 				lines_to_clip.push_back(line_proj);
 			}

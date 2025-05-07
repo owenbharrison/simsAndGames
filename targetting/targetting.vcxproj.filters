@@ -26,5 +26,6 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\suzanne.txt" />
+    <Text Include="assets\bunny.txt" />
   </ItemGroup>
 </Project>

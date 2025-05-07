@@ -1,4 +1,7 @@
 #include "common/3d/engine_3d.h"
+namespace cmn {
+	static const olc::Pixel PURPLE(150, 0, 255);
+}
 
 #include "mesh.h"
 #include "common/utils.h"
@@ -9,22 +12,52 @@ struct Example : cmn::Engine3D {
 	}
 
 	//camera positioning
-	float cam_yaw=0;
-	float cam_pitch=0;
+	float cam_yaw=-cmn::Pi/2;
+	float cam_pitch=-.1f;
 
 	//scene stuff
-	Mesh mesh;
-	vf3d* aspect=nullptr;
+	std::vector<Mesh> meshes;
+	Mesh* selected=nullptr;
+
+	bool show_bounds=false;
+
+	//dont want to sort meshes by id...
+	int lowestUniqueID() const {
+		for(int id=0; ; id++) {
+			bool unique=true;
+			for(const auto& m:meshes) {
+				if(m.id==id) {
+					unique=false;
+					break;
+				}
+			}
+			if(unique) return id;
+		}
+	}
 
 	bool user_create() override {
+		cam_pos={0, 0, 3};
+		
+		//load monkey and bunny
 		try{
-			Mesh m=Mesh::loadFromOBJ("assets/suzanne.txt");
-			m.colorNormals();
-			mesh=m;
-			aspect=&mesh.rotation;
+			Mesh a=Mesh::loadFromOBJ("assets/suzanne.txt");
+			a.translation={-1.5f, 0, 0};
+			meshes.push_back(a);
+			Mesh b=Mesh::loadFromOBJ("assets/bunny.txt");
+			b.scale={10, 10, 10};
+			b.translation={1.5f, -1, 0};
+			meshes.push_back(b);
 		} catch(const std::exception& e) {
 			std::cout<<e.what()<<'\n';
 			return false;
+		}
+
+		//update things
+		for(auto& m:meshes) {
+			m.updateMatrices();
+			m.id=lowestUniqueID();
+			m.updateTris();
+			m.colorNormals();
 		}
 
 		return true;
@@ -65,29 +98,95 @@ struct Example : cmn::Engine3D {
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
-		//transform testing
-		if(GetKey(olc::Key::K1).bPressed) aspect=&mesh.rotation;
-		if(GetKey(olc::Key::K2).bPressed) aspect=&mesh.scale;
-		if(GetKey(olc::Key::K3).bPressed) aspect=&mesh.translation;
+		if(GetMouse(olc::Mouse::LEFT).bPressed) {
+			try {
+				//screen -> world with inverse matrix
+				Mat4 invPV=Mat4::inverse(mat_view*mat_proj);
+				float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+				float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+				vf3d clip(ndc_x, ndc_y, 1);
+				vf3d world=clip*invPV;
+				world/=world.w;
 
-		//transform testing
-		bool to_update=false;
-		int sign=1-2*GetKey(olc::Key::CTRL).bHeld;
-		if(GetKey(olc::Key::X).bHeld) aspect->x+=sign*dt, to_update=true;
-		if(GetKey(olc::Key::Y).bHeld) aspect->y+=sign*dt, to_update=true;
-		if(GetKey(olc::Key::Z).bHeld) aspect->z+=sign*dt, to_update=true;
-		if(to_update) {
-			mesh.updateMatrices();
-			mesh.updateTris();
-			mesh.colorNormals();
+				vf3d dir=(world-cam_pos).norm();
+
+				//select closest mesh
+				float record;
+				selected=nullptr;
+				for(auto& m:meshes) {
+					float dist=m.intersectRay(cam_pos, dir);
+					if(dist>0) {
+						if(!selected||dist<record) {
+							record=dist;
+							selected=&m;
+						}
+					}
+				}
+			} catch(const std::exception& e) {
+				//matrix could be singular.
+				std::cout<<"  "<<e.what()<<'\n';
+			}
 		}
+		if(GetKey(olc::Key::ESCAPE).bPressed) selected=nullptr;
+
+		//debug toggles
+		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 
 		return true;
 	}
 
+	void addAABB(const AABB3& box, const olc::Pixel& col) {
+		//corner vertexes
+		const vf3d& v0=box.min, & v7=box.max;
+		vf3d v1(v7.x, v0.y, v0.z);
+		vf3d v2(v0.x, v7.y, v0.z);
+		vf3d v3(v7.x, v7.y, v0.z);
+		vf3d v4(v0.x, v0.y, v7.z);
+		vf3d v5(v7.x, v0.y, v7.z);
+		vf3d v6(v0.x, v7.y, v7.z);
+		//bottom
+		Line l1{v0, v1}; l1.col=col;
+		lines_to_project.push_back(l1);
+		Line l2{v1, v3}; l2.col=col;
+		lines_to_project.push_back(l2);
+		Line l3{v3, v2}; l3.col=col;
+		lines_to_project.push_back(l3);
+		Line l4{v2, v0}; l4.col=col;
+		lines_to_project.push_back(l4);
+		//sides
+		Line l5{v0, v4}; l5.col=col;
+		lines_to_project.push_back(l5);
+		Line l6{v1, v5}; l6.col=col;
+		lines_to_project.push_back(l6);
+		Line l7{v2, v6}; l7.col=col;
+		lines_to_project.push_back(l7);
+		Line l8{v3, v7}; l8.col=col;
+		lines_to_project.push_back(l8);
+		//top
+		Line l9{v4, v5}; l9.col=col;
+		lines_to_project.push_back(l9);
+		Line l10{v5, v7}; l10.col=col;
+		lines_to_project.push_back(l10);
+		Line l11{v7, v6}; l11.col=col;
+		lines_to_project.push_back(l11);
+		Line l12{v6, v4}; l12.col=col;
+		lines_to_project.push_back(l12);
+	}
+
 	bool user_geometry() override {
 		//combine all meshes triangles
-		tris_to_project.insert(tris_to_project.end(), mesh.tris.begin(), mesh.tris.end());
+		for(const auto& m:meshes){
+			tris_to_project.insert(tris_to_project.end(),
+				m.tris.begin(), m.tris.end()
+			);
+		}
+
+		//add bound lines
+		if(show_bounds) {
+			for(const auto& m:meshes) {
+				addAABB(m.getAABB(), olc::GREEN);
+			}
+		}
 
 		return true;
 	}
@@ -97,13 +196,30 @@ struct Example : cmn::Engine3D {
 
 		render3D();
 		
+		//edge detection with selected object
+		if(selected) {
+			int id=selected->id;
+			for(int i=1; i<ScreenWidth()-1; i++) {
+				for(int j=1; j<ScreenHeight()-1; j++) {
+					bool curr=id_buffer[i+ScreenWidth()*j]==id;
+					bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
+					bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
+					bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
+					bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
+					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
+						Draw(i, j, olc::WHITE);
+					}
+				}
+			}
+		}
+
 		return true;
 	}
 };
 
 int main() {
 	Example e;
-	if(e.Construct(400, 400, 1, 1, false, true)) e.Start();
+	if(e.Construct(540, 360, 1, 1, false, true)) e.Start();
 
 	return 0;
 }
