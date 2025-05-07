@@ -146,6 +146,7 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\bunny.txt" />
+    <Text Include="assets\dragon.txt" />
     <Text Include="assets\suzanne.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

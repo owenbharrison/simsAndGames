@@ -41,12 +41,16 @@ struct Example : cmn::Engine3D {
 		//load monkey and bunny
 		try{
 			Mesh a=Mesh::loadFromOBJ("assets/suzanne.txt");
-			a.translation={-1.5f, 0, 0};
+			a.translation={-2.5f, 0, 0};
 			meshes.push_back(a);
-			Mesh b=Mesh::loadFromOBJ("assets/bunny.txt");
-			b.scale={10, 10, 10};
-			b.translation={1.5f, -1, 0};
+			Mesh b=Mesh::loadFromOBJ("assets/dragon.txt");
+			b.rotation={0, cmn::Pi, 0};
+			b.scale={3, 3, 3};
 			meshes.push_back(b);
+			Mesh c=Mesh::loadFromOBJ("assets/bunny.txt");
+			c.scale={10, 10, 10};
+			c.translation={2.5f, -1, 0};
+			meshes.push_back(c);
 		} catch(const std::exception& e) {
 			std::cout<<e.what()<<'\n';
 			return false;
