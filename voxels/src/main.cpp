@@ -167,11 +167,11 @@ struct VoxelGame : olc::PixelGameEngine {
 
 				return false;
 			}
-
-			//rescale
-			m.fitToBounds(scene_bounds);
-			m.colorNormals();
 			model=m;
+			
+			//rescale
+			model.fitToBounds(scene_bounds);
+			model.colorNormals();
 
 			std::cout<<"  successfully loaded model w/ "<<model.triangles.size()<<"tris\n";
 
@@ -259,8 +259,8 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
 
 		//look left, right
-		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
-		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
+		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
+		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
 
 		if(player_camera) {
 			//xz movement
@@ -354,28 +354,33 @@ struct VoxelGame : olc::PixelGameEngine {
 
 		//mouse painting?
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
-			//screen -> world with inverse matrix
-			Mat4 invPV=Mat4::inverse(mat_view*mat_proj);
-			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
-			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
-			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*invPV;
-			world/=world.w;
+			//matrix could be singular.
+			try {
+				//screen -> world with inverse matrix
+				Mat4 invPV=Mat4::inverse(mat_view*mat_proj);
+				float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+				float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+				vf3d clip(ndc_x, ndc_y, 1);
+				vf3d world=clip*invPV;
+				world/=world.w;
 
-			//check every tri against segment
-			vf3d start=cam_pos;
-			float record=INFINITY;
-			Triangle* closest=nullptr;
-			for(auto& t:model.triangles) {
-				float dist=segIntersectTri(start, world, t);
-				if(dist>0&&dist<record) {
-					record=dist;
-					closest=&t;
+				//check every tri against segment
+				vf3d start=cam_pos;
+				float record=INFINITY;
+				Triangle* closest=nullptr;
+				for(auto& t:model.triangles) {
+					float dist=segIntersectTri(start, world, t);
+					if(dist>0&&dist<record) {
+						record=dist;
+						closest=&t;
+					}
 				}
-			}
 
-			//if found, paint
-			if(closest) closest->col=olc::WHITE;
+				//if found, paint
+				if(closest) closest->col=olc::WHITE;
+			} catch(const std::exception& e) {
+				std::cout<<"  "<<e.what()<<'\n';
+			}
 		}
 	}
 

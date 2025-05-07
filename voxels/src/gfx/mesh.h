@@ -14,7 +14,7 @@
 
 struct Mesh {
 	std::vector<Triangle> triangles;
-	
+
 	AABB3 getAABB() const {
 		AABB3 a;
 		for(const auto& t:triangles) {
@@ -50,21 +50,6 @@ struct Mesh {
 			t.col.r=128+127*norm.x;
 			t.col.g=128+127*norm.y;
 			t.col.b=128+127*norm.z;
-		}
-	}
-
-	//these obj helpers will fundamentally change when
-	//i update triangles such that they store indexes
-	void saveToOBJ(const std::string& filename) {
-		std::ofstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
-
-		int j=1;
-		for(const auto& t:triangles) {
-			for(int i=0; i<3; i++) {
-				file<<"v "<<t.p[i].x<<' '<<t.p[i].y<<' '<<t.p[i].z<<'\n';
-			}
-			file<<"f "<<(j++)<<' '<<(j++)<<' '<<(j++)<<'\n';
 		}
 	}
 

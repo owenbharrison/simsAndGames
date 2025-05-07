@@ -10,11 +10,12 @@ int neg_mod(int a, int b) {
 	return (b+a%b)%b;
 }
 
-struct BlockGame : Engine3D {
+struct BlockGame : cmn::Engine3D {
 	BlockGame() {
 		sAppName="Block Game";
 	}
 
+	//camera positioning
 	float cam_yaw=0;
 	float cam_pitch=0;
 

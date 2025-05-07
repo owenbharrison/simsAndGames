@@ -83,7 +83,7 @@ struct Mat4 {
 		m.v[3][2]=z;
 		return m;
 	}
-
+	
 	//projection matrix helper
 	static Mat4 makeProj(float fov_deg, float aspect, float near, float far) {
 		float fov_rad=fov_deg*Pi/180;
