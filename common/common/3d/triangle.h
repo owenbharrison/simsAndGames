@@ -82,6 +82,7 @@ struct Triangle {
 				a.t[2].w=in_tex[0]->w+t*(out_tex[1]->w-in_tex[0]->w);
 
 				a.col=col;
+				a.id=id;
 				return 1;
 			}
 			case 2: {
@@ -100,6 +101,7 @@ struct Triangle {
 				a.t[2].w=in_tex[1]->w+t*(out_tex[0]->w-in_tex[1]->w);
 
 				a.col=col;
+				a.id=id;
 
 				b.p[0]=a.p[0];
 				b.t[0]=a.t[0];
@@ -115,6 +117,7 @@ struct Triangle {
 				b.t[2].w=out_tex[0]->w+t*(a.t[0].w-out_tex[0]->w);
 
 				b.col=col;
+				b.id=id;
 				return 2;
 			}
 			case 3:
