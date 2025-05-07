@@ -16,6 +16,7 @@ struct Triangle {
 	vf3d p[3];
 	v2d t[3];
 	olc::Pixel col=olc::WHITE;
+	int id=-1;
 
 	vf3d getCtr() const {
 		return (p[0]+p[1]+p[2])/3;

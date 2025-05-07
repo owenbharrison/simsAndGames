@@ -84,6 +84,16 @@ struct Mat4 {
 		return m;
 	}
 
+	//scale matrix helper
+	static Mat4 makeScale(float x, float y, float z) {
+		Mat4 m;
+		m.v[0][0]=x;
+		m.v[1][1]=y;
+		m.v[2][2]=z;
+		m.v[3][3]=1;
+		return m;
+	}
+
 	//projection matrix helper
 	static Mat4 makeProj(float fov_deg, float aspect, float near, float far) {
 		float fov_rad=fov_deg*3.1415927f/180;

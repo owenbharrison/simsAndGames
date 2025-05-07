@@ -9,6 +9,7 @@ struct Line {
 	vf3d p[2];
 	v2d t[2];
 	olc::Pixel col=olc::WHITE;
+	int id=-1;
 
 	bool clipAgainstPlane(const vf3d& ctr, const vf3d& norm, Line& a) const {
 		const vf3d* in_pts[2];
