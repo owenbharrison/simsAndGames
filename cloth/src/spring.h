@@ -9,6 +9,7 @@ struct Spring {
 	float rest_len=0;
 	float stiffness=0;
 	float damping=0;
+	float strain=0;
 
 	Spring() {}
 
@@ -37,6 +38,10 @@ struct Spring {
 		vf3d force=getForce();
 		a->applyForce(force);
 		b->applyForce(-force);
+
+		//update strain
+		float curr=(a->pos-b->pos).mag();
+		strain=rest_len-curr/rest_len;
 	}
 };
 #endif
