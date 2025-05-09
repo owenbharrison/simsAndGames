@@ -16,7 +16,7 @@ struct Cloth3DUI : cmn::Engine3D {
 
 	//camera positioning
 	float cam_yaw=-cmn::Pi/2;
-	float cam_pitch=-.1f;
+	float cam_pitch=0;
 	
 	//user input stuff
 	vf3d mouse_dir;
@@ -42,7 +42,7 @@ struct Cloth3DUI : cmn::Engine3D {
 	float update_timer=0;
 
 	bool user_create() override {
-		cam_pos={0, 0, 3};
+		cam_pos={0, 0, 7};
 
 		//load gradients
 		gradient1_spr=new olc::Sprite("assets/gradient_1.png");
@@ -83,21 +83,25 @@ struct Cloth3DUI : cmn::Engine3D {
 
 	//mostly just camera controls!
 	void handleUserInput(float dt) {
-		//update mouse ray
+		//matrix could be singular...
+		Mat4 invVP;
+		bool invVP_avail=true;
 		try {
-			//screen -> world with inverse matrix
-			Mat4 invPV=Mat4::inverse(mat_view*mat_proj);
+			invVP=Mat4::inverse(mat_view*mat_proj);
+		} catch(const std::exception& e) {
+			invVP_avail=false;
+		}
+
+		//update mouse ray
+		//screen -> world with inverse matrix
+		if(invVP_avail) {
 			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
 			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*invPV;
+			vf3d world=clip*invVP;
 			world/=world.w;
 
-			//mouse ray dir
 			mouse_dir=(world-cam_pos).norm();
-		} catch(const std::exception& e) {
-			//matrix could be singular...
-			std::cout<<"  "<<e.what()<<'\n';
 		}
 
 		//cant drag particle and move around at same time.

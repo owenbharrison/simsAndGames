@@ -34,5 +34,14 @@
     <Image Include="assets\gradient.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\gradient_1.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\gradient_2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\gradient_3.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

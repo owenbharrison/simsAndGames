@@ -154,6 +154,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\gradient.png" />
+    <Image Include="assets\gradient_1.png" />
+    <Image Include="assets\gradient_2.png" />
+    <Image Include="assets\gradient_3.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
