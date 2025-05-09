@@ -41,32 +41,29 @@ struct Mat4 {
 	
 	//rotation in all axes helpers
 	static Mat4 makeRotX(float theta) {
+		float c=std::cosf(theta), s=std::sinf(theta);
 		Mat4 m;
-		m.v[0][0]=std::cosf(theta);
-		m.v[0][1]=std::sinf(theta);
-		m.v[1][0]=-std::sinf(theta);
-		m.v[1][1]=std::cosf(theta);
-		m.v[2][2]=1;
+		m.v[0][0]=1;
+		m.v[1][1]=c, m.v[1][2]=-s;
+		m.v[2][1]=s, m.v[2][2]=c;
 		m.v[3][3]=1;
 		return m;
 	}
 	static Mat4 makeRotY(float theta) {
+		float c=std::cosf(theta), s=std::sinf(theta);
 		Mat4 m;
-		m.v[0][0]=std::cosf(theta);
-		m.v[0][2]=std::sinf(theta);
-		m.v[2][0]=-std::sinf(theta);
+		m.v[0][0]=c, m.v[0][2]=s;
 		m.v[1][1]=1;
-		m.v[2][2]=std::cosf(theta);
+		m.v[2][0]=-s, m.v[2][2]=c;
 		m.v[3][3]=1;
 		return m;
 	}
 	static Mat4 makeRotZ(float theta) {
+		float c=std::cosf(theta), s=std::sinf(theta);
 		Mat4 m;
-		m.v[0][0]=1;
-		m.v[1][1]=std::cosf(theta);
-		m.v[1][2]=std::sinf(theta);
-		m.v[2][1]=-std::sinf(theta);
-		m.v[2][2]=std::cosf(theta);
+		m.v[0][0]=c, m.v[0][1]=-s;
+		m.v[1][0]=s, m.v[1][1]=c;
+		m.v[2][2]=1;
 		m.v[3][3]=1;
 		return m;
 	}
