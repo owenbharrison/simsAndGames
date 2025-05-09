@@ -2,6 +2,8 @@
 #ifndef MESH_CLASS_H
 #define MESH_CLASS_H
 
+#include "quat.h"
+
 bool rayIntersectAABB(const vf3d& orig, const vf3d& dir, const AABB3& box) {
 	const float epsilon=1e-6f;
 	float tmin=-INFINITY;
@@ -49,7 +51,7 @@ struct IndexTriangle {
 struct Mesh {
 	std::vector<vf3d> vertices;
 	std::vector<IndexTriangle> index_tris;
-	vf3d rotation;
+	Quat rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
 	Mat4 mat_world;//local->world
@@ -57,15 +59,12 @@ struct Mesh {
 	std::vector<Triangle> tris;
 	int id=-1;
 
-	void updateMatrices() {
+	void updateTransforms() {
 		//combine all transforms
-		Mat4 mat_rot_x=Mat4::makeRotX(rotation.x);
-		Mat4 mat_rot_y=Mat4::makeRotY(rotation.y);
-		Mat4 mat_rot_z=Mat4::makeRotZ(rotation.z);
-		Mat4 mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
+		Mat4 mat_rot=quatToMat4(rotation);
 		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
 		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_world=mat_rot*mat_scale*mat_trans;
+		mat_world=mat_scale*mat_rot*mat_trans;
 		//matrix could be singular
 		mat_local=Mat4::identity();
 		try {
@@ -76,7 +75,7 @@ struct Mesh {
 		}
 	}
 
-	void updateTris() {
+	void applyTransforms() {
 		std::vector<vf3d> new_verts;
 		new_verts.reserve(vertices.size());
 		for(const auto& v:vertices) {
@@ -116,7 +115,7 @@ struct Mesh {
 	}
 
 	float intersectRay(const vf3d& orig, const vf3d& dir) const {
-		if(!rayIntersectAABB(orig, dir, getAABB())) return false;
+		if(!rayIntersectAABB(orig, dir, getAABB())) return -1;
 
 		//sort by closest
 		float record=-1;

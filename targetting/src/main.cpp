@@ -1,7 +1,5 @@
 #include "common/3d/engine_3d.h"
-namespace cmn {
-	static const olc::Pixel PURPLE(150, 0, 255);
-}
+using olc::vf2d;
 
 #include "mesh.h"
 #include "common/utils.h"
@@ -15,10 +13,23 @@ struct Example : cmn::Engine3D {
 	float cam_yaw=-cmn::Pi/2;
 	float cam_pitch=-.1f;
 
+	//ui stuff
+	vf2d mouse_pos;
+	vf2d prev_mouse_pos;
+
+	vf3d mouse_dir;
+
+	Mesh* trans_mesh=nullptr;
+	vf3d trans_plane;
+	vf2d trans_start;
+
+	Mesh* rot_mesh=nullptr;
+	vf2d rot_start;
+
 	//scene stuff
 	std::vector<Mesh> meshes;
-	Mesh* selected=nullptr;
 
+	//debug toggles
 	bool show_bounds=false;
 
 	//dont want to sort meshes by id...
@@ -36,20 +47,19 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_create() override {
-		cam_pos={0, 0, 3};
+		cam_pos={0, 0, 3.5f};
 		
 		//load monkey and bunny
 		try{
 			Mesh a=Mesh::loadFromOBJ("assets/suzanne.txt");
-			a.translation={-2.5f, 0, 0};
+			a.translation={-3, 0, 0};
 			meshes.push_back(a);
 			Mesh b=Mesh::loadFromOBJ("assets/dragon.txt");
-			b.rotation={0, cmn::Pi, 0};
 			b.scale={3, 3, 3};
 			meshes.push_back(b);
 			Mesh c=Mesh::loadFromOBJ("assets/bunny.txt");
 			c.scale={10, 10, 10};
-			c.translation={2.5f, -1, 0};
+			c.translation={3, -.3f, 0};
 			meshes.push_back(c);
 		} catch(const std::exception& e) {
 			std::cout<<e.what()<<'\n';
@@ -58,9 +68,9 @@ struct Example : cmn::Engine3D {
 
 		//update things
 		for(auto& m:meshes) {
-			m.updateMatrices();
+			m.updateTransforms();
 			m.id=lowestUniqueID();
-			m.updateTris();
+			m.applyTransforms();
 			m.colorNormals();
 		}
 
@@ -102,42 +112,121 @@ struct Example : cmn::Engine3D {
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
-		if(GetMouse(olc::Mouse::LEFT).bPressed) {
-			try {
-				//screen -> world with inverse matrix
-				Mat4 invPV=Mat4::inverse(mat_view*mat_proj);
-				float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
-				float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
-				vf3d clip(ndc_x, ndc_y, 1);
-				vf3d world=clip*invPV;
-				world/=world.w;
-
-				vf3d dir=(world-cam_pos).norm();
-
-				//select closest mesh
-				float record;
-				selected=nullptr;
-				for(auto& m:meshes) {
-					float dist=m.intersectRay(cam_pos, dir);
-					if(dist>0) {
-						if(!selected||dist<record) {
-							record=dist;
-							selected=&m;
-						}
-					}
-				}
-			} catch(const std::exception& e) {
-				//matrix could be singular.
-				std::cout<<"  "<<e.what()<<'\n';
-			}
-		}
-		if(GetKey(olc::Key::ESCAPE).bPressed) selected=nullptr;
-
 		//debug toggles
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 
+		//update screen mouse
+		prev_mouse_pos=mouse_pos;
+		mouse_pos=GetMousePos();
+
+		//unprojection matrix
+		Mat4 invVP;
+		bool invVP_avail=true;
+		try {
+			invVP=Mat4::inverse(mat_view*mat_proj);
+		} catch(const std::exception& e) {
+			invVP_avail=false;
+		}
+
+		//update world mouse ray
+		if(invVP_avail){
+			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+			vf3d clip(ndc_x, ndc_y, 1);
+			vf3d world=clip*invVP;
+			world/=world.w;
+
+			mouse_dir=(world-cam_pos).norm();
+		}
+
+		const auto translate_action=GetMouse(olc::Mouse::LEFT);
+		if(translate_action.bPressed) {
+			//get closest mesh
+			float record=-1;
+			trans_mesh=nullptr;
+			for(auto& m:meshes) {
+				float dist=m.intersectRay(cam_pos, mouse_dir);
+				if(dist>0) {
+					if(record<0||dist<record) {
+						record=dist;
+						trans_mesh=&m;
+					}
+				}
+			}
+			if(trans_mesh) {
+				trans_plane=cam_pos+record*cam_dir;
+				trans_start=mouse_pos;
+			}
+		}
+		if(translate_action.bReleased) {
+			trans_mesh=nullptr;
+		}
+
+		const auto rotate_action=GetMouse(olc::Mouse::RIGHT);
+		if(rotate_action.bPressed) {
+			//get closest mesh
+			float record=-1;
+			rot_mesh=nullptr;
+			for(auto& m:meshes) {
+				float dist=m.intersectRay(cam_pos, mouse_dir);
+				if(dist>0) {
+					if(record<0||dist<record) {
+						record=dist;
+						rot_mesh=&m;
+					}
+				}
+			}
+			if(rot_mesh) {
+				rot_start=mouse_pos;
+			}
+		}
+		if(rotate_action.bReleased) {
+			rot_mesh=nullptr;
+		}
+
+		//update translated mesh
+		if(trans_mesh&&invVP_avail) {
+			//project screen ray onto translation plane
+			float prev_ndc_x=1-2*prev_mouse_pos.x/ScreenWidth();
+			float prev_ndc_y=1-2*prev_mouse_pos.y/ScreenHeight();
+			vf3d prev_clip(prev_ndc_x, prev_ndc_y, 1);
+			vf3d prev_world=prev_clip*invVP;
+			prev_world/=prev_world.w;
+			vf3d prev_pt=segIntersectPlane(cam_pos, prev_world, trans_plane, cam_dir);
+			float curr_ndc_x=1-2*mouse_pos.x/ScreenWidth();
+			float curr_ndc_y=1-2*mouse_pos.y/ScreenHeight();
+			vf3d curr_clip(curr_ndc_x, curr_ndc_y, 1);
+			vf3d curr_world=curr_clip*invVP;
+			curr_world/=curr_world.w;
+			vf3d curr_pt=segIntersectPlane(cam_pos, curr_world, trans_plane, cam_dir);
+
+			//apply translation delta and update
+			trans_mesh->translation+=curr_pt-prev_pt;
+			trans_mesh->updateTransforms();
+			trans_mesh->applyTransforms();
+			trans_mesh->colorNormals();
+		}
+
+		//update rotated mesh
+		if(rot_mesh&&invVP_avail) {
+			vf2d b=mouse_pos-rot_start;
+			if(b.mag()>20) {
+				vf2d a=prev_mouse_pos-rot_start;
+				float dot=a.x*b.x+a.y*b.y;
+				float cross=a.x*b.y-a.y*b.x;
+				float angle=-std::atan2f(cross, dot);
+				//apply rotation delta and update
+				rot_mesh->rotation=Quat::fromAxisAngle(cam_dir, angle)*rot_mesh->rotation;
+				rot_mesh->updateTransforms();
+				rot_mesh->applyTransforms();
+				rot_mesh->colorNormals();
+			}
+		}
+
 		return true;
 	}
+
+	float thing_timer=0;
 
 	void addAABB(const AABB3& box, const olc::Pixel& col) {
 		//corner vertexes
@@ -188,7 +277,7 @@ struct Example : cmn::Engine3D {
 		//add bound lines
 		if(show_bounds) {
 			for(const auto& m:meshes) {
-				addAABB(m.getAABB(), olc::GREEN);
+				addAABB(m.getAABB(), olc::BLACK);
 			}
 		}
 
@@ -199,22 +288,19 @@ struct Example : cmn::Engine3D {
 		Clear(olc::Pixel(100, 100, 100));
 
 		render3D();
-		
-		//edge detection with selected object
-		if(selected) {
-			int id=selected->id;
-			for(int i=1; i<ScreenWidth()-1; i++) {
-				for(int j=1; j<ScreenHeight()-1; j++) {
-					bool curr=id_buffer[i+ScreenWidth()*j]==id;
-					bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
-					bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
-					bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
-					bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
-					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
-						Draw(i, j, olc::WHITE);
-					}
-				}
-			}
+
+		if(trans_mesh) {
+			DrawLine(trans_start, mouse_pos, olc::BLUE);
+			DrawLine(trans_start.x-8, trans_start.y, trans_start.x+8, trans_start.y, olc::GREEN);
+			DrawLine(trans_start.x, trans_start.y-8, trans_start.x, trans_start.y+8, olc::GREEN);
+		}
+
+		if(rot_mesh) {
+			float dist=(mouse_pos-rot_start).mag();
+			float rad=std::max(20.f, dist);
+			DrawCircle(rot_start, rad, olc::YELLOW);
+			DrawLine(rot_start.x-8, rot_start.y, rot_start.x+8, rot_start.y, olc::RED);
+			DrawLine(rot_start.x, rot_start.y-8, rot_start.x, rot_start.y+8, olc::RED);
 		}
 
 		return true;
