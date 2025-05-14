@@ -7,7 +7,7 @@ using olc::vf2d;
 struct Example : cmn::Engine3D {
 	Example() {
 		sAppName="targetting system";
-	}
+	} 
 
 	//camera positioning
 	float cam_yaw=-cmn::Pi/2;
@@ -49,7 +49,7 @@ struct Example : cmn::Engine3D {
 	bool user_create() override {
 		cam_pos={0, 0, 3.5f};
 		
-		//load monkey and bunny
+		//load monkey, dragon, and bunny
 		try{
 			Mesh a=Mesh::loadFromOBJ("assets/suzanne.txt");
 			a.translation={-3, 0, 0};
@@ -287,7 +287,24 @@ struct Example : cmn::Engine3D {
 	bool user_render() override {
 		Clear(olc::Pixel(100, 100, 100));
 
-		render3D();
+		resetBuffers();
+
+		for(const auto& t:tris_to_draw) {
+			FillDepthTriangle(
+				t.p[0].x, t.p[0].y, t.t[0].w,
+				t.p[1].x, t.p[1].y, t.t[1].w,
+				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.col, t.id
+			);
+		}
+
+		for(const auto& l:lines_to_draw) {
+			DrawDepthLine(
+				l.p[0].x, l.p[0].y, l.t[0].w,
+				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.col, l.id
+			);
+		}
 
 		//rot mesh edge detection
 		if(rot_mesh) {

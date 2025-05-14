@@ -40,18 +40,6 @@ namespace cmn {
 		//geom helpers
 		void makeQuad(vf3d p, float w, float h, Triangle& a, Triangle& b);
 
-		//render helpers
-		void DrawDepthLine(
-			int x1, int y1, float w1,
-			int x2, int y2, float w2,
-			olc::Pixel col, int id);
-
-		void FillDepthTriangle(
-			int x1, int y1, float u1, float v1, float w1,
-			int x2, int y2, float u2, float v2, float w2,
-			int x3, int y3, float u3, float v3, float w3,
-			olc::Pixel col, int id);
-
 		bool OnUserUpdate(float dt) override;
 
 	public:
@@ -87,36 +75,189 @@ namespace cmn {
 
 		virtual bool user_render()=0;
 
-		void render3D() {
-			//reset depth buffer
+		void resetBuffers() {
 			for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
+				//reset depth buffer
 				depth_buffer[i]=0;
-			}
-
-			//reset id buffer
-			for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
+				//reset id buffer
 				id_buffer[i]=-1;
 			}
+		}
 
-			//rasterize all triangles
-			for(const auto& t:tris_to_draw) {
-				FillDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].w, t.t[0].w, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].w, t.t[1].w, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].w, t.t[2].w, t.t[2].w,
-					t.col, t.id
-				);
+		void FillDepthTriangle(
+			int x1, int y1, float w1,
+			int x2, int y2, float w2,
+			int x3, int y3, float w3,
+			olc::Pixel col, int id
+		) {
+			//sort by y
+			if(y2<y1) {
+				std::swap(x1, x2);
+				std::swap(y1, y2);
+				std::swap(w1, w2);
+			}
+			if(y3<y1) {
+				std::swap(x1, x3);
+				std::swap(y1, y3);
+				std::swap(w1, w3);
+			}
+			if(y3<y2) {
+				std::swap(x2, x3);
+				std::swap(y2, y3);
+				std::swap(w2, w3);
 			}
 
-			//rasterize all lines
-			for(const auto& l:lines_to_draw) {
-				DrawDepthLine(
-					l.p[0].x, l.p[0].y, l.t[0].w,
-					l.p[1].x, l.p[1].y, l.t[1].w,
-					l.col, l.id
-				);
+			//calculate slopes
+			int dx1=x2-x1;
+			int dy1=y2-y1;
+			float dw1=w2-w1;
+
+			int dx2=x3-x1;
+			int dy2=y3-y1;
+			float dw2=w3-w1;
+
+			float tex_u, tex_v, tex_w;
+
+			float dax_step=0, dbx_step=0,
+				du1_step=0, dv1_step=0,
+				du2_step=0, dv2_step=0,
+				dw1_step=0, dw2_step=0;
+
+			if(dy1) dax_step=dx1/std::fabsf(dy1);
+			if(dy2) dbx_step=dx2/std::fabsf(dy2);
+
+			if(dy1) dw1_step=dw1/std::fabsf(dy1);
+			if(dy2) dw2_step=dw2/std::fabsf(dy2);
+
+			//start scanline filling triangles
+			if(dy1) {
+				for(int j=y1; j<=y2; j++) {
+					int ax=x1+dax_step*(j-y1);
+					int bx=x1+dbx_step*(j-y1);
+					float tex_sw=w1+dw1_step*(j-y1);
+					float tex_ew=w1+dw2_step*(j-y1);
+					//sort along x
+					if(ax>bx) {
+						std::swap(ax, bx);
+						std::swap(tex_sw, tex_ew);
+					}
+					float t_step=1.f/(bx-ax);
+					float t=0;
+					for(int i=ax; i<bx; i++) {
+						tex_w=tex_sw+t*(tex_ew-tex_sw);
+						if(inRangeX(i)&&inRangeY(j)) {
+							int k=i+ScreenWidth()*j;
+							float& depth=depth_buffer[k];
+							if(tex_w>depth) {
+								Draw(i, j, col);
+								depth=tex_w;
+								id_buffer[k]=id;
+							}
+						}
+						t+=t_step;
+					}
+				}
+			}
+
+			//recalculate slopes
+			dx1=x3-x2;
+			dy1=y3-y2;
+			dw1=w3-w2;
+
+			if(dy1) dax_step=dx1/std::fabsf(dy1);
+
+			du1_step=0, dv1_step=0;
+			if(dy1) dw1_step=dw1/std::fabsf(dy1);
+
+			for(int j=y2; j<=y3; j++) {
+				int ax=x2+dax_step*(j-y2);
+				int bx=x1+dbx_step*(j-y1);
+				float tex_sw=w2+dw1_step*(j-y2);
+				float tex_ew=w1+dw2_step*(j-y1);
+				//sort along x
+				if(ax>bx) {
+					std::swap(ax, bx);
+					std::swap(tex_sw, tex_ew);
+				}
+				float t_step=1.f/(bx-ax);
+				float t=0;
+				for(int i=ax; i<bx; i++) {
+					tex_w=tex_sw+t*(tex_ew-tex_sw);
+					if(inRangeX(i)&&inRangeY(j)) {
+						int k=i+ScreenWidth()*j;
+						float& depth=depth_buffer[k];
+						if(tex_w>depth) {
+							Draw(i, j, col);
+							depth=tex_w;
+							id_buffer[k]=id;
+						}
+					}
+					t+=t_step;
+				}
 			}
 		}
+
+		void DrawDepthLine(
+			int x1, int y1, float w1,
+			int x2, int y2, float w2,
+			olc::Pixel col, int id
+		) {
+			auto draw=[&] (int i, int j, float t) {
+				if(!inRangeX(i)||!inRangeY(j)) return;
+
+				int k=i+ScreenWidth()*j;
+				float& depth=depth_buffer[k];
+				float w=w1+t*(w2-w1);
+				if(w>depth) {
+					Draw(i, j, col);
+					depth=w;
+					id_buffer[k]=id;
+				}
+			};
+			int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
+			dx=x2-x1; dy=y2-y1;
+			dx1=abs(dx), dy1=abs(dy);
+			px=2*dy1-dx1, py=2*dx1-dy1;
+			if(dy1<=dx1) {
+				bool flip=false;
+				if(dx>=0) x=x1, y=y1, xe=x2;
+				else x=x2, y=y2, xe=x1, flip=true;
+				draw(x, y, flip);
+				float t_step=1.f/dx1;
+				for(i=0; x<xe; i++) {
+					x++;
+					if(px<0) px+=2*dy1;
+					else {
+						if((dx<0&&dy<0)||(dx>0&&dy>0)) y++;
+						else y--;
+						px+=2*(dy1-dx1);
+					}
+					draw(x, y, flip?1-t_step*i:t_step*i);
+				}
+			} else {
+				bool flip=false;
+				if(dy>=0) x=x1, y=y1, ye=y2;
+				else x=x2, y=y2, ye=y1, flip=true;
+				draw(x, y, flip);
+				float t_step=1.f/dy1;
+				for(i=0; y<ye; i++) {
+					y++;
+					if(py<=0) py+=2*dx1;
+					else {
+						if((dx<0&&dy<0)||(dx>0&&dy>0)) x++;
+						else x--;
+						py+=2*(dx1-dy1);
+					}
+					draw(x, y, flip?1-t_step*i:t_step*i);
+				}
+			}
+		}
+
+		void FillTexturedDepthTriangle(
+			int x1, int y1, float u1, float v1, float w1,
+			int x2, int y2, float u2, float v2, float w2,
+			int x3, int y3, float u3, float v3, float w3,
+			olc::Sprite spr, int id) {}
 	};
 
 	bool Engine3D::OnUserCreate() {
@@ -346,209 +487,6 @@ namespace cmn {
 			while(!line_queue.empty()) {
 				lines_to_draw.push_back(line_queue.top());
 				line_queue.pop();
-			}
-		}
-	}
-
-	void Engine3D::DrawDepthLine(
-		int x1, int y1, float w1,
-		int x2, int y2, float w2,
-		olc::Pixel col, int id
-	) {
-		auto draw=[&] (int i, int j, float t) {
-			if(!inRangeX(i)||!inRangeY(j)) return;
-
-			int k=i+ScreenWidth()*j;
-			float& depth=depth_buffer[k];
-			float w=w1+t*(w2-w1);
-			if(w>depth) {
-				Draw(i, j, col);
-				depth=w;
-				id_buffer[k]=id;
-			}
-		};
-		int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
-		dx=x2-x1; dy=y2-y1;
-		dx1=abs(dx), dy1=abs(dy);
-		px=2*dy1-dx1, py=2*dx1-dy1;
-		if(dy1<=dx1) {
-			bool flip=false;
-			if(dx>=0) x=x1, y=y1, xe=x2;
-			else x=x2, y=y2, xe=x1, flip=true;
-			draw(x, y, flip);
-			float t_step=1.f/dx1;
-			for(i=0; x<xe; i++) {
-				x++;
-				if(px<0) px+=2*dy1;
-				else {
-					if((dx<0&&dy<0)||(dx>0&&dy>0)) y++;
-					else y--;
-					px+=2*(dy1-dx1);
-				}
-				draw(x, y, flip?1-t_step*i:t_step*i);
-			}
-		} else {
-			bool flip=false;
-			if(dy>=0) x=x1, y=y1, ye=y2;
-			else x=x2, y=y2, ye=y1, flip=true;
-			draw(x, y, flip);
-			float t_step=1.f/dy1;
-			for(i=0; y<ye; i++) {
-				y++;
-				if(py<=0) py+=2*dx1;
-				else {
-					if((dx<0&&dy<0)||(dx>0&&dy>0)) x++;
-					else x--;
-					py+=2*(dx1-dy1);
-				}
-				draw(x, y, flip?1-t_step*i:t_step*i);
-			}
-		}
-	}
-
-	void Engine3D::FillDepthTriangle(
-		int x1, int y1, float u1, float v1, float w1,
-		int x2, int y2, float u2, float v2, float w2,
-		int x3, int y3, float u3, float v3, float w3,
-		olc::Pixel col, int id
-	) {
-		//sort by y
-		if(y2<y1) {
-			std::swap(x1, x2);
-			std::swap(y1, y2);
-			std::swap(u1, u2);
-			std::swap(v1, v2);
-			std::swap(w1, w2);
-		}
-		if(y3<y1) {
-			std::swap(x1, x3);
-			std::swap(y1, y3);
-			std::swap(u1, u3);
-			std::swap(v1, v3);
-			std::swap(w1, w3);
-		}
-		if(y3<y2) {
-			std::swap(x2, x3);
-			std::swap(y2, y3);
-			std::swap(u2, u3);
-			std::swap(v2, v3);
-			std::swap(w2, w3);
-		}
-
-		//calculate slopes
-		int dx1=x2-x1;
-		int dy1=y2-y1;
-		float du1=u2-u1;
-		float dv1=v2-v1;
-		float dw1=w2-w1;
-
-		int dx2=x3-x1;
-		int dy2=y3-y1;
-		float du2=u3-u1;
-		float dv2=v3-v1;
-		float dw2=w3-w1;
-
-		float tex_u, tex_v, tex_w;
-
-		float dax_step=0, dbx_step=0,
-			du1_step=0, dv1_step=0,
-			du2_step=0, dv2_step=0,
-			dw1_step=0, dw2_step=0;
-
-		if(dy1) dax_step=dx1/std::fabsf(dy1);
-		if(dy2) dbx_step=dx2/std::fabsf(dy2);
-
-		if(dy1) du1_step=du1/std::fabsf(dy1);
-		if(dy1) dv1_step=dv1/std::fabsf(dy1);
-		if(dy1) dw1_step=dw1/std::fabsf(dy1);
-		if(dy2) du2_step=du2/std::fabsf(dy2);
-		if(dy2) dv2_step=dv2/std::fabsf(dy2);
-		if(dy2) dw2_step=dw2/std::fabsf(dy2);
-
-		//start scanline filling triangles
-		if(dy1) {
-			for(int j=y1; j<=y2; j++) {
-				int ax=x1+dax_step*(j-y1);
-				int bx=x1+dbx_step*(j-y1);
-				float tex_su=u1+du1_step*(j-y1);
-				float tex_sv=v1+dv1_step*(j-y1);
-				float tex_sw=w1+dw1_step*(j-y1);
-				float tex_eu=u1+du2_step*(j-y1);
-				float tex_ev=v1+dv2_step*(j-y1);
-				float tex_ew=w1+dw2_step*(j-y1);
-				//sort along x
-				if(ax>bx) {
-					std::swap(ax, bx);
-					std::swap(tex_su, tex_eu);
-					std::swap(tex_sv, tex_ev);
-					std::swap(tex_sw, tex_ew);
-				}
-				float t_step=1.f/(bx-ax);
-				float t=0;
-				for(int i=ax; i<bx; i++) {
-					tex_u=tex_su+t*(tex_eu-tex_su);
-					tex_v=tex_sv+t*(tex_ev-tex_sv);
-					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					if(inRangeX(i)&&inRangeY(j)) {
-						int k=i+ScreenWidth()*j;
-						float& depth=depth_buffer[k];
-						if(tex_w>depth) {
-							Draw(i, j, col);
-							depth=tex_w;
-							id_buffer[k]=id;
-						}
-					}
-					t+=t_step;
-				}
-			}
-		}
-
-		//recalculate slopes
-		dx1=x3-x2;
-		dy1=y3-y2;
-		du1=u3-u2;
-		dv1=v3-v2;
-		dw1=w3-w2;
-
-		if(dy1) dax_step=dx1/std::fabsf(dy1);
-
-		du1_step=0, dv1_step=0;
-		if(dy1) du1_step=du1/std::fabsf(dy1);
-		if(dy1) dv1_step=dv1/std::fabsf(dy1);
-		if(dy1) dw1_step=dw1/std::fabsf(dy1);
-
-		for(int j=y2; j<=y3; j++) {
-			int ax=x2+dax_step*(j-y2);
-			int bx=x1+dbx_step*(j-y1);
-			float tex_su=u2+du1_step*(j-y2);
-			float tex_sv=v2+dv1_step*(j-y2);
-			float tex_sw=w2+dw1_step*(j-y2);
-			float tex_eu=u1+du2_step*(j-y1);
-			float tex_ev=v1+dv2_step*(j-y1);
-			float tex_ew=w1+dw2_step*(j-y1);
-			//sort along x
-			if(ax>bx) {
-				std::swap(ax, bx);
-				std::swap(tex_su, tex_eu);
-				std::swap(tex_sv, tex_ev);
-				std::swap(tex_sw, tex_ew);
-			}
-			float t_step=1.f/(bx-ax);
-			float t=0;
-			for(int i=ax; i<bx; i++) {
-				tex_u=tex_su+t*(tex_eu-tex_su);
-				tex_v=tex_sv+t*(tex_ev-tex_sv);
-				tex_w=tex_sw+t*(tex_ew-tex_sw);
-				if(inRangeX(i)&&inRangeY(j)) {
-					int k=i+ScreenWidth()*j;
-					float& depth=depth_buffer[k];
-					if(tex_w>depth) {
-						Draw(i, j, col);
-						depth=tex_w;
-						id_buffer[k]=id;
-					}
-				}
-				t+=t_step;
 			}
 		}
 	}

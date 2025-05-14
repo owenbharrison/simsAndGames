@@ -61,7 +61,7 @@ struct Mesh {
 
 	void updateTransforms() {
 		//combine all transforms
-		Mat4 mat_rot=quatToMat4(rotation);
+		Mat4 mat_rot=Quat::toMat4(rotation);
 		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
 		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
 		mat_world=mat_scale*mat_rot*mat_trans;
