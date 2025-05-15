@@ -38,7 +38,7 @@ struct Example : cmn::Engine3D {
 	vf2d rot_start;
 
 	Mesh* scale_mesh=nullptr;
-	vf2d scale_start;
+	vf2d scale_start, scale_ctr;
 	vf3d base_scale;
 
 	//scene stuff
@@ -219,6 +219,10 @@ struct Example : cmn::Engine3D {
 			if(scale_mesh) {
 				scale_start=mouse_pos;
 				base_scale=scale_mesh->scale;
+				vf3d ctr_ndc=scale_mesh->translation*mat_view*mat_proj;
+				ctr_ndc/=ctr_ndc.w;
+				scale_ctr.x=(1-ctr_ndc.x)*ScreenWidth()/2;
+				scale_ctr.y=(1-ctr_ndc.y)*ScreenHeight()/2;
 			}
 		}
 		if(scale_action.bReleased) {
@@ -249,7 +253,7 @@ struct Example : cmn::Engine3D {
 		}
 
 		//update rotated mesh
-		if(rot_mesh&&invVP_avail) {
+		if(rot_mesh) {
 			vf2d b=mouse_pos-rot_start;
 			if(b.mag()>20) {
 				vf2d a=prev_mouse_pos-rot_start;
@@ -265,15 +269,9 @@ struct Example : cmn::Engine3D {
 		}
 
 		//update scaled mesh
-		if(scale_mesh&&invVP_avail) {
-			vf3d ctr_ndc=scale_mesh->translation*mat_view*mat_proj;
-			ctr_ndc/=ctr_ndc.w;
-			vf2d ctr(
-				(1-ctr_ndc.x)*ScreenWidth()/2,
-				(1-ctr_ndc.y)*ScreenHeight()/2
-			);
-			float m2c=(mouse_pos-ctr).mag();
-			float s2c=(scale_start-ctr).mag();
+		if(scale_mesh) {
+			float m2c=(mouse_pos-scale_ctr).mag();
+			float s2c=(scale_start-scale_ctr).mag();
 			//apply scale delta and update
 			scale_mesh->scale=base_scale*m2c/s2c;
 			scale_mesh->updateTransforms();
@@ -414,18 +412,12 @@ struct Example : cmn::Engine3D {
 
 		//draw scale handle
 		if(scale_mesh) {
-			vf3d ctr_ndc=scale_mesh->translation*mat_view*mat_proj;
-			ctr_ndc/=ctr_ndc.w;
-			vf2d ctr(
-				(1-ctr_ndc.x)*ScreenWidth()/2,
-				(1-ctr_ndc.y)*ScreenHeight()/2
-			);
-			float m2c=(mouse_pos-ctr).mag();
-			DrawCircle(ctr, m2c, olc::PURPLE);
-			float s2c=(scale_start-ctr).mag();
-			DrawCircle(ctr, s2c, olc::PURPLE);
-			DrawLine(ctr.x-8, ctr.y, ctr.x+8, ctr.y, olc::YELLOW);
-			DrawLine(ctr.x, ctr.y-8, ctr.x, ctr.y+8, olc::YELLOW);
+			float m2c=(mouse_pos-scale_ctr).mag();
+			DrawCircle(scale_ctr, m2c, olc::PURPLE);
+			float s2c=(scale_start-scale_ctr).mag();
+			DrawCircle(scale_ctr, s2c, olc::PURPLE);
+			DrawLine(scale_ctr.x-8, scale_ctr.y, scale_ctr.x+8, scale_ctr.y, olc::YELLOW);
+			DrawLine(scale_ctr.x, scale_ctr.y-8, scale_ctr.x, scale_ctr.y+8, olc::YELLOW);
 		}
 
 		return true;
