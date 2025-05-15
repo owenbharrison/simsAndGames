@@ -1,8 +1,18 @@
 #include "common/3d/engine_3d.h"
 using olc::vf2d;
+namespace olc {
+	static const Pixel PURPLE(144, 0, 255);
+	static const Pixel ORANGE(255, 115, 0);
+}
 
 #include "mesh.h"
+
 #include "common/utils.h"
+namespace cmn {
+	vf2d polar(float rad, float angle) {
+		return polar_generic<vf2d>(rad, angle);
+	}
+}
 
 struct Example : cmn::Engine3D {
 	Example() {
@@ -19,12 +29,17 @@ struct Example : cmn::Engine3D {
 
 	vf3d mouse_dir;
 
+	//handles and offsets
 	Mesh* trans_mesh=nullptr;
 	vf3d trans_plane;
 	vf2d trans_start;
 
 	Mesh* rot_mesh=nullptr;
 	vf2d rot_start;
+
+	Mesh* scale_mesh=nullptr;
+	vf2d scale_start;
+	vf3d base_scale;
 
 	//scene stuff
 	std::vector<Mesh> meshes;
@@ -78,36 +93,39 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_update(float dt) override {
-		//look up, down
-		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
-		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
+		//cant move while updating
+		if(!trans_mesh&&!rot_mesh&&!scale_mesh) {
+			//look up, down
+			if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
+			if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
+			if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
+			if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
 
-		//look left, right
-		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
-		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+			//look left, right
+			if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
+			if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
 
-		//polar to cartesian
-		cam_dir=vf3d(
-			std::cosf(cam_yaw)*std::cosf(cam_pitch),
-			std::sinf(cam_pitch),
-			std::sinf(cam_yaw)*std::cosf(cam_pitch)
-		);
+			//polar to cartesian
+			cam_dir=vf3d(
+				std::cosf(cam_yaw)*std::cosf(cam_pitch),
+				std::sinf(cam_pitch),
+				std::sinf(cam_yaw)*std::cosf(cam_pitch)
+			);
 		
-		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+			//move up, down
+			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
-		//move forward, backward
-		vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+			//move forward, backward
+			vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+			//move left, right
+			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+		}
 
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
@@ -184,6 +202,29 @@ struct Example : cmn::Engine3D {
 			rot_mesh=nullptr;
 		}
 
+		const auto scale_action=GetMouse(olc::Mouse::MIDDLE);
+		if(scale_action.bPressed) {
+			//get closest mesh
+			float record=-1;
+			scale_mesh=nullptr;
+			for(auto& m:meshes) {
+				float dist=m.intersectRay(cam_pos, mouse_dir);
+				if(dist>0) {
+					if(record<0||dist<record) {
+						record=dist;
+						scale_mesh=&m;
+					}
+				}
+			}
+			if(scale_mesh) {
+				scale_start=mouse_pos;
+				base_scale=scale_mesh->scale;
+			}
+		}
+		if(scale_action.bReleased) {
+			scale_mesh=nullptr;
+		}
+
 		//update translated mesh
 		if(trans_mesh&&invVP_avail) {
 			//project screen ray onto translation plane
@@ -223,10 +264,25 @@ struct Example : cmn::Engine3D {
 			}
 		}
 
+		//update scaled mesh
+		if(scale_mesh&&invVP_avail) {
+			vf3d ctr_ndc=scale_mesh->translation*mat_view*mat_proj;
+			ctr_ndc/=ctr_ndc.w;
+			vf2d ctr(
+				(1-ctr_ndc.x)*ScreenWidth()/2,
+				(1-ctr_ndc.y)*ScreenHeight()/2
+			);
+			float m2c=(mouse_pos-ctr).mag();
+			float s2c=(scale_start-ctr).mag();
+			//apply scale delta and update
+			scale_mesh->scale=base_scale*m2c/s2c;
+			scale_mesh->updateTransforms();
+			scale_mesh->applyTransforms();
+			scale_mesh->colorNormals();
+		}
+
 		return true;
 	}
-
-	float thing_timer=0;
 
 	void addAABB(const AABB3& box, const olc::Pixel& col) {
 		//corner vertexes
@@ -285,8 +341,9 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_render() override {
-		Clear(olc::Pixel(100, 100, 100));
+		Clear(olc::Pixel(150, 150, 150));
 
+		//render 3d stuff
 		resetBuffers();
 
 		for(const auto& t:tris_to_draw) {
@@ -306,35 +363,27 @@ struct Example : cmn::Engine3D {
 			);
 		}
 
-		//rot mesh edge detection
-		if(rot_mesh) {
-			int id=rot_mesh->id;
-			for(int i=1; i<ScreenWidth()-1; i++) {
-				for(int j=1; j<ScreenHeight()-1; j++) {
-					bool curr=id_buffer[i+ScreenWidth()*j]==id;
-					bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
-					bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
-					bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
-					bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
-					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
-						Draw(i, j, olc::BLACK);
-					}
-				}
+		//selected mesh edge detection
+		for(int k=0; k<3; k++) {
+			Mesh* select=nullptr;
+			olc::Pixel col;
+			switch(k) {
+				case 0: select=trans_mesh, col=olc::ORANGE; break;
+				case 1: select=rot_mesh, col=olc::RED; break;
+				case 2: select=scale_mesh, col=olc::YELLOW; break;
 			}
-		}
-
-		//trans mesh edge detection
-		if(trans_mesh) {
-			int id=trans_mesh->id;
-			for(int i=1; i<ScreenWidth()-1; i++) {
-				for(int j=1; j<ScreenHeight()-1; j++) {
-					bool curr=id_buffer[i+ScreenWidth()*j]==id;
-					bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
-					bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
-					bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
-					bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
-					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
-						Draw(i, j, olc::BLACK);
+			if(select) {
+				int id=select->id;
+				for(int i=1; i<ScreenWidth()-1; i++) {
+					for(int j=1; j<ScreenHeight()-1; j++) {
+						bool curr=id_buffer[i+ScreenWidth()*j]==id;
+						bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
+						bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
+						bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
+						bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
+						if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
+							Draw(i, j, col);
+						}
 					}
 				}
 			}
@@ -343,17 +392,40 @@ struct Example : cmn::Engine3D {
 		//draw translation handle
 		if(trans_mesh) {
 			DrawLine(trans_start, mouse_pos, olc::BLUE);
-			DrawLine(trans_start.x-8, trans_start.y, trans_start.x+8, trans_start.y, olc::GREEN);
-			DrawLine(trans_start.x, trans_start.y-8, trans_start.x, trans_start.y+8, olc::GREEN);
+			DrawLine(trans_start.x-8, trans_start.y, trans_start.x+8, trans_start.y, olc::ORANGE);
+			DrawLine(trans_start.x, trans_start.y-8, trans_start.x, trans_start.y+8, olc::ORANGE);
 		}
 
 		//draw rotation handle
 		if(rot_mesh) {
-			float dist=(mouse_pos-rot_start).mag();
+			vf2d sub=mouse_pos-rot_start;
+			float dist=sub.mag();
 			float rad=std::max(20.f, dist);
-			DrawCircle(rot_start, rad, olc::YELLOW);
+			float angle=std::atan2f(sub.y, sub.x);
+			vf2d a=rot_start+cmn::polar(rad, angle);
+			vf2d b=rot_start+cmn::polar(rad, angle+.667f*cmn::Pi);
+			vf2d c=rot_start+cmn::polar(rad, angle+1.33f*cmn::Pi);
+			DrawLine(a, b, olc::GREEN);
+			DrawLine(b, c, olc::GREEN);
+			DrawLine(c, a, olc::GREEN);
 			DrawLine(rot_start.x-8, rot_start.y, rot_start.x+8, rot_start.y, olc::RED);
 			DrawLine(rot_start.x, rot_start.y-8, rot_start.x, rot_start.y+8, olc::RED);
+		}
+
+		//draw scale handle
+		if(scale_mesh) {
+			vf3d ctr_ndc=scale_mesh->translation*mat_view*mat_proj;
+			ctr_ndc/=ctr_ndc.w;
+			vf2d ctr(
+				(1-ctr_ndc.x)*ScreenWidth()/2,
+				(1-ctr_ndc.y)*ScreenHeight()/2
+			);
+			float m2c=(mouse_pos-ctr).mag();
+			DrawCircle(ctr, m2c, olc::PURPLE);
+			float s2c=(scale_start-ctr).mag();
+			DrawCircle(ctr, s2c, olc::PURPLE);
+			DrawLine(ctr.x-8, ctr.y, ctr.x+8, ctr.y, olc::YELLOW);
+			DrawLine(ctr.x, ctr.y-8, ctr.x, ctr.y+8, olc::YELLOW);
 		}
 
 		return true;
