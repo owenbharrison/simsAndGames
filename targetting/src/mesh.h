@@ -97,10 +97,9 @@ struct Mesh {
 
 	void colorNormals() {
 		for(auto& t:tris) {
-			vf3d norm=t.getNorm();
-			t.col.r=128+127*norm.x;
-			t.col.g=128+127*norm.y;
-			t.col.b=128+127*norm.z;
+			vf3d norm=t.getNorm(), rgb=.5f+.5f*norm;
+			float l=std::max(rgb.x, std::max(rgb.y, rgb.z));
+			t.col=olc::PixelF(rgb.x/l, rgb.y/l, rgb.z/l);
 		}
 	}
 
