@@ -86,6 +86,7 @@ struct VoxelGame : olc::PixelGameEngine {
 	vf3d gravity{0, -1, 0};
 
 	bool player_camera=false;
+	bool third_person=false;
 	vf3d player_pos;
 	vf3d player_vel;
 	const float player_rad=.1f;
@@ -111,7 +112,6 @@ struct VoxelGame : olc::PixelGameEngine {
 			model=Mesh::loadFromOBJ("assets/models/mountains.txt");
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
-
 			return false;
 		}
 
@@ -215,6 +215,7 @@ struct VoxelGame : olc::PixelGameEngine {
 				"  P        add particle\n"
 				"  L        set light pos\n"
 				"  C        toggle player camera\n"
+				"  F        toggle third person\n"
 				"  O        toggle outlines\n"
 				"  G        toggle grid\n"
 				"  N        toggle normals\n"
@@ -311,6 +312,9 @@ struct VoxelGame : olc::PixelGameEngine {
 
 			//player pos is at feet, so offset camera to head
 			cam_pos=player_pos+vf3d(0, player_height, 0);
+			if(third_person) {
+				cam_pos-=.5f*cam_dir;
+			}
 		} else {
 			//move up, down
 			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
@@ -351,6 +355,7 @@ struct VoxelGame : olc::PixelGameEngine {
 		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
 		if(GetKey(olc::Key::R).bPressed) show_render^=true;
 		if(GetKey(olc::Key::B).bPressed) show_depth^=true;
+		if(GetKey(olc::Key::F).bPressed) third_person^=true;
 
 		//mouse painting?
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
@@ -468,6 +473,33 @@ struct VoxelGame : olc::PixelGameEngine {
 			tris_to_project.push_back(f1);
 			Triangle f2{tl, bl, br}; f2.col=p.col;
 			tris_to_project.push_back(f2);
+		}
+
+		if(third_person) {
+			AABB3 box{
+				player_pos-player_rad,
+				player_pos+player_rad+vf3d(0, player_height, 0)
+			};
+			vf3d v0=box.min, v7=box.max;
+			vf3d v1(v7.x, v0.y, v0.z);
+			vf3d v2(v0.x, v7.y, v0.z);
+			vf3d v3(v7.x, v7.y, v0.z);
+			vf3d v4(v0.x, v0.y, v7.z);
+			vf3d v5(v7.x, v0.y, v7.z);
+			vf3d v6(v0.x, v7.y, v7.z);
+			tris_to_project.push_back({v0, v1, v4});
+			tris_to_project.push_back({v1, v5, v4});
+			tris_to_project.push_back({v0, v2, v1});
+			tris_to_project.push_back({v2, v3, v1});
+			tris_to_project.push_back({v1, v3, v7});
+			tris_to_project.push_back({v1, v7, v5});
+			tris_to_project.push_back({v5, v7, v6});
+			tris_to_project.push_back({v5, v6, v4});
+			tris_to_project.push_back({v0, v6, v2});
+			tris_to_project.push_back({v0, v4, v6});
+			tris_to_project.push_back({v2, v7, v3});
+			tris_to_project.push_back({v2, v6, v7});
+			tris_to_project.push_back({v0, v1, v2});
 		}
 
 		//add blender-like viewport camera "frustum" lines
