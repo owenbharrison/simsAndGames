@@ -22,9 +22,9 @@ struct Example : cmn::Engine3D {
 	float rot_x=0, rot_y=0, rot_z=0;
 	bool to_spin=true;
 	
-	bool fill_triangles=true;
 	bool offset_meshes=true;
 	bool show_bounds=false;
+	bool fill_triangles=true;
 
 	bool user_create() override {
 		cam_pos={0, 0, 2};
@@ -37,10 +37,78 @@ struct Example : cmn::Engine3D {
 			return false;
 		}
 
+		std::cout<<"Press ESC for integrated console.\n"
+			"  then type help for help.\n";
+		ConsoleCaptureStdOut(true);
+
 		return true;
 	}
 
-	bool user_update(float dt) override {
+	bool OnConsoleCommand(const std::string& line) override {
+		std::stringstream line_str(line);
+		std::string cmd; line_str>>cmd;
+
+		if(cmd=="clear") {
+			ConsoleClear();
+
+			return true;
+		}
+
+		if(cmd=="import") {
+			std::string filename;
+			line_str>>filename;
+			if(filename.empty()) {
+				std::cout<<"no filename. try using:\n  import <filename>\n";
+
+				return false;
+			}
+			
+			//try load model
+			Mesh m;
+			try {
+				m=Mesh::loadFromOBJ(filename);
+			} catch(const std::exception& e) {
+				std::cout<<"  "<<e.what()<<'\n';
+				return false;
+			}
+			mesh=m;
+
+			std::cout<<"  successfully loaded mesh w/ "<<mesh.tris.size()<<"tris\n";
+
+			return true;
+		}
+
+		if(cmd=="keybinds") {
+			std::cout<<
+				"  ARROWS   look up, down, left, right\n"
+				"  WASD     move forward, back, left, right\n"
+				"  SPACE    move up\n"
+				"  SHIFT    move down\n"
+				"  L        set light pos\n"
+				"  ENTER    toggle spinning\n"
+				"  O        toggle offset view\n"
+				"  B        toggle bounds view\n"
+				"  F        toggle triangle fill\n"
+				"  ESC      toggle integrated console\n";
+
+			return true;
+		}
+
+		if(cmd=="help") {
+			std::cout<<
+				"  clear        clears the console\n"
+				"  import       import mesh from file\n"
+				"  keybinds     which keys to press for this program?\n";
+
+			return true;
+		}
+
+		std::cout<<"unknown command. type help for list of commands.\n";
+
+		return false;
+	}
+
+	void handleUserInput(float dt) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
 		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
@@ -74,12 +142,20 @@ struct Example : cmn::Engine3D {
 
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
-		
+
 		//debug toggles
 		if(GetKey(olc::Key::ENTER).bPressed) to_spin^=true;
-		if(GetKey(olc::Key::F).bPressed) fill_triangles^=true;
 		if(GetKey(olc::Key::O).bPressed) offset_meshes^=true;
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		if(GetKey(olc::Key::F).bPressed) fill_triangles^=true;
+	}
+
+	bool user_update(float dt) override {
+		//open and close the integrated console
+		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
+
+		//only allow input when console NOT open
+		if(!IsConsoleShowing()) handleUserInput(dt);
 
 		if(to_spin) {
 			rot_x+=.3f*dt;
@@ -139,8 +215,8 @@ struct Example : cmn::Engine3D {
 				neg.tris.begin(), neg.tris.end()
 			);
 			if(show_bounds) {
-				addAABB(pos.getAABB(), olc::PURPLE);
-				addAABB(neg.getAABB(), olc::ORANGE);
+				addAABB(pos.getAABB(), olc::ORANGE);
+				addAABB(neg.getAABB(), olc::PURPLE);
 			}
 		}
 
