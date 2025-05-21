@@ -152,7 +152,8 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\bunny.txt" />
-    <Text Include="assets\suzanne.txt" />
+    <Text Include="assets\cube.txt" />
+    <Text Include="assets\dragon.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

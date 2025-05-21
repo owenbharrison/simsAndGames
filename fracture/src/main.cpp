@@ -1,4 +1,8 @@
 #include "common/3d/engine_3d.h"
+namespace olc {
+	static const Pixel PURPLE(144, 0, 255);
+	static const Pixel ORANGE(255, 115, 0);
+}
 
 #include "mesh.h"
 
@@ -18,7 +22,9 @@ struct Example : cmn::Engine3D {
 	float rot_x=0, rot_y=0, rot_z=0;
 	bool to_spin=true;
 	
-	bool show_outlines=false;
+	bool fill_triangles=true;
+	bool offset_meshes=true;
+	bool show_bounds=false;
 
 	bool user_create() override {
 		cam_pos={0, 0, 2};
@@ -69,9 +75,11 @@ struct Example : cmn::Engine3D {
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 		
+		//debug toggles
 		if(GetKey(olc::Key::ENTER).bPressed) to_spin^=true;
-		
-		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
+		if(GetKey(olc::Key::F).bPressed) fill_triangles^=true;
+		if(GetKey(olc::Key::O).bPressed) offset_meshes^=true;
+		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 
 		if(to_spin) {
 			rot_x+=.3f*dt;
@@ -80,6 +88,32 @@ struct Example : cmn::Engine3D {
 		}
 
 		return true;
+	}
+
+	void addAABB(const AABB3& box, const olc::Pixel& col) {
+		//corner vertexes
+		const vf3d& v0=box.min, & v7=box.max;
+		vf3d v1(v7.x, v0.y, v0.z);
+		vf3d v2(v0.x, v7.y, v0.z);
+		vf3d v3(v7.x, v7.y, v0.z);
+		vf3d v4(v0.x, v0.y, v7.z);
+		vf3d v5(v7.x, v0.y, v7.z);
+		vf3d v6(v0.x, v7.y, v7.z);
+		//bottom
+		Line l1{v0, v1}; l1.col=col; lines_to_project.push_back(l1);
+		Line l2{v1, v3}; l2.col=col; lines_to_project.push_back(l2);
+		Line l3{v3, v2}; l3.col=col; lines_to_project.push_back(l3);
+		Line l4{v2, v0}; l4.col=col; lines_to_project.push_back(l4);
+		//sides
+		Line l5{v0, v4}; l5.col=col; lines_to_project.push_back(l5);
+		Line l6{v1, v5}; l6.col=col; lines_to_project.push_back(l6);
+		Line l7{v2, v6}; l7.col=col; lines_to_project.push_back(l7);
+		Line l8{v3, v7}; l8.col=col; lines_to_project.push_back(l8);
+		//top
+		Line l9{v4, v5}; l9.col=col; lines_to_project.push_back(l9);
+		Line l10{v5, v7}; l10.col=col; lines_to_project.push_back(l10);
+		Line l11{v7, v6}; l11.col=col; lines_to_project.push_back(l11);
+		Line l12{v6, v4}; l12.col=col; lines_to_project.push_back(l12);
 	}
 
 	bool user_geometry() override {
@@ -91,14 +125,23 @@ struct Example : cmn::Engine3D {
 		norm=norm*mat_x*mat_y*mat_z;
 		Mesh pos, neg;
 		if(mesh.splitByPlane({0, 0, 0}, norm, pos, neg)) {
-			pos.color(olc::BLUE);
+			if(offset_meshes) {
+				vf3d offset=.075f*norm;
+				for(auto& v:pos.verts) v+=offset;
+				pos.triangulate();
+				for(auto& v:neg.verts) v-=offset;
+				neg.triangulate();
+			}
 			tris_to_project.insert(tris_to_project.end(),
 				pos.tris.begin(), pos.tris.end()
 			);
-			neg.color(olc::GREEN);
 			tris_to_project.insert(tris_to_project.end(),
 				neg.tris.begin(), neg.tris.end()
 			);
+			if(show_bounds) {
+				addAABB(pos.getAABB(), olc::PURPLE);
+				addAABB(neg.getAABB(), olc::ORANGE);
+			}
 		}
 
 		//show split plane
@@ -120,7 +163,7 @@ struct Example : cmn::Engine3D {
 			lines_to_project.push_back(l5);
 		}
 
-		if(show_outlines) {
+		if(!fill_triangles) {
 			for(const auto& t:tris_to_project) {
 				Line l1{t.p[0], t.p[1]}; l1.col=t.col;
 				lines_to_project.push_back(l1);
@@ -136,7 +179,7 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_render() override {
-		Clear(olc::DARK_GREY);
+		Clear(olc::BLACK);
 
 		//render 3d stuff
 		resetBuffers();
