@@ -88,6 +88,10 @@ struct Cloth3DUI : cmn::Engine3D {
 			for(int j=0; j<height; j++) {
 				if(i>0) springs.emplace_back(&grid[ix(i, j)], &grid[ix(i-1, j)], k, d);
 				if(j>0) springs.emplace_back(&grid[ix(i, j)], &grid[ix(i, j-1)], k, d);
+				if(i>0&&j>0) {
+					springs.emplace_back(&grid[ix(i-1, j-1)], &grid[ix(i, j)], k, d);
+					springs.emplace_back(&grid[ix(i-1, j)], &grid[ix(i, j-1)], k, d);
+				}
 			}
 		}
 
@@ -407,7 +411,7 @@ struct Cloth3DUI : cmn::Engine3D {
 
 int main() {
 	Cloth3DUI c3dui;
-	if(c3dui.Construct(480, 480, 1, 1, false, true)) c3dui.Start();
+	if(c3dui.Construct(480, 360, 1, 1, false, true)) c3dui.Start();
 
 	return 0;
 }
