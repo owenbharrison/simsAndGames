@@ -148,11 +148,13 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\constraint.h" />
-    <ClInclude Include="src\particle.h" />
-    <ClInclude Include="src\spring.h" />
+    <ClInclude Include="src\phys\constraint.h" />
+    <ClInclude Include="src\perlin_noise.h" />
+    <ClInclude Include="src\phys\particle.h" />
+    <ClInclude Include="src\phys\spring.h" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\flag.png" />
     <Image Include="assets\gradient.png" />
     <Image Include="assets\gradient_1.png" />
     <Image Include="assets\gradient_2.png" />

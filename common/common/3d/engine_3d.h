@@ -254,7 +254,7 @@ namespace cmn {
 			int x1, int y1, float u1, float v1, float w1,
 			int x2, int y2, float u2, float v2, float w2,
 			int x3, int y3, float u3, float v3, float w3,
-			olc::Sprite spr, int id
+			olc::Sprite* spr, olc::Pixel tint, int id
 		) {
 			//sort by y
 			if(y2<y1) {
@@ -327,7 +327,7 @@ namespace cmn {
 							int k=i+ScreenWidth()*j;
 							float& depth=depth_buffer[k];
 							if(tex_w>depth) {
-								Draw(i, j, spr.Sample(tex_u/tex_w, tex_v/tex_w));
+								Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
 								depth=tex_w;
 								id_buffer[k]=id;
 							}
@@ -377,7 +377,7 @@ namespace cmn {
 						int k=i+ScreenWidth()*j;
 						float& depth=depth_buffer[k];
 						if(tex_w>depth) {
-							Draw(i, j, spr.Sample(tex_u/tex_w, tex_v/tex_w));
+							Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
 							depth=tex_w;
 							id_buffer[k]=id;
 						}

@@ -26,8 +26,8 @@ struct Spring {
 		float spring_force=stiffness*(curr_len-rest_len);
 
 		//thanks gonkee
-		vf3d a_vel=a->pos-a->oldpos;
-		vf3d b_vel=b->pos-b->oldpos;
+		vf3d a_vel=a->pos-a->old_pos;
+		vf3d b_vel=b->pos-b->old_pos;
 		vf3d norm=sub/curr_len;
 		float damp_force=damping*norm.dot(b_vel-a_vel);
 
