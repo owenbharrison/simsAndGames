@@ -51,6 +51,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3d_builder", "3d_builder\3d
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fracture", "fracture\fracture.vcxproj", "{134F8EC1-508E-4C94-9674-D6B9541D387A}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3d_physics", "3d_physics\3d_physics.vcxproj", "{D1742974-008D-4184-B895-DB5C4E89DEAC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -251,6 +253,14 @@ Global
 		{134F8EC1-508E-4C94-9674-D6B9541D387A}.Release|x64.Build.0 = Release|x64
 		{134F8EC1-508E-4C94-9674-D6B9541D387A}.Release|x86.ActiveCfg = Release|Win32
 		{134F8EC1-508E-4C94-9674-D6B9541D387A}.Release|x86.Build.0 = Release|Win32
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Debug|x64.ActiveCfg = Debug|x64
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Debug|x64.Build.0 = Debug|x64
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Debug|x86.ActiveCfg = Debug|Win32
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Debug|x86.Build.0 = Debug|Win32
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Release|x64.ActiveCfg = Release|x64
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Release|x64.Build.0 = Release|x64
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Release|x86.ActiveCfg = Release|Win32
+		{D1742974-008D-4184-B895-DB5C4E89DEAC}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
