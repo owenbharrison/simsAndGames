@@ -9,16 +9,6 @@
 
 #include "mat4.h"
 
-//vector-matrix multiplication
-vf3d operator*(const vf3d& v, const Mat4& m) {
-	vf3d r;
-	r.x=v.x*m.v[0][0]+v.y*m.v[1][0]+v.z*m.v[2][0]+v.w*m.v[3][0];
-	r.y=v.x*m.v[0][1]+v.y*m.v[1][1]+v.z*m.v[2][1]+v.w*m.v[3][1];
-	r.z=v.x*m.v[0][2]+v.y*m.v[1][2]+v.z*m.v[2][2]+v.w*m.v[3][2];
-	r.w=v.x*m.v[0][3]+v.y*m.v[1][3]+v.z*m.v[2][3]+v.w*m.v[3][3];
-	return r;
-}
-
 #include "v2d.h"
 
 #include "triangle.h"
@@ -74,6 +64,44 @@ namespace cmn {
 		virtual bool user_geometry()=0;
 
 		virtual bool user_render()=0;
+
+		void addAABB(const AABB3& box, const olc::Pixel& col) {
+			//corner vertexes
+			vf3d v0=box.min, v7=box.max;
+			vf3d v1(v7.x, v0.y, v0.z);
+			vf3d v2(v0.x, v7.y, v0.z);
+			vf3d v3(v7.x, v7.y, v0.z);
+			vf3d v4(v0.x, v0.y, v7.z);
+			vf3d v5(v7.x, v0.y, v7.z);
+			vf3d v6(v0.x, v7.y, v7.z);
+			//bottom
+			Line l1{v0, v1}; l1.col=col;
+			lines_to_project.push_back(l1);
+			Line l2{v1, v3}; l2.col=col;
+			lines_to_project.push_back(l2);
+			Line l3{v3, v2}; l3.col=col;
+			lines_to_project.push_back(l3);
+			Line l4{v2, v0}; l4.col=col;
+			lines_to_project.push_back(l4);
+			//sides
+			Line l5{v0, v4}; l5.col=col;
+			lines_to_project.push_back(l5);
+			Line l6{v1, v5}; l6.col=col;
+			lines_to_project.push_back(l6);
+			Line l7{v2, v6}; l7.col=col;
+			lines_to_project.push_back(l7);
+			Line l8{v3, v7}; l8.col=col;
+			lines_to_project.push_back(l8);
+			//top
+			Line l9{v4, v5}; l9.col=col;
+			lines_to_project.push_back(l9);
+			Line l10{v5, v7}; l10.col=col;
+			lines_to_project.push_back(l10);
+			Line l11{v7, v6}; l11.col=col;
+			lines_to_project.push_back(l11);
+			Line l12{v6, v4}; l12.col=col;
+			lines_to_project.push_back(l12);
+		}
 
 		void resetBuffers() {
 			for(int i=0; i<ScreenWidth()*ScreenHeight(); i++) {
