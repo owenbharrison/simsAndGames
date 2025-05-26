@@ -39,7 +39,7 @@ public:
 	Chunk* back=nullptr, * front=nullptr;//z
 	ChunkCoord coord;
 
-	std::vector<Triangle> triangles;
+	std::vector<cmn::Triangle> triangles;
 
 	Chunk() {
 		blocks=new bool[size];

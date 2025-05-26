@@ -1,5 +1,7 @@
 #include "common/3d/engine_3d.h"
 using olc::vf2d;
+using cmn::vf3d;
+using cmn::Mat4;
 
 constexpr float Pi=3.1415927f;
 
@@ -290,45 +292,6 @@ struct Cloth3DUI : cmn::Engine3D {
 		return true;
 	}
 
-#pragma region GEOMETRY HELPERS
-	void addAABB(const AABB3& box, const olc::Pixel& col) {
-		//corner vertexes
-		const vf3d& v0=box.min, & v7=box.max;
-		vf3d v1(v7.x, v0.y, v0.z);
-		vf3d v2(v0.x, v7.y, v0.z);
-		vf3d v3(v7.x, v7.y, v0.z);
-		vf3d v4(v0.x, v0.y, v7.z);
-		vf3d v5(v7.x, v0.y, v7.z);
-		vf3d v6(v0.x, v7.y, v7.z);
-		//bottom
-		Line l1{v0, v1}; l1.col=col;
-		lines_to_project.push_back(l1);
-		Line l2{v1, v3}; l2.col=col;
-		lines_to_project.push_back(l2);
-		Line l3{v3, v2}; l3.col=col;
-		lines_to_project.push_back(l3);
-		Line l4{v2, v0}; l4.col=col;
-		lines_to_project.push_back(l4);
-		//sides
-		Line l5{v0, v4}; l5.col=col;
-		lines_to_project.push_back(l5);
-		Line l6{v1, v5}; l6.col=col;
-		lines_to_project.push_back(l6);
-		Line l7{v2, v6}; l7.col=col;
-		lines_to_project.push_back(l7);
-		Line l8{v3, v7}; l8.col=col;
-		lines_to_project.push_back(l8);
-		//top
-		Line l9{v4, v5}; l9.col=col;
-		lines_to_project.push_back(l9);
-		Line l10{v5, v7}; l10.col=col;
-		lines_to_project.push_back(l10);
-		Line l11{v7, v6}; l11.col=col;
-		lines_to_project.push_back(l11);
-		Line l12{v6, v4}; l12.col=col;
-		lines_to_project.push_back(l12);
-	}
-
 	olc::Pixel sampleGradient(float u) const {
 		switch(gradient_to_use) {
 			case 0: return gradient1_spr->Sample(u, 0);
@@ -337,13 +300,12 @@ struct Cloth3DUI : cmn::Engine3D {
 		}
 		return olc::BLACK;
 	}
-#pragma endregion
 
 	bool user_geometry() override {
 		//realize surface
 		for(const auto& pt:surface) {
 			//twofaced to prevent culling
-			Triangle t{
+			cmn::Triangle t{
 				grid[pt.a].pos, grid[pt.b].pos, grid[pt.c].pos,
 				grid[pt.a].uv, grid[pt.b].uv, grid[pt.c].uv
 			};
@@ -364,7 +326,7 @@ struct Cloth3DUI : cmn::Engine3D {
 
 			//add all lines
 			for(const auto& s:springs) {
-				Line l{s.a->pos, s.b->pos};
+				cmn::Line l{s.a->pos, s.b->pos};
 				float u=std::fabsf(s.strain)/max_strain;
 				l.col=sampleGradient(u);
 				lines_to_project.push_back(l);
@@ -373,7 +335,7 @@ struct Cloth3DUI : cmn::Engine3D {
 
 		//show cloth bounds
 		if(show_bounds) {
-			AABB3 box;
+			cmn::AABB3 box;
 			for(int i=0; i<length*height; i++) {
 				box.fitToEnclose(grid[i].pos);
 			}

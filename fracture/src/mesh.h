@@ -48,13 +48,13 @@ struct EdgeEqual {
 struct Mesh {
 	std::vector<vf3d> verts;
 	std::vector<IndexTriangle> index_tris;
-	std::vector<Triangle> tris;
+	std::vector<cmn::Triangle> tris;
 	int id=-1;
 
 	void triangulate() {
 		tris.clear();
 		for(const auto& it:index_tris) {
-			Triangle t{
+			cmn::Triangle t{
 				verts[it.x],
 				verts[it.y],
 				verts[it.z]
@@ -63,8 +63,8 @@ struct Mesh {
 		}
 	}
 
-	AABB3 getAABB() const {
-		AABB3 box;
+	cmn::AABB3 getAABB() const {
+		cmn::AABB3 box;
 		for(const auto& t:tris) {
 			for(int i=0; i<3; i++) {
 				box.fitToEnclose(t.p[i]);

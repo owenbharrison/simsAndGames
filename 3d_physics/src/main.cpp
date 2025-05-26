@@ -1,5 +1,7 @@
 #include "common/3d/engine_3d.h"
 using olc::vf2d;
+using cmn::vf3d;
+using cmn::Mat4;
 
 constexpr float Pi=3.1415927f;
 
@@ -12,8 +14,8 @@ vf3d projectOntoPlane(const vf3d& v, const vf3d& norm) {
 
 #include "shape.h"
 
-struct Example : cmn::Engine3D {
-	Example() {
+struct Physics3DUI : cmn::Engine3D {
+	Physics3DUI() {
 		sAppName="3d physics";
 	}
 
@@ -111,37 +113,11 @@ struct Example : cmn::Engine3D {
 		return true;
 	}
 
-	void addAABB(const AABB3& box, const olc::Pixel& col) {
-		//corner vertexes
-		const vf3d& v0=box.min, & v7=box.max;
-		vf3d v1(v7.x, v0.y, v0.z);
-		vf3d v2(v0.x, v7.y, v0.z);
-		vf3d v3(v7.x, v7.y, v0.z);
-		vf3d v4(v0.x, v0.y, v7.z);
-		vf3d v5(v7.x, v0.y, v7.z);
-		vf3d v6(v0.x, v7.y, v7.z);
-		//bottom
-		Line l1{v0, v1}; l1.col=col; lines_to_project.push_back(l1);
-		Line l2{v1, v3}; l2.col=col; lines_to_project.push_back(l2);
-		Line l3{v3, v2}; l3.col=col; lines_to_project.push_back(l3);
-		Line l4{v2, v0}; l4.col=col; lines_to_project.push_back(l4);
-		//sides
-		Line l5{v0, v4}; l5.col=col; lines_to_project.push_back(l5);
-		Line l6{v1, v5}; l6.col=col; lines_to_project.push_back(l6);
-		Line l7{v2, v6}; l7.col=col; lines_to_project.push_back(l7);
-		Line l8{v3, v7}; l8.col=col; lines_to_project.push_back(l8);
-		//top
-		Line l9{v4, v5}; l9.col=col; lines_to_project.push_back(l9);
-		Line l10{v5, v7}; l10.col=col; lines_to_project.push_back(l10);
-		Line l11{v7, v6}; l11.col=col; lines_to_project.push_back(l11);
-		Line l12{v6, v4}; l12.col=col; lines_to_project.push_back(l12);
-	}
-
 	//combine all scene geometry
 	bool user_geometry() override {
 		for(const auto& s:shapes) {
 			for(const auto& it:s.index_tris) {
-				Triangle t{
+				cmn::Triangle t{
 					s.particles[it.a].pos,
 					s.particles[it.b].pos,
 					s.particles[it.c].pos
@@ -186,9 +162,9 @@ struct Example : cmn::Engine3D {
 };
 
 int main() {
-	Example e;
+	Physics3DUI p3dui;
 	bool vsync=true;
-	if(e.Construct(540, 360, 1, 1, false, vsync)) e.Start();
+	if(p3dui.Construct(540, 360, 1, 1, false, vsync)) p3dui.Start();
 
 	return 0;
 }

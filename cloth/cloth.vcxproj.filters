@@ -23,9 +23,6 @@
     <ClInclude Include="src\phys\particle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\phys\constraint.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\phys\spring.h">
       <Filter>Header Files</Filter>
     </ClInclude>

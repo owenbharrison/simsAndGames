@@ -148,7 +148,6 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\phys\constraint.h" />
     <ClInclude Include="src\perlin_noise.h" />
     <ClInclude Include="src\phys\particle.h" />
     <ClInclude Include="src\phys\spring.h" />

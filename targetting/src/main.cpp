@@ -4,6 +4,8 @@ namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
 	static const Pixel ORANGE(255, 115, 0);
 }
+using cmn::vf3d;
+using cmn::Mat4;
 
 #include "mesh.h"
 
@@ -280,44 +282,6 @@ struct Example : cmn::Engine3D {
 		}
 
 		return true;
-	}
-
-	void addAABB(const AABB3& box, const olc::Pixel& col) {
-		//corner vertexes
-		const vf3d& v0=box.min, & v7=box.max;
-		vf3d v1(v7.x, v0.y, v0.z);
-		vf3d v2(v0.x, v7.y, v0.z);
-		vf3d v3(v7.x, v7.y, v0.z);
-		vf3d v4(v0.x, v0.y, v7.z);
-		vf3d v5(v7.x, v0.y, v7.z);
-		vf3d v6(v0.x, v7.y, v7.z);
-		//bottom
-		Line l1{v0, v1}; l1.col=col;
-		lines_to_project.push_back(l1);
-		Line l2{v1, v3}; l2.col=col;
-		lines_to_project.push_back(l2);
-		Line l3{v3, v2}; l3.col=col;
-		lines_to_project.push_back(l3);
-		Line l4{v2, v0}; l4.col=col;
-		lines_to_project.push_back(l4);
-		//sides
-		Line l5{v0, v4}; l5.col=col;
-		lines_to_project.push_back(l5);
-		Line l6{v1, v5}; l6.col=col;
-		lines_to_project.push_back(l6);
-		Line l7{v2, v6}; l7.col=col;
-		lines_to_project.push_back(l7);
-		Line l8{v3, v7}; l8.col=col;
-		lines_to_project.push_back(l8);
-		//top
-		Line l9{v4, v5}; l9.col=col;
-		lines_to_project.push_back(l9);
-		Line l10{v5, v7}; l10.col=col;
-		lines_to_project.push_back(l10);
-		Line l11{v7, v6}; l11.col=col;
-		lines_to_project.push_back(l11);
-		Line l12{v6, v4}; l12.col=col;
-		lines_to_project.push_back(l12);
 	}
 
 	bool user_geometry() override {

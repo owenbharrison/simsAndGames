@@ -5,7 +5,7 @@
 struct Particle {
 	vf3d pos, old_pos, acc;
 	bool locked=false;
-	v2d uv;
+	cmn::v2d uv;
 
 	Particle() {}
 

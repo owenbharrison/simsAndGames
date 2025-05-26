@@ -3,6 +3,8 @@ namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
 	static const Pixel ORANGE(255, 115, 0);
 }
+using cmn::vf3d;
+using cmn::Mat4;
 
 #include "mesh.h"
 
@@ -166,32 +168,6 @@ struct Example : cmn::Engine3D {
 		return true;
 	}
 
-	void addAABB(const AABB3& box, const olc::Pixel& col) {
-		//corner vertexes
-		const vf3d& v0=box.min, & v7=box.max;
-		vf3d v1(v7.x, v0.y, v0.z);
-		vf3d v2(v0.x, v7.y, v0.z);
-		vf3d v3(v7.x, v7.y, v0.z);
-		vf3d v4(v0.x, v0.y, v7.z);
-		vf3d v5(v7.x, v0.y, v7.z);
-		vf3d v6(v0.x, v7.y, v7.z);
-		//bottom
-		Line l1{v0, v1}; l1.col=col; lines_to_project.push_back(l1);
-		Line l2{v1, v3}; l2.col=col; lines_to_project.push_back(l2);
-		Line l3{v3, v2}; l3.col=col; lines_to_project.push_back(l3);
-		Line l4{v2, v0}; l4.col=col; lines_to_project.push_back(l4);
-		//sides
-		Line l5{v0, v4}; l5.col=col; lines_to_project.push_back(l5);
-		Line l6{v1, v5}; l6.col=col; lines_to_project.push_back(l6);
-		Line l7{v2, v6}; l7.col=col; lines_to_project.push_back(l7);
-		Line l8{v3, v7}; l8.col=col; lines_to_project.push_back(l8);
-		//top
-		Line l9{v4, v5}; l9.col=col; lines_to_project.push_back(l9);
-		Line l10{v5, v7}; l10.col=col; lines_to_project.push_back(l10);
-		Line l11{v7, v6}; l11.col=col; lines_to_project.push_back(l11);
-		Line l12{v6, v4}; l12.col=col; lines_to_project.push_back(l12);
-	}
-
 	bool user_geometry() override {
 		//split mesh and color each side accordingly
 		vf3d norm{0, 1, 0};
@@ -227,25 +203,25 @@ struct Example : cmn::Engine3D {
 			up=norm.cross(rgt);
 			vf3d tl=up-rgt, tr=up+rgt;
 			vf3d bl=-up-rgt, br=-up+rgt;
-			Line l1{tl, tr}; l1.col=olc::RED;
+			cmn::Line l1{tl, tr}; l1.col=olc::RED;
 			lines_to_project.push_back(l1);
-			Line l2{tr, br}; l2.col=olc::RED;
+			cmn::Line l2{tr, br}; l2.col=olc::RED;
 			lines_to_project.push_back(l2);
-			Line l3{br, bl}; l3.col=olc::RED;
+			cmn::Line l3{br, bl}; l3.col=olc::RED;
 			lines_to_project.push_back(l3);
-			Line l4{bl, tl}; l4.col=olc::RED;
+			cmn::Line l4{bl, tl}; l4.col=olc::RED;
 			lines_to_project.push_back(l4);
-			Line l5{tl, br}; l5.col=olc::RED;
+			cmn::Line l5{tl, br}; l5.col=olc::RED;
 			lines_to_project.push_back(l5);
 		}
 
 		if(!fill_triangles) {
 			for(const auto& t:tris_to_project) {
-				Line l1{t.p[0], t.p[1]}; l1.col=t.col;
+				cmn::Line l1{t.p[0], t.p[1]}; l1.col=t.col;
 				lines_to_project.push_back(l1);
-				Line l2{t.p[1], t.p[2]}; l2.col=t.col;
+				cmn::Line l2{t.p[1], t.p[2]}; l2.col=t.col;
 				lines_to_project.push_back(l2);
-				Line l3{t.p[2], t.p[0]}; l3.col=t.col;
+				cmn::Line l3{t.p[2], t.p[0]}; l3.col=t.col;
 				lines_to_project.push_back(l3);
 			}
 			tris_to_project.clear();

@@ -9,7 +9,7 @@
 #include <filesystem>
 namespace fs=std::filesystem;
 
-bool rayIntersectAABB(const vf3d& orig, const vf3d& dir, const AABB3& box) {
+bool rayIntersectAABB(const vf3d& orig, const vf3d& dir, const cmn::AABB3& box) {
 	const float epsilon=1e-6f;
 	float tmin=-INFINITY;
 	float tmax=INFINITY;
@@ -57,14 +57,14 @@ struct IndexTriangle {
 struct Mesh {
 	fs::path filename;
 	std::vector<vf3d> verts;
-	std::vector<v2d> tex_verts;
+	std::vector<cmn::v2d> tex_verts;
 	std::vector<IndexTriangle> index_tris;
 	Quat rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
 	Mat4 mat_world;//local->world
 	Mat4 mat_local;//world->local
-	std::vector<Triangle> tris;
+	std::vector<cmn::Triangle> tris;
 	int id=-1;
 
 	void updateTransforms() {
@@ -93,7 +93,7 @@ struct Mesh {
 		tris.clear();
 		tris.reserve(index_tris.size());
 		for(const auto& it:index_tris) {
-			Triangle t{
+			cmn::Triangle t{
 				new_verts[it.a],
 				new_verts[it.b],
 				new_verts[it.c]
@@ -114,8 +114,8 @@ struct Mesh {
 		}
 	}
 
-	AABB3 getAABB() const {
-		AABB3 box;
+	cmn::AABB3 getAABB() const {
+		cmn::AABB3 box;
 		for(const auto& t:tris) {
 			for(int i=0; i<3; i++) {
 				box.fitToEnclose(t.p[i]);
@@ -158,7 +158,7 @@ struct Mesh {
 				line_str>>v.x>>v.y>>v.z;
 				m.verts.push_back(v);
 			} else if(type=="vt") {
-				v2d vt;
+				cmn::v2d vt;
 				line_str>>vt.u>>vt.v;
 				m.tex_verts.push_back(vt);
 			} else if(type=="f") {

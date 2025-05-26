@@ -4,7 +4,7 @@
 
 #include "quat.h"
 
-bool rayIntersectAABB(const vf3d& orig, const vf3d& dir, const AABB3& box) {
+bool rayIntersectAABB(const vf3d& orig, const vf3d& dir, const cmn::AABB3& box) {
 	const float epsilon=1e-6f;
 	float tmin=-INFINITY;
 	float tmax=INFINITY;
@@ -56,7 +56,7 @@ struct Mesh {
 	vf3d translation;
 	Mat4 mat_world;//local->world
 	Mat4 mat_local;//world->local
-	std::vector<Triangle> tris;
+	std::vector<cmn::Triangle> tris;
 	int id=-1;
 
 	void updateTransforms() {
@@ -85,7 +85,7 @@ struct Mesh {
 		tris.clear();
 		tris.reserve(index_tris.size());
 		for(const auto& it:index_tris) {
-			Triangle t{
+			cmn::Triangle t{
 				new_verts[it.a],
 				new_verts[it.b],
 				new_verts[it.c]
@@ -103,8 +103,8 @@ struct Mesh {
 		}
 	}
 
-	AABB3 getAABB() const {
-		AABB3 box;
+	cmn::AABB3 getAABB() const {
+		cmn::AABB3 box;
 		for(const auto& t:tris) {
 			for(int i=0; i<3; i++) {
 				box.fitToEnclose(t.p[i]);

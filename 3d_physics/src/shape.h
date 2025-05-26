@@ -52,8 +52,8 @@ public:
 		return num;
 	}
 
-	AABB3 getAABB() const {
-		AABB3 box;
+	cmn::AABB3 getAABB() const {
+		cmn::AABB3 box;
 		for(int i=0; i<num; i++) {
 			box.fitToEnclose(particles[i].pos);
 		}
@@ -75,7 +75,7 @@ public:
 	}
 
 	//SUPER hard coded but whatever
-	static Shape makeBox(const AABB3& a) {
+	static Shape makeBox(const cmn::AABB3& a) {
 		Shape s(8);
 		vf3d v0=a.min, v7=a.max;
 		s.particles[0]=Particle(v0);
