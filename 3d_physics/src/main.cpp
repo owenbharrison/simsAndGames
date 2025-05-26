@@ -21,28 +21,35 @@ struct Example : cmn::Engine3D {
 	float cam_yaw=-Pi/2;
 	float cam_pitch=-.1f;
 
+	//debug toggles
+	bool show_bounds=false;
+
+	//physics stuff
 	const vf3d gravity{0, -9.8f, 0};
 	std::list<Shape> shapes;
 
-	bool show_bounds=false;
+	const float time_step=1/120.f;
+	float update_timer=0;
 
 	bool user_create() override {
 		cam_pos={0, 0, 3.5f};
 
 		Shape box=Shape::makeBox({vf3d(-1, -2, -1), vf3d(1, 2, 1)});
 		box.particles[0].locked=true;
+		box.col=olc::GREEN;
 		shapes.push_back(box);
 
 		Shape ground=Shape::makeBox({vf3d(-4, -4, -4), vf3d(4, -3, 4)});
 		ground.particles[0].locked=true;
 		ground.particles[1].locked=true;
+		ground.col=olc::BLUE;
 		shapes.push_back(ground);
 
 		return true;
 	}
 
 	//mostly camera controls
-	bool user_update(float dt) override {
+	void handleUserInput(float dt) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
 		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
@@ -79,12 +86,26 @@ struct Example : cmn::Engine3D {
 
 		//debug toggles
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+	}
 
+	void handlePhysics() {
 		for(auto& s:shapes) {
 			for(int i=0; i<s.getNum(); i++) {
 				s.particles[i].accelerate(gravity);
 			}
-			s.update(dt);
+			s.update(time_step);
+		}
+	}
+
+	bool user_update(float dt) override {
+		handleUserInput(dt);
+
+		//ensure similar update across multiple framerates
+		update_timer+=dt;
+		while(update_timer>time_step) {
+			handlePhysics();
+
+			update_timer-=time_step;
 		}
 
 		return true;
@@ -120,17 +141,18 @@ struct Example : cmn::Engine3D {
 	bool user_geometry() override {
 		for(const auto& s:shapes) {
 			for(const auto& it:s.index_tris) {
-				tris_to_project.push_back({
+				Triangle t{
 					s.particles[it.a].pos,
 					s.particles[it.b].pos,
 					s.particles[it.c].pos
-					});
+				}; t.col=s.col;
+				tris_to_project.push_back(t);
 			}
 		}
 
 		if(show_bounds) {
 			for(const auto& s:shapes) {
-				addAABB(s.getAABB(), olc::RED);
+				addAABB(s.getAABB(), olc::WHITE);
 			}
 		}
 
@@ -138,7 +160,7 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_render() override {
-		Clear(olc::Pixel(100, 100, 100));
+		Clear(olc::BLACK);
 
 		resetBuffers();
 

@@ -18,6 +18,8 @@ public:
 	std::list<Constraint> constraints;
 	std::list<IndexTriangle> index_tris;
 
+	olc::Pixel col=olc::WHITE;
+
 	Shape() {}
 
 	Shape(int n) {
@@ -152,6 +154,9 @@ void Shape::copyFrom(const Shape& s) {
 
 	//copy over index tris
 	index_tris=s.index_tris;
+
+	//copy over graphics
+	col=s.col;
 }
 
 void Shape::clear() {
