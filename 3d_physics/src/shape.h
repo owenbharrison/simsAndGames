@@ -8,6 +8,30 @@ struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
 
+struct IndexLine {
+	int a=0, b=0;
+
+	IndexLine() {}
+
+	IndexLine(int a_, int b_) {
+		a=a_, b=b_;
+		if(a>b) std::swap(a, b);
+	}
+
+	bool operator==(const IndexLine& il) const {
+		return a==il.a&&b==il.b;
+	}
+};
+
+struct LineHash {
+	std::size_t operator()(const IndexLine& il) const {
+		std::hash<int> hasher;
+		return hasher(il.a)^(hasher(il.b)<<1);
+	}
+};
+
+#include <unordered_set>
+
 class Shape {
 	int num=0;
 
@@ -70,8 +94,32 @@ public:
 		}
 	}
 
-	void keepOut(Shape& s) {
-
+	//check MY points against THEIR tris
+	void keepOutOf(Shape& s) {
+		for(int i=0; i<num; i++) {
+			auto& p=particles[i];
+			for(const auto& sit:s.index_tris) {
+				auto& sp0=s.particles[sit.a];
+				auto& sp1=s.particles[sit.b];
+				auto& sp2=s.particles[sit.c];
+				cmn::Triangle s_t{sp0.pos, sp1.pos, sp2.pos};
+				vf3d close_pt=s_t.getClosePt(p.pos);
+				vf3d sub=p.pos-close_pt;
+				float mag2=sub.mag2();
+				if(mag2<Particle::rad*Particle::rad) {
+					float mag=std::sqrtf(mag2);
+					vf3d norm=sub/mag;
+					vf3d new_pt=close_pt+Particle::rad*norm;
+					vf3d delta=new_pt-p.pos;
+					if(!p.locked) p.pos+=.75f*delta;
+					//barycentric weights next?
+					if(!sp0.locked) sp0.pos-=.25f*delta;
+					if(!sp1.locked) sp1.pos-=.25f*delta;
+					if(!sp2.locked) sp2.pos-=.25f*delta;
+					break;
+				}
+			}
+		}
 	}
 
 	//SUPER hard coded but whatever

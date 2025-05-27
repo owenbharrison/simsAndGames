@@ -14,6 +14,35 @@ vf3d projectOntoPlane(const vf3d& v, const vf3d& norm) {
 
 #include "shape.h"
 
+struct Joint {
+	Shape* shp_a=nullptr;
+	std::list<int> ix_a;
+	Shape* shp_b=nullptr;
+	std::list<int> ix_b;
+
+	void update() {
+		//find side centers
+		vf3d avg_a;
+		for(const auto& ia:ix_a) avg_a+=shp_a->particles[ia].pos;
+		avg_a/=ix_a.size();
+		vf3d avg_b;
+		for(const auto& ib:ix_b) avg_b+=shp_b->particles[ib].pos;
+		avg_b/=ix_b.size();
+		
+		//update accordingly
+		vf3d axis=avg_b-avg_a;
+		vf3d delta=.5f*axis;
+		for(const auto& ia:ix_a) {
+			auto& a=shp_a->particles[ia];
+			if(!a.locked) a.pos+=delta;
+		}
+		for(const auto& ib:ix_b) {
+			auto& b=shp_b->particles[ib];
+			if(!b.locked) b.pos-=delta;
+		}
+	}
+};
+
 struct Physics3DUI : cmn::Engine3D {
 	Physics3DUI() {
 		sAppName="3d physics";
@@ -21,36 +50,66 @@ struct Physics3DUI : cmn::Engine3D {
 
 	//camera positioning
 	float cam_yaw=-Pi/2;
-	float cam_pitch=-.1f;
+	float cam_pitch=-.3f;
 
 	//debug toggles
 	bool show_bounds=false;
+	bool show_verts=false;
 	bool update_phys=false;
 
 	//physics stuff
 	const vf3d gravity{0, -9.8f, 0};
 	std::list<Shape> shapes;
+	std::list<Joint> joints;
 
 	const float time_step=1/120.f;
 	float update_timer=0;
 
 	bool user_create() override {
-		cam_pos={0, 0, 3.5f};
-		light_pos=cam_pos;
+		cam_pos={.5f, 0, 8};
+		light_pos={0, 5, 0};
 
-		Shape top_box=Shape::makeBox({vf3d(-1, 2, -1), vf3d(1, 3, 1)});
-		top_box.col=olc::RED;
-		shapes.push_back(top_box);
+		Shape chain0=Shape::makeBox({vf3d(0, -.5f, -.5f), vf3d(2, .5f, .5f)});
+		chain0.particles[2].locked=true;
+		chain0.col=olc::RED;
+		shapes.push_back(chain0);
+		auto chain0_ptr=&shapes.back();
 
-		Shape btm_box=Shape::makeBox({vf3d(-2, 0, -2), vf3d(2, 1, 2)});
-		btm_box.col=olc::GREEN;
-		shapes.push_back(btm_box);
+		Shape chain1=Shape::makeBox({vf3d(2, -.5f, -.5f), vf3d(4, .5f, .5f)});
+		chain1.col=olc::YELLOW;
+		shapes.push_back(chain1);
+		auto chain1_ptr=&shapes.back();
 
-		Shape ground=Shape::makeBox({vf3d(-4, -2, -4), vf3d(4, -1, 4)});
-		for(int i=0; i<ground.getNum(); i++) {
-			ground.particles[i].locked=true;
-		}
-		ground.col=olc::BLUE;
+		Shape chain2=Shape::makeBox({vf3d(4, -.5f, -.5f), vf3d(6, .5f, .5f)});
+		chain2.col=olc::BLUE;
+		shapes.push_back(chain2);
+		auto chain2_ptr=&shapes.back();
+		
+		joints.push_back({
+			chain0_ptr,
+			{1, 3, 5, 7},
+			chain1_ptr,
+			{0, 2, 4, 6}
+			});
+
+		joints.push_back({
+			chain1_ptr,
+			{1, 3, 5, 7},
+			chain2_ptr,
+			{0, 2, 4, 6}
+			});
+
+		Shape stack0=Shape::makeBox({vf3d(-4, 0, -1), vf3d(-2, 1, 1)});
+		stack0.col=olc::WHITE;
+		shapes.push_back(stack0);
+
+		Shape stack1=Shape::makeBox({vf3d(-5, -2, -2), vf3d(-1, -1, 2)});
+		stack1.col=olc::MAGENTA;
+		shapes.push_back(stack1);
+
+		Shape ground=Shape::makeBox({vf3d(-6, -4, -4), vf3d(7, -3, 4)});
+		ground.col=olc::GREEN;
+		for(int i=0; i<ground.getNum(); i++) ground.particles[i].locked=true;
 		shapes.push_back(ground);
 
 		return true;
@@ -94,29 +153,55 @@ struct Physics3DUI : cmn::Engine3D {
 
 		//debug toggles
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		if(GetKey(olc::Key::V).bPressed) show_verts^=true;
 		if(GetKey(olc::Key::ENTER).bPressed) update_phys^=true;
 	}
 
 	void handlePhysics() {
-		//collisions(triangle closept)
+		//collisions
 		for(auto& a:shapes) {
 			for(auto& b:shapes) {
+				//dont check self
 				if(&b==&a) continue;
 
-				//accomodate check radius
+				//find jointed indexes
+				const std::list<int>* skip_ix=nullptr;
+				for(const auto& j:joints) {
+					if(j.shp_a==&a&&j.shp_b==&b) {
+						skip_ix=&j.ix_a;
+						break;
+					}
+					if(j.shp_a==&b&&j.shp_b==&a) {
+						skip_ix=&j.ix_b;
+						break;
+					}
+				}
+
+				//bounding box optimization
 				cmn::AABB3 a_box=a.getAABB();
 				a_box.min-=Particle::rad, a_box.max+=Particle::rad;
 				cmn::AABB3 b_box=b.getAABB();
 				b_box.min-=Particle::rad, b_box.max+=Particle::rad;
 				if(!a_box.overlaps(b_box)) continue;
 
-				//keep a out of b
+				//keep a pts out of b tris
 				for(int i=0; i<a.getNum(); i++) {
+					//skip jointed indexes
+					if(skip_ix) {
+						bool to_skip=false;
+						for(const auto& j:*skip_ix) {
+							if(j==i) {
+								to_skip=true;
+								break;
+							}
+						}
+						if(to_skip) continue;
+					}
 					auto& ap=a.particles[i];
-					for(const auto& bit:b.index_tris) {
-						auto& bp0=b.particles[bit.a];
-						auto& bp1=b.particles[bit.b];
-						auto& bp2=b.particles[bit.c];
+					for(const auto& sit:b.index_tris) {
+						auto& bp0=b.particles[sit.a];
+						auto& bp1=b.particles[sit.b];
+						auto& bp2=b.particles[sit.c];
 						cmn::Triangle b_t{bp0.pos, bp1.pos, bp2.pos};
 						vf3d close_pt=b_t.getClosePt(ap.pos);
 						vf3d sub=ap.pos-close_pt;
@@ -137,7 +222,13 @@ struct Physics3DUI : cmn::Engine3D {
 				}
 			}
 		}
+		
+		//update joints
+		for(auto& j:joints) {
+			j.update();
+		}
 
+		//integration
 		for(auto& s:shapes) {
 			for(int i=0; i<s.getNum(); i++) {
 				s.particles[i].accelerate(gravity);
@@ -189,6 +280,11 @@ struct Physics3DUI : cmn::Engine3D {
 
 		resetBuffers();
 
+		if(GetKey(olc::Key::Z).bPressed) {
+			std::cout<<cam_pos.x<<' '<<cam_pos.y<<' '<<cam_pos.z<<'\n';
+			std::cout<<cam_pitch<<' '<<cam_yaw<<'\n';
+		}
+
 		for(const auto& t:tris_to_draw) {
 			FillDepthTriangle(
 				t.p[0].x, t.p[0].y, t.t[0].w,
@@ -204,6 +300,19 @@ struct Physics3DUI : cmn::Engine3D {
 				l.p[1].x, l.p[1].y, l.t[1].w,
 				l.col, l.id
 			);
+		}
+
+		if(show_verts) {
+			for(const auto& s:shapes) {
+				for(int i=0; i<s.getNum(); i++) {
+					vf3d ndc=s.particles[i].pos*mat_view*mat_proj;
+					ndc/=ndc.w;
+					float scr_x=(1-ndc.x)*ScreenWidth()/2;
+					float scr_y=(1-ndc.y)*ScreenHeight()/2;
+					auto str=std::to_string(i);
+					DrawString(scr_x-4, scr_y-4, str);
+				}
+			}
 		}
 
 		if(!update_phys) {
