@@ -25,6 +25,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 	//debug toggles
 	bool show_bounds=false;
+	bool update_phys=false;
 
 	//physics stuff
 	const vf3d gravity{0, -9.8f, 0};
@@ -35,15 +36,20 @@ struct Physics3DUI : cmn::Engine3D {
 
 	bool user_create() override {
 		cam_pos={0, 0, 3.5f};
+		light_pos=cam_pos;
 
-		Shape box=Shape::makeBox({vf3d(-1, -2, -1), vf3d(1, 2, 1)});
-		box.particles[0].locked=true;
-		box.col=olc::GREEN;
-		shapes.push_back(box);
+		Shape top_box=Shape::makeBox({vf3d(-1, 2, -1), vf3d(1, 3, 1)});
+		top_box.col=olc::RED;
+		shapes.push_back(top_box);
 
-		Shape ground=Shape::makeBox({vf3d(-4, -4, -4), vf3d(4, -3, 4)});
-		ground.particles[0].locked=true;
-		ground.particles[1].locked=true;
+		Shape btm_box=Shape::makeBox({vf3d(-2, 0, -2), vf3d(2, 1, 2)});
+		btm_box.col=olc::GREEN;
+		shapes.push_back(btm_box);
+
+		Shape ground=Shape::makeBox({vf3d(-4, -2, -4), vf3d(4, -1, 4)});
+		for(int i=0; i<ground.getNum(); i++) {
+			ground.particles[i].locked=true;
+		}
 		ground.col=olc::BLUE;
 		shapes.push_back(ground);
 
@@ -88,9 +94,50 @@ struct Physics3DUI : cmn::Engine3D {
 
 		//debug toggles
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		if(GetKey(olc::Key::ENTER).bPressed) update_phys^=true;
 	}
 
 	void handlePhysics() {
+		//collisions(triangle closept)
+		for(auto& a:shapes) {
+			for(auto& b:shapes) {
+				if(&b==&a) continue;
+
+				//accomodate check radius
+				cmn::AABB3 a_box=a.getAABB();
+				a_box.min-=Particle::rad, a_box.max+=Particle::rad;
+				cmn::AABB3 b_box=b.getAABB();
+				b_box.min-=Particle::rad, b_box.max+=Particle::rad;
+				if(!a_box.overlaps(b_box)) continue;
+
+				//keep a out of b
+				for(int i=0; i<a.getNum(); i++) {
+					auto& ap=a.particles[i];
+					for(const auto& bit:b.index_tris) {
+						auto& bp0=b.particles[bit.a];
+						auto& bp1=b.particles[bit.b];
+						auto& bp2=b.particles[bit.c];
+						cmn::Triangle b_t{bp0.pos, bp1.pos, bp2.pos};
+						vf3d close_pt=b_t.getClosePt(ap.pos);
+						vf3d sub=ap.pos-close_pt;
+						float mag2=sub.mag2();
+						if(mag2<Particle::rad*Particle::rad) {
+							float mag=std::sqrtf(mag2);
+							vf3d norm=sub/mag;
+							vf3d new_pt=close_pt+Particle::rad*norm;
+							vf3d delta=new_pt-ap.pos;
+							if(!ap.locked) ap.pos+=.75f*delta;
+							//barycentric weights next?
+							if(!bp0.locked) bp0.pos-=.25f*delta;
+							if(!bp1.locked) bp1.pos-=.25f*delta;
+							if(!bp2.locked) bp2.pos-=.25f*delta;
+							break;
+						}
+					}
+				}
+			}
+		}
+
 		for(auto& s:shapes) {
 			for(int i=0; i<s.getNum(); i++) {
 				s.particles[i].accelerate(gravity);
@@ -102,12 +149,14 @@ struct Physics3DUI : cmn::Engine3D {
 	bool user_update(float dt) override {
 		handleUserInput(dt);
 
-		//ensure similar update across multiple framerates
-		update_timer+=dt;
-		while(update_timer>time_step) {
-			handlePhysics();
+		if(update_phys) {
+			//ensure similar update across multiple framerates
+			update_timer+=dt;
+			while(update_timer>time_step) {
+				handlePhysics();
 
-			update_timer-=time_step;
+				update_timer-=time_step;
+			}
 		}
 
 		return true;
@@ -128,7 +177,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 		if(show_bounds) {
 			for(const auto& s:shapes) {
-				addAABB(s.getAABB(), olc::WHITE);
+				addAABB(s.getAABB(), olc::GREY);
 			}
 		}
 
@@ -155,6 +204,10 @@ struct Physics3DUI : cmn::Engine3D {
 				l.p[1].x, l.p[1].y, l.t[1].w,
 				l.col, l.id
 			);
+		}
+
+		if(!update_phys) {
+			DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::WHITE);
 		}
 
 		return true;

@@ -7,6 +7,8 @@ struct Particle {
 	bool locked=false;
 	cmn::v2d uv;
 
+	static const float rad;
+
 	Particle() {}
 
 	Particle(vf3d p) {
@@ -30,4 +32,6 @@ struct Particle {
 		acc*=0;
 	}
 };
+
+const float Particle::rad=.1f;
 #endif
