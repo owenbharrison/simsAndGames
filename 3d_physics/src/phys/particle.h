@@ -3,7 +3,8 @@
 #define PARTICLE_STRUCT_H
 
 struct Particle {
-	vf3d pos, old_pos, acc;
+	vf3d pos, old_pos, forces;
+	float mass=1;
 	bool locked=false;
 	cmn::v2d uv;
 
@@ -16,8 +17,12 @@ struct Particle {
 		old_pos=p;
 	}
 
-	void accelerate(const vf3d& f) {
-		acc+=f;
+	void accelerate(const vf3d& a) {
+		forces+=mass*a;
+	}
+
+	void applyForce(const vf3d& f) {
+		forces+=f;
 	}
 
 	void update(float dt) {
@@ -26,10 +31,11 @@ struct Particle {
 		old_pos=pos;
 
 		//verlet integration
+		vf3d acc=forces/mass;
 		if(!locked) pos+=vel+acc*dt*dt;
 
 		//reset forces
-		acc*=0;
+		forces*=0;
 	}
 };
 
