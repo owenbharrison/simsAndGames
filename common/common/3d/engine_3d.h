@@ -18,8 +18,6 @@
 
 namespace cmn {
 	class Engine3D : public olc::PixelGameEngine {
-		void projectAndClip();
-
 		bool inRangeX(int x) const { return x>=0&&x<ScreenWidth(); }
 		bool inRangeY(int y) const { return y>=0&&y<ScreenHeight(); }
 
@@ -101,6 +99,193 @@ namespace cmn {
 			lines_to_project.push_back(l11);
 			Line l12{v6, v4}; l12.col=col;
 			lines_to_project.push_back(l12);
+		}
+
+		void projectAndClip() {
+			//recalculate matrices
+			{
+				const vf3d up(0, 1, 0);
+				vf3d target=cam_pos+cam_dir;
+				Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
+				mat_view=Mat4::quickInverse(mat_cam);
+			}
+
+			//clip triangles against near plane
+			std::vector<Triangle> tris_to_clip;
+			for(const auto& tri:tris_to_project) {
+				vf3d norm=tri.getNorm();
+
+				//is triangle pointing towards me? culling
+				if(norm.dot(tri.p[0]-cam_pos)<0) {
+					//lighting
+					vf3d light_dir=(light_pos-tri.getCtr()).norm();
+					float dp=std::max(.5f, norm.dot(light_dir));
+
+					//transform triangles given camera positioning
+					Triangle tri_view;
+					for(int i=0; i<3; i++) {
+						tri_view.p[i]=tri.p[i]*mat_view;
+						tri_view.t[i]=tri.t[i];
+					}
+					tri_view.col=tri.col*dp;
+					tri_view.id=tri.id;
+
+					//clip
+					Triangle clipped[2];
+					int num=tri_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
+					for(int i=0; i<num; i++) {
+						Triangle tri_proj;
+						//for each vert
+						for(int j=0; j<3; j++) {
+							//project
+							tri_proj.p[j]=clipped[i].p[j]*mat_proj;
+
+							//copy over texture stuff
+							tri_proj.t[j]=clipped[i].t[j];
+
+							//w normalization?
+							float w=tri_proj.p[j].w;
+							tri_proj.t[j].u/=w;
+							tri_proj.t[j].v/=w;
+							tri_proj.t[j].w=1/w;
+
+							//scale into view
+							tri_proj.p[j]/=w;
+
+							//x/y inverted so put them back
+							tri_proj.p[j].x*=-1;
+							tri_proj.p[j].y*=-1;
+
+							//offset into visible normalized space
+							tri_proj.p[j]+=vf3d(1, 1, 0);
+							tri_proj.p[j].x*=ScreenWidth()/2;
+							tri_proj.p[j].y*=ScreenHeight()/2;
+						}
+						tri_proj.col=clipped[i].col;
+						tri_proj.id=clipped[i].id;
+
+						tris_to_clip.push_back(tri_proj);
+					}
+				}
+			}
+
+			//clip lines against near plane
+			std::vector<Line> lines_to_clip;
+			for(const auto& line:lines_to_project) {
+				//transform triangles given camera positioning
+				Line line_view;
+				for(int i=0; i<2; i++) {
+					line_view.p[i]=line.p[i]*mat_view;
+					line_view.t[i]=line.t[i];
+				}
+				line_view.col=line.col;
+				line_view.id=line.id;
+
+				//clip
+				Line clipped;
+				if(line_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped)) {
+					Line line_proj;
+					//for each vert
+					for(int j=0; j<2; j++) {
+						//project
+						line_proj.p[j]=clipped.p[j]*mat_proj;
+
+						//copy over texture stuff
+						line_proj.t[j]=clipped.t[j];
+
+						//w normalization?
+						float w=line_proj.p[j].w;
+						line_proj.t[j].u/=w;
+						line_proj.t[j].v/=w;
+						line_proj.t[j].w=1/w;
+
+						//scale into view
+						line_proj.p[j]/=w;
+
+						//x/y inverted so put them back
+						line_proj.p[j].x*=-1;
+						line_proj.p[j].y*=-1;
+
+						//offset into visible normalized space
+						line_proj.p[j]+=vf3d(1, 1, 0);
+						line_proj.p[j].x*=ScreenWidth()/2;
+						line_proj.p[j].y*=ScreenHeight()/2;
+					}
+					line_proj.col=clipped.col;
+					line_proj.id=clipped.id;
+
+					lines_to_clip.push_back(line_proj);
+				}
+			}
+
+			//left,right,top,bottom
+			const vf3d ctrs[4]{
+				vf3d(0, 0, 0),
+				vf3d(ScreenWidth(), 0, 0),
+				vf3d(0, 0, 0),
+				vf3d(0, ScreenHeight(), 0)
+			};
+			const vf3d norms[4]{
+				vf3d(1, 0, 0),
+				vf3d(-1, 0, 0),
+				vf3d(0, 1, 0),
+				vf3d(0, -1, 0)
+			};
+
+			//clip tris against edges of screen
+			std::stack<Triangle> tri_queue;
+			tris_to_draw.clear();
+			for(const auto& t:tris_to_clip) {
+				tri_queue.push(t);
+				int num_new=1;
+				Triangle clipped[2];
+				for(int i=0; i<4; i++) {
+					//iteratively clip all tris
+					while(num_new>0) {
+						Triangle test=tri_queue.top();
+						tri_queue.pop();
+						num_new--;
+
+						int num_clip=test.clipAgainstPlane(ctrs[i], norms[i], clipped[0], clipped[1]);
+						for(int j=0; j<num_clip; j++) tri_queue.push(clipped[j]);
+					}
+					num_new=tri_queue.size();
+				}
+
+				//add to conglomerate
+				while(!tri_queue.empty()) {
+					tris_to_draw.push_back(tri_queue.top());
+					tri_queue.pop();
+				}
+			}
+
+			//clip lines against edges of screen
+			std::stack<Line> line_queue;
+			lines_to_draw.clear();
+			for(const auto& l:lines_to_clip) {
+				Line clipped;
+				line_queue.push(l);
+				int num_new=1;
+				for(int i=0; i<4; i++) {
+					//iteratively clip all lines
+					while(num_new>0) {
+						Line test=line_queue.top();
+						line_queue.pop();
+						num_new--;
+
+						if(test.clipAgainstPlane(ctrs[i], norms[i], clipped)) {
+							line_queue.push(clipped);
+						}
+					}
+					num_new=line_queue.size();
+				}
+
+				//add to conglomerate
+				while(!line_queue.empty()) {
+					lines_to_draw.push_back(line_queue.top());
+					line_queue.pop();
+				}
+			}
 		}
 
 		void resetBuffers() {
@@ -458,193 +643,6 @@ namespace cmn {
 		//tesselation
 		a={tl, br, tr};
 		b={tl, bl, br};
-	}
-
-	void Engine3D::projectAndClip() {
-		//recalculate matrices
-		{
-			const vf3d up(0, 1, 0);
-			vf3d target=cam_pos+cam_dir;
-			Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
-			mat_view=Mat4::quickInverse(mat_cam);
-		}
-
-		//clip triangles against near plane
-		std::vector<Triangle> tris_to_clip;
-		for(const auto& tri:tris_to_project) {
-			vf3d norm=tri.getNorm();
-
-			//is triangle pointing towards me? culling
-			if(norm.dot(tri.p[0]-cam_pos)<0) {
-				//lighting
-				vf3d light_dir=(light_pos-tri.getCtr()).norm();
-				float dp=std::max(.5f, norm.dot(light_dir));
-
-				//transform triangles given camera positioning
-				Triangle tri_view;
-				for(int i=0; i<3; i++) {
-					tri_view.p[i]=tri.p[i]*mat_view;
-					tri_view.t[i]=tri.t[i];
-				}
-				tri_view.col=tri.col*dp;
-				tri_view.id=tri.id;
-
-				//clip
-				Triangle clipped[2];
-				int num=tri_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
-				for(int i=0; i<num; i++) {
-					Triangle tri_proj;
-					//for each vert
-					for(int j=0; j<3; j++) {
-						//project
-						tri_proj.p[j]=clipped[i].p[j]*mat_proj;
-
-						//copy over texture stuff
-						tri_proj.t[j]=clipped[i].t[j];
-
-						//w normalization?
-						float w=tri_proj.p[j].w;
-						tri_proj.t[j].u/=w;
-						tri_proj.t[j].v/=w;
-						tri_proj.t[j].w=1/w;
-
-						//scale into view
-						tri_proj.p[j]/=w;
-
-						//x/y inverted so put them back
-						tri_proj.p[j].x*=-1;
-						tri_proj.p[j].y*=-1;
-
-						//offset into visible normalized space
-						tri_proj.p[j]+=vf3d(1, 1, 0);
-						tri_proj.p[j].x*=ScreenWidth()/2;
-						tri_proj.p[j].y*=ScreenHeight()/2;
-					}
-					tri_proj.col=clipped[i].col;
-					tri_proj.id=clipped[i].id;
-
-					tris_to_clip.push_back(tri_proj);
-				}
-			}
-		}
-
-		//clip lines against near plane
-		std::vector<Line> lines_to_clip;
-		for(const auto& line:lines_to_project) {
-			//transform triangles given camera positioning
-			Line line_view;
-			for(int i=0; i<2; i++) {
-				line_view.p[i]=line.p[i]*mat_view;
-				line_view.t[i]=line.t[i];
-			}
-			line_view.col=line.col;
-			line_view.id=line.id;
-
-			//clip
-			Line clipped;
-			if(line_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped)) {
-				Line line_proj;
-				//for each vert
-				for(int j=0; j<2; j++) {
-					//project
-					line_proj.p[j]=clipped.p[j]*mat_proj;
-
-					//copy over texture stuff
-					line_proj.t[j]=clipped.t[j];
-
-					//w normalization?
-					float w=line_proj.p[j].w;
-					line_proj.t[j].u/=w;
-					line_proj.t[j].v/=w;
-					line_proj.t[j].w=1/w;
-
-					//scale into view
-					line_proj.p[j]/=w;
-
-					//x/y inverted so put them back
-					line_proj.p[j].x*=-1;
-					line_proj.p[j].y*=-1;
-
-					//offset into visible normalized space
-					line_proj.p[j]+=vf3d(1, 1, 0);
-					line_proj.p[j].x*=ScreenWidth()/2;
-					line_proj.p[j].y*=ScreenHeight()/2;
-				}
-				line_proj.col=clipped.col;
-				line_proj.id=clipped.id;
-
-				lines_to_clip.push_back(line_proj);
-			}
-		}
-
-		//left,right,top,bottom
-		const vf3d ctrs[4]{
-			vf3d(0, 0, 0),
-			vf3d(ScreenWidth(), 0, 0),
-			vf3d(0, 0, 0),
-			vf3d(0, ScreenHeight(), 0)
-		};
-		const vf3d norms[4]{
-			vf3d(1, 0, 0),
-			vf3d(-1, 0, 0),
-			vf3d(0, 1, 0),
-			vf3d(0, -1, 0)
-		};
-
-		//clip tris against edges of screen
-		std::stack<Triangle> tri_queue;
-		tris_to_draw.clear();
-		for(const auto& t:tris_to_clip) {
-			tri_queue.push(t);
-			int num_new=1;
-			Triangle clipped[2];
-			for(int i=0; i<4; i++) {
-				//iteratively clip all tris
-				while(num_new>0) {
-					Triangle test=tri_queue.top();
-					tri_queue.pop();
-					num_new--;
-
-					int num_clip=test.clipAgainstPlane(ctrs[i], norms[i], clipped[0], clipped[1]);
-					for(int j=0; j<num_clip; j++) tri_queue.push(clipped[j]);
-				}
-				num_new=tri_queue.size();
-			}
-
-			//add to conglomerate
-			while(!tri_queue.empty()) {
-				tris_to_draw.push_back(tri_queue.top());
-				tri_queue.pop();
-			}
-		}
-
-		//clip lines against edges of screen
-		std::stack<Line> line_queue;
-		lines_to_draw.clear();
-		for(const auto& l:lines_to_clip) {
-			Line clipped;
-			line_queue.push(l);
-			int num_new=1;
-			for(int i=0; i<4; i++) {
-				//iteratively clip all lines
-				while(num_new>0) {
-					Line test=line_queue.top();
-					line_queue.pop();
-					num_new--;
-
-					if(test.clipAgainstPlane(ctrs[i], norms[i], clipped)) {
-						line_queue.push(clipped);
-					}
-				}
-				num_new=line_queue.size();
-			}
-
-			//add to conglomerate
-			while(!line_queue.empty()) {
-				lines_to_draw.push_back(line_queue.top());
-				line_queue.pop();
-			}
-		}
 	}
 
 	bool Engine3D::OnUserUpdate(float dt) {
