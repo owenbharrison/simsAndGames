@@ -10,13 +10,11 @@
 
 #include <exception>
 
-#include "triangle.h"
-
 struct Mesh {
-	std::vector<Triangle> triangles;
+	std::vector<cmn::Triangle> triangles;
 
-	AABB3 getAABB() const {
-		AABB3 a;
+	cmn::AABB3 getAABB() const {
+		cmn::AABB3 a;
 		for(const auto& t:triangles) {
 			for(int i=0; i<3; i++) {
 				a.fitToEnclose(t.p[i]);
@@ -25,10 +23,10 @@ struct Mesh {
 		return a;
 	}
 
-	void fitToBounds(const AABB3& box) {
+	void fitToBounds(const cmn::AABB3& box) {
 		vf3d box_ctr=box.getCenter();
 
-		AABB3 me=getAABB();
+		cmn::AABB3 me=getAABB();
 		vf3d me_ctr=me.getCenter();
 
 		//which is the constraining dimension?
@@ -59,7 +57,7 @@ struct Mesh {
 		if(file.fail()) throw std::runtime_error("invalid filename");
 
 		std::vector<vf3d> verts;
-		std::vector<v2d> texs;
+		std::vector<cmn::v2d> texs;
 
 		std::string line;
 		while(std::getline(file, line)) {
@@ -70,7 +68,7 @@ struct Mesh {
 				line_str>>v.x>>v.y>>v.z;
 				verts.push_back({v});
 			} else if(type=="vt") {
-				v2d t;
+				cmn::v2d t;
 				line_str>>t.u>>t.v;
 				texs.push_back(t);
 			} else if(type=="f") {
@@ -91,7 +89,7 @@ struct Mesh {
 				//triangulate
 				bool to_texture=vt_ixs.size();
 				for(int i=2; i<num; i++) {
-					Triangle t{
+					cmn::Triangle t{
 						verts[v_ixs[0]],
 						verts[v_ixs[i-1]],
 						verts[v_ixs[i]]

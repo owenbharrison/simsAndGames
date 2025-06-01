@@ -2,7 +2,7 @@
 //i.e. shelling + greedymeshing
 //and polyhedra pixelization
 
-#include "gfx/mesh.h"
+#include "mesh.h"
 #include "voxel_set.h"
 
 #include <thread>
@@ -15,7 +15,7 @@ float random(float b=1, float a=0) {
 
 [[nodiscard]] VoxelSet meshToVoxels(const Mesh& m, float resolution) {
 	//find mesh bounds
-	AABB3 box=m.getAABB();
+	cmn::AABB3 box=m.getAABB();
 
 	//determine voxelset sizing
 	vf3d size=(box.max-box.min)/resolution;
@@ -52,7 +52,7 @@ float random(float b=1, float a=0) {
 
 [[nodiscard]] VoxelSet meshToVoxels_fast(const Mesh& m, float resolution) {
 	//find mesh bounds
-	AABB3 box=m.getAABB();
+	cmn::AABB3 box=m.getAABB();
 
 	//determine voxelset sizing
 	vf3d size=(box.max-box.min)/resolution;
@@ -583,7 +583,7 @@ float random(float b=1, float a=0) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				Triangle t;
+				cmn::Triangle t;
 				t.p[0]=v0, t.p[1]=v2, t.p[2]=v1, t.col=col;
 				m.triangles.push_back(t);
 				t.p[0]=v0, t.p[1]=v3, t.p[2]=v2;
@@ -654,7 +654,7 @@ float random(float b=1, float a=0) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				Triangle t;
+				cmn::Triangle t;
 				t.p[0]=v0, t.p[1]=v1, t.p[2]=v2, t.col=col;
 				m.triangles.push_back(t);
 				t.p[0]=v0, t.p[1]=v2, t.p[2]=v3;
@@ -734,7 +734,7 @@ float random(float b=1, float a=0) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				Triangle t;
+				cmn::Triangle t;
 				t.p[0]=v0, t.p[1]=v2, t.p[2]=v1, t.col=col;
 				m.triangles.push_back(t);
 				t.p[0]=v0, t.p[1]=v3, t.p[2]=v2;
@@ -805,7 +805,7 @@ float random(float b=1, float a=0) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				Triangle t;
+				cmn::Triangle t;
 				t.p[0]=v0, t.p[1]=v1, t.p[2]=v2, t.col=col;
 				m.triangles.push_back(t);
 				t.p[0]=v0, t.p[1]=v2, t.p[2]=v3;
@@ -885,7 +885,7 @@ float random(float b=1, float a=0) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				Triangle t;
+				cmn::Triangle t;
 				t.p[0]=v0, t.p[1]=v2, t.p[2]=v1, t.col=col;
 				m.triangles.push_back(t);
 				t.p[0]=v0, t.p[1]=v3, t.p[2]=v2;
@@ -956,7 +956,7 @@ float random(float b=1, float a=0) {
 					case VoxelSet::Edge: col=olc::BLUE; break;
 					case VoxelSet::Corner: col=olc::RED; break;
 				}
-				Triangle t;
+				cmn::Triangle t;
 				t.p[0]=v0, t.p[1]=v1, t.p[2]=v2, t.col=col;
 				m.triangles.push_back(t);
 				t.p[0]=v0, t.p[1]=v2, t.p[2]=v3;

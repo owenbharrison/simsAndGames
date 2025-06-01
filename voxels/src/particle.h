@@ -29,7 +29,7 @@ struct Particle {
 		acc*=0;
 	}
 
-	void keepIn(const AABB3& a) {
+	void keepIn(const cmn::AABB3& a) {
 		vf3d vel=pos-oldpos;
 		if(pos.x<a.min.x) {
 			pos.x=a.min.x;

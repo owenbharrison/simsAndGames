@@ -183,6 +183,7 @@
     <ClInclude Include="src\math\v2d.h" />
     <ClInclude Include="src\math\v3d.h" />
     <ClInclude Include="src\gfx\render.h" />
+    <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\particle.h" />
     <ClInclude Include="src\voxel_set.h" />
   </ItemGroup>
