@@ -9,13 +9,18 @@ constexpr float Pi=3.1415927f;
 
 #include "lookup.h"
 
+float random01() {
+	static constexpr float rand_max=RAND_MAX;
+	return rand()/rand_max;
+}
+
 struct Example : cmn::Engine3D {
 	Example() {
 		sAppName="3d builder";
 	}
 
 	//camera positioning
-	float cam_yaw=-Pi/2;
+	float cam_yaw=Pi/4;
 	float cam_pitch=-.1f;
 
 	int width=0, height=0, depth=0;
@@ -25,6 +30,7 @@ struct Example : cmn::Engine3D {
 	}
 
 	PerlinNoise noise_gen;
+	vf3d noise_offset;
 
 	float total_dt=0;
 
@@ -33,12 +39,15 @@ struct Example : cmn::Engine3D {
 	float surf=.5f;
 
 	bool user_create() override {
-		cam_pos={0, 0, 3.5f};
+		srand(time(0));
 
 		//w, h, d = [5, 10]
-		width=2;//+rand()%6;
-		height=2;//+rand()%6;
-		depth=2;//+rand()%6;
+		width=5+rand()%6;
+		height=5+rand()%6;
+		depth=5+rand()%6;
+
+		cam_pos=vf3d(-2, .5f*height, -2);
+		light_pos=vf3d(.5f*width, 5+height, .5f*depth);
 
 		noise_gen=PerlinNoise(time(0));
 
@@ -108,16 +117,27 @@ struct Example : cmn::Engine3D {
 		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 
 		//move along time
-		if(GetKey(olc::Key::ENTER).bHeld) total_dt+=.5f*dt;
+		if(GetKey(olc::Key::ENTER).bHeld) {
+			//find smooth direction change
+			float nx=noise_gen.noise(total_dt, 2*total_dt, 3*total_dt);
+			float ny=noise_gen.noise(100+3*total_dt, 100+total_dt, 100+2*total_dt);
+			float nz=noise_gen.noise(200+2*total_dt, 200+3*total_dt, 200+total_dt);
+			
+			vf3d dir(nx, ny, nz);
+
+			//step along change
+			noise_offset+=dir*dt;
+			total_dt+=dt;
+		}
 
 		//fill grid
 		for(int i=0; i<width; i++) {
 			for(int j=0; j<height; j++) {
 				for(int k=0; k<depth; k++) {
 					values[ix(i, j, k)]=noise_gen.noise(
-						total_dt+.1f*i,
-						total_dt+.1f*j,
-						total_dt+.1f*k
+						noise_offset.x+.1f*i,
+						noise_offset.y+.1f*j,
+						noise_offset.z+.1f*k
 					);
 				}
 			}
@@ -130,13 +150,10 @@ struct Example : cmn::Engine3D {
 	bool user_geometry() override {
 		for(int i=0; i<width-1; i++) {
 			float min_x=i, max_x=1+i;
-			//float min_x=i-.5f*width, max_x=1+min_x;
 			for(int j=0; j<height-1; j++) {
 				float min_y=j, max_y=1+j;
-				//float min_y=j-.5f*height, max_y=1+min_y;
 				for(int k=0; k<depth-1; k++) {
 					float min_z=k, max_z=1+k;
-					//float min_z=k-.5f*depth, max_z=1+min_z;
 					//get cube corners
 					vf3d c[8]{
 						{min_x, min_y, min_z},
@@ -148,6 +165,7 @@ struct Example : cmn::Engine3D {
 						{min_x, max_y, max_z},
 						{max_x, max_y, max_z}
 					};
+					//get corner values
 					float v[8]{
 						values[ix(i, j, k)],
 						values[ix(i+1, j, k)],
@@ -158,7 +176,7 @@ struct Example : cmn::Engine3D {
 						values[ix(i, j+1, k+1)],
 						values[ix(i+1, j+1, k+1)]
 					};
-					//find cube state
+					//get cube state
 					int state=
 						128*(v[7]<surf)+
 						64*(v[6]<surf)+
@@ -172,11 +190,11 @@ struct Example : cmn::Engine3D {
 					const int* tris=triangulation_table[state];
 					for(int l=0; l<12; l+=3) {
 						if(tris[l]==-1) break;
-						//find edges
+						//get edges
 						const int* e0=edge_indexes[tris[l]];
 						const int* e1=edge_indexes[tris[l+1]];
 						const int* e2=edge_indexes[tris[l+2]];
-						//find interpolators
+						//get interpolators
 						float t0=(surf-v[e0[0]])/(v[e0[1]]-v[e0[0]]);
 						float t1=(surf-v[e1[0]])/(v[e1[1]]-v[e1[0]]);
 						float t2=(surf-v[e2[0]])/(v[e2[1]]-v[e2[0]]);
@@ -193,14 +211,10 @@ struct Example : cmn::Engine3D {
 		if(show_grid) {
 			//show x lines
 			const float min_x=0, max_x=width-1;
-			//const float min_x=-.5f*width;
-			//const float max_x=.5f*width;
 			for(int j=0; j<height; j++) {
 				float y=j;
-				//float y=j-.5f*height;
 				for(int k=0; k<depth; k++) {
 					float z=k;
-					//float z=k-.5f*depth;
 					cmn::Line l{vf3d(min_x, y, z), vf3d(max_x, y, z)};
 					l.col=olc::RED;
 					lines_to_project.push_back(l);
@@ -209,14 +223,10 @@ struct Example : cmn::Engine3D {
 
 			//show y lines
 			const float min_y=0, max_y=height-1;
-			//const float min_y=-.5f*height;
-			//const float max_y=.5f*height;
 			for(int k=0; k<depth; k++) {
 				float z=k;
-				//float z=k-.5f*depth;
 				for(int i=0; i<width; i++) {
 					float x=i;
-					//float x=i-.5f*width;
 					cmn::Line l{vf3d(x, min_y, z), vf3d(x, max_y, z)};
 					l.col=olc::BLUE;
 					lines_to_project.push_back(l);
@@ -225,14 +235,10 @@ struct Example : cmn::Engine3D {
 
 			//show x lines
 			const float min_z=0, max_z=depth-1;
-			//const float min_z=-.5f*depth;
-			//const float max_z=.5f*depth;
 			for(int i=0; i<width; i++) {
 				float x=i;
-				//float x=i-.5f*width;
 				for(int j=0; j<height; j++) {
 					float y=j;
-					//float y=j-.5f*height;
 					cmn::Line l{vf3d(x, y, min_z), vf3d(x, y, max_z)};
 					l.col=olc::GREEN;
 					lines_to_project.push_back(l);
@@ -273,6 +279,6 @@ int main() {
 	Example e;
 	bool vsync=true;
 	if(e.Construct(540, 360, 1, 1, false, vsync)) e.Start();
-
+	
 	return 0;
 }
