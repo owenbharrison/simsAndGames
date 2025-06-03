@@ -90,13 +90,16 @@ struct Example : cmn::Engine3D {
 			
 			if(GetKey(olc::Key::X).bPressed) edit=true, width+=inc;
 			if(width<2) width=2;
+			if(width>50) width=50;
 
  			if(GetKey(olc::Key::Y).bPressed) edit=true, height+=inc;
 			if(height<2) height=2;
-			
+			if(height>50) height=50;
+
 			if(GetKey(olc::Key::Z).bPressed) edit=true, depth+=inc;
 			if(depth<2) depth=2;
-			
+			if(depth>50) depth=50;
+
 			//reallocate
 			if(edit) values=new float[width*height*depth];
 		}
@@ -105,7 +108,7 @@ struct Example : cmn::Engine3D {
 		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
 
 		//move along time
-		if(GetKey(olc::Key::ENTER).bHeld) total_dt+=dt;
+		if(GetKey(olc::Key::ENTER).bHeld) total_dt+=.5f*dt;
 
 		//fill grid
 		for(int i=0; i<width; i++) {
@@ -119,7 +122,6 @@ struct Example : cmn::Engine3D {
 				}
 			}
 		}
-
 
 		return true;
 	}
@@ -136,7 +138,7 @@ struct Example : cmn::Engine3D {
 					float min_z=k, max_z=1+k;
 					//float min_z=k-.5f*depth, max_z=1+min_z;
 					//get cube corners
-					vf3d v[8]{
+					vf3d c[8]{
 						{min_x, min_y, min_z},
 						{max_x, min_y, min_z},
 						{min_x, max_y, min_z},
@@ -146,27 +148,42 @@ struct Example : cmn::Engine3D {
 						{min_x, max_y, max_z},
 						{max_x, max_y, max_z}
 					};
+					float v[8]{
+						values[ix(i, j, k)],
+						values[ix(i+1, j, k)],
+						values[ix(i, j+1, k)],
+						values[ix(i+1, j+1, k)],
+						values[ix(i, j, k+1)],
+						values[ix(i+1, j, k+1)],
+						values[ix(i, j+1, k+1)],
+						values[ix(i+1, j+1, k+1)]
+					};
 					//find cube state
 					int state=
-						128*(values[ix(i+1, j+1, k+1)]<surf)+
-						64*(values[ix(i, j+1, k+1)]<surf)+
-						32*(values[ix(i+1, j, k+1)]<surf)+
-						16*(values[ix(i, j, k+1)]<surf)+
-						8*(values[ix(i+1, j+1, k)]<surf)+
-						4*(values[ix(i, j+1, k)]<surf)+
-						2*(values[ix(i+1, j, k)]<surf)+
-						1*(values[ix(i, j, k)]<surf);
+						128*(v[7]<surf)+
+						64*(v[6]<surf)+
+						32*(v[5]<surf)+
+						16*(v[4]<surf)+
+						8*(v[3]<surf)+
+						4*(v[2]<surf)+
+						2*(v[1]<surf)+
+						1*(v[0]<surf);
 					//triangulate
 					const int* tris=triangulation_table[state];
 					for(int l=0; l<12; l+=3) {
 						if(tris[l]==-1) break;
+						//find edges
 						const int* e0=edge_indexes[tris[l]];
 						const int* e1=edge_indexes[tris[l+1]];
 						const int* e2=edge_indexes[tris[l+2]];
+						//find interpolators
+						float t0=(surf-v[e0[0]])/(v[e0[1]]-v[e0[0]]);
+						float t1=(surf-v[e1[0]])/(v[e1[1]]-v[e1[0]]);
+						float t2=(surf-v[e2[0]])/(v[e2[1]]-v[e2[0]]);
 						tris_to_project.push_back({
-							v[e0[0]]+.5f*(v[e0[1]]-v[e0[0]]),
-							v[e1[0]]+.5f*(v[e1[1]]-v[e1[0]]),
-							v[e2[0]]+.5f*(v[e2[1]]-v[e2[0]])
+							c[e0[0]]+t0*(c[e0[1]]-c[e0[0]]),
+							c[e1[0]]+t1*(c[e1[1]]-c[e1[0]]),
+							c[e2[0]]+t2*(c[e2[1]]-c[e2[0]])
 						});
 					}
 				}
