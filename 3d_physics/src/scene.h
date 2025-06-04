@@ -96,8 +96,6 @@ struct Scene {
 			std::stringstream line_str(line);
 			std::string type; line_str>>type;
 
-			std::cout<<"type: "<<type<<'\n';
-
 			if(type=="shp") {
 				//parse shape header
 				int num_p, num_c, num_t, num_e;

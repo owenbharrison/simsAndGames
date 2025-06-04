@@ -156,7 +156,7 @@
     <ClInclude Include="src\phys\shape.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\stack_chain.txt" />
+    <Text Include="assets\stack_chain.fzx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

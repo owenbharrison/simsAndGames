@@ -42,69 +42,14 @@ struct Physics3DUI : cmn::Engine3D {
 	const float time_step=1/120.f;
 	float update_timer=0;
 
-	void setupScene() {
-		scene=Scene();
-		
-		Shape ground({vf3d(-7, -1, -3), vf3d(7, 0, 4)});
-		for(int i=0; i<ground.getNum(); i++) {
-			ground.particles[i].locked=true;
-		}
-		ground.fill=olc::WHITE;
-		scene.shapes.push_back(ground);
-
-		Shape stack0({vf3d(-6, 1, -2), vf3d(-1, 2, 3)});
-		stack0.fill=olc::PURPLE;
-		scene.shapes.push_back(stack0);
-
-		Shape stack1({vf3d(-5, 3, -1), vf3d(-2, 4, 2)});
-		stack1.fill=olc::GREEN;
-		scene.shapes.push_back(stack1);
-
-		Shape stack2({vf3d(-4, 5, 0), vf3d(-3, 6, 1)});
-		stack2.fill=olc::ORANGE;
-		scene.shapes.push_back(stack2);
-
-		Shape chain0({vf3d(0, 6, 0), vf3d(2, 7, 1)});
-		chain0.particles[2].locked=true;
-		chain0.particles[6].locked=true;
-		chain0.fill=olc::RED;
-		scene.shapes.push_back(chain0);
-		auto chain0_ptr=&scene.shapes.back();
-
-		Shape chain1({vf3d(2, 6, 0), vf3d(4, 7, 1)});
-		chain1.fill=olc::YELLOW;
-		scene.shapes.push_back(chain1);
-		auto chain1_ptr=&scene.shapes.back();
-
-		Shape chain2({vf3d(4, 6, -1), vf3d(6, 7, 2)});
-		chain2.fill=olc::BLUE;
-		scene.shapes.push_back(chain2);
-		auto chain2_ptr=&scene.shapes.back();
-
-		scene.joints.push_back({
-			chain0_ptr,
-			{1, 3, 5, 7},
-			chain1_ptr,
-			{0, 2, 4, 6},
-			});
-
-		scene.joints.push_back({
-			chain1_ptr,
-			{1, 3, 5, 7},
-			chain2_ptr,
-			{0, 2, 4, 6},
-			});
-	}
-	
 	bool user_create() override {
 		srand(time(0));
-		
+
 		cam_pos={0, 5.5f, 8};
 		light_pos={0, 12, 0};
 
-		try{
-			scene=Scene::load("assets/stack_chain.txt");
-			std::cout<<scene.joints.size()<<'\n';
+		try {
+			scene=Scene::load("assets/stack_chain.fzx");
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
@@ -282,7 +227,7 @@ struct Physics3DUI : cmn::Engine3D {
 						}
 						if(to_skip) break;
 					}
-					
+
 					auto& b1=c.second->particles[eb.a];
 					auto& b2=c.second->particles[eb.b];
 					//find close points on both edges
@@ -348,7 +293,7 @@ struct Physics3DUI : cmn::Engine3D {
 			to_time=true;
 			std::cout<<"timing info:\n";
 		}
-		
+
 		if(to_time) update_watch.start();
 
 		handleUserInput(dt);
@@ -424,7 +369,7 @@ struct Physics3DUI : cmn::Engine3D {
 			auto dur=pc_watch.getMicros();
 			std::cout<<"  project & clip: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
 		}
-		
+
 		if(to_time) render_watch.start();
 
 		Clear(olc::Pixel(35, 35, 35));
@@ -443,7 +388,7 @@ struct Physics3DUI : cmn::Engine3D {
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
 				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.p[1].x, l.p[1].y, l.t[1].w, 
 				l.col, l.id
 			);
 		}

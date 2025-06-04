@@ -40,6 +40,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\stack_chain.txt" />
+    <Text Include="assets\stack_chain.fzx" />
   </ItemGroup>
 </Project>
