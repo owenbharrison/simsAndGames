@@ -29,8 +29,17 @@
     <ClInclude Include="src\phys\spring.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\shape.h">
+    <ClInclude Include="src\phys\shape.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\scene.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\phys\joint.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\stack_chain.txt" />
   </ItemGroup>
 </Project>

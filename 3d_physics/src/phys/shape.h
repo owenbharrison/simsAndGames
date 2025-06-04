@@ -2,7 +2,7 @@
 #ifndef SHAPE_CLASS_H
 #define SHAPE_CLASS_H
 
-#include "phys/constraint.h"
+#include "constraint.h"
 
 struct IndexTriangle {
 	int a=0, b=0, c=0;
@@ -46,7 +46,7 @@ public:
 	std::list<IndexTriangle> tris;
 	std::list<IndexEdge> edges;
 
-	olc::Pixel col=olc::WHITE;
+	olc::Pixel fill=olc::WHITE;
 
 	Shape() {}
 
@@ -211,7 +211,7 @@ void Shape::copyFrom(const Shape& s) {
 	edges=s.edges;
 
 	//copy over graphics
-	col=s.col;
+	fill=s.fill;
 }
 
 void Shape::clear() {

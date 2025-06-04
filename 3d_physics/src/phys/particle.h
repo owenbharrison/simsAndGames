@@ -6,7 +6,6 @@ struct Particle {
 	vf3d pos, old_pos, forces;
 	float mass=1;
 	bool locked=false;
-	cmn::v2d uv;
 
 	static const float rad;
 

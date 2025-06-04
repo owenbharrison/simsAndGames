@@ -149,9 +149,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\phys\constraint.h" />
+    <ClInclude Include="src\phys\joint.h" />
     <ClInclude Include="src\phys\particle.h" />
     <ClInclude Include="src\phys\spring.h" />
-    <ClInclude Include="src\shape.h" />
+    <ClInclude Include="src\scene.h" />
+    <ClInclude Include="src\phys\shape.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\stack_chain.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

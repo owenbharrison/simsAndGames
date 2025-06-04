@@ -7,48 +7,15 @@ using olc::vf2d;
 using cmn::vf3d;
 using cmn::Mat4;
 
-constexpr float Pi=3.1415927f;
+#include "common/stopwatch.h"
 
-#include "phys/constraint.h"
-//#include "phys/spring.h"
+constexpr float Pi=3.1415927f;
 
 vf3d projectOntoPlane(const vf3d& v, const vf3d& norm) {
 	return v-norm.dot(v)*norm;
 }
 
-#include "shape.h"
-
-#include "common/stopwatch.h"
-
-//basically a weighted constraint
-struct Joint {
-	Shape* shp_a=nullptr;
-	std::list<int> ix_a;
-	Shape* shp_b=nullptr;
-	std::list<int> ix_b;
-
-	void update() {
-		//find side centers
-		vf3d avg_a;
-		for(const auto& ia:ix_a) avg_a+=shp_a->particles[ia].pos;
-		avg_a/=ix_a.size();
-		vf3d avg_b;
-		for(const auto& ib:ix_b) avg_b+=shp_b->particles[ib].pos;
-		avg_b/=ix_b.size();
-
-		//update each side halfway
-		vf3d axis=avg_b-avg_a;
-		vf3d delta=.5f*axis;
-		for(const auto& ia:ix_a) {
-			auto& a=shp_a->particles[ia];
-			if(!a.locked) a.pos+=delta;
-		}
-		for(const auto& ib:ix_b) {
-			auto& b=shp_b->particles[ib];
-			if(!b.locked) b.pos-=delta;
-		}
-	}
-};
+#include "scene.h"
 
 struct Physics3DUI : cmn::Engine3D {
 	Physics3DUI() {
@@ -70,67 +37,78 @@ struct Physics3DUI : cmn::Engine3D {
 
 	//physics stuff
 	const vf3d gravity{0, -9.8f, 0};
-	std::list<Shape> shapes;
-	std::list<Joint> joints;
+	Scene scene;
 
 	const float time_step=1/120.f;
 	float update_timer=0;
 
-	bool user_create() override {
-		srand(time(0));
+	void setupScene() {
+		scene=Scene();
 		
-		cam_pos={0, 5.5f, 8};
-		light_pos={0, 12, 0};
-
 		Shape ground({vf3d(-7, -1, -3), vf3d(7, 0, 4)});
 		for(int i=0; i<ground.getNum(); i++) {
 			ground.particles[i].locked=true;
 		}
-		ground.col=olc::WHITE;
-		shapes.push_back(ground);
+		ground.fill=olc::WHITE;
+		scene.shapes.push_back(ground);
 
 		Shape stack0({vf3d(-6, 1, -2), vf3d(-1, 2, 3)});
-		stack0.col=olc::PURPLE;
-		shapes.push_back(stack0);
+		stack0.fill=olc::PURPLE;
+		scene.shapes.push_back(stack0);
 
 		Shape stack1({vf3d(-5, 3, -1), vf3d(-2, 4, 2)});
-		stack1.col=olc::GREEN;
-		shapes.push_back(stack1);
+		stack1.fill=olc::GREEN;
+		scene.shapes.push_back(stack1);
 
 		Shape stack2({vf3d(-4, 5, 0), vf3d(-3, 6, 1)});
-		stack2.col=olc::ORANGE;
-		shapes.push_back(stack2);
+		stack2.fill=olc::ORANGE;
+		scene.shapes.push_back(stack2);
 
 		Shape chain0({vf3d(0, 6, 0), vf3d(2, 7, 1)});
 		chain0.particles[2].locked=true;
 		chain0.particles[6].locked=true;
-		chain0.col=olc::RED;
-		shapes.push_back(chain0);
-		auto chain0_ptr=&shapes.back();
+		chain0.fill=olc::RED;
+		scene.shapes.push_back(chain0);
+		auto chain0_ptr=&scene.shapes.back();
 
 		Shape chain1({vf3d(2, 6, 0), vf3d(4, 7, 1)});
-		chain1.col=olc::YELLOW;
-		shapes.push_back(chain1);
-		auto chain1_ptr=&shapes.back();
+		chain1.fill=olc::YELLOW;
+		scene.shapes.push_back(chain1);
+		auto chain1_ptr=&scene.shapes.back();
 
 		Shape chain2({vf3d(4, 6, -1), vf3d(6, 7, 2)});
-		chain2.col=olc::BLUE;
-		shapes.push_back(chain2);
-		auto chain2_ptr=&shapes.back();
+		chain2.fill=olc::BLUE;
+		scene.shapes.push_back(chain2);
+		auto chain2_ptr=&scene.shapes.back();
 
-		joints.push_back({
+		scene.joints.push_back({
 			chain0_ptr,
 			{1, 3, 5, 7},
 			chain1_ptr,
 			{0, 2, 4, 6},
 			});
 
-		joints.push_back({
+		scene.joints.push_back({
 			chain1_ptr,
 			{1, 3, 5, 7},
 			chain2_ptr,
 			{0, 2, 4, 6},
 			});
+	}
+	
+	bool user_create() override {
+		srand(time(0));
+		
+		cam_pos={0, 5.5f, 8};
+		light_pos={0, 12, 0};
+
+		try{
+			scene=Scene::load("assets/stack_chain.txt");
+			std::cout<<scene.joints.size()<<'\n';
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
+		}
 
 		return true;
 	}
@@ -181,8 +159,8 @@ struct Physics3DUI : cmn::Engine3D {
 	void handlePhysics(float dt) {
 		//find potential matches
 		std::list<std::pair<Shape*, Shape*>> checks;
-		for(auto ait=shapes.begin(); ait!=shapes.end(); ait++) {
-			for(auto bit=std::next(ait); bit!=shapes.end(); bit++) {
+		for(auto ait=scene.shapes.begin(); ait!=scene.shapes.end(); ait++) {
+			for(auto bit=std::next(ait); bit!=scene.shapes.end(); bit++) {
 				//predicated by bounding box
 				cmn::AABB3 a_box=ait->getAABB();
 				a_box.min-=Particle::rad, a_box.max+=Particle::rad;
@@ -200,7 +178,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 				//find joint conflicts
 				const std::list<int>* skip_ix=nullptr;
-				for(const auto& j:joints) {
+				for(const auto& j:scene.joints) {
 					if(j.shp_a==&a&&j.shp_b==&b) {
 						skip_ix=&j.ix_a;
 						break;
@@ -266,7 +244,7 @@ struct Physics3DUI : cmn::Engine3D {
 		for(const auto& c:checks) {
 			//find joint conflicts
 			const std::list<int>* skip_ix_a=nullptr, * skip_ix_b=nullptr;
-			for(const auto& j:joints) {
+			for(const auto& j:scene.joints) {
 				if(j.shp_a==c.first&&j.shp_b==c.second) {
 					skip_ix_a=&j.ix_a, skip_ix_b=&j.ix_b;
 					break;
@@ -351,12 +329,12 @@ struct Physics3DUI : cmn::Engine3D {
 		}
 
 		//update joints
-		for(auto& j:joints) {
+		for(auto& j:scene.joints) {
 			j.update();
 		}
 
 		//integration
-		for(auto& s:shapes) {
+		for(auto& s:scene.shapes) {
 			for(int i=0; i<s.getNum(); i++) {
 				s.particles[i].accelerate(gravity);
 			}
@@ -402,13 +380,13 @@ struct Physics3DUI : cmn::Engine3D {
 	bool user_geometry() override {
 		if(to_time) geom_watch.start();
 
-		for(const auto& s:shapes) {
+		for(const auto& s:scene.shapes) {
 			if(show_edges) {
 				for(const auto& ie:s.edges) {
 					cmn::Line l{
 						s.particles[ie.a].pos,
 						s.particles[ie.b].pos
-					}; l.col=s.col;
+					}; l.col=s.fill;
 					lines_to_project.push_back(l);
 				}
 			} else {
@@ -417,14 +395,14 @@ struct Physics3DUI : cmn::Engine3D {
 						s.particles[it.a].pos,
 						s.particles[it.b].pos,
 						s.particles[it.c].pos
-					}; t.col=s.col;
+					}; t.col=s.fill;
 					tris_to_project.push_back(t);
 				}
 			}
 		}
 
 		if(show_bounds) {
-			for(const auto& s:shapes) {
+			for(const auto& s:scene.shapes) {
 				addAABB(s.getAABB(), olc::BLACK);
 			}
 		}
@@ -471,7 +449,7 @@ struct Physics3DUI : cmn::Engine3D {
 		}
 
 		if(show_verts) {
-			for(const auto& s:shapes) {
+			for(const auto& s:scene.shapes) {
 				for(int i=0; i<s.getNum(); i++) {
 					vf3d ndc=s.particles[i].pos*mat_view*mat_proj;
 					ndc/=ndc.w;
@@ -504,5 +482,5 @@ int main() {
 	bool vsync=true;
 	if(p3dui.Construct(540, 360, 1, 1, false, vsync)) p3dui.Start();
 
-	return 0;
+	return 200;
 }
