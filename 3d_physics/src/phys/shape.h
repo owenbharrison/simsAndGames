@@ -130,6 +130,12 @@ public:
 			particles[i].update(dt);
 		}
 	}
+
+	void keepIn(const cmn::AABB3& box) {
+		for(int i=0; i<num_ptc; i++) {
+			particles[i].keepIn(box);
+		}
+	}
 };
 
 void Shape::initConstraints() {

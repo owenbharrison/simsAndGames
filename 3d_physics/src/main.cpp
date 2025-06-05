@@ -31,8 +31,8 @@ struct Physics3DUI : cmn::Engine3D {
 	bool show_verts=false;
 	bool show_edges=false;
 	bool update_phys=false;
-
 	bool to_time=false;
+
 	cmn::Stopwatch update_watch, geom_watch, pc_watch, render_watch;
 
 	//physics stuff
@@ -49,7 +49,7 @@ struct Physics3DUI : cmn::Engine3D {
 		light_pos={0, 12, 0};
 
 		try {
-			scene=Scene::load("assets/stack_chain.fzx");
+			scene=Scene::load("assets/tower.fzx");
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
@@ -284,17 +284,17 @@ struct Physics3DUI : cmn::Engine3D {
 				s.particles[i].accelerate(gravity);
 			}
 			s.update(dt);
+			s.keepIn(scene.bounds);
 		}
 	}
 
 	bool user_update(float dt) override {
+		update_watch.start();
+
 		//exterior input logic
 		if(GetKey(olc::Key::T).bPressed) {
 			to_time=true;
-			std::cout<<"timing info:\n";
 		}
-
-		if(to_time) update_watch.start();
 
 		handleUserInput(dt);
 
@@ -302,7 +302,7 @@ struct Physics3DUI : cmn::Engine3D {
 			//ensure similar update across multiple framerates
 			update_timer+=dt;
 			while(update_timer>time_step) {
-				const int num_steps=12;
+				const int num_steps=4;
 				const float sub_time_step=time_step/num_steps;
 				for(int i=0; i<num_steps; i++) {
 					handlePhysics(sub_time_step);
@@ -312,18 +312,14 @@ struct Physics3DUI : cmn::Engine3D {
 			}
 		}
 
-		if(to_time) {
-			update_watch.stop();
-			auto dur=update_watch.getMicros();
-			std::cout<<"  update: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
-		}
+		update_watch.stop();
 
 		return true;
 	}
 
 	//combine all scene geometry
 	bool user_geometry() override {
-		if(to_time) geom_watch.start();
+		geom_watch.start();
 
 		for(const auto& s:scene.shapes) {
 			if(show_edges) {
@@ -348,29 +344,22 @@ struct Physics3DUI : cmn::Engine3D {
 
 		if(show_bounds) {
 			for(const auto& s:scene.shapes) {
-				addAABB(s.getAABB(), olc::BLACK);
+				addAABB(s.getAABB(), olc::WHITE);
 			}
+			addAABB(scene.bounds, olc::BLACK);
 		}
 
-		if(to_time) {
-			geom_watch.stop();
-			auto dur=geom_watch.getMicros();
-			std::cout<<"  geom: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
-		}
+		geom_watch.stop();
 
-		if(to_time) pc_watch.start();
+		pc_watch.start();
 
 		return true;
 	}
 
 	bool user_render() override {
-		if(to_time) {
-			pc_watch.stop();
-			auto dur=pc_watch.getMicros();
-			std::cout<<"  project & clip: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
-		}
+		pc_watch.stop();
 
-		if(to_time) render_watch.start();
+		render_watch.start();
 
 		Clear(olc::Pixel(35, 35, 35));
 
@@ -388,7 +377,7 @@ struct Physics3DUI : cmn::Engine3D {
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
 				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w, 
+				l.p[1].x, l.p[1].y, l.t[1].w,
 				l.col, l.id
 			);
 		}
@@ -407,14 +396,21 @@ struct Physics3DUI : cmn::Engine3D {
 		}
 
 		if(!update_phys) {
-			DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::WHITE);
+			DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::RED);
 		}
 
-		if(to_time) {
-			render_watch.stop();
-			auto dur=render_watch.getMicros();
-			std::cout<<"  render: "<<dur<<"us ("<<(dur/1000.f)<<"ms)\n";
+		render_watch.stop();
 
+		if(to_time) {
+			auto update_dur=update_watch.getMicros();
+			auto geom_dur=geom_watch.getMicros();
+			auto pc_dur=pc_watch.getMicros();
+			auto render_dur=render_watch.getMicros();
+			std::cout<<"timing info:\n"<<
+				"  update: "<<update_dur<<"us ("<<(update_dur/1000.f)<<"ms)\n"<<
+				"  geom: "<<geom_dur<<"us ("<<(geom_dur/1000.f)<<"ms)\n"<<
+				"  project & clip: "<<pc_dur<<"us ("<<(pc_dur/1000.f)<<"ms)\n"<<
+				"  render: "<<render_dur<<"us ("<<(render_dur/1000.f)<<"ms)\n";
 			to_time=false;
 		}
 

@@ -42,4 +42,8 @@
   <ItemGroup>
     <Text Include="assets\stack_chain.fzx" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\logs.fzx" />
+    <None Include="assets\tower.fzx" />
+  </ItemGroup>
 </Project>

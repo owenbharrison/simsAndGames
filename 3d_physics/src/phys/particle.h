@@ -36,6 +36,34 @@ struct Particle {
 		//reset forces
 		forces*=0;
 	}
+
+	void keepIn(const cmn::AABB3& box) {
+		vf3d vel=pos-old_pos;
+		if(pos.x<box.min.x) {
+			pos.x=box.min.x;
+			old_pos.x=pos.x+vel.x;
+		}
+		if(pos.y<box.min.y) {
+			pos.y=box.min.y;
+			old_pos.y=pos.y+vel.y;
+		}
+		if(pos.z<box.min.z) {
+			pos.z=box.min.z;
+			old_pos.z=pos.z+vel.z;
+		}
+		if(pos.x>box.max.x) {
+			pos.x=box.max.x;
+			old_pos.x=pos.x+vel.x;
+		}
+		if(pos.y>box.max.y) {
+			pos.y=box.max.y;
+			old_pos.y=pos.y+vel.y;
+		}
+		if(pos.z>box.max.z) {
+			pos.z=box.max.z;
+			old_pos.z=pos.z+vel.z;
+		}
+	}
 };
 
 const float Particle::rad=.1f;

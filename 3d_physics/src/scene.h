@@ -15,6 +15,7 @@ struct Scene {
 	//list so they can be removed w/o realloc?
 	std::list<Shape> shapes;
 	std::list<Joint> joints;
+	cmn::AABB3 bounds{vf3d(0, 0, 0), vf3d(1, 1, 1)};
 
 	bool save(const std::string& filename) {
 		std::ofstream file(filename);
@@ -75,6 +76,11 @@ struct Scene {
 			for(const auto& ib:j.ix_b) file<<' '<<ib;
 			file<<'\n';
 		}
+
+		//print bounds
+		file<<"bnd\n"<<
+			"  a "<<bounds.min.x<<' '<<bounds.min.y<<' '<<bounds.min.z<<'\n'<<
+			"  b "<<bounds.max.x<<' '<<bounds.max.y<<' '<<bounds.max.z<<'\n';
 
 		file.close();
 
@@ -233,6 +239,27 @@ struct Scene {
 
 				//add
 				scene.joints.push_back(j);
+			}
+
+			//parse bounds
+			else if(type=="bnd") {
+				std::getline(file, line);
+				line_str.str(line), line_str.clear();
+				
+				//check
+				char elem; line_str>>elem;
+				if(elem!='a') throw std::runtime_error("expected an a");
+
+				line_str>>scene.bounds.min.x>>scene.bounds.min.y>>scene.bounds.min.z;
+
+				std::getline(file, line);
+				line_str.str(line), line_str.clear();
+				
+				//check
+				line_str>>elem;
+				if(elem!='b') throw std::runtime_error("expected a b");
+
+				line_str>>scene.bounds.max.x>>scene.bounds.max.y>>scene.bounds.max.z;
 			}
 		}
 
