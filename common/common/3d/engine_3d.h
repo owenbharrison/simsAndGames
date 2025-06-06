@@ -602,8 +602,6 @@ namespace cmn {
 	};
 
 	bool Engine3D::OnUserCreate() {
-		if(!user_create()) return false;
-
 		//create projection matrix
 		float asp=float(ScreenHeight())/ScreenWidth();
 		mat_proj=Mat4::makeProj(cam_fov_deg, asp, .001f, 1000.f);
@@ -613,6 +611,8 @@ namespace cmn {
 
 		//object buffering?
 		id_buffer=new int[ScreenWidth()*ScreenHeight()];
+
+		if(!user_create()) return false;
 
 		return true;
 	}
