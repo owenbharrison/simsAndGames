@@ -2,82 +2,53 @@
 namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
 }
+using olc::vf2d;
 using cmn::vf3d;
+using cmn::Mat4;
 
-constexpr float Pi=3.1415927f;
+#include "common/utils.h"
 
 #include "mesh.h"
 
-struct Camera {
-	int width=0, height=0;
-	vf3d pos, dir;
-	olc::Sprite* curr_spr=nullptr, *prev_spr=nullptr;
+#include "camera.h"
 
-	Camera() {}
-
-	Camera(int w, int h, vf3d p, vf3d d) {
-		width=w;
-		height=h;
-		pos=p;
-		dir=d;
-		curr_spr=new olc::Sprite(w, h);
-		prev_spr=new olc::Sprite(w, h);
-	}
-};
-
-struct Example : cmn::Engine3D {
-	Example() {
-		sAppName="tracking";
+struct TrackingUI : cmn::Engine3D {
+	TrackingUI() {
+		sAppName="3D Tracking Demo";
 	}
 
 	//camera positioning
-	float cam_yaw=-Pi/2;
-	float cam_pitch=0;
+	float cam_yaw=-1.83f;
+	float cam_pitch=-0.37f;
 
 	//scene stuff
-	Mesh mesh;
-	const cmn::AABB3 bounds{vf3d(-3, -2, -3), vf3d(3, 2, 3)};
-
-	std::list<Camera> cams;
+	Mesh model;
+	const cmn::AABB3 bounds{vf3d(-6, -3, -6), vf3d(6, 3, 6)};
 
 	//graphics stuff
+	std::vector<Camera> cams;
 	olc::Sprite* render_spr=nullptr;
 
+	//debug toggles
 	bool to_spin=true;
+	bool show_cams=false;
 
-	bool user_create() override {
-		cam_pos={-1.75f, 0, 8};
-		light_pos={0, 10, 0};
+	//tracking info
+	float track_timer=0;
+	std::vector<cmn::Line> rays;
+	bool object_moving=false;
+	vf3d object_pos;
 
-		//try load mesh
-		try {
-			mesh=Mesh::loadFromOBJ("assets/car.txt");
-		} catch(const std::exception& e) {
-			std::cout<<"  "<<e.what()<<'\n';
-			return false;
-		}
+	void updateCam(Camera& c, const std::vector<cmn::Triangle> tris) {
+		//target tex & save pos
+		vf3d old_cam_pos=cam_pos;
+		vf3d old_cam_dir=cam_dir;
+		SetDrawTarget(render_spr);
 
-		//add cameras at corners pointing toward center
-		vf3d ctr=bounds.getCenter();
-		vf3d vnn(bounds.min.x, bounds.min.y, bounds.min.z);
-		cams.emplace_back(120, 90, vnn, (ctr-vnn).norm());
-		vf3d vpn(bounds.max.x, bounds.min.y, bounds.min.z);
-		cams.emplace_back(120, 90, vpn, (ctr-vpn).norm());
-		vf3d vpp(bounds.max.x, bounds.min.y, bounds.max.z);
-		cams.emplace_back(120, 90, vpp, (ctr-vpp).norm());
-		vf3d vnp(bounds.min.x, bounds.min.y, bounds.max.z);
-		cams.emplace_back(120, 90, vnp, (ctr-vnp).norm());
-
-		//setup render texture
-		render_spr=new olc::Sprite(ScreenWidth(), ScreenHeight());
-
-		return true;
-	}
-
-	void renderCam(Camera& c) {
 		//clip
 		cam_pos=c.pos;
 		cam_dir=c.dir;
+		tris_to_project=tris;
 		projectAndClip();
 
 		//reset
@@ -100,21 +71,111 @@ struct Example : cmn::Engine3D {
 		std::swap(c.curr_spr, c.prev_spr);
 
 		//update texture
-		for(int i=0; i<c.curr_spr->width; i++) {
-			for(int j=0; j<c.curr_spr->height; j++) {
-				float u=float(i)/c.curr_spr->width;
-				float v=float(j)/c.curr_spr->height;
-				c.curr_spr->SetPixel(i, j, render_spr->Sample(u, v));
+		c.updateSpr(render_spr);
+
+		//reset target & pos
+		cam_pos=old_cam_pos;
+		cam_dir=old_cam_dir;
+		SetDrawTarget(nullptr);
+	}
+
+	bool user_create() override {
+		cam_pos={2.95f, 2.55f, 10.73f};
+		light_pos={0, 10, 0};
+
+		//try load meshes
+		try {
+			model=Mesh::loadFromOBJ("assets/car.txt");
+			model.scale={.5f, .5f, .5f};
+			model.updateTransforms();
+			model.updateTriangles();
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
+		}
+
+		//add cameras at corners pointing toward center
+		{
+			const vf3d c[8]{
+				{bounds.min.x, bounds.min.y, bounds.min.z},
+				{bounds.max.x, bounds.min.y, bounds.min.z},
+				{bounds.min.x, bounds.max.y, bounds.min.z},
+				{bounds.max.x, bounds.max.y, bounds.min.z},
+				{bounds.min.x, bounds.min.y, bounds.max.z},
+				{bounds.max.x, bounds.min.y, bounds.max.z},
+				{bounds.min.x, bounds.max.y, bounds.max.z},
+				{bounds.max.x, bounds.max.y, bounds.max.z}
+			};
+			vf3d ctr=bounds.getCenter();
+			for(int i=0; i<8; i++) {
+				cams.emplace_back(120, 90, c[i], (ctr-c[i]).norm());
 			}
 		}
+
+		//setup render texture
+		render_spr=new olc::Sprite(ScreenWidth(), ScreenHeight());
+
+		//simulate camera calibration
+		for(auto& c:cams) {
+			//get basis vectors
+			vf3d up(0, 1, 0);
+			vf3d rgt=c.dir.cross(up).norm();
+			up=rgt.cross(c.dir);
+
+			//10cm square in front of camera
+			const float c_w=.1f, c_h=.1f;
+			//10-20cm away
+			float d=cmn::random(.1f, .2f);
+
+			//vertex positioning
+			vf3d ctr=c.pos+d*c.dir;
+			vf3d tl=ctr+c_w/2*rgt+c_h/2*up;
+			vf3d bl=ctr-c_w/2*rgt+c_h/2*up;
+			vf3d tr=ctr+c_w/2*rgt-c_h/2*up;
+			vf3d br=ctr-c_w/2*rgt-c_h/2*up;
+			updateCam(c, {{tl, br, tr}, {tl, bl, br}});
+
+			//find width in pixels
+			int min_x=-1, min_y=-1;
+			int max_x=-1, max_y=-1;
+			for(int x=0; x<c.width; x++) {
+				for(int y=0; y<c.height; y++) {
+					olc::Pixel curr=c.curr_spr->GetPixel(x, y);
+					float lum=(curr.r+curr.g+curr.b)/765.f;
+					if(lum>.1f) {
+						if(min_x<0||x<min_x) min_x=x;
+						if(min_y<0||y<min_y) min_y=y;
+						if(max_x<0||x>max_x) max_x=x;
+						if(max_y<0||y>max_y) max_y=y;
+					}
+				}
+			}
+
+			if(min_x<0||min_y<0||max_x<0||max_y<0) {
+				std::cout<<"  camera calibration failed\n";
+				return false;
+			}
+
+			//calculate focal length
+			c.focal_length.x=(max_x-min_x)*d/c_w;
+			c.focal_length.y=(max_y-min_y)*d/c_h;
+		}
+
+		return true;
+	}
+
+	bool user_destroy() override {
+		delete render_spr;
+
+		return true;
 	}
 
 	bool user_update(float dt) override {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
+		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
 
 		//look left, right
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
@@ -146,43 +207,114 @@ struct Example : cmn::Engine3D {
 
 		//debug toggles
 		if(GetKey(olc::Key::ENTER).bPressed) to_spin^=true;
+		if(GetKey(olc::Key::C).bPressed) show_cams^=true;
 
-		if(to_spin) {
-			//spin mesh about y axis
-			mesh.rotation=Quat::fromAxisAngle(vf3d(0, 1, 0), dt)*mesh.rotation;
-			mesh.updateTransforms();
-			mesh.updateTriangles();
-			mesh.colorNormals();
+		//move model
+		{
+			int dir=GetKey(olc::Key::CTRL).bHeld?-1:1;
+			if(GetKey(olc::Key::X).bHeld) model.translation.x+=dir*dt;
+			if(GetKey(olc::Key::Y).bHeld) model.translation.y+=dir*dt;
+			if(GetKey(olc::Key::Z).bHeld) model.translation.z+=dir*dt;
 		}
+		
+		//spin mesh about y axis
+		if(to_spin) model.rotation=Quat::fromAxisAngle(vf3d(0, 1, 0), dt)*model.rotation;
+		
+		//update model
+		model.updateTransforms();
+		model.updateTriangles();
+		model.colorNormals();
 
-		//target tex & save pos
-		vf3d old_cam_pos=cam_pos;
-		vf3d old_cam_dir=cam_dir;
-		SetDrawTarget(render_spr);
+		//track every now and then
+		if(track_timer<0) {
+			track_timer=.5f;
 
-		//render all cameras
-		tris_to_project=mesh.tris;
-		for(auto& c:cams) {
-			renderCam(c);
+			//update cameras
+			for(auto& c:cams) {
+				updateCam(c, model.tris);
+			}
+
+			//where in image are most pixels moving
+			rays.clear();
+			for(int i=0; i<cams.size(); i++) {
+				const auto& c=cams[i];
+
+				//luminance weighted average
+				int x_sum=0, y_sum=0;
+				int l_sum=0;
+				for(int x=0; x<c.width; x++) {
+					for(int y=0; y<c.height; y++) {
+						olc::Pixel curr=c.curr_spr->GetPixel(x, y);
+						olc::Pixel prev=c.prev_spr->GetPixel(x, y);
+						int dr=curr.r-prev.r;
+						int dg=curr.g-prev.g;
+						int db=curr.b-prev.b;
+						int dsq=dr*dr+dg*dg+db*db;
+						x_sum+=dsq*x;
+						y_sum+=dsq*y;
+						l_sum+=dsq;
+					}
+				}
+				if(l_sum==0) continue;
+
+				//find position of differences
+				float x_avg=x_sum/float(l_sum);
+				float y_avg=y_sum/float(l_sum);
+				vf3d dir=c.getDir(x_avg, y_avg);
+				const float len=3.2f;
+				cmn::Line ray{c.pos, c.pos+len*dir};
+				ray.col=olc::WHITE;
+				ray.id=i;//reference cam
+				rays.push_back(ray);
+			}
+
+			//find segment intersection
+			object_moving=false;
+			if(rays.size()>=2) {
+				object_moving=true;
+
+				//sum of distance to lines
+				auto cost=[&] (vf3d pos) {
+					float sum=0;
+					for(const auto& r:rays) {
+						vf3d pa=pos-r.p[0], ba=r.p[1]-r.p[0];
+						sum+=pa.cross(ba).mag()/ba.mag();
+					}
+					return sum;
+				};
+
+				//gradient descent
+				const float h=.001f;
+				const float rate=.1f;
+				const int num=50;
+				vf3d ix(0, 0, 0);
+				for(int i=0; i<num; i++) {
+					//finite difference method
+					float curr=cost(ix);
+					float ddx=(cost(ix+vf3d(h, 0, 0))-curr)/h;
+					float ddy=(cost(ix+vf3d(0, h, 0))-curr)/h;
+					float ddz=(cost(ix+vf3d(0, 0, h))-curr)/h;
+					ix-=rate*vf3d(ddx, ddy, ddz);
+				}
+
+				//update position
+				object_pos=ix;
+			}
 		}
-
-		//reset target & pos
-		cam_pos=old_cam_pos;
-		cam_dir=old_cam_dir;
-		SetDrawTarget(nullptr);
+		track_timer-=dt;
 
 		return true;
 	}
 
 	bool user_geometry() override {
-		//add mesh
-		tris_to_project=mesh.tris;
-		
-		//add cameras
+		//show model
+		tris_to_project=model.tris;
+
+		//show camera frustums?
 		for(const auto& c:cams) {
 			//camera sizing
 			float w=.75f, h=w*c.height/c.width;
-			float cam_fov_rad=cam_fov_deg/180*Pi;
+			float cam_fov_rad=cam_fov_deg/180*cmn::Pi;
 			float d=w/2/std::tanf(cam_fov_rad/2);
 
 			//camera positioning
@@ -216,8 +348,64 @@ struct Example : cmn::Engine3D {
 			lines_to_project.push_back(l8);
 		}
 
-		//add bounds
-		addAABB(bounds, olc::WHITE);
+		//show camera renders as billboards
+		if(show_cams) {
+			for(int i=0; i<cams.size(); i++) {
+				const auto& c=cams[i];
+
+				//get basis vectors
+				vf3d norm=(c.pos-cam_pos).norm();
+				vf3d up(0, 1, 0);
+				vf3d rgt=norm.cross(up).norm();
+				up=rgt.cross(norm);
+
+				//vertex positioning
+				float w=1, h=w*c.height/c.width;
+				float d=1;
+				vf3d ctr=c.pos-d*c.dir;
+				vf3d tl=ctr+w/2*rgt+h/2*up;
+				vf3d tr=ctr+w/2*rgt-h/2*up;
+				vf3d bl=ctr-w/2*rgt+h/2*up;
+				vf3d br=ctr-w/2*rgt-h/2*up;
+
+				//texture coords
+				cmn::v2d tl_t{0, 0};
+				cmn::v2d tr_t{0, 1};
+				cmn::v2d bl_t{1, 0};
+				cmn::v2d br_t{1, 1};
+
+				//tesselation
+				cmn::Triangle f1{tl, br, tr, tl_t, br_t, tr_t}; f1.id=i;
+				tris_to_project.push_back(f1);
+				cmn::Triangle f2{tl, bl, br, tl_t, bl_t, br_t}; f2.id=i;
+				tris_to_project.push_back(f2);
+			}
+		}
+
+		//show bounds
+		addAABB(bounds, olc::BLACK);
+
+		//show rays
+		for(const auto& r:rays) {
+			lines_to_project.push_back(r);
+		}
+
+		//show intersection
+		const float size=1.2f;
+		vf3d x_diff(size/2, 0, 0);
+		vf3d y_diff(0, size/2, 0);
+		vf3d z_diff(0, 0, size/2);
+		cmn::Line ix_x{object_pos-x_diff, object_pos+x_diff};
+		cmn::Line ix_y{object_pos-y_diff, object_pos+y_diff};
+		cmn::Line ix_z{object_pos-z_diff, object_pos+z_diff};
+		if(object_moving) {
+			ix_x.col=olc::RED;
+			ix_y.col=olc::BLUE;
+			ix_z.col=olc::GREEN;
+		}
+		lines_to_project.push_back(ix_x);
+		lines_to_project.push_back(ix_y);
+		lines_to_project.push_back(ix_z);
 
 		return true;
 	}
@@ -228,11 +416,18 @@ struct Example : cmn::Engine3D {
 		resetBuffers();
 
 		for(const auto& t:tris_to_draw) {
-			FillDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
-				t.col, t.id
+			//texture triangles if id is valid
+			if(t.id==-1) FillDepthTriangle(
+					t.p[0].x, t.p[0].y, t.t[0].w,
+					t.p[1].x, t.p[1].y, t.t[1].w,
+					t.p[2].x, t.p[2].y, t.t[2].w,
+					t.col, t.id
+				);
+			else FillTexturedDepthTriangle(
+				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
+				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
+				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+				cams[t.id].curr_spr, t.col, t.id
 			);
 		}
 
@@ -244,36 +439,13 @@ struct Example : cmn::Engine3D {
 			);
 		}
 
-		//show cameras on side
-		int n=0, y=0;
-		for(const auto& c:cams) {
-			FillRect(0, y, c.width-1, c.height-1, olc::BLACK);
-			//show differences
-			for(int i=0; i<c.width; i++) {
-				for(int j=0; j<c.height; j++) {
-					olc::Pixel curr=c.curr_spr->GetPixel(i, j);
-					olc::Pixel prev=c.prev_spr->GetPixel(i, j);
-					int dr=curr.r-prev.r;
-					int dg=curr.g-prev.g;
-					int db=curr.b-prev.b;
-					int diff=dr*dr+dg*dg+db*db;
-					if(diff>20) Draw(i, y+j, olc::WHITE);
-				}
-			}
-			//show boundary and label
-			DrawRect(0, y, c.width-1, c.height-1, olc::PURPLE);
-			DrawString(0, y, std::to_string(n));
-			n++;
-			y+=c.height;
-		}
-
 		return true;
 	}
 };
 
 int main() {
-	Example e;
-	if(e.Construct(480, 360, 1, 1, false, true)) e.Start();
+	TrackingUI tui;
+	if(tui.Construct(640, 480, 1, 1, false, true)) tui.Start();
 
 	return 0;
 }

@@ -14,15 +14,15 @@ struct Mesh {
 	Quat rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
-	cmn::Mat4 mat_world;//local->world
+	Mat4 mat_world;//local->world
 	std::vector<cmn::Triangle> tris;
 	int id=-1;
 
 	void updateTransforms() {
 		//combine all transforms
-		cmn::Mat4 mat_rot=Quat::toMat4(rotation);
-		cmn::Mat4 mat_scale=cmn::Mat4::makeScale(scale.x, scale.y, scale.z);
-		cmn::Mat4 mat_trans=cmn::Mat4::makeTrans(translation.x, translation.y, translation.z);
+		Mat4 mat_rot=Quat::toMat4(rotation);
+		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
+		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
 		mat_world=mat_scale*mat_rot*mat_trans;
 	}
 

@@ -148,11 +148,13 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\camera.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\quat.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\car.txt" />
+    <Text Include="assets\icosphere.txt" />
     <Text Include="assets\suzanne.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

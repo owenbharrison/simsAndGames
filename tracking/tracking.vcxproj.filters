@@ -26,9 +26,13 @@
     <ClInclude Include="src\quat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\suzanne.txt" />
     <Text Include="assets\car.txt" />
+    <Text Include="assets\icosphere.txt" />
   </ItemGroup>
 </Project>
