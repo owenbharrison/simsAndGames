@@ -83,10 +83,10 @@ struct TrackingUI : cmn::Engine3D {
 		cam_pos={2.95f, 2.55f, 10.73f};
 		light_pos={0, 10, 0};
 
-		//try load meshes
+		//try load model
 		try {
 			model=Mesh::loadFromOBJ("assets/car.txt");
-			model.scale={.5f, .5f, .5f};
+			model.scale={.4f, .4f, .4f};
 			model.updateTransforms();
 			model.updateTriangles();
 		} catch(const std::exception& e) {
@@ -94,7 +94,7 @@ struct TrackingUI : cmn::Engine3D {
 			return false;
 		}
 
-		//add cameras at corners pointing toward center
+		//add cameras at corners and point towards center
 		{
 			const vf3d c[8]{
 				{bounds.min.x, bounds.min.y, bounds.min.z},
@@ -135,7 +135,7 @@ struct TrackingUI : cmn::Engine3D {
 			vf3d br=ctr-c_w/2*rgt-c_h/2*up;
 			updateCam(c, {{tl, br, tr}, {tl, bl, br}});
 
-			//find width in pixels
+			//find rendered size
 			int min_x=-1, min_y=-1;
 			int max_x=-1, max_y=-1;
 			for(int x=0; x<c.width; x++) {
@@ -212,9 +212,9 @@ struct TrackingUI : cmn::Engine3D {
 		//move model
 		{
 			int dir=GetKey(olc::Key::CTRL).bHeld?-1:1;
-			if(GetKey(olc::Key::X).bHeld) model.translation.x+=dir*dt;
-			if(GetKey(olc::Key::Y).bHeld) model.translation.y+=dir*dt;
-			if(GetKey(olc::Key::Z).bHeld) model.translation.z+=dir*dt;
+			if(GetKey(olc::Key::X).bHeld) model.translation.x+=2*dir*dt;
+			if(GetKey(olc::Key::Y).bHeld) model.translation.y+=2*dir*dt;
+			if(GetKey(olc::Key::Z).bHeld) model.translation.z+=2*dir*dt;
 		}
 		
 		//spin mesh about y axis
@@ -264,7 +264,6 @@ struct TrackingUI : cmn::Engine3D {
 				const float len=3.2f;
 				cmn::Line ray{c.pos, c.pos+len*dir};
 				ray.col=olc::WHITE;
-				ray.id=i;//reference cam
 				rays.push_back(ray);
 			}
 
@@ -286,9 +285,9 @@ struct TrackingUI : cmn::Engine3D {
 				//gradient descent
 				const float h=.001f;
 				const float rate=.1f;
-				const int num=50;
+				const int steps=50;
 				vf3d ix(0, 0, 0);
-				for(int i=0; i<num; i++) {
+				for(int i=0; i<steps; i++) {
 					//finite difference method
 					float curr=cost(ix);
 					float ddx=(cost(ix+vf3d(h, 0, 0))-curr)/h;
@@ -369,15 +368,18 @@ struct TrackingUI : cmn::Engine3D {
 				vf3d br=ctr-w/2*rgt-h/2*up;
 
 				//texture coords
-				cmn::v2d tl_t{0, 0};
-				cmn::v2d tr_t{0, 1};
-				cmn::v2d bl_t{1, 0};
-				cmn::v2d br_t{1, 1};
+				cmn::v2d tl_t{1, 0};
+				cmn::v2d tr_t{1, 1};
+				cmn::v2d bl_t{0, 0};
+				cmn::v2d br_t{0, 1};
 
-				//tesselation
-				cmn::Triangle f1{tl, br, tr, tl_t, br_t, tr_t}; f1.id=i;
+				//tessellation
+				cmn::Triangle f1{tl, br, tr, tl_t, br_t, tr_t};
+				cmn::Triangle f2{tl, bl, br, tl_t, bl_t, br_t};
+				//reference camera
+				f1.id=i;
+				f2.id=i;
 				tris_to_project.push_back(f1);
-				cmn::Triangle f2{tl, bl, br, tl_t, bl_t, br_t}; f2.id=i;
 				tris_to_project.push_back(f2);
 			}
 		}
@@ -390,8 +392,8 @@ struct TrackingUI : cmn::Engine3D {
 			lines_to_project.push_back(r);
 		}
 
-		//show intersection
-		const float size=1.2f;
+		//show intersection axis
+		const float size=1.7f;
 		vf3d x_diff(size/2, 0, 0);
 		vf3d y_diff(0, size/2, 0);
 		vf3d z_diff(0, 0, size/2);
