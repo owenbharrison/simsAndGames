@@ -108,7 +108,7 @@ struct TrackingUI : cmn::Engine3D {
 			};
 			vf3d ctr=bounds.getCenter();
 			for(int i=0; i<8; i++) {
-				cams.emplace_back(120, 90, c[i], (ctr-c[i]).norm());
+				cams.emplace_back(360, 270, c[i], (ctr-c[i]).norm());
 			}
 		}
 
@@ -236,30 +236,32 @@ struct TrackingUI : cmn::Engine3D {
 
 			//where in image are most pixels moving
 			rays.clear();
+			const vf3d rgb_weights(.299f, .587f, .114f);
 			for(int i=0; i<cams.size(); i++) {
 				const auto& c=cams[i];
 
 				//luminance weighted average
-				int x_sum=0, y_sum=0;
-				int l_sum=0;
+				float x_sum=0, y_sum=0;
+				float w_sum=0;
 				for(int x=0; x<c.width; x++) {
 					for(int y=0; y<c.height; y++) {
 						olc::Pixel curr=c.curr_spr->GetPixel(x, y);
+						vf3d curr01(curr.r/255.f, curr.r/255.f, curr.r/255.f);
+						float curr_lum=curr01.dot(rgb_weights);
 						olc::Pixel prev=c.prev_spr->GetPixel(x, y);
-						int dr=curr.r-prev.r;
-						int dg=curr.g-prev.g;
-						int db=curr.b-prev.b;
-						int dsq=dr*dr+dg*dg+db*db;
-						x_sum+=dsq*x;
-						y_sum+=dsq*y;
-						l_sum+=dsq;
+						vf3d prev01(prev.r/255.f, prev.r/255.f, prev.r/255.f);
+						float prev_lum=prev01.dot(rgb_weights);
+						float lum_diff=std::fabsf(curr_lum-prev_lum);
+						x_sum+=lum_diff*x;
+						y_sum+=lum_diff*y;
+						w_sum+=lum_diff;
 					}
 				}
-				if(l_sum==0) continue;
+				if(w_sum<1e-6) continue;
 
 				//find position of differences
-				float x_avg=x_sum/float(l_sum);
-				float y_avg=y_sum/float(l_sum);
+				float x_avg=x_sum/w_sum;
+				float y_avg=y_sum/w_sum;
 				vf3d dir=c.getDir(x_avg, y_avg);
 				const float len=3.2f;
 				cmn::Line ray{c.pos, c.pos+len*dir};
@@ -271,7 +273,7 @@ struct TrackingUI : cmn::Engine3D {
 			object_moving=false;
 			if(rays.size()>=2) {
 				object_moving=true;
-
+				 
 				//sum of distance to lines
 				auto cost=[&] (vf3d pos) {
 					float sum=0;
