@@ -4,9 +4,7 @@
 
 #include "constraint.h"
 
-struct IndexTriangle {
-	int a=0, b=0, c=0;
-};
+#include "index_triangle.h"
 
 struct IndexEdge {
 	int a=0, b=0;
@@ -32,21 +30,24 @@ struct EdgeHash {
 
 #include <unordered_set>
 
+#include <fstream>
+#include <sstream>
+#include <exception>
+
 class Shape {
 	int num_ptc=0;
-
-	void initConstraints(), initEdges();
-	void initMass();
 
 	void copyFrom(const Shape&), clear();
 
 public:
 	Particle* particles=nullptr;
-	std::list<Constraint> constraints;
-	std::list<IndexTriangle> tris;
-	std::list<IndexEdge> edges;
+	std::vector<Constraint> constraints;
+	std::vector<IndexTriangle> tris;
+	std::vector<IndexEdge> edges;
 
 	olc::Pixel fill=olc::WHITE;
+
+	int id=-1;
 
 	Shape() {}
 
@@ -69,7 +70,7 @@ public:
 
 		initConstraints();
 
-		//tesselate
+		//tessellate
 		tris.push_back({0, 1, 4});
 		tris.push_back({1, 5, 4});
 		tris.push_back({0, 2, 1});
@@ -109,6 +110,65 @@ public:
 		return *this;
 	}
 
+	void initConstraints() {
+		constraints.clear();
+
+		//connect everything together
+		for(int i=0; i<num_ptc; i++) {
+			for(int j=i+1; j<num_ptc; j++) {
+				constraints.emplace_back(&particles[i], &particles[j]);
+			}
+		}
+	}
+
+	void initEdges() {
+		edges.clear();
+
+		//extract edges
+		std::unordered_map<IndexEdge, std::vector<const IndexTriangle*>, EdgeHash> edge_tris;
+		for(const auto& it:tris) {
+			edge_tris[IndexEdge(it.a, it.b)].push_back(&it);
+			edge_tris[IndexEdge(it.b, it.c)].push_back(&it);
+			edge_tris[IndexEdge(it.c, it.a)].push_back(&it);
+		}
+
+		//collect non-coplanar edges
+		const float thresh=std::cosf(Pi/180);//1 deg
+		for(const auto& et:edge_tris) {
+			if(et.second.size()==1) {//include boundary edges
+				edges.push_back(et.first);
+			} else if(et.second.size()==2) {
+				auto& t1=et.second[0], & t2=et.second[1];
+				vf3d ab1=particles[t1->b].pos-particles[t1->a].pos;
+				vf3d ac1=particles[t1->c].pos-particles[t1->a].pos;
+				vf3d n1=ab1.cross(ac1).norm();
+				vf3d ab2=particles[t2->b].pos-particles[t2->a].pos;
+				vf3d ac2=particles[t2->c].pos-particles[t2->a].pos;
+				vf3d n2=ab2.cross(ac2).norm();
+				if(n1.dot(n2)<thresh) edges.push_back(et.first);
+			}
+		}
+	}
+
+	//evenly distribute mass among particles
+	void initMass() {
+		//calculate volume using signed tetrahedrons
+		float volume=0;
+		for(const auto& it:tris) {
+			vf3d& pa=particles[it.a].pos;
+			vf3d& pb=particles[it.b].pos;
+			vf3d& pc=particles[it.c].pos;
+			volume+=pa.dot(pb.cross(pc));
+		}
+		volume=std::fabsf(volume)/6;
+
+		//distribute mass
+		float ind_mass=volume/num_ptc;
+		for(int i=0; i<num_ptc; i++) {
+			particles[i].mass=ind_mass;
+		}
+	}
+
 	int getNum() const {
 		return num_ptc;
 	}
@@ -119,6 +179,28 @@ public:
 			box.fitToEnclose(particles[i].pos);
 		}
 		return box;
+	}
+
+	float intersectRay(const vf3d& orig, const vf3d& dir) const {
+		if(!rayIntersectBox(orig, dir, getAABB())) return -1;
+
+		//sort by closest
+		float record=-1;
+		for(const auto& it:tris) {
+			cmn::Triangle t{
+				particles[it.a].pos,
+				particles[it.b].pos,
+				particles[it.c].pos
+			};
+			float dist=segIntersectTri(orig, orig+dir, t);
+			if(dist>0) {
+				if(record<0||dist<record) {
+					record=dist;
+				}
+			}
+		}
+
+		return record;
 	}
 
 	void update(float dt) {
@@ -137,63 +219,6 @@ public:
 		}
 	}
 };
-
-void Shape::initConstraints() {
-	constraints.clear();
-
-	//connect everything together
-	for(int i=0; i<num_ptc; i++) {
-		for(int j=i+1; j<num_ptc; j++) {
-			constraints.emplace_back(&particles[i], &particles[j]);
-		}
-	}
-}
-
-void Shape::initEdges() {
-	edges.clear();
-
-	//extract edges
-	std::unordered_map<IndexEdge, std::vector<const IndexTriangle*>, EdgeHash> edge_tris;
-	for(const auto& it:tris) {
-		edge_tris[IndexEdge(it.a, it.b)].push_back(&it);
-		edge_tris[IndexEdge(it.b, it.c)].push_back(&it);
-		edge_tris[IndexEdge(it.c, it.a)].push_back(&it);
-	}
-
-	//collect non-coplanar edges
-	const float thresh=std::cosf(Pi/180);//1 deg
-	for(const auto& et:edge_tris) {
-		if(et.second.size()==1) {//include boundary edges
-			edges.push_back(et.first);
-		} else if(et.second.size()==2) {
-			auto& t1=et.second[0], & t2=et.second[1];
-			vf3d ab1=particles[t1->b].pos-particles[t1->a].pos;
-			vf3d ac1=particles[t1->c].pos-particles[t1->a].pos;
-			vf3d n1=ab1.cross(ac1).norm();
-			vf3d ab2=particles[t2->b].pos-particles[t2->a].pos;
-			vf3d ac2=particles[t2->c].pos-particles[t2->a].pos;
-			vf3d n2=ab2.cross(ac2).norm();
-			if(n1.dot(n2)<thresh) edges.push_back(et.first);
-		}
-	}
-}
-
-//evenly distribute mass among particles
-void Shape::initMass() {
-	//calculate volume using signed tetrahedrons
-	float volume=0;
-	for(const auto& it:tris) {
-		vf3d& pa=particles[it.a].pos;
-		vf3d& pb=particles[it.b].pos;
-		vf3d& pc=particles[it.c].pos;
-		volume+=pa.dot(pb.cross(pc));
-	}
-	volume=std::fabsf(volume)/6;
-	float ind_mass=volume/num_ptc;
-	for(int i=0; i<num_ptc; i++) {
-		particles[i].mass=ind_mass;
-	}
-}
 
 void Shape::copyFrom(const Shape& s) {
 	//allocate
@@ -218,6 +243,7 @@ void Shape::copyFrom(const Shape& s) {
 
 	//copy over graphics
 	fill=s.fill;
+	id=s.id;
 }
 
 void Shape::clear() {

@@ -5,19 +5,41 @@
 #include "phys/shape.h"
 #include "phys/joint.h"
 
-#include <fstream>
-#include <sstream>
-#include <exception>
-
 #include <unordered_map>
 
-struct Scene {
+class Scene {
+	void copyFrom(const Scene&), clear();
+
+public:
 	//list so they can be removed w/o realloc?
 	std::list<Shape> shapes;
 	std::list<Joint> joints;
 	cmn::AABB3 bounds{vf3d(0, 0, 0), vf3d(1, 1, 1)};
 
-	bool save(const std::string& filename) {
+	Scene() {}
+
+	//1
+	Scene(const Scene& s) {
+		copyFrom(s);
+	}
+
+	//2
+	~Scene() {
+		clear();
+	}
+
+	//3
+	Scene& operator=(const Scene& s) {
+		if(&s==this) return *this;
+
+		clear();
+
+		copyFrom(s);
+
+		return *this;
+	}
+
+	bool saveToFZX(const std::string& filename) {
 		std::ofstream file(filename);
 		if(file.fail()) return false;
 
@@ -87,15 +109,16 @@ struct Scene {
 		return true;
 	}
 
-	static Scene load(const std::string& filename) {
+	static Scene loadFromFZX(const std::string& filename) {
 		std::ifstream file(filename);
 		if(file.fail()) throw std::runtime_error("invalid filename");
 
 		Scene scene;
+		int id=0;
 
 		//index -> shape
-		std::vector<Shape*> shapes;
-		
+		std::vector<Shape*> shape_ptrs;
+
 		//read file line by line
 		for(std::string line; std::getline(file, line);) {
 			//parse type
@@ -107,7 +130,7 @@ struct Scene {
 				int num_p, num_c, num_t, num_e;
 				line_str>>num_p>>num_c>>num_t>>num_e;
 
-				//check nums
+				//check counts
 				if(num_p<=0) throw std::runtime_error("invalid particle count");
 				if(num_c<0) throw std::runtime_error("invalid constraint count");
 				if(num_t<0) throw std::runtime_error("invalid triangle count");
@@ -140,11 +163,13 @@ struct Scene {
 					//check
 					char elem; line_str>>elem;
 					if(elem!='c') throw std::runtime_error("expected constraint");
-					
+
 					//check
 					int a=0, b=0;
-					line_str>>a>>b;
-					if(a<0||b<0) throw std::runtime_error("invalid particle index");
+					line_str>>a;
+					if(a<0||a>=num_p) throw std::runtime_error("invalid particle index");
+					line_str>>b;
+					if(b<0||b>=num_p) throw std::runtime_error("invalid particle index");
 
 					//add
 					Constraint c;
@@ -165,8 +190,12 @@ struct Scene {
 
 					//check
 					IndexTriangle it;
-					line_str>>it.a>>it.b>>it.c;
-					if(it.a<0||it.b<0||it.c<0) throw std::runtime_error("invalid particle index");
+					line_str>>it.a;
+					if(it.a<0||it.a>=num_p) throw std::runtime_error("invalid particle index");
+					line_str>>it.b;
+					if(it.b<0||it.b>=num_p) throw std::runtime_error("invalid particle index");
+					line_str>>it.c;
+					if(it.c<0||it.c>=num_p) throw std::runtime_error("invalid particle index");
 
 					//add
 					s.tris.push_back(it);
@@ -183,8 +212,10 @@ struct Scene {
 
 					//check
 					int a=0, b=0;
-					line_str>>a>>b;
-					if(a<0||b<0) throw std::runtime_error("invalid particle index");
+					line_str>>a;
+					if(a<0||a>=num_p) throw std::runtime_error("invalid particle index");
+					line_str>>b;
+					if(b<0||b>=num_p) throw std::runtime_error("invalid particle index");
 
 					//add
 					s.edges.emplace_back(a, b);
@@ -207,9 +238,12 @@ struct Scene {
 					s.fill.b=b;
 				}
 
+				//initialize id
+				s.id=id++;
+				
 				//add
 				scene.shapes.push_back(s);
-				shapes.push_back(&scene.shapes.back());
+				shape_ptrs.push_back(&scene.shapes.back());
 			}
 
 			//parse joint
@@ -220,23 +254,27 @@ struct Scene {
 				if(a<0||b<0) throw std::runtime_error("invalid shape index");
 
 				Joint j;
-				j.shp_a=shapes[a];
-				j.shp_b=shapes[b];
+				j.shp_a=shape_ptrs[a];
+				j.shp_b=shape_ptrs[b];
 
-				//check
 				std::getline(file, line);
 				line_str.str(line), line_str.clear();
+				
+				//check
 				char elem; line_str>>elem;
 				if(elem!='a') throw std::runtime_error("expected an a");
+				
 				for(int ia; line_str>>ia;) j.ix_a.push_back(ia);
 
-				//check
 				std::getline(file, line);
 				line_str.str(line), line_str.clear();
+				
+				//check
 				line_str>>elem;
 				if(elem!='b') throw std::runtime_error("expected a b");
-				for(int ib; line_str>>ib;) j.ix_b.push_back(ib);
 
+				for(int ib; line_str>>ib;) j.ix_b.push_back(ib);
+				
 				//add
 				scene.joints.push_back(j);
 			}
@@ -245,7 +283,7 @@ struct Scene {
 			else if(type=="bnd") {
 				std::getline(file, line);
 				line_str.str(line), line_str.clear();
-				
+
 				//check
 				char elem; line_str>>elem;
 				if(elem!='a') throw std::runtime_error("expected an a");
@@ -254,7 +292,7 @@ struct Scene {
 
 				std::getline(file, line);
 				line_str.str(line), line_str.clear();
-				
+
 				//check
 				line_str>>elem;
 				if(elem!='b') throw std::runtime_error("expected a b");
@@ -265,5 +303,147 @@ struct Scene {
 
 		return scene;
 	}
+
+	static Scene loadFromOBJ(const std::string& filename) {
+		std::ifstream file(filename);
+		if(file.fail()) throw std::runtime_error("invalid filename");
+
+		//parse obj file line by line
+		std::vector<Particle> particles;
+		std::vector<IndexTriangle> tris;
+		for(std::string line; std::getline(file, line);) {
+			std::stringstream line_str(line);
+			std::string type; line_str>>type;
+
+			if(type=="v") {
+				//add particles
+				vf3d v;
+				line_str>>v.x>>v.y>>v.z;
+				particles.emplace_back(v);
+			} else if(type=="f") {
+				//parse v/t/n until fail
+				std::vector<int> v_ixs;
+				int num=0;
+				for(std::string vtn; line_str>>vtn; num++) {
+					std::stringstream vtn_str(vtn);
+					int v_ix;
+					if(vtn_str>>v_ix) v_ixs.push_back(v_ix-1);
+				}
+
+				//triangulate
+				for(int i=2; i<num; i++) {
+					tris.push_back({v_ixs[0], v_ixs[i-1], v_ixs[i]});
+				}
+			}
+		}
+
+		//find neighbors(adjacency list)
+		std::vector<std::unordered_set<int>> adjacency(particles.size());
+		for(const auto& t:tris) {
+			adjacency[t.a].insert(t.b), adjacency[t.a].insert(t.c);
+			adjacency[t.b].insert(t.c), adjacency[t.b].insert(t.a);
+			adjacency[t.c].insert(t.a), adjacency[t.c].insert(t.b);
+		}
+
+		//floodfill to find connected particle groups
+		std::vector<bool> visited(particles.size(), false);
+		std::vector<std::vector<int>> particle_groups;
+		for(int i=0; i<particles.size(); i++) {
+			if(visited[i]) continue;
+
+			std::vector<int> group;
+			std::stack<int> stack;
+			stack.push(i);
+
+			while(!stack.empty()) {
+				int v=stack.top(); stack.pop();
+				if(visited[v]) continue;
+
+				visited[v]=true;
+				group.push_back(v);
+
+				for(const auto& neighbor:adjacency[v]) {
+					if(!visited[neighbor]) {
+						stack.push(neighbor);
+					}
+				}
+			}
+
+			particle_groups.push_back(group);
+		}
+
+		//construct shapes
+		Scene scene;
+		int id=0;
+		for(const auto& group:particle_groups) {
+			//index mapping
+			std::unordered_map<int, int> global_to_local;
+			for(int j=0; j<group.size(); j++) {
+				global_to_local[group[j]]=j;
+			}
+
+			//extract particles
+			Shape shape(group.size());
+			int i=0;
+			for(const auto& idx:group) {
+				shape.particles[i++]=particles[idx];
+			}
+
+			shape.initConstraints();
+
+			//extract relevant tris and remap indexes
+			for(const auto& tri:tris) {
+				if(global_to_local.count(tri.a)&&
+					global_to_local.count(tri.b)&&
+					global_to_local.count(tri.c)) {
+					shape.tris.push_back({
+						global_to_local[tri.a],
+						global_to_local[tri.b],
+						global_to_local[tri.c]
+						});
+				}
+			}
+
+			shape.initEdges();
+
+			shape.initMass();
+
+			shape.fill.r=rand()%255;
+			shape.fill.g=rand()%255;
+			shape.fill.b=rand()%255;
+			shape.id=id++;
+
+			scene.shapes.push_back(shape);
+		}
+
+		return scene;
+	}
 };
+
+void Scene::copyFrom(const Scene& scn) {
+	//copy over shapes & init pointer lookup
+	std::unordered_map<const Shape*, Shape*> scn_to_me;
+	for(const auto& s:scn.shapes) {
+		shapes.push_back(s);
+		scn_to_me[&s]=&shapes.back();
+	}
+
+	//copy over joints
+	for(const auto& j:scn.joints) {
+		joints.push_back({
+			scn_to_me[j.shp_a],
+			j.ix_a,
+			scn_to_me[j.shp_b],
+			j.ix_b
+		});
+	}
+
+	//copy bounds
+	bounds=scn.bounds;
+}
+
+void Scene::clear() {
+	shapes.clear();
+	joints.clear();
+}
 #endif

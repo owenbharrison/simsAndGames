@@ -38,12 +38,21 @@
     <ClInclude Include="src\phys\joint.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\index_triangle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\stack_chain.fzx" />
+    <Text Include="assets\ragdoll.txt" />
+    <Text Include="assets\icosahedron.txt" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\logs.fzx" />
     <None Include="assets\tower.fzx" />
+    <None Include="assets\ragdoll.fzx" />
   </ItemGroup>
 </Project>

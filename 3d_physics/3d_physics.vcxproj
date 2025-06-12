@@ -148,7 +148,9 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\phys\constraint.h" />
+    <ClInclude Include="src\index_triangle.h" />
     <ClInclude Include="src\phys\joint.h" />
     <ClInclude Include="src\phys\particle.h" />
     <ClInclude Include="src\phys\spring.h" />
@@ -156,10 +158,13 @@
     <ClInclude Include="src\phys\shape.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="assets\icosahedron.txt" />
+    <Text Include="assets\ragdoll.txt" />
     <Text Include="assets\stack_chain.fzx" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\logs.fzx" />
+    <None Include="assets\ragdoll.fzx" />
     <None Include="assets\tower.fzx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
