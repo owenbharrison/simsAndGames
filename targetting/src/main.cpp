@@ -19,7 +19,7 @@ namespace cmn {
 struct Example : cmn::Engine3D {
 	Example() {
 		sAppName="targetting system";
-	} 
+	}
 
 	//camera positioning
 	float cam_yaw=-cmn::Pi/2;
@@ -65,9 +65,9 @@ struct Example : cmn::Engine3D {
 
 	bool user_create() override {
 		cam_pos={0, 0, 3.5f};
-		
+
 		//load monkey, dragon, and bunny
-		try{
+		try {
 			Mesh a=Mesh::loadFromOBJ("assets/suzanne.txt");
 			a.translation={-3, 0, 0};
 			meshes.push_back(a);
@@ -113,7 +113,7 @@ struct Example : cmn::Engine3D {
 				std::sinf(cam_pitch),
 				std::sinf(cam_yaw)*std::cosf(cam_pitch)
 			);
-		
+
 			//move up, down
 			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
 			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
@@ -149,7 +149,7 @@ struct Example : cmn::Engine3D {
 		}
 
 		//update world mouse ray
-		if(invVP_avail){
+		if(invVP_avail) {
 			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
 			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 			vf3d clip(ndc_x, ndc_y, 1);
@@ -159,65 +159,39 @@ struct Example : cmn::Engine3D {
 			mouse_dir=(world-cam_pos).norm();
 		}
 
-		const auto translate_action=GetMouse(olc::Mouse::LEFT);
-		if(translate_action.bPressed) {
-			//get closest mesh
-			float record=-1;
-			trans_mesh=nullptr;
-			for(auto& m:meshes) {
-				float dist=m.intersectRay(cam_pos, mouse_dir);
-				if(dist>0) {
-					if(record<0||dist<record) {
-						record=dist;
-						trans_mesh=&m;
-					}
+		//get closest mesh
+		float mesh_dist=-1;
+		Mesh* close_mesh=nullptr;
+		for(auto& m:meshes) {
+			float dist=m.intersectRay(cam_pos, mouse_dir);
+			if(dist>0) {
+				if(mesh_dist<0||dist<mesh_dist) {
+					mesh_dist=dist;
+					close_mesh=&m;
 				}
 			}
+		}
+
+		const auto translate_action=GetMouse(olc::Mouse::LEFT);
+		if(translate_action.bPressed) {
+			trans_mesh=close_mesh;
 			if(trans_mesh) {
-				trans_plane=cam_pos+record*cam_dir;
+				trans_plane=cam_pos+mesh_dist*cam_dir;
 				trans_start=mouse_pos;
 			}
 		}
-		if(translate_action.bReleased) {
-			trans_mesh=nullptr;
-		}
+		if(translate_action.bReleased) trans_mesh=nullptr;
 
 		const auto rotate_action=GetMouse(olc::Mouse::RIGHT);
 		if(rotate_action.bPressed) {
-			//get closest mesh
-			float record=-1;
-			rot_mesh=nullptr;
-			for(auto& m:meshes) {
-				float dist=m.intersectRay(cam_pos, mouse_dir);
-				if(dist>0) {
-					if(record<0||dist<record) {
-						record=dist;
-						rot_mesh=&m;
-					}
-				}
-			}
-			if(rot_mesh) {
-				rot_start=mouse_pos;
-			}
+			rot_mesh=close_mesh;
+			if(rot_mesh) rot_start=mouse_pos;
 		}
-		if(rotate_action.bReleased) {
-			rot_mesh=nullptr;
-		}
+		if(rotate_action.bReleased) rot_mesh=nullptr;
 
 		const auto scale_action=GetMouse(olc::Mouse::MIDDLE);
 		if(scale_action.bPressed) {
-			//get closest mesh
-			float record=-1;
-			scale_mesh=nullptr;
-			for(auto& m:meshes) {
-				float dist=m.intersectRay(cam_pos, mouse_dir);
-				if(dist>0) {
-					if(record<0||dist<record) {
-						record=dist;
-						scale_mesh=&m;
-					}
-				}
-			}
+			scale_mesh=close_mesh;
 			if(scale_mesh) {
 				scale_start=mouse_pos;
 				base_scale=scale_mesh->scale;
@@ -227,9 +201,7 @@ struct Example : cmn::Engine3D {
 				scale_ctr.y=(1-ctr_ndc.y)*ScreenHeight()/2;
 			}
 		}
-		if(scale_action.bReleased) {
-			scale_mesh=nullptr;
-		}
+		if(scale_action.bReleased) scale_mesh=nullptr;
 
 		//update translated mesh
 		if(trans_mesh&&invVP_avail) {
@@ -286,7 +258,7 @@ struct Example : cmn::Engine3D {
 
 	bool user_geometry() override {
 		//combine all meshes triangles
-		for(const auto& m:meshes){
+		for(const auto& m:meshes) {
 			tris_to_project.insert(tris_to_project.end(),
 				m.tris.begin(), m.tris.end()
 			);
