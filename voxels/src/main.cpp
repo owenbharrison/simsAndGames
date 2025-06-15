@@ -655,7 +655,7 @@ struct VoxelGame : cmn::Engine3D {
 			//show all depth values
 			for(int i=0; i<ScreenWidth(); i++) {
 				for(int j=0; j<ScreenHeight(); j++) {
-					float depth=depth_buffer[i+ScreenWidth()*j];
+					float depth=depth_buffer[bufferIX(i, j)];
 					float shade=cmn::map(depth, min_depth, max_depth, 0, 1);
 					Draw(i, j, olc::PixelF(shade, shade, shade));
 				}
@@ -666,11 +666,11 @@ struct VoxelGame : cmn::Engine3D {
 		if(show_edges) {
 			for(int i=1; i<ScreenWidth()-1; i++) {
 				for(int j=1; j<ScreenHeight()-1; j++) {
-					bool curr=depth_buffer[i+ScreenWidth()*j]==0;
-					bool lft=depth_buffer[i-1+ScreenWidth()*j]==0;
-					bool rgt=depth_buffer[i+1+ScreenWidth()*j]==0;
-					bool top=depth_buffer[i+ScreenWidth()*(j-1)]==0;
-					bool btm=depth_buffer[i+ScreenWidth()*(j+1)]==0;
+					bool curr=depth_buffer[bufferIX(i, j)]==0;
+					bool lft=depth_buffer[bufferIX(i-1, j)]==0;
+					bool rgt=depth_buffer[bufferIX(i+1, j)]==0;
+					bool top=depth_buffer[bufferIX(i, j-1)]==0;
+					bool btm=depth_buffer[bufferIX(i, j+1)]==0;
 					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
 						Draw(i, j, olc::PURPLE);
 					}

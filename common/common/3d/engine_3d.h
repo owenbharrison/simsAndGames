@@ -18,9 +18,6 @@
 
 namespace cmn {
 	class Engine3D : public olc::PixelGameEngine {
-		bool inRangeX(int x) const { return x>=0&&x<ScreenWidth(); }
-		bool inRangeY(int y) const { return y>=0&&y<ScreenHeight(); }
-
 		bool OnUserCreate() override;
 
 		bool OnUserDestroy() override;
@@ -52,6 +49,10 @@ namespace cmn {
 
 		//object buffering?
 		int* id_buffer=nullptr;
+
+		bool inRangeX(int x) const { return x>=0&&x<ScreenWidth(); }
+		bool inRangeY(int y) const { return y>=0&&y<ScreenHeight(); }
+		int bufferIX(int i, int j) const { return i+ScreenWidth()*j; }
 
 		virtual bool user_create()=0;
 
@@ -357,12 +358,11 @@ namespace cmn {
 					for(int i=ax; i<bx; i++) {
 						tex_w=tex_sw+t*(tex_ew-tex_sw);
 						if(inRangeX(i)&&inRangeY(j)) {
-							int k=i+ScreenWidth()*j;
-							float& depth=depth_buffer[k];
+							float& depth=depth_buffer[bufferIX(i, j)];
 							if(tex_w>depth) {
 								Draw(i, j, col);
 								depth=tex_w;
-								id_buffer[k]=id;
+								id_buffer[bufferIX(i, j)]=id;
 							}
 						}
 						t+=t_step;
@@ -394,12 +394,11 @@ namespace cmn {
 				for(int i=ax; i<bx; i++) {
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					if(inRangeX(i)&&inRangeY(j)) {
-						int k=i+ScreenWidth()*j;
-						float& depth=depth_buffer[k];
+						float& depth=depth_buffer[bufferIX(i, j)];
 						if(tex_w>depth) {
 							Draw(i, j, col);
 							depth=tex_w;
-							id_buffer[k]=id;
+							id_buffer[bufferIX(i, j)]=id;
 						}
 					}
 					t+=t_step;
@@ -415,13 +414,12 @@ namespace cmn {
 			auto draw=[&] (int i, int j, float t) {
 				if(!inRangeX(i)||!inRangeY(j)) return;
 
-				int k=i+ScreenWidth()*j;
-				float& depth=depth_buffer[k];
+				float& depth=depth_buffer[bufferIX(i, j)];
 				float w=w1+t*(w2-w1);
 				if(w>depth) {
 					Draw(i, j, col);
 					depth=w;
-					id_buffer[k]=id;
+					id_buffer[bufferIX(i, j)]=id;
 				}
 			};
 			int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
@@ -537,12 +535,11 @@ namespace cmn {
 						tex_v=tex_sv+t*(tex_ev-tex_sv);
 						tex_w=tex_sw+t*(tex_ew-tex_sw);
 						if(inRangeX(i)&&inRangeY(j)) {
-							int k=i+ScreenWidth()*j;
-							float& depth=depth_buffer[k];
+							float& depth=depth_buffer[bufferIX(i, j)];
 							if(tex_w>depth) {
 								Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
 								depth=tex_w;
-								id_buffer[k]=id;
+								id_buffer[bufferIX(i, j)]=id;
 							}
 						}
 						t+=t_step;
@@ -587,12 +584,11 @@ namespace cmn {
 					tex_v=tex_sv+t*(tex_ev-tex_sv);
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					if(inRangeX(i)&&inRangeY(j)) {
-						int k=i+ScreenWidth()*j;
-						float& depth=depth_buffer[k];
+						float& depth=depth_buffer[bufferIX(i, j)];
 						if(tex_w>depth) {
 							Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
 							depth=tex_w;
-							id_buffer[k]=id;
+							id_buffer[bufferIX(i, j)]=id;
 						}
 					}
 					t+=t_step;

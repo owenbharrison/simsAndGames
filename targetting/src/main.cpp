@@ -310,11 +310,11 @@ struct Example : cmn::Engine3D {
 				int id=select->id;
 				for(int i=1; i<ScreenWidth()-1; i++) {
 					for(int j=1; j<ScreenHeight()-1; j++) {
-						bool curr=id_buffer[i+ScreenWidth()*j]==id;
-						bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
-						bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
-						bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
-						bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
+						bool curr=id_buffer[bufferIX(i, j)]==id;
+						bool lft=id_buffer[bufferIX(i-1, j)]==id;
+						bool rgt=id_buffer[bufferIX(i+1, j)]==id;
+						bool top=id_buffer[bufferIX(i, j-1)]==id;
+						bool btm=id_buffer[bufferIX(i, j+1)]==id;
 						if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
 							Draw(i, j, col);
 						}
