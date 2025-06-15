@@ -452,7 +452,7 @@ public:
 
 		//recolor if split
 		if(pixelsets.size()!=1) for(auto& p:pixelsets) {
-			p.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
+			p.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
 		}
 
 		//update graphics

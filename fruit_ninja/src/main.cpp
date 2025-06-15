@@ -308,7 +308,7 @@ struct FruitNinja : olc::PixelGameEngine {
 			f.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
 
 			//random col	
-			f.col=olc::Pixel(rand()%255, rand()%255, rand()%255);
+			f.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
 
 			//add the sucker
 			fruits.emplace_back(new Fruit(f));

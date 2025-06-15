@@ -117,7 +117,7 @@ struct WordleUI : olc::PixelGameEngine {
 					char letter='a'+i;
 					if(game.type(letter)) {
 						std::string msg(1, letter);
-						olc::Pixel col(rand()%255, rand()%255, rand()%255);
+						olc::Pixel col(rand()%256, rand()%256, rand()%256);
 						vf2d pos(block_step.x*(game.word_index-.5f), block_step.y*(.5f+game.guess_index));
 						addEffect(msg, col, pos);
 					}
@@ -130,7 +130,7 @@ struct WordleUI : olc::PixelGameEngine {
 				if(game.guess()) {
 					std::string msg;
 					for(int i=0; i<5; i++) msg+=game.guesses[game.guess_index-1][i];
-					olc::Pixel col(rand()%255, rand()%255, rand()%255);
+					olc::Pixel col(rand()%256, rand()%256, rand()%256);
 					vf2d pos(ScreenWidth()/2, block_step.y*(.5f+game.guess_index));
 					addEffect(msg, col, pos);
 				}

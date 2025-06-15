@@ -77,9 +77,9 @@ struct SmokeDemo : olc::PixelGameEngine {
 		bool emit_rainbow=GetMouse(olc::Mouse::RIGHT).bHeld;
 		if(emit_action.bPressed||emit_rainbow) {
 			//randomize col each click
-			emitter_col.r=rand()%255;
-			emitter_col.g=rand()%255;
-			emitter_col.b=rand()%255;
+			emitter_col.r=rand()%256;
+			emitter_col.g=rand()%256;
+			emitter_col.b=rand()%256;
 		}
 		//add particles at mouse
 		if(emit_action.bHeld||emit_rainbow) {
@@ -98,14 +98,14 @@ struct SmokeDemo : olc::PixelGameEngine {
 		if(GetMouse(olc::Mouse::MIDDLE).bPressed) {
 			//randomize col each click
 			olc::Pixel debris_col(
-				rand()%255,
-				rand()%255,
-				rand()%255
+				rand()%256,
+				rand()%256,
+				rand()%256
 			);
 			olc::Pixel smoke_col(
-				rand()%255,
-				rand()%255,
-				rand()%255
+				rand()%256,
+				rand()%256,
+				rand()%256
 			);
 			//spawn a random number
 			int num=20+rand()%20;

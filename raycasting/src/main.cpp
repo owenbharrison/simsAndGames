@@ -503,7 +503,7 @@ struct Example : olc::PixelGameEngine {
 
 		//for every shape
 		for(const auto& shp:shapes) {
-			olc::Pixel col(rand()%255, rand()%255, rand()%255);
+			olc::Pixel col(rand()%256, rand()%256, rand()%256);
 			//show all of its blocks
 			for(const auto& b:shp) {
 				FillRectDecal(cell_size*b, {cell_size, cell_size}, col);
