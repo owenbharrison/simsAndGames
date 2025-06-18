@@ -54,5 +54,6 @@
     <None Include="assets\logs.fzx" />
     <None Include="assets\tower.fzx" />
     <None Include="assets\ragdoll.fzx" />
+    <None Include="assets\ragdoll - Copy.fzx" />
   </ItemGroup>
 </Project>

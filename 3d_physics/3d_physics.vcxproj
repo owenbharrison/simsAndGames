@@ -164,6 +164,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\logs.fzx" />
+    <None Include="assets\ragdoll - Copy.fzx" />
     <None Include="assets\ragdoll.fzx" />
     <None Include="assets\tower.fzx" />
   </ItemGroup>

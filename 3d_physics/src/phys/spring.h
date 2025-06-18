@@ -1,6 +1,6 @@
 #pragma once
 #ifndef SPRING_STRUCT_H
-#define SPRING STRUCT_H
+#define SPRING_STRUCT_H
 
 #include "particle.h"
 
@@ -9,39 +9,46 @@ struct Spring {
 	float rest_len=0;
 	float stiffness=0;
 	float damping=0;
-	float strain=0;
 
 	Spring() {}
 
-	Spring(Particle* _a, Particle* _b, float k, float d) {
+	Spring(Particle* _a, Particle* _b, float dt) {
 		a=_a, b=_b;
 		rest_len=(a->pos-b->pos).mag();
-		stiffness=k;
-		damping=d;
+
+		//constants proportional to avg mass
+		float m=(a->mass+b->mass)/2;
+		stiffness=1130.75f*m;
+		//"*dt" cancels out later
+		damping=375.9f*dt*m;
 	}
 
-	vf3d getForce() const {
+	vf3d getForce(float dt) const {
+		//estimate particle velocities
+		vf3d vel_a=(a->pos-a->old_pos)/dt;
+		vf3d vel_b=(b->pos-b->old_pos)/dt;
+		
+		//get separation
 		vf3d sub=b->pos-a->pos;
-		float curr_len=sub.mag();
-		float spring_force=stiffness*(curr_len-rest_len);
+		float mag=sub.mag();
+		vf3d norm(1, 0, 0);
+		if(mag>1e-6f) norm=sub/mag;
 
-		//thanks gonkee
-		vf3d a_vel=a->pos-a->old_pos;
-		vf3d b_vel=b->pos-b->old_pos;
-		vf3d norm=sub/curr_len;
-		float damp_force=damping*norm.dot(b_vel-a_vel);
+		//hookes law
+		float x=mag-rest_len;
+		float spring=stiffness*x;
 
-		return (spring_force+damp_force)*norm;
+		//damping w/ relative velocity
+		float v_rel=norm.dot(vel_b-vel_a);
+		float damp=damping*v_rel;
+
+		return (spring+damp)*norm;
 	}
 
-	void update() {
-		vf3d force=getForce();
-		a->accelerate(force);
-		b->accelerate(-force);
-
-		//update strain
-		float curr=(a->pos-b->pos).mag();
-		strain=rest_len-curr/rest_len;
+	void update(float dt) {
+		vf3d force=getForce(dt);
+		if(!a->locked) a->applyForce(force);
+		if(!b->locked) b->applyForce(-force);
 	}
 };
 #endif
