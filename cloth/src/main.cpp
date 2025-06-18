@@ -124,7 +124,7 @@ struct Cloth3DUI : cmn::Engine3D {
 	bool user_destroy() override {
 		delete strain_spr;
 		
-		for(int i=0; i<3; i++) {
+		for(int i=0; i<4; i++) {
 			delete flag_spr[i];
 		}
 
