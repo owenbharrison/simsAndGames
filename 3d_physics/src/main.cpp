@@ -47,7 +47,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 	Mesh vertex;
 
-	const int num_sub_steps=8;
+	const int num_sub_steps=4;
 	const float time_step=1/60.f;
 	const float sub_time_step=time_step/num_sub_steps;
 	float update_timer=0;
@@ -61,19 +61,27 @@ struct Physics3DUI : cmn::Engine3D {
 		{
 			scene=Scene();
 
-			Shape softbody1({{-1, .5f, -2}, {1, 1.5f, 2}}, .5f, sub_time_step);
+			Shape softbody1({{-1, .5f, -2}, {1, 1.5f, 2}}, 1, sub_time_step);
 			softbody1.fill=olc::RED;
 			scene.shapes.push_back(softbody1);
 
-			Shape softbody2({{-2, 2, -1}, {2, 3, 1}}, .5f, sub_time_step);
+			Shape softbody2({{-2, 2, -1}, {2, 3, 1}}, 1, sub_time_step);
 			softbody2.fill=olc::BLUE;
 			scene.shapes.push_back(softbody2);
+
+			Shape softbody3({{-1, 3.5f, -2}, {1, 4.5f, 2}}, 1, sub_time_step);
+			softbody3.fill=olc::YELLOW;
+			scene.shapes.push_back(softbody3);
+
+			Shape softbody4({{-2, 5, -1}, {2, 6, 1}}, 1, sub_time_step);
+			softbody4.fill=olc::GREEN;
+			scene.shapes.push_back(softbody4);
 
 			Shape ground({{-4, -1, -4}, {4, 0, 4}});
 			for(int i=0; i<ground.getNum(); i++) {
 				ground.particles[i].locked=true;
 			}
-			ground.fill=olc::GREEN;
+			ground.fill=olc::WHITE;
 			scene.shapes.push_back(ground);
 
 			scene.shrinkWrap(3);
