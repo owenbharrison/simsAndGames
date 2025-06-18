@@ -339,11 +339,6 @@ struct Cloth3DUI : cmn::Engine3D {
 	bool user_render() override {
 		Clear(olc::VERY_DARK_GREY);
 
-		if(GetKey(olc::Key::K7).bPressed) {
-			std::cout<<cam_pitch<<' '<<cam_yaw<<'\n';
-			std::cout<<cam_pos.x<<' '<<cam_pos.y<<' '<<cam_pos.z<<'\n';
-		}
-
 		resetBuffers();
 
 		for(const auto& t:tris_to_draw) {
