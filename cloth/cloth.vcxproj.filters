@@ -31,20 +31,23 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\strain_gradient.png">
+      <Filter>Resource Files</Filter>
+    </Image>
     <Image Include="assets\gradient.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\gradient_1.png">
+    <Image Include="assets\flag_brazil.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\gradient_2.png">
+    <Image Include="assets\flag_djibouti.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\gradient_3.png">
+    <Image Include="assets\flag_colorado.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\flag.png">
-      <Filter>Resource Files</Filter>
-    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\flag_usa.png" />
   </ItemGroup>
 </Project>

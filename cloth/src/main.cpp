@@ -10,7 +10,7 @@ constexpr float Pi=3.1415927f;
 
 #include "perlin_noise.h"
 
-struct ParticleTriangle {
+struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
 
@@ -30,8 +30,6 @@ struct Cloth3DUI : cmn::Engine3D {
 	bool show_outlines=false;
 	bool show_bounds=false;
 
-	int gradient_to_use=0;
-
 	Particle* held_ptc=nullptr;
 	vf3d held_plane;
 
@@ -42,9 +40,10 @@ struct Cloth3DUI : cmn::Engine3D {
 	Particle* grid=nullptr;
 	int ix(int i, int j) const { return i+length*j; }
 
-	const vf3d gravity{0, 0, 0};
 	std::list<Spring> springs;
-	std::list<ParticleTriangle> surface;
+	std::list<IndexTriangle> surface;
+
+	const vf3d gravity{0, 0, 0};
 
 	PerlinNoise noise_gen;
 
@@ -52,16 +51,15 @@ struct Cloth3DUI : cmn::Engine3D {
 	float update_timer=0;
 
 	//graphics stuff
-	olc::Sprite* gradient1_spr=nullptr;
-	olc::Sprite* gradient2_spr=nullptr;
-	olc::Sprite* gradient3_spr=nullptr;
+	olc::Sprite* strain_spr=nullptr;
 
-	olc::Sprite* cloth_spr=nullptr;
+	olc::Sprite* flag_spr[4];
+	int flag_idx=0;
 
 	bool user_create() override {
 		srand(time(0));
 
-		cam_pos={3, 1, 4.5f};
+		cam_pos={2.5f, 1, 2.83f};
 		light_pos=cam_pos;
 
 		//allocate grid
@@ -111,23 +109,24 @@ struct Cloth3DUI : cmn::Engine3D {
 
 		noise_gen=PerlinNoise(time(0));
 
-		//load gradients
-		gradient1_spr=new olc::Sprite("assets/gradient_1.png");
-		gradient2_spr=new olc::Sprite("assets/gradient_2.png");
-		gradient3_spr=new olc::Sprite("assets/gradient_3.png");
-
+		//load gradient
+		strain_spr=new olc::Sprite("assets/strain_gradient.png");
+		
 		//cloth texture
-		cloth_spr=new olc::Sprite("assets/flag.png");
+		flag_spr[0]=new olc::Sprite("assets/flag_usa.png");
+		flag_spr[1]=new olc::Sprite("assets/flag_colorado.png");
+		flag_spr[2]=new olc::Sprite("assets/flag_brazil.png");
+		flag_spr[3]=new olc::Sprite("assets/flag_djibouti.png");
 
 		return true;
 	}
 
 	bool user_destroy() override {
-		delete gradient1_spr;
-		delete gradient2_spr;
-		delete gradient3_spr;
-
-		delete cloth_spr;
+		delete strain_spr;
+		
+		for(int i=0; i<3; i++) {
+			delete flag_spr[i];
+		}
 
 		delete[] grid;
 
@@ -172,9 +171,9 @@ struct Cloth3DUI : cmn::Engine3D {
 
 		//polar to cartesian
 		cam_dir=vf3d(
-			std::cosf(cam_yaw)*std::cosf(cam_pitch),
-			std::sinf(cam_pitch),
-			std::sinf(cam_yaw)*std::cosf(cam_pitch)
+			std::cos(cam_yaw)*std::cos(cam_pitch),
+			std::sin(cam_pitch),
+			std::sin(cam_yaw)*std::cos(cam_pitch)
 		);
 
 		//cant drag particle and move around at same time.
@@ -184,7 +183,7 @@ struct Cloth3DUI : cmn::Engine3D {
 			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 			//move forward, backward
-			vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+			vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
 			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -202,10 +201,11 @@ struct Cloth3DUI : cmn::Engine3D {
 		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 
-		//gradient choice!
-		if(GetKey(olc::Key::K1).bPressed) gradient_to_use=0;
-		if(GetKey(olc::Key::K2).bPressed) gradient_to_use=1;
-		if(GetKey(olc::Key::K3).bPressed) gradient_to_use=2;
+		//flag choice!
+		if(GetKey(olc::Key::K1).bPressed) flag_idx=0;
+		if(GetKey(olc::Key::K2).bPressed) flag_idx=1;
+		if(GetKey(olc::Key::K3).bPressed) flag_idx=2;
+		if(GetKey(olc::Key::K4).bPressed) flag_idx=3;
 
 		//grab particles
 		const auto hold_action=GetMouse(olc::Mouse::LEFT);
@@ -256,9 +256,9 @@ struct Cloth3DUI : cmn::Engine3D {
 		for(int i=0; i<length*height; i++) {
 			auto& p=grid[i];
 
-			p.applyForce(getWind(p.pos, .25f*total_dt));
+			p.accelerate(getWind(p.pos, .25f*total_dt));
 
-			p.applyForce(gravity);
+			p.accelerate(gravity);
 			p.update(time_step);
 		}
 	}
@@ -292,15 +292,6 @@ struct Cloth3DUI : cmn::Engine3D {
 		return true;
 	}
 
-	olc::Pixel sampleGradient(float u) const {
-		switch(gradient_to_use) {
-			case 0: return gradient1_spr->Sample(u, 0);
-			case 1: return gradient2_spr->Sample(u, 0);
-			case 2: return gradient3_spr->Sample(u, 0);
-		}
-		return olc::BLACK;
-	}
-
 	bool user_geometry() override {
 		//realize surface
 		for(const auto& pt:surface) {
@@ -318,7 +309,7 @@ struct Cloth3DUI : cmn::Engine3D {
 			//find max strain
 			float max_strain=1e-3f;
 			for(const auto& s:springs) {
-				float strain=std::fabsf(s.strain);
+				float strain=std::abs(s.strain);
 				if(strain>max_strain) {
 					max_strain=strain;
 				}
@@ -327,8 +318,8 @@ struct Cloth3DUI : cmn::Engine3D {
 			//add all lines
 			for(const auto& s:springs) {
 				cmn::Line l{s.a->pos, s.b->pos};
-				float u=std::fabsf(s.strain)/max_strain;
-				l.col=sampleGradient(u);
+				float u=std::abs(s.strain)/max_strain;
+				l.col=strain_spr->Sample(u, 0);
 				lines_to_project.push_back(l);
 			}
 		}
@@ -348,6 +339,11 @@ struct Cloth3DUI : cmn::Engine3D {
 	bool user_render() override {
 		Clear(olc::VERY_DARK_GREY);
 
+		if(GetKey(olc::Key::K7).bPressed) {
+			std::cout<<cam_pitch<<' '<<cam_yaw<<'\n';
+			std::cout<<cam_pos.x<<' '<<cam_pos.y<<' '<<cam_pos.z<<'\n';
+		}
+
 		resetBuffers();
 
 		for(const auto& t:tris_to_draw) {
@@ -355,7 +351,7 @@ struct Cloth3DUI : cmn::Engine3D {
 				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-				cloth_spr, t.col, t.id
+				flag_spr[flag_idx], t.col, t.id
 			);
 		}
 
@@ -365,6 +361,10 @@ struct Cloth3DUI : cmn::Engine3D {
 				l.p[1].x, l.p[1].y, l.t[1].w,
 				l.col, l.id
 			);
+		}
+
+		if(!update_phys) {
+			DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::WHITE);
 		}
 
 		return true;

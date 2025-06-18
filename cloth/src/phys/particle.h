@@ -14,7 +14,7 @@ struct Particle {
 		old_pos=p;
 	}
 
-	void applyForce(const vf3d& f) {
+	void accelerate(const vf3d& f) {
 		acc+=f;
 	}
 

@@ -153,11 +153,13 @@
     <ClInclude Include="src\phys\spring.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\flag.png" />
-    <Image Include="assets\gradient.png" />
-    <Image Include="assets\gradient_1.png" />
-    <Image Include="assets\gradient_2.png" />
-    <Image Include="assets\gradient_3.png" />
+    <Image Include="assets\flag_brazil.png" />
+    <Image Include="assets\flag_colorado.png" />
+    <Image Include="assets\flag_djibouti.png" />
+    <Image Include="assets\strain_gradient.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\flag_usa.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

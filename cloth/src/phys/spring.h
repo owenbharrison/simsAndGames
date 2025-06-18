@@ -20,24 +20,24 @@ struct Spring {
 		damping=d;
 	}
 
-	vf3d getForce() const {
+	vf3d getAccel() const {
 		vf3d sub=b->pos-a->pos;
 		float curr_len=sub.mag();
-		float spring_force=stiffness*(curr_len-rest_len);
+		float spring=stiffness*(curr_len-rest_len);
 
 		//thanks gonkee
 		vf3d a_vel=a->pos-a->old_pos;
 		vf3d b_vel=b->pos-b->old_pos;
 		vf3d norm=sub/curr_len;
-		float damp_force=damping*norm.dot(b_vel-a_vel);
+		float damp=damping*norm.dot(b_vel-a_vel);
 
-		return (spring_force+damp_force)*norm;
+		return (spring+damp)*norm;
 	}
 
 	void update() {
-		vf3d force=getForce();
-		a->applyForce(force);
-		b->applyForce(-force);
+		vf3d force=getAccel();
+		if(!a->locked) a->accelerate(force);
+		if(!b->locked) b->accelerate(-force);
 
 		//update strain
 		float curr=(a->pos-b->pos).mag();
