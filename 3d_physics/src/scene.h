@@ -8,6 +8,8 @@
 #include <unordered_map>
 
 class Scene {
+	int curr_id=0;
+	
 	void copyFrom(const Scene&), clear();
 
 public:
@@ -41,6 +43,11 @@ public:
 		copyFrom(s);
 
 		return *this;
+	}
+
+	void addShape(Shape& s) {
+		s.id=curr_id++;
+		shapes.push_back(s);
 	}
 
 	//set scene bounds such that they fit all shapes
@@ -689,6 +696,9 @@ void Scene::copyFrom(const Scene& scn) {
 
 	//copy bounds
 	bounds=scn.bounds;
+
+	//copy id
+	curr_id=scn.curr_id;
 }
 
 void Scene::clear() {

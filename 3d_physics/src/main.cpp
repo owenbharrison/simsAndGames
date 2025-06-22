@@ -31,65 +31,76 @@ struct Physics3DUI : cmn::Engine3D {
 	float cam_yaw=-Pi/2;
 	float cam_pitch=-.36f;
 
-	//debug toggles
-	bool show_bounds=false;
-	bool show_vertexes=false;
-	bool show_edges=false;
-	bool show_joints=false;
-	bool update_phys=false;
+	//ui stuff
+	vf3d mouse_dir;
+
+	Shape* grab_shape=nullptr;
+	vf3d grab_ctr, grab_dir;
+	Particle mouse_particle;
+	std::list<Spring> mouse_springs;
+
 	bool to_time=false;
-
-	Shape* highlighted=nullptr;
-
 	cmn::Stopwatch update_watch, geom_watch, pc_watch, render_watch;
 
+	//physics stuff
 	Scene scene;
-
-	Mesh vertex;
 
 	const int num_sub_steps=4;
 	const float time_step=1/60.f;
 	const float sub_time_step=time_step/num_sub_steps;
 	float update_timer=0;
 
+	bool update_phys=false;
+
+	//graphics stuff
+	Mesh vertex;
+
+	bool show_bounds=false;
+	bool show_vertexes=false;
+	bool show_edges=false;
+	bool show_joints=false;
+
 	bool user_create() override {
 		srand(time(0));
 
 		cam_pos={0, 5.5f, 8};
 		light_pos={0, 12, 0};
-		
+
+		//make sure that it isnt influenced by mouse constraints
+		mouse_particle.locked=true;
+
 		{
 			scene=Scene();
 
 			Shape softbody1({{-1, .5f, -2}, {1, 1.5f, 2}}, 1, sub_time_step);
 			softbody1.fill=olc::RED;
-			scene.shapes.push_back(softbody1);
+			scene.addShape(softbody1);
 
 			Shape softbody2({{-2, 2, -1}, {2, 3, 1}}, 1, sub_time_step);
 			softbody2.fill=olc::BLUE;
-			scene.shapes.push_back(softbody2);
+			scene.addShape(softbody2);
 
 			Shape softbody3({{-1, 3.5f, -2}, {1, 4.5f, 2}}, 1, sub_time_step);
 			softbody3.fill=olc::YELLOW;
-			scene.shapes.push_back(softbody3);
+			scene.addShape(softbody3);
 
 			Shape softbody4({{-2, 5, -1}, {2, 6, 1}}, 1, sub_time_step);
 			softbody4.fill=olc::GREEN;
-			scene.shapes.push_back(softbody4);
+			scene.addShape(softbody4);
 
 			Shape ground({{-4, -1, -4}, {4, 0, 4}});
 			for(int i=0; i<ground.getNum(); i++) {
 				ground.particles[i].locked=true;
 			}
 			ground.fill=olc::WHITE;
-			scene.shapes.push_back(ground);
+			scene.addShape(ground);
 
 			scene.shrinkWrap(3);
 		}
 
 		try {
 			vertex=Mesh::loadFromOBJ("assets/icosahedron.txt");
-			vertex.scale={.02f, .02f, .02f};
+			vertex.scale={.03f, .03f, .03f};
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
@@ -166,7 +177,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 		if(cmd=="mousebinds") {
 			std::cout<<
-				"  LEFT   highlight shape\n";
+				"  LEFT   grab and drag shape\n";
 
 			return true;
 		}
@@ -191,15 +202,18 @@ struct Physics3DUI : cmn::Engine3D {
 
 	//mostly camera controls
 	void handleUserInput(float dt) {
-		//look up, down
-		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
-		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
+		//cant move if grabbing shape
+		if(!grab_shape) {
+			//look up, down
+			if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
+			if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+			if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
+			if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
 
-		//look left, right
-		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
-		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+			//look left, right
+			if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
+			if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+		}
 
 		//polar to cartesian
 		cam_dir=vf3d(
@@ -208,19 +222,22 @@ struct Physics3DUI : cmn::Engine3D {
 			std::sin(cam_yaw)*std::cos(cam_pitch)
 		);
 
-		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+		//cant move if grabbing shape
+		if(!grab_shape) {
+			//move up, down
+			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
-		//move forward, backward
-		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+			//move forward, backward
+			vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+			//move left, right
+			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+		}
 
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
@@ -232,38 +249,71 @@ struct Physics3DUI : cmn::Engine3D {
 		if(GetKey(olc::Key::J).bPressed) show_joints^=true;
 		if(GetKey(olc::Key::ENTER).bPressed) update_phys^=true;
 
-		//shape highlighting
-		if(GetMouse(olc::Mouse::LEFT).bPressed) {
-			try {
-				//unprojection matrix
-				Mat4 invVP=Mat4::inverse(mat_view*mat_proj);
+		//update mouse ray (matrix could be singular)
+		try {
+			//unprojection matrix
+			Mat4 invVP=Mat4::inverse(mat_view*mat_proj);
 
-				//get mouse ray
-				float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
-				float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
-				vf3d clip(ndc_x, ndc_y, 1);
-				vf3d world=clip*invVP;
-				world/=world.w;
-				vf3d mouse_dir=(world-cam_pos).norm();
+			//get ray thru screen mouse pos
+			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+			vf3d clip(ndc_x, ndc_y, 1);
+			vf3d world=clip*invVP;
+			world/=world.w;
+			mouse_dir=(world-cam_pos).norm();
+		} catch(const std::exception& e) {}
 
-				//find closest shape
-				float record=-1;
-				highlighted=nullptr;
-				for(auto& s:scene.shapes) {
-					float dist=s.intersectRay(cam_pos, mouse_dir);
-					if(dist>0) {
-						if(record<0||dist<record) {
-							record=dist;
-							highlighted=&s;
-						}
+		//shape grabbing
+		const auto grab_action=GetMouse(olc::Mouse::LEFT);
+		if(grab_action.bPressed) {
+			grab_shape=nullptr;
+
+			//find closest shape
+			float record=-1;
+			for(auto& s:scene.shapes) {
+				float dist=s.intersectRay(cam_pos, mouse_dir);
+				if(dist>0) {
+					if(record<0||dist<record) {
+						record=dist;
+						grab_shape=&s;
 					}
 				}
-			} catch(const std::exception& e) {}
+			}
+
+			if(grab_shape) {
+				//store translation plane info
+				grab_ctr=cam_pos+record*mouse_dir;
+				grab_dir=mouse_dir;
+				
+				//temp update for spring setup
+				mouse_particle.pos=grab_ctr;
+
+				//setup mouse springs for every particle
+				for(int i=0; i<grab_shape->getNum(); i++) {
+					mouse_springs.emplace_back(&mouse_particle, &grab_shape->particles[i], sub_time_step);
+				}
+			}
+		}
+		if(grab_action.bReleased) {
+			grab_shape=nullptr;
+			mouse_springs.clear();
+		}
+
+		//update mouse particle position
+		if(grab_shape) {
+			vf3d ix=cmn::segIntersectPlane(
+				cam_pos,
+				cam_pos+mouse_dir,
+				grab_ctr,
+				grab_dir
+			);
+			mouse_particle.pos=ix;
+			mouse_particle.old_pos=ix;
 		}
 	}
 
 	bool user_update(float dt) override {
-		update_watch.start();
+		if(to_time) update_watch.start();
 
 		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
@@ -277,6 +327,10 @@ struct Physics3DUI : cmn::Engine3D {
 			while(update_timer>time_step) {
 				for(int i=0; i<num_sub_steps; i++) {
 					scene.handleCollisions();
+					//update mouse springs
+					for(auto& m:mouse_springs) {
+						m.update(sub_time_step);
+					}
 					scene.update(sub_time_step);
 				}
 
@@ -284,14 +338,14 @@ struct Physics3DUI : cmn::Engine3D {
 			}
 		}
 
-		update_watch.stop();
+		if(to_time) update_watch.stop();
 
 		return true;
 	}
 
 	//combine all scene geometry
 	bool user_geometry() override {
-		geom_watch.start();
+		if(to_time) geom_watch.start();
 
 		//realize shape geometry
 		if(show_edges) {
@@ -344,17 +398,28 @@ struct Physics3DUI : cmn::Engine3D {
 			}
 		}
 
-		geom_watch.stop();
+		//add axis at mouse particle
+		if(grab_shape) {
+			const float sz=.3f;
+			cmn::Line l6{mouse_particle.pos-vf3d(sz, 0, 0), mouse_particle.pos+vf3d(sz, 0, 0)}; l6.col=olc::RED;
+			lines_to_project.push_back(l6);
+			cmn::Line l7{mouse_particle.pos-vf3d(0, sz, 0), mouse_particle.pos+vf3d(0, sz, 0)}; l7.col=olc::BLUE;
+			lines_to_project.push_back(l7);
+			cmn::Line l8{mouse_particle.pos-vf3d(0, 0, sz), mouse_particle.pos+vf3d(0, 0, sz)}; l8.col=olc::GREEN;
+			lines_to_project.push_back(l8);
+		}
 
-		pc_watch.start();
+		if(to_time)  geom_watch.stop();
+
+		if(to_time)  pc_watch.start();
 
 		return true;
 	}
 
 	bool user_render()  override {
-		pc_watch.stop();
+		if(to_time) pc_watch.stop();
 
-		render_watch.start();
+		if(to_time) render_watch.start();
 
 		//dark grey background
 		Clear(olc::Pixel(35, 35, 35));
@@ -377,19 +442,18 @@ struct Physics3DUI : cmn::Engine3D {
 			);
 		}
 
-		//edge detection on highlighted object
-		if(highlighted) {
-			int id=highlighted->id;
-			olc::Pixel col=highlighted->fill;
+		//edge detection on grabbed shape
+		if(grab_shape) {
+			int id=grab_shape->id;
 			for(int i=1; i<ScreenWidth()-1; i++) {
 				for(int j=1; j<ScreenHeight()-1; j++) {
-					bool curr=id_buffer[i+ScreenWidth()*j]==id;
-					bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
-					bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
-					bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
-					bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
+					bool curr=id_buffer[bufferIX(i, j)]==id;
+					bool lft=id_buffer[bufferIX(i-1, j)]==id;
+					bool rgt=id_buffer[bufferIX(i+1, j)]==id;
+					bool top=id_buffer[bufferIX(i, j-1)]==id;
+					bool btm=id_buffer[bufferIX(i, j+1)]==id;
 					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
-						Draw(i, j, col);
+						Draw(i, j, grab_shape->fill);
 					}
 				}
 			}
@@ -417,7 +481,8 @@ struct Physics3DUI : cmn::Engine3D {
 		};
 
 		if(show_vertexes) {
-			if(highlighted) showVerts(*highlighted);
+			//show only verts of selected, else all
+			if(grab_shape) showVerts(*grab_shape);
 			else for(const auto& s:scene.shapes) {
 				showVerts(s);
 			}
@@ -428,7 +493,7 @@ struct Physics3DUI : cmn::Engine3D {
 			DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::RED);
 		}
 
-		render_watch.stop();
+		if(to_time) render_watch.stop();
 
 		//print diagnostics
 		if(to_time) {
