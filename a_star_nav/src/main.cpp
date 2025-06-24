@@ -261,7 +261,7 @@ struct AStarUI : olc::PixelGameEngine {
 					show_background^=true;
 					//load on first press
 					if(show_background&&!background_sprite) {
-						background_sprite=new olc::Sprite("assets/boulder.png");
+						background_sprite=new olc::Sprite("assets/background.png");
 						background_decal=new olc::Decal(background_sprite);
 					}
 				}
