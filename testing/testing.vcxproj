@@ -153,6 +153,12 @@
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\billboard.h" />
+    <ClInclude Include="src\packing.h" />
+    <ClInclude Include="src\slider.h" />
+    <ClInclude Include="src\sprite_sheet.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -4,49 +4,13 @@ using cmn::Mat4;
 
 constexpr float Pi=3.1415927f;
 
-struct SpriteSheet {
-	olc::Sprite* sprite=nullptr;
-	int num_x=0, num_y=0;
-	std::unordered_map<std::string, std::vector<int>> animations;
+#include "sprite_sheet.h"
 
-	SpriteSheet() {}
+#include "billboard.h"
 
-	SpriteSheet(const std::string& filename, int x, int y) {
-		sprite=new olc::Sprite(filename);
-		num_x=x;
-		num_y=y;
-	}
+#include "packing.h"
 
-	~SpriteSheet() {
-		delete sprite;
-	}
-};
-
-struct Billboard {
-	vf3d pos;
-	int id=0;
-	std::string state;
-	float anim=0;
-	float w=1, h=1;
-	float rot=0;
-
-	void update(float dt) {
-		anim+=dt;
-	}
-};
-
-//pack four 0-255 uchars into an int
-int pack(unsigned char a, unsigned char b, unsigned char c, unsigned char d) {
-	return (a<<24)|(b<<16)|(c<<8)|d;
-}
-
-//retrieve four 0-255 uchars from an int
-void unpack(int packed, unsigned char& a, unsigned char& b, unsigned char& c, unsigned char& d) {
-	a=(packed>>24)&0xFF;
-	b=(packed>>16)&0xFF;
-	c=(packed>>8)&0xFF;
-	d=packed&0xFF;
-}
+#include "slider.h"
 
 struct Example : cmn::Engine3D {
 	Example() {
@@ -62,9 +26,21 @@ struct Example : cmn::Engine3D {
 
 	Billboard* selected=nullptr;
 
+	std::list<Slider> sliders;
+
 	bool user_create() override {
 		cam_pos={0, 0, 2.5f};
 		light_pos={0, 0, 2.5f};
+
+		//callback to update projection matrix
+		auto resetFOV=[this] (float t) {
+			//fov from 1 to 179...
+			cam_fov_deg=1+178*t;
+			float asp=float(ScreenHeight())/ScreenWidth();
+			mat_proj=Mat4::makeProj(cam_fov_deg, asp, .001f, 1000.f);
+		};
+
+		sliders.push_back({olc::vf2d(40, 40), olc::vf2d(ScreenWidth()-40, 40), 7, resetFOV});
 
 		{
 			//make actual sprite sheet
@@ -143,9 +119,6 @@ struct Example : cmn::Engine3D {
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
-		//deselect
-		if(GetKey(olc::Key::ESCAPE).bPressed) selected=nullptr;
-
 		//select billboard with id buffer
 		if(GetKey(olc::Key::ENTER).bPressed) {
 			//get index
@@ -163,13 +136,25 @@ struct Example : cmn::Engine3D {
 			}
 		}
 
-		//rotate billboard
+		//deselect
+		if(GetKey(olc::Key::ESCAPE).bPressed) selected=nullptr;
+
+		//update sliders
+		{
+			const auto mouse_pos=GetMousePos();
+			const auto slide_action=GetMouse(olc::Mouse::LEFT);
+			if(slide_action.bPressed) for(auto& s:sliders) s.startSlide(mouse_pos);
+			if(slide_action.bHeld) for(auto& s:sliders) s.updateSlide(mouse_pos);
+			if(slide_action.bReleased) for(auto& s:sliders) s.endSlide();
+		}
+
+		//rotate selected billboard
 		if(selected) {
 			if(GetKey(olc::Key::Q).bHeld) selected->rot+=dt;
 			if(GetKey(olc::Key::E).bHeld) selected->rot-=dt;
 		}
 
-		//basically just updating the animation
+		//update animations
 		for(auto& b:billboards) {
 			b.update(dt);
 		}
@@ -185,10 +170,6 @@ struct Example : cmn::Engine3D {
 
 		//add billboards
 		for(const auto& b:billboards) {
-			//unpack sprite sheet index
-			unsigned char ss_idx, _na;
-			unpack(b.id, _na, ss_idx, _na, _na);
-
 			//get basis vectors
 			vf3d norm=(b.pos-cam_pos).norm();
 			vf3d up(0, 1, 0);
@@ -206,28 +187,23 @@ struct Example : cmn::Engine3D {
 			vf3d bl=b.pos-b.w/2*new_rgt+b.h/2*new_up;
 			vf3d br=b.pos-b.w/2*new_rgt-b.h/2*new_up;
 
+			//unpack sprite sheet index
+			unsigned char ss_idx, _na;
+			unpack(b.id, _na, ss_idx, _na, _na);
+
 			//get corresponding sprite sheet
 			SpriteSheet& ss=*sprite_sheet_atlas[ss_idx];
-			//get corresponding list of poses
-			const auto& poses=ss.animations[b.state];
-			//wrap animation step and get pose
-			int pose=poses[int(b.anim)%poses.size()];
-			//find texture region x
-			int pose_x=pose%ss.num_x;
-			float min_u=pose_x/float(ss.num_x);
-			float max_u=min_u+1.f/ss.num_x;
-			//find texture region y
-			int pose_y=pose/ss.num_x;
-			float min_v=pose_y/float(ss.num_y);
-			float max_v=min_v+1.f/ss.num_y;
+			//get texture rect
+			olc::vf2d min_uv, max_uv;
+			ss.getCurrRect(b.state, b.anim, min_uv, max_uv);
 
-			//texture using given region
-			cmn::v2d tl_t{max_u, min_v};
-			cmn::v2d tr_t{max_u, max_v};
-			cmn::v2d bl_t{min_u, min_v};
-			cmn::v2d br_t{min_u, max_v};
+			//texture coords
+			cmn::v2d tl_t{max_uv.x, min_uv.y};
+			cmn::v2d tr_t{max_uv.x, max_uv.y};
+			cmn::v2d bl_t{min_uv.x, min_uv.y};
+			cmn::v2d br_t{min_uv.x, max_uv.y};
 
-			//tesselate vertexes and texture coords and pass packed int
+			//tessellate vertexes w/ texture coords & pass packed id
 			cmn::Triangle f1{tl, br, tr, tl_t, br_t, tr_t}; f1.id=b.id;
 			tris_to_project.push_back(f1);
 			cmn::Triangle f2{tl, bl, br, tl_t, bl_t, br_t}; f2.id=b.id;
@@ -281,6 +257,8 @@ struct Example : cmn::Engine3D {
 				}
 			}
 		}
+
+		for(const auto& s:sliders) s.draw(this);
 
 		return true;
 	}
