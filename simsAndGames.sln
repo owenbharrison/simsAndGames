@@ -47,8 +47,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "targetting", "targetting\ta
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cloth", "cloth\cloth.vcxproj", "{73BF86FB-41DB-405C-927E-B2F6737A9BF1}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3d_builder", "3d_builder\3d_builder.vcxproj", "{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fracture", "fracture\fracture.vcxproj", "{134F8EC1-508E-4C94-9674-D6B9541D387A}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3d_physics", "3d_physics\3d_physics.vcxproj", "{D1742974-008D-4184-B895-DB5C4E89DEAC}"
@@ -241,14 +239,6 @@ Global
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Release|x64.Build.0 = Release|x64
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Release|x86.ActiveCfg = Release|Win32
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Release|x86.Build.0 = Release|Win32
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Debug|x64.ActiveCfg = Debug|x64
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Debug|x64.Build.0 = Debug|x64
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Debug|x86.ActiveCfg = Debug|Win32
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Debug|x86.Build.0 = Debug|Win32
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Release|x64.ActiveCfg = Release|x64
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Release|x64.Build.0 = Release|x64
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Release|x86.ActiveCfg = Release|Win32
-		{4E60B02F-6EF6-4EA9-BD60-321AF9AB5C10}.Release|x86.Build.0 = Release|Win32
 		{134F8EC1-508E-4C94-9674-D6B9541D387A}.Debug|x64.ActiveCfg = Debug|x64
 		{134F8EC1-508E-4C94-9674-D6B9541D387A}.Debug|x64.Build.0 = Debug|x64
 		{134F8EC1-508E-4C94-9674-D6B9541D387A}.Debug|x86.ActiveCfg = Debug|Win32
