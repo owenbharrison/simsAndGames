@@ -163,19 +163,15 @@
     <Image Include="assets\london.jpg" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="fx\eeb_old\blur_st.txt" />
-    <Text Include="fx\eeb_old\calc_st.txt" />
-    <Text Include="fx\eeb_old\lic.txt" />
-    <Text Include="fx\test\avg.txt" />
-    <Text Include="fx\test\flip_x.txt" />
-    <Text Include="fx\test\flip_y.txt" />
-    <Text Include="fx\test\invert.txt" />
-    <Text Include="fx\test\uv.txt" />
-    <Text Include="fx\eeb\blur_st.txt" />
-    <Text Include="fx\eeb\calc_st.txt" />
-    <Text Include="fx\eeb\lic.txt" />
-    <Text Include="fx\rainbow_edges.txt" />
-    <Text Include="thing.txt" />
+    <None Include="assets\fx\eeb\blur_st.glsl" />
+    <None Include="assets\fx\eeb\calc_st.glsl" />
+    <None Include="assets\fx\eeb\lic.glsl" />
+    <None Include="assets\fx\rainbow_edges.glsl" />
+    <None Include="assets\fx\test\avg.glsl" />
+    <None Include="assets\fx\test\flip_x.glsl" />
+    <None Include="assets\fx\test\flip_y.glsl" />
+    <None Include="assets\fx\test\invert.glsl" />
+    <None Include="assets\fx\test\uv.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

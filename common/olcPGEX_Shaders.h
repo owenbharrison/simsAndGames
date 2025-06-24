@@ -1,9 +1,84 @@
+/*
+	olcPGEX_Shaders.h
+
+	+-------------------------------------------------------------+
+	|         OneLoneCoder Pixel Game Engine Extension            |
+	|                    Shaders   v1.00                          |
+	+-------------------------------------------------------------+
+
+	NOTE: UNDER ACTIVE DEVELOPMENT - THERE ARE BUGS/GLITCHES - VERY UNFINISHED
+	SIMPLY PUT - DO NOT USE UNLESS YOU KNOW WHAT YOU ARE DOING :P
+
+	What is this?
+	~~~~~~~~~~~~~
+	This is an "unfinished" extension that allows you to render to decals
+	via a genuine GPU pixel shader. It has all sorts of caveats. Do not use.
+
+	License (OLC-3)
+	~~~~~~~~~~~~~~~
+
+	Copyright 2018 - 2025 OneLoneCoder.com
+
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions
+	are met:
+
+	1. Redistributions or derivations of source code must retain the above
+	copyright notice, this list of conditions and the following disclaimer.
+
+	2. Redistributions or derivative works in binary form must reproduce
+	the above copyright notice. This list of conditions and the following
+	disclaimer must be reproduced in the documentation and/or other
+	materials provided with the distribution.
+
+	3. Neither the name of the copyright holder nor the names of its
+	contributors may be used to endorse or promote products derived
+	from this software without specific prior written permission.
+
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+	"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+	A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+	HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+	SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+	LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+	DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+	THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+	(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+	Links
+	~~~~~
+	YouTube:	https://www.youtube.com/javidx9
+	Discord:	https://discord.gg/WhwHUMV
+	Twitter:	https://www.twitter.com/javidx9
+	Twitch:		https://www.twitch.tv/javidx9
+	GitHub:		https://www.github.com/onelonecoder
+	Homepage:	https://www.onelonecoder.com
+
+	Author
+	~~~~~~
+	David Barr, aka javidx9, ?OneLoneCoder 2019, 2020, 2021, 2022, 2023, 2024, 2025
+
+	Revisions:
+	1.00:	Initial Release
+
+*/
+
 #pragma once
+#ifndef OLC_PGEX_SHADER_H
+#define OLC_PGEX_SHADER_H
 
 #if !defined(OLC_GFX_OPENGL33)
 #error The olc::Shader Extension requires the OpenGL 3.3 Renderer to be specified!
 #endif
 
+#if !defined(OLC_USING_PGEX_SHADER)
+#define OLC_USING_PGEX_SHADER
+#endif
+
+
+#define OLC_GFX_OPENGL33
 #include "olcPixelGameEngine.h"
 
 namespace olc {
@@ -158,7 +233,11 @@ namespace olc {
 			1,
 			1,
 		};
+
+
+
 	}
+
 
 	class Effect {
 	public:
@@ -185,19 +264,6 @@ namespace olc {
 		uint32_t m_nTargetSlots=0;
 	};
 
-	typedef GLint CALLSTYLE locGetUniformLocation_t(GLuint program, const GLchar* name);
-	typedef void CALLSTYLE locUniform1f_t(GLint location, GLfloat v0);
-	typedef void CALLSTYLE locUniform1i_t(GLint location, GLint v0);
-	typedef void CALLSTYLE locUniform2fv_t(GLint location, GLsizei count, const GLfloat* value);
-	typedef void CALLSTYLE locActiveTexture_t(GLenum texture);
-	typedef void CALLSTYLE locGenFrameBuffers_t(GLsizei n, GLuint* ids);
-	typedef void CALLSTYLE locBindFrameBuffer_t(GLenum target, GLuint fb);
-	typedef GLenum CALLSTYLE locCheckFrameBufferStatus_t(GLenum target);
-	typedef void CALLSTYLE locDeleteFrameBuffers_t(GLsizei n, const GLuint* fbs);
-	typedef void CALLSTYLE locFrameBufferTexture2D_t(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
-	typedef void CALLSTYLE locDrawBuffers_t(GLsizei n, const GLenum* bufs);
-	typedef void CALLSTYLE locBlendFuncSeparate_t(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha);
-
 	class Shade : public olc::PGEX {
 		friend class olc::Effect;
 
@@ -218,6 +284,9 @@ namespace olc {
 		void DrawDecal(const olc::vf2d& pos, olc::Decal* decal, const olc::vf2d& scale={1.0f, 1.0f}, const olc::Pixel& tint=olc::WHITE);
 		void DrawPartialDecal(const olc::vf2d& pos, olc::Decal* decal, const olc::vf2d& source_pos, const olc::vf2d& source_size, const olc::vf2d& scale={1.0f, 1.0f}, const olc::Pixel& tint=olc::WHITE);
 		void DrawPartialDecal(const olc::vf2d& pos, const olc::vf2d& size, olc::Decal* decal, const olc::vf2d& source_pos, const olc::vf2d& source_size, const olc::Pixel& tint=olc::WHITE);
+		void DrawPolygonDecal(olc::Decal* decal, const std::vector<olc::vf2d>& pos, const std::vector<olc::vf2d>& uv, const std::vector<olc::Pixel>& colours);
+
+
 
 	public: // Advanced Interface
 		int32_t DrawQuad(const olc::vf2d& vPos, const olc::vf2d& vSize);
@@ -235,6 +304,7 @@ namespace olc {
 		std::array<sResourceSlot, 8> slotTarget;
 		std::array<sResourceSlot, 8> slotSource;
 
+
 		struct sOmniVertex {
 			float pos[3];
 			olc::Pixel col;
@@ -244,7 +314,7 @@ namespace olc {
 		uint32_t m_nVB=0;
 		uint32_t m_nVA=0;
 
-		sOmniVertex pVertexMem[OLC_MAX_VERTS];
+		sOmniVertex pVertexMem[olc::OLC_MAX_VERTS];
 
 		uint32_t m_nFBO=0;
 		uint32_t m_nEffectID=0;
@@ -252,6 +322,13 @@ namespace olc {
 		int32_t RenderDecal();
 
 		void Render(const olc::DecalInstance& decal);
+
+		void RenderPolygon(
+			const std::vector<olc::Decal*>& decals,	// Source Textures
+			const std::vector<olc::vf2d>& pos,		// Vertex positions
+			const std::vector<olc::vf2d>& uv,		// Texture Coords
+			const std::vector<olc::Pixel>& colours, // Vertex Colours
+			const olc::DecalStructure& structure);	// Primitive
 
 		void ClearAllSlots();
 
@@ -289,11 +366,17 @@ namespace olc {
 		locDrawBuffers_t* locDrawBuffers=nullptr;
 		locBlendFuncSeparate_t* locBlendFuncSeparate=nullptr;
 
+		olc::Renderable dummyTex;
+
 	protected:
 		void OnBeforeUserCreate() override;
 
 	};
 }
+
+
+#ifdef OLC_PGEX_SHADERS
+#undef OLC_PGEX_SHADERS
 
 namespace olc {
 	void Effect::SetSlots(const uint32_t nInput, const uint32_t nTarget) {
@@ -327,9 +410,11 @@ namespace olc {
 		m_nPSID=psid;
 	}
 
+
 	Shade::Shade() : PGEX(true) {
 
 	}
+
 
 	olc::Effect Shade::ConstructShader(const std::string& sVS, const std::string& sPS) {
 		olc::Effect effect;
@@ -378,6 +463,7 @@ namespace olc {
 		return effect;
 	}
 
+
 	olc::Effect Shade::MakeEffect(const olc::EffectConfig& premade) {
 		// Construct Vertex Shader
 		std::string sVertexShader=
@@ -418,9 +504,10 @@ namespace olc {
 		sPixelShader.append(premade.sPixelSource);
 
 		olc::Effect effect=ConstructShader(sVertexShader, sPixelShader);
-		effect.SetSlots(premade.nInputs, premade.nOutputs);
+		effect.SetSlots(uint32_t(premade.nInputs), uint32_t(premade.nOutputs));
 		return effect;
 	}
+
 
 	void Shade::OnBeforeUserCreate() {
 		// Load External OpenGL Functions
@@ -487,18 +574,22 @@ namespace olc {
 		locVertexAttribPointer(9, 2, GL_FLOAT, GL_FALSE, sizeof(sOmniVertex), (void*)(18*sizeof(float)));
 
 		locEnableVertexAttribArray(0); // Pos
-		locEnableVertexAttribArray(1); // Tex 0
-		locEnableVertexAttribArray(2); // Tex 1
-		locEnableVertexAttribArray(3); // Tex 2
-		locEnableVertexAttribArray(4); // Tex 3
-		locEnableVertexAttribArray(5); // Tex 4
-		locEnableVertexAttribArray(6); // Tex 5
-		locEnableVertexAttribArray(7); // Tex 6
-		locEnableVertexAttribArray(8); // Tex 7
-		locEnableVertexAttribArray(9); // Colour
+		locEnableVertexAttribArray(1); // Colour
+		locEnableVertexAttribArray(2); // Tex 0
+		locEnableVertexAttribArray(3); // Tex 1
+		locEnableVertexAttribArray(4); // Tex 2
+		locEnableVertexAttribArray(5); // Tex 3
+		locEnableVertexAttribArray(6); // Tex 4
+		locEnableVertexAttribArray(7); // Tex 5
+		locEnableVertexAttribArray(8); // Tex 6
+		locEnableVertexAttribArray(9); // Tex 7
 
 		locBindBuffer(0x8892, 0);
 		locBindVertexArray(0);
+
+		dummyTex.Create(1, 1);
+		dummyTex.Sprite()->GetData()[0]=olc::WHITE;
+		dummyTex.Decal()->Update();
 	}
 
 	void Shade::ClearAllSlots() {
@@ -506,10 +597,14 @@ namespace olc {
 	}
 
 	int32_t Shade::SetSourceDecal(olc::Decal* pDecal, const uint32_t nSlot, const olc::vf2d& vSourcePos, const olc::vf2d& vSourceSize) {
-		slotSource[nSlot].bInUse=true;
-		slotSource[nSlot].nTargetResID=pDecal->id;
-		slotSource[nSlot].vPos=vSourcePos;
-		slotSource[nSlot].vSize=vSourceSize;
+		if(pDecal==nullptr) {
+			slotSource[nSlot]={false, dummyTex.Decal()->id, {0.0f, 0.0f}, {1.0f, 1.0f}};
+		} else {
+			slotSource[nSlot].bInUse=true;
+			slotSource[nSlot].nTargetResID=pDecal->id;
+			slotSource[nSlot].vPos=vSourcePos;
+			slotSource[nSlot].vSize=vSourceSize;
+		}
 
 		locActiveTexture(0x84C0); // TODO
 		glBindTexture(GL_TEXTURE_2D, slotSource[nSlot].nTargetResID);
@@ -557,9 +652,9 @@ namespace olc {
 
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_CULL_FACE);
-		glEnable(GL_BLEND);
-		locBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
+		//glEnable(GL_BLEND);
+		//locBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
 #if defined(OLC_PLATFORM_EMSCRIPTEN)
@@ -581,6 +676,7 @@ namespace olc {
 		locBindFrameBuffer(36160U, 0);
 		return 0;
 	}
+
 
 	int32_t Shade::DrawQuad(const olc::vf2d& vPos, const olc::vf2d& vSize) {
 		locBindBuffer(0x8892, m_nVB);
@@ -617,10 +713,13 @@ namespace olc {
 		return 0;
 	}
 
+
 	void Shade::Clear(const olc::Pixel& p) {
 		glClearColor(float(p.r)/255.0f, float(p.g)/255.0f, float(p.b)/255.0f, float(p.a)/255.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 	}
+
+
 
 	void Shade::DrawDecal(const olc::vf2d& pos, olc::Decal* decal, const olc::vf2d& scale, const olc::Pixel& tint) {
 		olc::vf2d vScreenSpacePos=
@@ -701,6 +800,58 @@ namespace olc {
 		Render(di);
 	}
 
+	void Shade::DrawPolygonDecal(olc::Decal* decal, const std::vector<olc::vf2d>& pos, const std::vector<olc::vf2d>& uv, const std::vector<olc::Pixel>& colours) {
+		// Assumed points are normalised, transform points into target space
+		std::vector<olc::vf2d> vTransformedPos(pos.size());
+		std::transform(pos.begin(), pos.end(), vTransformedPos.begin(),
+			[this] (const olc::vf2d& pin) {
+			return (pin);  ///* slotTarget[0].vInvSize*/) * 2.0f - olc::vf2d{ 1.0f, 1.0f };
+		});
+
+		RenderPolygon({decal}, vTransformedPos, uv, colours, DecalStructure::FAN);
+	}
+
+	void Shade::RenderPolygon(
+		const std::vector<olc::Decal*>& decals,	// Source Textures
+		const std::vector<olc::vf2d>& pos,		// Vertex positions
+		const std::vector<olc::vf2d>& uv,		// Texture Coords
+		const std::vector<olc::Pixel>& colours, // Vertex Colours
+		const olc::DecalStructure& structure)	// Primitive
+	{
+		// Setup multi-texture sources
+		for(size_t i=0; i<decals.size(); i++)
+			SetSourceDecal(decals[i], uint32_t(i));
+
+		// Populate vertex buffer (note for now, texture coords are shared)
+		for(uint32_t i=0; i<pos.size(); i++) {
+			pVertexMem[i].pos[0]=pos[i].x;
+			pVertexMem[i].pos[1]=pos[i].y;
+			pVertexMem[i].pos[2]=1.0f;
+			pVertexMem[i].tex[0]=uv[i];
+			pVertexMem[i].col=colours[i];
+		}
+
+		// Bind vertex buffer
+		locBindBuffer(0x8892, m_nVB);
+
+		// Send to GPU
+		locBufferData(0x8892, sizeof(sOmniVertex)*pos.size(), pVertexMem, 0x88E0);
+
+		// Draw!
+		switch(structure) {
+			case DecalStructure::FAN:
+				glDrawArrays(GL_TRIANGLE_FAN, 0, GLsizei(pos.size()));
+				break;
+			case DecalStructure::LIST:
+				glDrawArrays(GL_TRIANGLES, 0, GLsizei(pos.size()));
+				break;
+			case DecalStructure::STRIP:
+				glDrawArrays(GL_TRIANGLE_STRIP, 0, GLsizei(pos.size()));
+				break;
+		}
+	}
+
+
 	void Shade::Render(const olc::DecalInstance& decal) {
 		locBindBuffer(0x8892, m_nVB);
 
@@ -717,3 +868,6 @@ namespace olc {
 		glDrawArrays(GL_TRIANGLE_FAN, 0, decal.points);
 	}
 }
+
+#endif // OLC_PGEX_SHADER
+#endif // OLC_PGEX_SHADER_H

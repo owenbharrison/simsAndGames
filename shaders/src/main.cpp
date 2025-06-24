@@ -3,7 +3,8 @@
 #include "olcPixelGameEngine.h"
 using olc::vf2d;
 
-#include "shade_shader.h"
+#define OLC_PGEX_SHADERS
+#include "olcPGEX_Shaders.h"
 
 #include <fstream>
 
@@ -30,7 +31,7 @@ struct Demo : public olc::PixelGameEngine {
 	}
 
 	olc::Shade shade;
-	olc::Effect pass1, pass2, pass3;
+	olc::Effect calc_st_pass, blur_st_pass, lic_pass;
 
 	struct Buffer {
 		olc::Sprite* spr=nullptr;
@@ -42,7 +43,7 @@ struct Demo : public olc::PixelGameEngine {
 		}
 	};
 
-	Buffer source, buf_a, buf_b, buf_c;
+	Buffer source, buf_a, buf_b, target;
 
 	bool OnUserCreate() override {
 		//initialize buffers
@@ -52,42 +53,42 @@ struct Demo : public olc::PixelGameEngine {
 		buf_a.dec=new olc::Decal(buf_a.spr);
 		buf_b.spr=new olc::Sprite(2*source.spr->width, source.spr->height);
 		buf_b.dec=new olc::Decal(buf_b.spr);
-		buf_c.spr=new olc::Sprite(source.spr->width, source.spr->height);
-		buf_c.dec=new olc::Decal(buf_c.spr);
+		target.spr=new olc::Sprite(source.spr->width, source.spr->height);
+		target.dec=new olc::Decal(target.spr);
 		
 		//load effect passes
-		pass1=shade.MakeEffect(loadEffect("fx/eeb/calc_st.txt"));
-		if(!pass1.IsOK()) {
-			std::cout<<"pass1 err:\n"<<pass1.GetStatus();
+		calc_st_pass=shade.MakeEffect(loadEffect("assets/fx/eeb/calc_st.glsl"));
+		if(!calc_st_pass.IsOK()) {
+			std::cout<<"calc st err:\n"<<calc_st_pass.GetStatus();
 			return false;
 		}
-		pass2=shade.MakeEffect(loadEffect("fx/eeb/blur_st.txt"));
-		if(!pass2.IsOK()) {
-			std::cout<<"pass2 err:\n"<<pass2.GetStatus();
+		blur_st_pass=shade.MakeEffect(loadEffect("assets/fx/eeb/blur_st.glsl"));
+		if(!blur_st_pass.IsOK()) {
+			std::cout<<"blur st err:\n"<<blur_st_pass.GetStatus();
 			return false;
 		}
-		pass3=shade.MakeEffect(loadEffect("fx/eeb/lic.txt"));
-		if(!pass3.IsOK()) {
-			std::cout<<"pass3 err:\n"<<pass3.GetStatus();
+		lic_pass=shade.MakeEffect(loadEffect("assets/fx/eeb/lic.glsl"));
+		if(!lic_pass.IsOK()) {
+			std::cout<<"lic err:\n"<<lic_pass.GetStatus();
 			return false;
 		}
 
 		//apply them
 		shade.SetSourceDecal(source.dec);
 		shade.SetTargetDecal(buf_a.dec);
-		shade.Start(&pass1);
+		shade.Start(&calc_st_pass);
 		shade.DrawQuad({-1, -1}, {2, 2});
 		shade.End();
 
 		shade.SetSourceDecal(buf_a.dec);
 		shade.SetTargetDecal(buf_b.dec);
-		shade.Start(&pass2);
+		shade.Start(&blur_st_pass);
 		shade.DrawQuad({-1, -1}, {2, 2});
 		shade.End();
 
 		shade.SetSourceDecal(buf_b.dec);
-		shade.SetTargetDecal(buf_c.dec);
-		shade.Start(&pass3);
+		shade.SetTargetDecal(target.dec);
+		shade.Start(&lic_pass);
 		shade.DrawQuad({-1, -1}, {2, 2});
 		shade.End();
 
@@ -102,7 +103,7 @@ struct Demo : public olc::PixelGameEngine {
 		Clear(olc::BLACK);
 
 		if(GetKey(olc::Key::SPACE).bHeld) DrawDecal({0, 0}, source.dec);
-		else DrawDecal({0, 0}, buf_c.dec);
+		else DrawDecal({0, 0}, target.dec);
 
 		return true;
 	}
