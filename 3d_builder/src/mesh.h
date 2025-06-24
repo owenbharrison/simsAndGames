@@ -90,7 +90,7 @@ struct Mesh {
 		//sort by closest
 		float record=-1;
 		for(const auto& t:tris) {
-			float dist=segIntersectTri(orig, orig+dir, t);
+			float dist=t.intersectSeg(orig, orig+dir);
 			if(dist>0) {
 				if(record<0||dist<record) {
 					record=dist;

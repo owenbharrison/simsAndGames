@@ -361,7 +361,7 @@ struct VoxelGame : cmn::Engine3D {
 				float record=INFINITY;
 				cmn::Triangle* closest=nullptr;
 				for(auto& t:model.triangles) {
-					float dist=segIntersectTri(start, world, t);
+					float dist=t.intersectSeg(start, world);
 					if(dist>0&&dist<record) {
 						record=dist;
 						closest=&t;

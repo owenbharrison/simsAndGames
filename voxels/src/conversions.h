@@ -37,7 +37,7 @@ float random(float b=1, float a=0) {
 				//for every tri
 				int num_ix=0;
 				for(const auto& tri:m.triangles) {
-					float t=segIntersectTri(xyz, xyz+dir, tri);
+					float t=tri.intersectSeg(xyz, xyz+dir);
 					if(t>0) num_ix++;
 				}
 
@@ -80,7 +80,7 @@ float random(float b=1, float a=0) {
 						//for every tri
 						int num_ix=0;
 						for(const auto& tri:m.triangles) {
-							float t=segIntersectTri(xyz, xyz+dir, tri);
+							float t=tri.intersectSeg(xyz, xyz+dir);
 							if(t>0) num_ix++;
 						}
 

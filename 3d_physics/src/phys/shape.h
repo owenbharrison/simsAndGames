@@ -354,7 +354,7 @@ public:
 				particles[it.b].pos,
 				particles[it.c].pos
 			};
-			float dist=segIntersectTri(orig, orig+dir, t);
+			float dist=t.intersectSeg(orig, orig+dir);
 			if(dist>0) {
 				if(record<0||dist<record) {
 					record=dist;
