@@ -1,3 +1,4 @@
+#define OLC_GFX_OPENGL33
 #include "common/3d/engine_3d.h"
 namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
@@ -22,6 +23,47 @@ vf3d projectOntoPlane(const vf3d& v, const vf3d& norm) {
 
 #include "mesh.h"
 
+#define OLC_PGEX_SHADERS
+#include "olcPGEX_Shaders.h"
+
+olc::EffectConfig loadEffect(const std::string& filename) {
+	//get file
+	std::ifstream file(filename);
+	if(file.fail()) return olc::fx::FX_NORMAL;
+
+	//dump contents into str stream
+	std::stringstream mid;
+	mid<<file.rdbuf();
+
+	return {
+		DEFAULT_VS,
+		mid.str(),
+		1,
+		1
+	};
+}
+
+struct ShaderOption {
+	olc::Sprite* logo_spr=nullptr;
+	olc::Decal* logo_dec=nullptr;
+	std::string effect_file;
+	olc::Effect effect;
+
+	ShaderOption() {}
+
+	ShaderOption(olc::Shade& s, const std::string& l, const std::string& e) {
+		logo_spr=new olc::Sprite(l);
+		logo_dec=new olc::Decal(logo_spr);
+		effect_file=e;
+		effect=s.MakeEffect(loadEffect(effect_file));
+	}
+
+	~ShaderOption() {
+		delete logo_spr;
+		delete logo_dec;
+	}
+};
+
 struct Physics3DUI : cmn::Engine3D {
 	Physics3DUI() {
 		sAppName="3D Physics";
@@ -39,8 +81,9 @@ struct Physics3DUI : cmn::Engine3D {
 	Particle mouse_particle;
 	std::list<Spring> mouse_springs;
 
-	bool to_time=false;
-	cmn::Stopwatch update_watch, geom_watch, pc_watch, render_watch;
+	olc::vf2d menu_pos;
+	const float menu_sz=95;
+	const float menu_min_sz=.2f*menu_sz;
 
 	//physics stuff
 	Scene scene;
@@ -52,7 +95,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 	bool update_phys=false;
 
-	//graphics stuff
+	//geometry stuf
 	Mesh vertex;
 
 	bool show_bounds=false;
@@ -60,15 +103,38 @@ struct Physics3DUI : cmn::Engine3D {
 	bool show_edges=false;
 	bool show_joints=false;
 
+	//render stuff
+	olc::Sprite* prim_rect_spr=nullptr;
+	olc::Decal* prim_rect_dec=nullptr;
+	olc::Sprite* prim_circ_spr=nullptr;
+	olc::Decal* prim_circ_dec=nullptr;
+
+	//post processing stuff
+	olc::Sprite* source_spr=nullptr;
+	olc::Decal* source_dec=nullptr;
+	olc::Sprite* target_spr=nullptr;
+	olc::Decal* target_dec=nullptr;
+	unsigned int frame_count=0;
+
+	//shader stuff
+	olc::Shade shade;
+	std::list<ShaderOption> shaders;
+	ShaderOption* chosen_shader=nullptr;
+
+	//diagnostic stuff
+	bool to_time=false;
+	cmn::Stopwatch update_watch, geom_watch, pc_watch, render_watch, pp_watch;
+
 	bool user_create() override {
 		srand(time(0));
 
 		cam_pos={0, 5.5f, 8};
 		light_pos={0, 12, 0};
 
-		//make sure that it isnt influenced by mouse constraints
+		//ensure mouse particle has no influencers
 		mouse_particle.locked=true;
 
+		//initialize softbody scene
 		{
 			scene=Scene();
 
@@ -98,17 +164,73 @@ struct Physics3DUI : cmn::Engine3D {
 			scene.shrinkWrap(3);
 		}
 
+		//load vertex model for joint view
 		try {
-			vertex=Mesh::loadFromOBJ("assets/icosahedron.txt");
+			vertex=Mesh::loadFromOBJ("assets/models/icosahedron.txt");
 			vertex.scale={.03f, .03f, .03f};
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
 		}
 
+		//make some "primitives" to help draw with
+		prim_rect_spr=new olc::Sprite(1, 1);
+		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
+		prim_rect_dec=new olc::Decal(prim_rect_spr);
+		{
+			int sz=1024;
+			prim_circ_spr=new olc::Sprite(sz, sz);
+			SetDrawTarget(prim_circ_spr);
+			Clear(olc::BLANK);
+			FillCircle(sz/2, sz/2, sz/2);
+			SetDrawTarget(nullptr);
+			prim_circ_dec=new olc::Decal(prim_circ_spr);
+		}
+
+		//allocate source and target buffers
+		source_spr=new olc::Sprite(ScreenWidth(), ScreenHeight());
+		source_dec=new olc::Decal(source_spr);
+		target_spr=new olc::Sprite(ScreenWidth(), ScreenHeight());
+		target_dec=new olc::Decal(target_spr);
+
+		//load shader options
+		shaders.emplace_back(shade, "assets/logos/identity.png", "assets/fx/identity.glsl");
+		shaders.emplace_back(shade, "assets/logos/cmyk.png", "assets/fx/cmyk_ht.glsl");
+		shaders.emplace_back(shade, "assets/logos/rgb.png", "assets/fx/rgb_ht.glsl");
+		shaders.emplace_back(shade, "assets/logos/crt.png", "assets/fx/crt.glsl");
+		shaders.emplace_back(shade, "assets/logos/sobel.png", "assets/fx/rainbow_sobel.glsl");
+
+		//check shaders
+		for(const auto& s:shaders) {
+			if(!s.effect.IsOK()) {
+				std::cout<<"err in \""<<s.effect_file<<"\": "<<s.effect.GetStatus()<<'\n';
+				return false;
+			}
+		}
+
+		//default to identity shader
+		chosen_shader=&shaders.front();
+
+		//print help disclaimer
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
 		ConsoleCaptureStdOut(true);
+
+		return true;
+	}
+
+	bool user_destroy() override {
+		//deallocate helpers
+		delete prim_rect_spr;
+		delete prim_rect_dec;
+		delete prim_circ_spr;
+		delete prim_circ_dec;
+
+		//deallocate buffers
+		delete source_dec;
+		delete source_spr;
+		delete target_dec;
+		delete target_spr;
 
 		return true;
 	}
@@ -177,7 +299,8 @@ struct Physics3DUI : cmn::Engine3D {
 
 		if(cmd=="mousebinds") {
 			std::cout<<
-				"  LEFT   grab and drag shape\n";
+				"  LEFT    grab and drag shape\n"<<
+				"  RIGHT   shader selection menu\n";
 
 			return true;
 		}
@@ -284,7 +407,7 @@ struct Physics3DUI : cmn::Engine3D {
 				//store translation plane info
 				grab_ctr=cam_pos+record*mouse_dir;
 				grab_dir=mouse_dir;
-				
+
 				//temp update for spring setup
 				mouse_particle.pos=grab_ctr;
 
@@ -309,6 +432,29 @@ struct Physics3DUI : cmn::Engine3D {
 			);
 			mouse_particle.pos=ix;
 			mouse_particle.old_pos=ix;
+		}
+
+		//menu positioning
+		if(GetMouse(olc::Mouse::RIGHT).bPressed) menu_pos=GetMousePos();
+
+		//menu selection
+		if(GetMouse(olc::Mouse::RIGHT).bReleased) {
+			//get relative offset
+			olc::vf2d sub=menu_pos-GetMousePos();
+			//ensure within selection radius
+			float dist=sub.mag();
+			if(dist>menu_min_sz&&dist<menu_sz) {
+				//find angle
+				float angle=std::atan2(sub.y, sub.x);
+				//normalize
+				float a01=(1.5f*Pi+angle)/2/Pi;
+				//truncate to nearest section
+				int reg=int(std::round(shaders.size()*a01))%shaders.size();
+				//choose shader with iterators
+				auto it=shaders.begin();
+				std::advance(it, reg);
+				chosen_shader=&*it;
+			}
 		}
 	}
 
@@ -371,6 +517,7 @@ struct Physics3DUI : cmn::Engine3D {
 			}
 		}
 
+		//add all shapes bounds and scene bounds
 		if(show_bounds) {
 			for(const auto& s:scene.shapes) {
 				addAABB(s.getAABB(), olc::PURPLE);
@@ -398,7 +545,7 @@ struct Physics3DUI : cmn::Engine3D {
 			}
 		}
 
-		//add axis at mouse particle
+		//show axis at mouse particle
 		if(grab_shape) {
 			const float sz=.3f;
 			cmn::Line l6{mouse_particle.pos-vf3d(sz, 0, 0), mouse_particle.pos+vf3d(sz, 0, 0)}; l6.col=olc::RED;
@@ -416,13 +563,47 @@ struct Physics3DUI : cmn::Engine3D {
 		return true;
 	}
 
+#pragma region RENDER HELPERS
+	void DrawThickLineDecal(const olc::vf2d& a, const olc::vf2d& b, float w, olc::Pixel col) {
+		olc::vf2d sub=b-a;
+		float len=sub.mag();
+		olc::vf2d tang=(sub/len).perp();
+
+		float angle=std::atan2f(sub.y, sub.x);
+		DrawRotatedDecal(a-w*tang, prim_rect_dec, angle, {0, 0}, {len, 2*w}, col);
+	}
+
+	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
+		olc::vf2d offset(rad, rad);
+		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+		DrawDecal(pos-offset, prim_circ_dec, scale, col);
+	}
+
+	void DrawThickCircleDecal(const olc::vf2d& pos, float rad, float w, const olc::Pixel& col) {
+		const int num=32;
+		olc::vf2d first, prev;
+		for(int i=0; i<num; i++) {
+			float angle=2*Pi*i/num;
+			olc::vf2d curr(pos.x+rad*std::cos(angle), pos.y+rad*std::sin(angle));
+			FillCircleDecal(curr, w, col);
+			if(i==0) first=curr;
+			else DrawThickLineDecal(prev, curr, w, col);
+			prev=curr;
+		}
+		DrawThickLineDecal(first, prev, w, col);
+	}
+#pragma endregion
+
 	bool user_render()  override {
 		if(to_time) pc_watch.stop();
 
 		if(to_time) render_watch.start();
 
+		//render to source sprite
+		SetDrawTarget(source_spr);
+
 		//dark grey background
-		Clear(olc::Pixel(35, 35, 35));
+		Clear(olc::Pixel(170, 170, 170));
 
 		//render 3d stuff
 		resetBuffers();
@@ -495,17 +676,69 @@ struct Physics3DUI : cmn::Engine3D {
 
 		if(to_time) render_watch.stop();
 
+		//post processing
+		if(to_time) pp_watch.start();
+
+		//update frame info
+		Draw(0, 0, {
+			0xFF&frame_count,
+			0xFF&(frame_count>>8),
+			0xFF&(frame_count>>16),
+			0xFF&(frame_count>>24)
+			});
+		frame_count++;
+
+		//update source decal with sprite
+		source_dec->Update();
+
+		//apply effect
+		shade.SetSourceDecal(source_dec);
+		shade.SetTargetDecal(target_dec);
+		shade.Start(&chosen_shader->effect);
+		shade.DrawQuad({-1, -1}, {2, 2});
+		shade.End();
+
+		//draw effect
+		DrawDecal({0, 0}, target_dec);
+
+		//show shader menu
+		if(GetMouse(olc::Mouse::RIGHT).bHeld) {
+			//for each shader option
+			int i=0;
+			for(const auto& s:shaders) {
+				//draw divider
+				float angle=Pi*(.5f+2.f*i/shaders.size());
+				olc::vf2d dir(std::cos(angle), std::sin(angle));
+				DrawThickLineDecal(menu_pos+menu_min_sz*dir, menu_pos+menu_sz*dir, 1, olc::WHITE);
+
+				//draw logo
+				olc::vf2d ctr=menu_pos-.6f*menu_sz*dir;
+				olc::vf2d size(s.logo_spr->width, s.logo_spr->height);
+				float scl=.5f*menu_sz/size.x;
+				DrawDecal(ctr-scl/2*size, s.logo_dec, {scl, scl});
+				i++;
+			}
+
+			//draw circle bounds
+			DrawThickCircleDecal(menu_pos, menu_min_sz, 2, olc::WHITE);
+			DrawThickCircleDecal(menu_pos, menu_sz, 2, olc::WHITE);
+		}
+
+		if(to_time) pp_watch.stop();
+
 		//print diagnostics
 		if(to_time) {
 			auto update_dur=update_watch.getMicros();
 			auto geom_dur=geom_watch.getMicros();
 			auto pc_dur=pc_watch.getMicros();
 			auto render_dur=render_watch.getMicros();
+			auto pp_dur=pp_watch.getMicros();
 			std::cout<<
 				"  update: "<<update_dur<<"us ("<<(update_dur/1000.f)<<"ms)\n"<<
 				"  geom: "<<geom_dur<<"us ("<<(geom_dur/1000.f)<<"ms)\n"<<
 				"  project & clip: "<<pc_dur<<"us ("<<(pc_dur/1000.f)<<"ms)\n"<<
-				"  render: "<<render_dur<<"us ("<<(render_dur/1000.f)<<"ms)\n";
+				"  render: "<<render_dur<<"us ("<<(render_dur/1000.f)<<"ms)\n"<<
+				"  post process: "<<pp_dur<<"us ("<<(pp_dur/1000.f)<<"ms)\n";
 
 			//reset print flag
 			to_time=false;
@@ -518,7 +751,7 @@ struct Physics3DUI : cmn::Engine3D {
 int main() {
 	Physics3DUI p3dui;
 	bool vsync=true;
-	if(p3dui.Construct(540, 360, 1, 1, false, vsync)) p3dui.Start();
+	if(p3dui.Construct(640, 400, 1, 1, false, vsync)) p3dui.Start();
 
-	return 200;
+	return 0;
 }
