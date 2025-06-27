@@ -46,23 +46,17 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\scenes\stack_chain.fzx" />
-    <Text Include="assets\models\ragdoll.txt" />
-    <Text Include="assets\models\icosahedron.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="assets\scenes\logs.fzx" />
-    <None Include="assets\scenes\tower.fzx" />
-    <None Include="assets\scenes\ragdoll.fzx" />
-    <None Include="assets\scenes\ragdoll - Copy.fzx" />
+    <None Include="assets\fx\cmyk_ht.glsl" />
     <None Include="assets\fx\crt.glsl" />
+    <None Include="assets\fx\identity.glsl" />
     <None Include="assets\fx\rainbow_sobel.glsl" />
     <None Include="assets\fx\rgb_ht.glsl" />
-    <None Include="assets\fx\identity.glsl" />
-    <None Include="assets\fx\cmyk_ht.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\logos\cmyk.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\logos\crt.png">
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\logos\identity.png">
@@ -71,11 +65,11 @@
     <Image Include="assets\logos\rgb.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\logos\crt.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\logos\sobel.png">
       <Filter>Resource Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\models\icosahedron.txt" />
   </ItemGroup>
 </Project>

@@ -706,16 +706,19 @@ struct Physics3DUI : cmn::Engine3D {
 			//for each shader option
 			int i=0;
 			for(const auto& s:shaders) {
-				//draw divider
-				float angle=Pi*(.5f+2.f*i/shaders.size());
-				olc::vf2d dir(std::cos(angle), std::sin(angle));
-				DrawThickLineDecal(menu_pos+menu_min_sz*dir, menu_pos+menu_sz*dir, 1, olc::WHITE);
-
 				//draw logo
-				olc::vf2d ctr=menu_pos-.6f*menu_sz*dir;
+				float logo_angle=Pi*(-.5f+2.f*i/shaders.size());
+				olc::vf2d logo_dir(std::cos(logo_angle), std::sin(logo_angle));
+				olc::vf2d ctr=menu_pos+.6f*menu_sz*logo_dir;
 				olc::vf2d size(s.logo_spr->width, s.logo_spr->height);
 				float scl=.5f*menu_sz/size.x;
 				DrawDecal(ctr-scl/2*size, s.logo_dec, {scl, scl});
+					
+				//draw divider
+				float div_angle=logo_angle+Pi/shaders.size();
+				olc::vf2d div_dir(std::cos(div_angle), std::sin(div_angle));
+				DrawThickLineDecal(menu_pos+menu_min_sz*div_dir, menu_pos+menu_sz*div_dir, 1, olc::WHITE);
+
 				i++;
 			}
 

@@ -158,20 +158,11 @@
     <ClInclude Include="src\phys\shape.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\models\icosahedron.txt" />
-    <Text Include="assets\models\ragdoll.txt" />
-    <Text Include="assets\scenes\stack_chain.fzx" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="assets\fx\cmyk_ht.glsl" />
     <None Include="assets\fx\crt.glsl" />
-    <None Include="assets\fx\rgb_ht.glsl" />
     <None Include="assets\fx\identity.glsl" />
     <None Include="assets\fx\rainbow_sobel.glsl" />
-    <None Include="assets\scenes\logs.fzx" />
-    <None Include="assets\scenes\ragdoll - Copy.fzx" />
-    <None Include="assets\scenes\ragdoll.fzx" />
-    <None Include="assets\scenes\tower.fzx" />
+    <None Include="assets\fx\rgb_ht.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\logos\cmyk.png" />
@@ -179,6 +170,9 @@
     <Image Include="assets\logos\identity.png" />
     <Image Include="assets\logos\rgb.png" />
     <Image Include="assets\logos\sobel.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\models\icosahedron.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
