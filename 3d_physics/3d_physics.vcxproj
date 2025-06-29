@@ -156,16 +156,22 @@
     <ClInclude Include="src\phys\spring.h" />
     <ClInclude Include="src\scene.h" />
     <ClInclude Include="src\phys\shape.h" />
+    <ClInclude Include="src\shader.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="assets\fx\ascii.glsl" />
     <None Include="assets\fx\cmyk_ht.glsl" />
     <None Include="assets\fx\crt.glsl" />
+    <None Include="assets\fx\gaussian_blur.glsl" />
     <None Include="assets\fx\identity.glsl" />
     <None Include="assets\fx\rainbow_sobel.glsl" />
     <None Include="assets\fx\rgb_ht.glsl" />
+    <None Include="assets\fx\crosshatch.glsl" />
+    <None Include="assets\fx\voronoi.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\logos\cmyk.png" />
+    <Image Include="assets\logos\crosshatch.png" />
     <Image Include="assets\logos\crt.png" />
     <Image Include="assets\logos\identity.png" />
     <Image Include="assets\logos\rgb.png" />

@@ -44,6 +44,9 @@
     <ClInclude Include="src\index_triangle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\fx\cmyk_ht.glsl" />
@@ -51,6 +54,10 @@
     <None Include="assets\fx\identity.glsl" />
     <None Include="assets\fx\rainbow_sobel.glsl" />
     <None Include="assets\fx\rgb_ht.glsl" />
+    <None Include="assets\fx\crosshatch.glsl" />
+    <None Include="assets\fx\gaussian_blur.glsl" />
+    <None Include="assets\fx\ascii.glsl" />
+    <None Include="assets\fx\voronoi.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\logos\cmyk.png">
@@ -66,6 +73,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\logos\sobel.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\logos\crosshatch.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

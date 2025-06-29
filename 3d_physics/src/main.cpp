@@ -26,43 +26,7 @@ vf3d projectOntoPlane(const vf3d& v, const vf3d& norm) {
 #define OLC_PGEX_SHADERS
 #include "olcPGEX_Shaders.h"
 
-olc::EffectConfig loadEffect(const std::string& filename) {
-	//get file
-	std::ifstream file(filename);
-	if(file.fail()) return olc::fx::FX_NORMAL;
-
-	//dump contents into str stream
-	std::stringstream mid;
-	mid<<file.rdbuf();
-
-	return {
-		DEFAULT_VS,
-		mid.str(),
-		1,
-		1
-	};
-}
-
-struct ShaderOption {
-	olc::Sprite* logo_spr=nullptr;
-	olc::Decal* logo_dec=nullptr;
-	std::string effect_file;
-	olc::Effect effect;
-
-	ShaderOption() {}
-
-	ShaderOption(olc::Shade& s, const std::string& l, const std::string& e) {
-		logo_spr=new olc::Sprite(l);
-		logo_dec=new olc::Decal(logo_spr);
-		effect_file=e;
-		effect=s.MakeEffect(loadEffect(effect_file));
-	}
-
-	~ShaderOption() {
-		delete logo_spr;
-		delete logo_dec;
-	}
-};
+#include "shader.h"
 
 struct Physics3DUI : cmn::Engine3D {
 	Physics3DUI() {
@@ -82,8 +46,9 @@ struct Physics3DUI : cmn::Engine3D {
 	std::list<Spring> mouse_springs;
 
 	olc::vf2d menu_pos;
-	const float menu_sz=95;
+	const float menu_sz=105;
 	const float menu_min_sz=.2f*menu_sz;
+	const float menu_logo_sz=.4f*menu_sz;
 
 	//physics stuff
 	Scene scene;
@@ -118,8 +83,9 @@ struct Physics3DUI : cmn::Engine3D {
 
 	//shader stuff
 	olc::Shade shade;
-	std::list<ShaderOption> shaders;
-	ShaderOption* chosen_shader=nullptr;
+	std::list<Shader> shaders;
+	olc::Effect* identity_pass=nullptr;
+	Shader* chosen_shader=nullptr;
 
 	//diagnostic stuff
 	bool to_time=false;
@@ -183,7 +149,7 @@ struct Physics3DUI : cmn::Engine3D {
 			SetDrawTarget(prim_circ_spr);
 			Clear(olc::BLANK);
 			FillCircle(sz/2, sz/2, sz/2);
-			SetDrawTarget(nullptr);
+			SetDrawTarget(nullptr); 
 			prim_circ_dec=new olc::Decal(prim_circ_spr);
 		}
 
@@ -194,22 +160,26 @@ struct Physics3DUI : cmn::Engine3D {
 		target_dec=new olc::Decal(target_spr);
 
 		//load shader options
-		shaders.emplace_back(shade, "assets/logos/identity.png", "assets/fx/identity.glsl");
-		shaders.emplace_back(shade, "assets/logos/cmyk.png", "assets/fx/cmyk_ht.glsl");
-		shaders.emplace_back(shade, "assets/logos/rgb.png", "assets/fx/rgb_ht.glsl");
-		shaders.emplace_back(shade, "assets/logos/crt.png", "assets/fx/crt.glsl");
-		shaders.emplace_back(shade, "assets/logos/sobel.png", "assets/fx/rainbow_sobel.glsl");
-
-		//check shaders
-		for(const auto& s:shaders) {
-			if(!s.effect.IsOK()) {
-				std::cout<<"err in \""<<s.effect_file<<"\": "<<s.effect.GetStatus()<<'\n';
-				return false;
-			}
+		try {
+			//default to identity shader
+			shaders.push_back(Shader(shade, "assets/logos/identity.png", {"assets/fx/identity.glsl"}));
+			identity_pass=&shaders.back().passes.front();
+			chosen_shader=&shaders.back();
+			
+			shaders.push_back(Shader(shade, "assets/logos/rgb.png", {"assets/fx/rgb_ht.glsl"}));
+			shaders.push_back(Shader(shade, "assets/logos/ascii.png", {"assets/fx/ascii.glsl"}));
+			shaders.push_back(Shader(shade, "assets/logos/cmyk.png", {"assets/fx/cmyk_ht.glsl"}));
+			shaders.push_back(Shader(shade, "assets/logos/crt.png", {"assets/fx/crt.glsl"}));
+			shaders.push_back(Shader(shade, "assets/logos/sobel.png", {"assets/fx/rainbow_sobel.glsl"}));
+			shaders.push_back(Shader(shade, "assets/logos/crosshatch.png", {
+				"assets/fx/crosshatch.glsl",
+				"assets/fx/gaussian_blur.glsl"
+				}));
+			shaders.push_back(Shader(shade, "assets/logos/voronoi.png", {"assets/fx/voronoi.glsl"}));
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
 		}
-
-		//default to identity shader
-		chosen_shader=&shaders.front();
 
 		//print help disclaimer
 		std::cout<<"Press ESC for integrated console.\n"
@@ -603,7 +573,7 @@ struct Physics3DUI : cmn::Engine3D {
 		SetDrawTarget(source_spr);
 
 		//dark grey background
-		Clear(olc::Pixel(170, 170, 170));
+		Clear(olc::Pixel(60, 60, 60));
 
 		//render 3d stuff
 		resetBuffers();
@@ -691,12 +661,21 @@ struct Physics3DUI : cmn::Engine3D {
 		//update source decal with sprite
 		source_dec->Update();
 
-		//apply effect
-		shade.SetSourceDecal(source_dec);
-		shade.SetTargetDecal(target_dec);
-		shade.Start(&chosen_shader->effect);
-		shade.DrawQuad({-1, -1}, {2, 2});
-		shade.End();
+		//apply each shader pass
+		for(auto& p:chosen_shader->passes) {
+			shade.SetSourceDecal(source_dec);
+			shade.SetTargetDecal(target_dec);
+			shade.Start(&p);
+			shade.DrawQuad({-1, -1}, {2, 2});
+			shade.End();
+
+			//put target in source
+			shade.SetSourceDecal(target_dec);
+			shade.SetTargetDecal(source_dec);
+			shade.Start(identity_pass);
+			shade.DrawQuad({-1, -1}, {2, 2});
+			shade.End();
+		}
 
 		//draw effect
 		DrawDecal({0, 0}, target_dec);
@@ -709,9 +688,9 @@ struct Physics3DUI : cmn::Engine3D {
 				//draw logo
 				float logo_angle=Pi*(-.5f+2.f*i/shaders.size());
 				olc::vf2d logo_dir(std::cos(logo_angle), std::sin(logo_angle));
-				olc::vf2d ctr=menu_pos+.6f*menu_sz*logo_dir;
+				olc::vf2d ctr=menu_pos+.67f*menu_sz*logo_dir;
 				olc::vf2d size(s.logo_spr->width, s.logo_spr->height);
-				float scl=.5f*menu_sz/size.x;
+				float scl=menu_logo_sz/size.x;
 				DrawDecal(ctr-scl/2*size, s.logo_dec, {scl, scl});
 					
 				//draw divider
@@ -754,7 +733,7 @@ struct Physics3DUI : cmn::Engine3D {
 int main() {
 	Physics3DUI p3dui;
 	bool vsync=true;
-	if(p3dui.Construct(640, 400, 1, 1, false, vsync)) p3dui.Start();
+	if(p3dui.Construct(720, 480, 1, 1, false, vsync)) p3dui.Start();
 
 	return 0;
 }
