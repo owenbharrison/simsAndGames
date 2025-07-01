@@ -1,95 +1,84 @@
+#define OLC_GFX_OPENGL33
 #include "common/3d/engine_3d.h"
+using olc::vf2d;
 using cmn::vf3d;
 using cmn::Mat4;
 
-constexpr float Pi=3.1415927f;
+#include "scene.h"
 
-#include "sprite_sheet.h"
+#include "common/utils.h"
 
-#include "billboard.h"
+#include "thread_pool.h"
 
-#include "packing.h"
-
-#include "slider.h"
+#define OLC_PGEX_SHADERS
+#include "olcPGEX_Shaders.h"
 
 struct Example : cmn::Engine3D {
 	Example() {
-		sAppName="billboard spritesheets";
+		sAppName="3d builder";
 	}
 
 	//camera positioning
-	float cam_yaw=-Pi/2;
-	float cam_pitch=0;
+	float cam_yaw=.71f;
+	float cam_pitch=-.58f;
 
-	std::vector<SpriteSheet*> sprite_sheet_atlas;
-	std::list<Billboard> billboards;
+	//scene stuff
+	Scene scene;
 
-	Billboard* selected=nullptr;
+	const int tile_size=64;
+	int tiles_x=0, tiles_y=0;
+	std::vector<cmn::Triangle>* tile_bins=nullptr;
 
-	std::list<Slider> sliders;
+	std::vector<olc::vi2d> tile_jobs;
+	ThreadPool* raster_pool=nullptr;
+
+	olc::Shade shade;
+	olc::Effect shader;
 
 	bool user_create() override {
-		cam_pos={0, 0, 2.5f};
-		light_pos={0, 0, 2.5f};
+		cam_pos={-5.61f, 8.42f, -4.89f};
 
-		//callback to update projection matrix
-		auto resetFOV=[this] (float t) {
-			//fov from 1 to 179...
-			cam_fov_deg=1+178*t;
-			float asp=float(ScreenHeight())/ScreenWidth();
-			mat_proj=Mat4::makeProj(cam_fov_deg, asp, .001f, 1000.f);
-		};
-
-		sliders.push_back({olc::vf2d(40, 40), olc::vf2d(ScreenWidth()-40, 40), 7, resetFOV});
-
-		{
-			//make actual sprite sheet
-			SpriteSheet* four_ways=new SpriteSheet("assets/four_ways.png", 6, 4);
-			four_ways->animations["backward"]={0, 1, 2, 3, 4, 5};
-			four_ways->animations["left"]={6, 7, 8, 9, 10, 11};
-			four_ways->animations["right"]={12, 13, 14, 15, 16, 17};
-			four_ways->animations["forward"]={18, 19, 20, 21, 22, 23};
-			sprite_sheet_atlas.push_back(four_ways);
+		//try load scene
+		try {
+			scene=Scene::load("assets/bench.scn");
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
 		}
 
-		{
-			//make indexed sprite sheet
-			SpriteSheet* indexing=new SpriteSheet("assets/indexing.png", 6, 4);
-			indexing->animations["backward"]={0, 1, 2, 3, 4, 5};
-			indexing->animations["left"]={6, 7, 8, 9, 10, 11};
-			indexing->animations["right"]={12, 13, 14, 15, 16, 17};
-			indexing->animations["forward"]={18, 19, 20, 21, 22, 23};
-			sprite_sheet_atlas.push_back(indexing);
+		//allocate tiles
+		tiles_x=ScreenWidth()/tile_size;
+		tiles_y=ScreenHeight()/tile_size;
+		tile_bins=new std::vector<cmn::Triangle>[tiles_x*tiles_y];
+
+		//allocate jobs
+		for(int i=0; i<tiles_x; i++) {
+			for(int j=0; j<tiles_y; j++) {
+				tile_jobs.push_back({i, j});
+			}
 		}
 
-		//pack(id, sprite_sheet, n/a, n/a)
-		//billboards with actual sprite sheet
-		billboards.push_back({vf3d(-3, -1, 0), pack(0, 0, 0, 0), "forward"});
-		billboards.push_back({vf3d(-1, -1, 0), pack(1, 0, 0, 0), "backward"});
-		billboards.push_back({vf3d(1, -1, 0), pack(2, 0, 0, 0), "left"});
-		billboards.push_back({vf3d(3, -1, 0), pack(3, 0, 0, 0), "right"});
-
-		//billboards with indexed sprite sheet
-		billboards.push_back({vf3d(-3, 1, 0), pack(4, 1, 0, 0), "forward"});
-		billboards.push_back({vf3d(-1, 1, 0), pack(5, 1, 0, 0), "backward"});
-		billboards.push_back({vf3d(1, 1, 0), pack(6, 1, 0, 0), "left"});
-		billboards.push_back({vf3d(3, 1, 0), pack(7, 1, 0, 0), "right"});
+		//make thread pool
+		raster_pool=new ThreadPool(std::thread::hardware_concurrency());
 
 		return true;
 	}
 
 	bool user_destroy() override {
-		for(auto& s:sprite_sheet_atlas) delete s;
+		delete[] tile_bins;
+
+		delete raster_pool;
 
 		return true;
 	}
 
+	//mostly camera controls
 	bool user_update(float dt) override {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
+		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
 
 		//look left, right
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
@@ -97,9 +86,9 @@ struct Example : cmn::Engine3D {
 
 		//polar to cartesian
 		cam_dir=vf3d(
-			std::cos(cam_yaw)*std::cos(cam_pitch),
-			std::sin(cam_pitch),
-			std::sin(cam_yaw)*std::cos(cam_pitch)
+			std::cosf(cam_yaw)*std::cosf(cam_pitch),
+			std::sinf(cam_pitch),
+			std::sinf(cam_yaw)*std::cosf(cam_pitch)
 		);
 
 		//move up, down
@@ -107,7 +96,7 @@ struct Example : cmn::Engine3D {
 		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 		//move forward, backward
-		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
+		vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
 		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -119,146 +108,202 @@ struct Example : cmn::Engine3D {
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
-		//select billboard with id buffer
-		if(GetKey(olc::Key::ENTER).bPressed) {
-			//get index
-			int cid=id_buffer[bufferIX(ScreenWidth()/2, ScreenHeight()/2)];
-
-			//unpack ids and compare
-			selected=nullptr;
-			for(auto& b:billboards) {
-				unsigned char id, _na;
-				unpack(b.id, id, _na, _na, _na);
-				if(id==cid) {
-					selected=&b;
-					break;
-				}
-			}
-		}
-
-		//deselect
-		if(GetKey(olc::Key::ESCAPE).bPressed) selected=nullptr;
-
-		//update sliders
-		{
-			const auto mouse_pos=GetMousePos();
-			const auto slide_action=GetMouse(olc::Mouse::LEFT);
-			if(slide_action.bPressed) for(auto& s:sliders) s.startSlide(mouse_pos);
-			if(slide_action.bHeld) for(auto& s:sliders) s.updateSlide(mouse_pos);
-			if(slide_action.bReleased) for(auto& s:sliders) s.endSlide();
-		}
-
-		//rotate selected billboard
-		if(selected) {
-			if(GetKey(olc::Key::Q).bHeld) selected->rot+=dt;
-			if(GetKey(olc::Key::E).bHeld) selected->rot-=dt;
-		}
-
-		//update animations
-		for(auto& b:billboards) {
-			b.update(dt);
-		}
-
 		return true;
 	}
 
 	bool user_geometry() override {
-		//sort billboards by camera dist for transparency
-		billboards.sort([&] (const Billboard& a, const Billboard& b) {
-			return (a.pos-cam_pos).mag2()>(b.pos-cam_pos).mag2();
-		});
-
-		//add billboards
-		for(const auto& b:billboards) {
-			//get basis vectors
-			vf3d norm=(b.pos-cam_pos).norm();
-			vf3d up(0, 1, 0);
-			vf3d rgt=norm.cross(up).norm();
-			up=rgt.cross(norm);
-
-			//rotate basis vectors w/ rotation matrix
-			float c=std::cos(b.rot), s=std::sin(b.rot);
-			vf3d new_rgt=c*rgt+s*up;
-			vf3d new_up=-s*rgt+c*up;
-
-			//vertex positioning
-			vf3d tl=b.pos+b.w/2*new_rgt+b.h/2*new_up;
-			vf3d tr=b.pos+b.w/2*new_rgt-b.h/2*new_up;
-			vf3d bl=b.pos-b.w/2*new_rgt+b.h/2*new_up;
-			vf3d br=b.pos-b.w/2*new_rgt-b.h/2*new_up;
-
-			//unpack sprite sheet index
-			unsigned char ss_idx, _na;
-			unpack(b.id, _na, ss_idx, _na, _na);
-
-			//get corresponding sprite sheet
-			SpriteSheet& ss=*sprite_sheet_atlas[ss_idx];
-			//get texture rect
-			olc::vf2d min_uv, max_uv;
-			ss.getCurrRect(b.state, b.anim, min_uv, max_uv);
-
-			//texture coords
-			cmn::v2d tl_t{max_uv.x, min_uv.y};
-			cmn::v2d tr_t{max_uv.x, max_uv.y};
-			cmn::v2d bl_t{min_uv.x, min_uv.y};
-			cmn::v2d br_t{min_uv.x, max_uv.y};
-
-			//tessellate vertexes w/ texture coords & pass packed id
-			cmn::Triangle f1{tl, br, tr, tl_t, br_t, tr_t}; f1.id=b.id;
-			tris_to_project.push_back(f1);
-			cmn::Triangle f2{tl, bl, br, tl_t, bl_t, br_t}; f2.id=b.id;
-			tris_to_project.push_back(f2);
+		for(const auto& m:scene.meshes) {
+			for(const auto& t:m.tris){
+				tris_to_project.push_back(t);
+				//lines_to_project.push_back({t.p[0], t.p[1]});
+				//lines_to_project.push_back({t.p[1], t.p[2]});
+				//lines_to_project.push_back({t.p[2], t.p[0]});
+			}
 		}
 
 		return true;
 	}
 
-	bool user_render() override {
-		Clear(olc::DARK_GREY);
-
-		//render 3d stuff
-		resetBuffers();
-
-		SetPixelMode(olc::Pixel::Mode::ALPHA);
-		for(const auto& t:tris_to_draw) {
-			//unpack id and sprite sheet index
-			unsigned char id, ss_idx, _na;
-			unpack(t.id, id, ss_idx, _na, _na);
-			//texture with corresponding sprite lookup
-			FillTexturedDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-				sprite_sheet_atlas[ss_idx]->sprite, t.col, id
-			);
+	void FillDepthTriangleWithin(
+		int x1, int y1, float w1,
+		int x2, int y2, float w2,
+		int x3, int y3, float w3,
+		olc::Pixel col, int id,
+		int nx, int ny, int mx, int my
+	) {
+		//sort by y
+		if(y2<y1) {
+			std::swap(x1, x2);
+			std::swap(y1, y2);
+			std::swap(w1, w2);
 		}
-		SetPixelMode(olc::Pixel::Mode::NORMAL);
+		if(y3<y1) {
+			std::swap(x1, x3);
+			std::swap(y1, y3);
+			std::swap(w1, w3);
+		}
+		if(y3<y2) {
+			std::swap(x2, x3);
+			std::swap(y2, y3);
+			std::swap(w2, w3);
+		}
 
-		//draw crosshair
-		const int sz=8;
-		int cx=ScreenWidth()/2, cy=ScreenHeight()/2;
-		DrawLine(cx-sz, cy, cx+sz, cy, olc::WHITE);
-		DrawLine(cx, cy-sz, cx, cy+sz, olc::WHITE);
+		//calculate slopes
+		int dx1=x2-x1;
+		int dy1=y2-y1;
+		float dw1=w2-w1;
 
-		//highlight selected
-		if(selected) {
-			unsigned char id, _na;
-			unpack(selected->id, id, _na, _na, _na);
-			for(int i=1; i<ScreenWidth()-1; i++) {
-				for(int j=1; j<ScreenHeight()-1; j++) {
-					bool curr=id_buffer[i+ScreenWidth()*j]==id;
-					bool lft=id_buffer[i-1+ScreenWidth()*j]==id;
-					bool rgt=id_buffer[i+1+ScreenWidth()*j]==id;
-					bool top=id_buffer[i+ScreenWidth()*(j-1)]==id;
-					bool btm=id_buffer[i+ScreenWidth()*(j+1)]==id;
-					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
-						Draw(i, j, olc::BLUE);
-					}
+		int dx2=x3-x1;
+		int dy2=y3-y1;
+		float dw2=w3-w1;
+
+		int si, ei, sj, ej;
+
+		float t;
+
+		float tex_w;
+
+		float dax_step=0, dbx_step=0,
+			dw1_step=0, dw2_step=0;
+
+		if(dy1) dax_step=dx1/std::fabsf(dy1);
+		if(dy2) dbx_step=dx2/std::fabsf(dy2);
+
+		if(dy1) dw1_step=dw1/std::fabsf(dy1);
+		if(dy2) dw2_step=dw2/std::fabsf(dy2);
+
+		if(dy1) for(int j=y1; j<=y2; j++) {
+			if(j<ny||j>=my) continue;
+			int ax=x1+dax_step*(j-y1);
+			int bx=x1+dbx_step*(j-y1);
+			float tex_sw=w1+dw1_step*(j-y1);
+			float tex_ew=w1+dw2_step*(j-y1);
+			//sort along x
+			if(ax>bx) {
+				std::swap(ax, bx);
+				std::swap(tex_sw, tex_ew);
+			}
+			float t_step=1.f/(bx-ax);
+			for(int i=ax; i<bx; i++) {
+				if(i<nx||i>=mx) continue;
+				t=t_step*(i-ax);
+				tex_w=tex_sw+t*(tex_ew-tex_sw);
+				float& depth=depth_buffer[bufferIX(i, j)];
+				if(tex_w>depth) {
+					Draw(i, j, col);
+					depth=tex_w;
+					id_buffer[bufferIX(i, j)]=id;
 				}
 			}
 		}
 
-		for(const auto& s:sliders) s.draw(this);
+		//recalculate slopes
+		dx1=x3-x2;
+		dy1=y3-y2;
+		dw1=w3-w2;
+
+		if(dy1) dax_step=dx1/std::fabsf(dy1);
+
+		if(dy1) dw1_step=dw1/std::fabsf(dy1);
+
+		for(int j=y2; j<=y3; j++) {
+			if(j<ny||j>=my) continue;
+			int ax=x2+dax_step*(j-y2);
+			int bx=x1+dbx_step*(j-y1);
+			float tex_sw=w2+dw1_step*(j-y2);
+			float tex_ew=w1+dw2_step*(j-y1);
+			//sort along x
+			if(ax>bx) {
+				std::swap(ax, bx);
+				std::swap(tex_sw, tex_ew);
+			}
+			float t_step=1.f/(bx-ax);
+			for(int i=ax; i<bx; i++) {
+				if(i<nx||i>=mx) continue;
+				t=t_step*(i-ax);
+				tex_w=tex_sw+t*(tex_ew-tex_sw);
+				float& depth=depth_buffer[bufferIX(i, j)];
+				if(tex_w>depth) {
+					Draw(i, j, col);
+					depth=tex_w;
+					id_buffer[bufferIX(i, j)]=id;
+				}
+			}
+		}
+	}
+
+	bool user_render() override {
+		Clear(olc::Pixel(100, 100, 100));
+
+		//render 3d stuff
+		resetBuffers();
+
+#if 1
+		//clear bins
+		for(int i=0; i<tiles_x*tiles_y; i++) tile_bins[i].clear();
+
+		//bin triangles
+		for(const auto& tri:tris_to_draw) {
+			//compute screen space bounds
+			float min_x=std::min(tri.p[0].x, std::min(tri.p[1].x, tri.p[2].x));
+			float min_y=std::min(tri.p[0].y, std::min(tri.p[1].y, tri.p[2].y));
+			float max_x=std::max(tri.p[0].x, std::max(tri.p[1].x, tri.p[2].x));
+			float max_y=std::max(tri.p[0].y, std::max(tri.p[1].y, tri.p[2].y));
+
+			//which tiles does it overlap
+			int sx=std::clamp(int(min_x/tile_size), 0, tiles_x-1);
+			int sy=std::clamp(int(min_y/tile_size), 0, tiles_y-1);
+			int ex=std::clamp(int(max_x/tile_size), 0, tiles_x-1);
+			int ey=std::clamp(int(max_y/tile_size), 0, tiles_y-1);
+
+			for(int tx=sx; tx<=ex; tx++) {
+				for(int ty=sy; ty<=ey; ty++) {
+					tile_bins[tx+tiles_x*ty].push_back(tri);
+				}
+			}
+		}
+
+		//queue work
+		std::atomic<int> tiles_remaining=tile_jobs.size();
+		for(const auto& j:tile_jobs) {
+			raster_pool->enqueue([=, &tiles_remaining] {
+				int nx=std::clamp(tile_size*j.x, 0, ScreenWidth());
+				int ny=std::clamp(tile_size*j.y, 0, ScreenHeight());
+				int mx=std::clamp(tile_size+nx, 0, ScreenWidth());
+				int my=std::clamp(tile_size+ny, 0, ScreenHeight());
+				for(const auto& t:tile_bins[j.x+tiles_x*j.y]) {
+					FillDepthTriangleWithin(
+						t.p[0].x, t.p[0].y, t.t[0].w,
+						t.p[1].x, t.p[1].y, t.t[1].w,
+						t.p[2].x, t.p[2].y, t.t[2].w,
+						t.col, t.id,
+						nx, ny, mx, my
+					);
+				}
+				tiles_remaining--;
+			});
+		}
+
+		//wait for raster to finish
+		while(tiles_remaining);
+#else
+		for(const auto& t:tris_to_draw) {
+			FillDepthTriangle_new(
+				t.p[0].x, t.p[0].y, t.t[0].w,
+				t.p[1].x, t.p[1].y, t.t[1].w,
+				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.col, t.id
+			);
+		}
+#endif
+
+		for(const auto& l:lines_to_draw) {
+			DrawDepthLine(
+				l.p[0].x, l.p[0].y, l.t[0].w,
+				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.col, l.id
+			);
+		}
 
 		return true;
 	}
@@ -266,7 +311,8 @@ struct Example : cmn::Engine3D {
 
 int main() {
 	Example e;
-	if(e.Construct(640, 320, 1, 1, false, true)) e.Start();
+	bool vsync=true;
+	if(e.Construct(640, 480, 1, 1, false, vsync)) e.Start();
 
 	return 0;
 }

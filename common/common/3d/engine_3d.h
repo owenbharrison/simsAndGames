@@ -330,8 +330,6 @@ namespace cmn {
 			int dy2=y3-y1;
 			float dw2=w3-w1;
 
-			float tex_w;
-
 			float dax_step=0, dbx_step=0,
 				dw1_step=0, dw2_step=0;
 
@@ -341,9 +339,14 @@ namespace cmn {
 			if(dy1) dw1_step=dw1/std::fabsf(dy1);
 			if(dy2) dw2_step=dw2/std::fabsf(dy2);
 
-			//start scanline filling triangles
+			float t_step, t;
+
+			float tex_w;
+
+			//top triangle
 			if(dy1) {
 				for(int j=y1; j<=y2; j++) {
+					if(!inRangeY(j)) continue;
 					int ax=x1+dax_step*(j-y1);
 					int bx=x1+dbx_step*(j-y1);
 					float tex_sw=w1+dw1_step*(j-y1);
@@ -353,19 +356,17 @@ namespace cmn {
 						std::swap(ax, bx);
 						std::swap(tex_sw, tex_ew);
 					}
-					float t_step=1.f/(bx-ax);
-					float t=0;
+					t_step=1.f/(bx-ax);
 					for(int i=ax; i<bx; i++) {
+						if(!inRangeX(i)) continue;
+						t=t_step*(i-ax);
 						tex_w=tex_sw+t*(tex_ew-tex_sw);
-						if(inRangeX(i)&&inRangeY(j)) {
-							float& depth=depth_buffer[bufferIX(i, j)];
-							if(tex_w>depth) {
-								Draw(i, j, col);
-								depth=tex_w;
-								id_buffer[bufferIX(i, j)]=id;
-							}
+						float& depth=depth_buffer[bufferIX(i, j)];
+						if(tex_w>depth) {
+							Draw(i, j, col);
+							depth=tex_w;
+							id_buffer[bufferIX(i, j)]=id;
 						}
-						t+=t_step;
 					}
 				}
 			}
@@ -379,7 +380,9 @@ namespace cmn {
 
 			if(dy1) dw1_step=dw1/std::fabsf(dy1);
 
+			//bottom triangle
 			for(int j=y2; j<=y3; j++) {
+				if(!inRangeY(j)) continue;
 				int ax=x2+dax_step*(j-y2);
 				int bx=x1+dbx_step*(j-y1);
 				float tex_sw=w2+dw1_step*(j-y2);
@@ -389,19 +392,17 @@ namespace cmn {
 					std::swap(ax, bx);
 					std::swap(tex_sw, tex_ew);
 				}
-				float t_step=1.f/(bx-ax);
-				float t=0;
+				t_step=1.f/(bx-ax);
 				for(int i=ax; i<bx; i++) {
+					if(!inRangeX(i)) continue;
+					t=t_step*(i-ax);
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					if(inRangeX(i)&&inRangeY(j)) {
-						float& depth=depth_buffer[bufferIX(i, j)];
-						if(tex_w>depth) {
-							Draw(i, j, col);
-							depth=tex_w;
-							id_buffer[bufferIX(i, j)]=id;
-						}
+					float& depth=depth_buffer[bufferIX(i, j)];
+					if(tex_w>depth) {
+						Draw(i, j, col);
+						depth=tex_w;
+						id_buffer[bufferIX(i, j)]=id;
 					}
-					t+=t_step;
 				}
 			}
 		}

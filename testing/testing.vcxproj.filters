@@ -32,5 +32,26 @@
     <ClInclude Include="src\packing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\quat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\thread_pool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\bench.scn" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\bunny.txt" />
+    <Text Include="assets\house.txt" />
+    <Text Include="assets\suzanne.txt" />
+    <Text Include="assets\dragon.txt" />
   </ItemGroup>
 </Project>

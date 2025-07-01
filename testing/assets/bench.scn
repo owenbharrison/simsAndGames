@@ -1,0 +1,65 @@
+16
+m house.txt
+	r 1 0 0 0
+	s 1 1 1
+	o 0 0 0
+m bunny.txt
+	r 1 0 0 0
+	s 30 30 30
+	o 8 0 0
+m dragon.txt
+	r 1 0 0 0
+	s 7 7 7
+	o 16 0 0
+m suzanne.txt
+	r 1 0 0 0
+	s 3 3 3
+	o 24 0 0
+m bunny.txt
+	r 1 0 0 0
+	s 30 30 30
+	o 0 0 8
+m dragon.txt
+	r 1 0 0 0
+	s 7 7 7
+	o 8 0 8
+m suzanne.txt
+	r 1 0 0 0
+	s 3 3 3
+	o 16 0 8
+m house.txt
+	r 1 0 0 0
+	s 1 1 1
+	o 24 0 8
+m dragon.txt
+	r 1 0 0 0
+	s 7 7 7
+	o 0 0 16
+m suzanne.txt
+	r 1 0 0 0
+	s 3 3 3
+	o 8 0 16
+m house.txt
+	r 1 0 0 0
+	s 1 1 1
+	o 16 0 16
+m bunny.txt
+	r 1 0 0 0
+	s 30 30 30
+	o 24 0 16
+m suzanne.txt
+	r 1 0 0 0
+	s 3 3 3
+	o 0 0 24
+m house.txt
+	r 1 0 0 0
+	s 1 1 1
+	o 8 0 24
+m bunny.txt
+	r 1 0 0 0
+	s 30 30 30
+	o 16 0 24
+m dragon.txt
+	r 1 0 0 0
+	s 7 7 7
+	o 24 0 24
