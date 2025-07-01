@@ -19,8 +19,8 @@ struct Example : cmn::Engine3D {
 	}
 
 	//camera positioning
-	float cam_yaw=.71f;
-	float cam_pitch=-.58f;
+	float cam_yaw=1.07f;
+	float cam_pitch=-.56f;
 
 	//scene stuff
 	Scene scene;
@@ -32,11 +32,10 @@ struct Example : cmn::Engine3D {
 	std::vector<olc::vi2d> tile_jobs;
 	ThreadPool* raster_pool=nullptr;
 
-	olc::Shade shade;
-	olc::Effect shader;
+	bool use_multithreading=true;
 
 	bool user_create() override {
-		cam_pos={-5.61f, 8.42f, -4.89f};
+		cam_pos={-.47f, 9.19f, -8.36f};
 
 		//try load scene
 		try {
@@ -47,8 +46,8 @@ struct Example : cmn::Engine3D {
 		}
 
 		//allocate tiles
-		tiles_x=ScreenWidth()/tile_size;
-		tiles_y=ScreenHeight()/tile_size;
+		tiles_x=1+ScreenWidth()/tile_size;
+		tiles_y=1+ScreenHeight()/tile_size;
 		tile_bins=new std::vector<cmn::Triangle>[tiles_x*tiles_y];
 
 		//allocate jobs
@@ -108,12 +107,15 @@ struct Example : cmn::Engine3D {
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
+		//debug toggle
+		if(GetKey(olc::Key::ENTER).bPressed) use_multithreading^=true;
+
 		return true;
 	}
 
 	bool user_geometry() override {
 		for(const auto& m:scene.meshes) {
-			for(const auto& t:m.tris){
+			for(const auto& t:m.tris) {
 				tris_to_project.push_back(t);
 				//lines_to_project.push_back({t.p[0], t.p[1]});
 				//lines_to_project.push_back({t.p[1], t.p[2]});
@@ -238,64 +240,64 @@ struct Example : cmn::Engine3D {
 		//render 3d stuff
 		resetBuffers();
 
-#if 1
-		//clear bins
-		for(int i=0; i<tiles_x*tiles_y; i++) tile_bins[i].clear();
+		if(use_multithreading) {
+			//clear bins
+			for(int i=0; i<tiles_x*tiles_y; i++) tile_bins[i].clear();
 
-		//bin triangles
-		for(const auto& tri:tris_to_draw) {
-			//compute screen space bounds
-			float min_x=std::min(tri.p[0].x, std::min(tri.p[1].x, tri.p[2].x));
-			float min_y=std::min(tri.p[0].y, std::min(tri.p[1].y, tri.p[2].y));
-			float max_x=std::max(tri.p[0].x, std::max(tri.p[1].x, tri.p[2].x));
-			float max_y=std::max(tri.p[0].y, std::max(tri.p[1].y, tri.p[2].y));
+			//bin triangles
+			for(const auto& tri:tris_to_draw) {
+				//compute screen space bounds
+				float min_x=std::min(tri.p[0].x, std::min(tri.p[1].x, tri.p[2].x));
+				float min_y=std::min(tri.p[0].y, std::min(tri.p[1].y, tri.p[2].y));
+				float max_x=std::max(tri.p[0].x, std::max(tri.p[1].x, tri.p[2].x));
+				float max_y=std::max(tri.p[0].y, std::max(tri.p[1].y, tri.p[2].y));
 
-			//which tiles does it overlap
-			int sx=std::clamp(int(min_x/tile_size), 0, tiles_x-1);
-			int sy=std::clamp(int(min_y/tile_size), 0, tiles_y-1);
-			int ex=std::clamp(int(max_x/tile_size), 0, tiles_x-1);
-			int ey=std::clamp(int(max_y/tile_size), 0, tiles_y-1);
+				//which tiles does it overlap
+				int sx=std::clamp(int(min_x/tile_size), 0, tiles_x-1);
+				int sy=std::clamp(int(min_y/tile_size), 0, tiles_y-1);
+				int ex=std::clamp(int(max_x/tile_size), 0, tiles_x-1);
+				int ey=std::clamp(int(max_y/tile_size), 0, tiles_y-1);
 
-			for(int tx=sx; tx<=ex; tx++) {
-				for(int ty=sy; ty<=ey; ty++) {
-					tile_bins[tx+tiles_x*ty].push_back(tri);
+				for(int tx=sx; tx<=ex; tx++) {
+					for(int ty=sy; ty<=ey; ty++) {
+						tile_bins[tx+tiles_x*ty].push_back(tri);
+					}
 				}
 			}
-		}
 
-		//queue work
-		std::atomic<int> tiles_remaining=tile_jobs.size();
-		for(const auto& j:tile_jobs) {
-			raster_pool->enqueue([=, &tiles_remaining] {
-				int nx=std::clamp(tile_size*j.x, 0, ScreenWidth());
-				int ny=std::clamp(tile_size*j.y, 0, ScreenHeight());
-				int mx=std::clamp(tile_size+nx, 0, ScreenWidth());
-				int my=std::clamp(tile_size+ny, 0, ScreenHeight());
-				for(const auto& t:tile_bins[j.x+tiles_x*j.y]) {
-					FillDepthTriangleWithin(
-						t.p[0].x, t.p[0].y, t.t[0].w,
-						t.p[1].x, t.p[1].y, t.t[1].w,
-						t.p[2].x, t.p[2].y, t.t[2].w,
-						t.col, t.id,
-						nx, ny, mx, my
-					);
-				}
-				tiles_remaining--;
-			});
-		}
+			//queue work
+			std::atomic<int> tiles_remaining=tile_jobs.size();
+			for(const auto& j:tile_jobs) {
+				raster_pool->enqueue([&]{//}=, &tiles_remaining] {	
+					int nx=std::clamp(tile_size*j.x, 0, ScreenWidth());
+					int ny=std::clamp(tile_size*j.y, 0, ScreenHeight());
+					int mx=std::clamp(tile_size+nx, 0, ScreenWidth());
+					int my=std::clamp(tile_size+ny, 0, ScreenHeight());
+					for(const auto& t:tile_bins[j.x+tiles_x*j.y]) {
+						FillDepthTriangleWithin(
+							t.p[0].x, t.p[0].y, t.t[0].w,
+							t.p[1].x, t.p[1].y, t.t[1].w,
+							t.p[2].x, t.p[2].y, t.t[2].w,
+							t.col, t.id,
+							nx, ny, mx, my
+						);
+					}
+					tiles_remaining--;
+				});
+			}
 
-		//wait for raster to finish
-		while(tiles_remaining);
-#else
-		for(const auto& t:tris_to_draw) {
-			FillDepthTriangle_new(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
-				t.col, t.id
-			);
+			//wait for raster to finish
+			while(tiles_remaining);
+		} else {
+			for(const auto& t:tris_to_draw) {
+				FillDepthTriangle(
+					t.p[0].x, t.p[0].y, t.t[0].w,
+					t.p[1].x, t.p[1].y, t.t[1].w,
+					t.p[2].x, t.p[2].y, t.t[2].w,
+					t.col, t.id
+				);
+			}
 		}
-#endif
 
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
@@ -304,6 +306,11 @@ struct Example : cmn::Engine3D {
 				l.col, l.id
 			);
 		}
+
+		//whether using multithreading
+		std::string onoff=use_multithreading?"on":"off";
+		olc::Pixel greenred=use_multithreading?olc::GREEN:olc::RED;
+		DrawString(0, 0, "multithreading: "+onoff, greenred);
 
 		return true;
 	}
