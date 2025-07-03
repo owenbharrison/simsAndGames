@@ -624,24 +624,6 @@ namespace cmn {
 		return true;
 	}
 
-	void Engine3D::makeQuad(vf3d p, float w, float h, Triangle& a, Triangle& b) {
-		//billboarded to point at camera
-		vf3d norm=(p-cam_pos).norm();
-		vf3d up(0, 1, 0);
-		vf3d rgt=norm.cross(up).norm();
-		up=rgt.cross(norm);
-
-		//vertex positioning
-		vf3d tl=p+w/2*rgt+h/2*up;
-		vf3d tr=p+w/2*rgt-h/2*up;
-		vf3d bl=p-w/2*rgt+h/2*up;
-		vf3d br=p-w/2*rgt-h/2*up;
-
-		//tesselation
-		a={tl, br, tr};
-		b={tl, bl, br};
-	}
-
 	bool Engine3D::OnUserUpdate(float dt) {
 		if(!user_update(dt)) return false;
 
