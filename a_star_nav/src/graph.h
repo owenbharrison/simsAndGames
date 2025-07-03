@@ -5,44 +5,21 @@
 #include "node.h"
 
 #include <list>
-#include <string>
-#include <fstream>
-#include <sstream>
+#include <unordered_map>
 
-struct Graph {
+class Graph {
+	void copyFrom(const Graph&), clear();
+
+public:
 	std::list<Node*> nodes;
 
 	Graph() {}
-
-	//this will change g's nodes' ids.
-	void copyFrom(const Graph& g) {
-		//copy over nodes
-		int id=1;
-		for(const auto& n:g.nodes) {
-			n->id=id++;
-			nodes.emplace_back(new Node(*n));
-		}
-
-		//copy over links
-		for(const auto& g_n:g.nodes) {
-			Node* n=getNodeById(g_n->id);
-			for(const auto& g_l:g_n->links) {
-				Node* l=getNodeById(g_n->id);
-				addLink(n, l);
-			}
-		}
-	}
 
 	//1
 	Graph(const Graph& g) {
 		copyFrom(g);
 	}
 
-	void clear() {
-		for(const auto& n:nodes) delete n;
-		nodes.clear();
-	}
-	
 	//2
 	~Graph() {
 		clear();
@@ -59,45 +36,21 @@ struct Graph {
 		return *this;
 	}
 
-	Node* getNode(const vf2d& pos) const {
-		for(const auto& n:nodes) {
-			if((n->pos-pos).mag2()<n->rad*n->rad) {
-				return n;
-			}
-		}
-
-		return nullptr;
-	}
-
-	Node* getNodeById(int id) const {
-		for(const auto& n:nodes) {
-			if(n->id==id) return n;
-		}
-		return nullptr;
-	}
-
-	bool contains(Node* o) const {
+	bool contains(const Node* o) const {
 		if(!o) return false;
 
 		for(const auto& n:nodes) {
 			if(n==o) return true;
 		}
+
 		return false;
 	}
 
-	bool addNode(const vf2d& pos) {
-		//inside another node?
-		if(getNode(pos)) return false;
-
-		nodes.emplace_back(new Node(pos));
-
-		return true;
-	}
-
 	bool addLink(Node* a, Node* b) {
+		//is link invalid?
 		if(!a||!b||a==b) return false;
 
-		//does this have it?
+		//does this graph have those nodes?
 		if(!contains(a)||!contains(b)) return false;
 
 		//does it already exist?
@@ -105,149 +58,30 @@ struct Graph {
 			if(n==b) return false;
 		}
 
+		//add it
 		a->links.emplace_back(b);
 
 		return true;
 	}
 
-	bool removeNodesAt(const vf2d& pos) {
-		bool removed=false;
-		for(auto nit=nodes.begin(); nit!=nodes.end();) {
-			const auto& n=*nit;
-			if((n->pos-pos).mag2()<n->rad*n->rad) {
-				//remove corresponding links
-				for(const auto& o:nodes) {
-					if(o==n) continue;
-
-					for(auto lit=o->links.begin(); lit!=o->links.end();) {
-						if(*lit==n) lit=o->links.erase(lit);
-						else lit++;
-					}
-				}
-
-				delete n;
-				nit=nodes.erase(nit);
-				removed=true;
-			} else nit++;
-		}
-		return removed;
-	}
-
-	bool removeLinksAt(const vf2d& pos) {
-		bool removed=false;
-		for(const auto& n:nodes) {
-			for(auto lit=n->links.begin(); lit!=n->links.end();) {
-				const auto& l=*lit;
-
-				//find closest point on segment
-				auto pa=pos-n->pos, ba=l->pos-n->pos;
-				float t=cmn::clamp(pa.dot(ba)/ba.dot(ba), 0.f, 1.f);
-				vf2d close_pt=n->pos+t*ba;
-
-				float rad=.5f*(n->rad+l->rad);
-				if((close_pt-pos).mag2()<rad*rad) {
-					lit=n->links.erase(lit);
-					removed=true;
-				} else lit++;
+	void removeNode(Node* said) {
+		//find
+		auto it=std::find(nodes.begin(), nodes.end(), said);
+		if(it!=nodes.end()) {
+			//remove other nodes link
+			for(const auto& n:nodes) {
+				auto nit=std::find(n->links.begin(), n->links.end(), said);
+				if(nit!=nodes.end()) n->links.erase(nit);
 			}
-		}
-		return removed;
-	}
-
-	void seperate(Node* o) {
-		if(!contains(o)) return;
-
-		for(const auto& n:nodes) {
-			if(n==o) continue;
-
-			float t_rad=n->rad+o->rad;
-			vf2d sub=o->pos-n->pos;
-			float d_sq=sub.mag2();
-			if(d_sq<t_rad*t_rad) {
-				if(d_sq==0) sub={1, 0};
-				o->pos+=t_rad*sub.norm();
-			}
+			//deallocate
+			delete* it;
+			//remove
+			nodes.erase(it);
 		}
 	}
 
-	std::string getInfo() const {
-		std::stringstream str;
-		str<<nodes.size()<<" node";
-		if(nodes.size()!=1) str<<'s';
-
-		str<<" and ";
-
-		int links=0;
-		for(const auto& n:nodes) links+=n->links.size();
-		str<<links<<" link";
-		if(links!=1) str<<'s';
-
-		return str.str();
-	}
-
-	bool exportAs(const std::string& filename) {
-		std::ofstream file(filename);
-		if(file.fail()) return false;
-
-		//print line by line while updating ids.
-		int id=0;
-		for(auto& n:nodes) {
-			file<<"n "<<n->pos.x<<' '<<n->pos.y<<' '<<n->rad<<'\n';
-			n->id=id++;
-		}
-
-		//just like an OBJ file
-		//except 0-based indexing
-		for(const auto& n:nodes) {
-			for(const auto& l:n->links) {
-				file<<"l "<<n->id<<' '<<l->id<<'\n';
-			}
-		}
-
-		//not necessary
-		file.close();
-		return true;
-	}
-
-	bool importAs(const std::string& filename) {
-		std::ifstream file(filename);
-		if(file.fail()) return false;
-
-		clear();
-
-		//parse file line by line
-		int id=0;
-		std::string line;
-		while(getline(file, line)) {
-			std::stringstream line_str(line);
-
-			//first char denotes type
-			char type; line_str>>type;
-			switch(type) {
-				case 'n':
-					float x, y, r;
-					line_str>>x>>y>>r;
-
-					nodes.emplace_back(new Node({x, y}, r));
-					nodes.back()->id=id++;
-					break;
-				case 'l':
-					int i_a, i_b;
-					line_str>>i_a>>i_b;
-
-					Node* a=getNodeById(i_a), * b=getNodeById(i_b);
-					if(!a||!b) return false;
-
-					a->links.emplace_back(b);
-					break;
-			}
-		}
-
-		file.close();
-		return true;
-	}
-
-	[[nodiscard]] std::list<Node*> route(Node* from, Node* to) {
+	//doesnt change structure per se, but changes node values...(const-ish)
+	[[nodiscard]] std::list<Node*> route(Node* from, Node* to) const {
 		std::list<Node*> path;
 		if(!from||!to||from==to) return path;
 
@@ -328,4 +162,26 @@ struct Graph {
 		return path;
 	}
 };
+
+void Graph::copyFrom(const Graph& g) {
+	//copy over node positions
+	std::unordered_map<Node*, Node*> g2me;
+	for(const auto& gn:g.nodes) {
+		nodes.push_back(new Node(gn->pos));
+		g2me[gn]=nodes.back();
+	}
+
+	//copy over links
+	for(const auto& gn:g.nodes) {
+		Node* n=g2me[gn];
+		for(const auto& go:gn->links) {
+			n->links.push_back(g2me[go]);
+		}
+	}
+}
+
+void Graph::clear() {
+	for(const auto& n:nodes) delete n;
+	nodes.clear();
+}
 #endif

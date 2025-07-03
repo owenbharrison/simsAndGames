@@ -15,24 +15,29 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\roundabout.nav" />
-    <None Include="assets\boulder.nav" />
-    <None Include="assets\cloverleaf.nav" />
-    <None Include="assets\cloverleaf2.nav" />
-    <None Include="assets\map.nav" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="assets\arrow.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\background.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\boulder.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\img\grass_falloff.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\end.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\start.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\poisson_disc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\triangulate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\graph.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -41,7 +46,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\readme.txt" />
+    <Text Include="assets\models\terrain.txt" />
+    <Text Include="assets\models\house.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">

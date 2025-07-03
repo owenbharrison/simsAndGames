@@ -1,570 +1,414 @@
-/*TODO:
-impl ctrl z, y
-impl path optimization
-impl time-saving routing
-impl references(photos)
-impl only show whats on screen?
-*/
+#include "common/3d/engine_3d.h"
+using cmn::vf3d;
+using cmn::Mat4;
 
-#define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
-using olc::vf2d;
+constexpr float Pi=3.1415927f;
 
-#define OLC_PGEX_TRANSFORMEDVIEW
-#include "olcPGEX_TransformedView.h"
+#include "mesh.h"
 
-#include <list>
-#include <fstream>
-#include <sstream>
-
+#include "common/aabb.h"
 #include "common/utils.h"
+namespace cmn {
+	using AABB=AABB_generic<olc::vf2d>;
+
+	olc::vf2d polar(float rad, float angle) {
+		return polar_generic<olc::vf2d>(rad, angle);
+	}
+}
+
+#include "poisson_disc.h"
+
+#include "triangulate.h"
+
+#include <unordered_map>
 
 #include "graph.h"
 
-#include "common/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
+float fract(float x) {
+	return x-std::floor(x);
 }
 
-struct AStarUI : olc::PixelGameEngine {
-	AStarUI() {
+struct Example : cmn::Engine3D {
+	Example() {
 		sAppName="A* Navigation";
 	}
 
-	vf2d scr_mouse_pos, wld_mouse_pos;
+	//camera positioning
+	float cam_yaw=Pi/2;
+	float cam_pitch=0;
 
-	Graph map;
+	//ui stuff
+	vf3d mouse_dir;
+	bool show_graph=true;
 
-	Node* connect_start=nullptr;
-	Node* held_node=nullptr;
+	//scene stuff
+	Mesh terrain;
+	std::list<Mesh> obstacles;
 
-	bool selecting=false;
-	vf2d selection_start;
-	std::list<Node*> selection;
+	Graph graph;
 
-	std::list<Node*> copied;
-
-	Node* route_from=nullptr, * route_to=nullptr;
+	//route markers
+	Node* from_node=nullptr, * to_node=nullptr;
 	std::list<Node*> route;
 
-	float animation=0;
+	//route fanciness
+	std::vector<olc::Sprite*> texture_atlas;
+	float anim_timer=0;
 
-	olc::TransformedView tv;
+	bool user_create() override {
+		cam_pos={0, 7, 0};
+		light_pos={0, 45, 0};
 
-	olc::Sprite* prim_rect_spr=nullptr;
-	olc::Decal* prim_rect_dec=nullptr;
-	olc::Sprite* prim_circ_spr=nullptr;
-	olc::Decal* prim_circ_dec=nullptr;
+		//load terrain & homes
+		try {
+			//color terrain based on slope
+			terrain=Mesh::loadFromOBJ("assets/models/terrain.txt");
+			olc::Sprite* gradient_spr=new olc::Sprite("assets/img/grass_falloff.png");
+			const vf3d up(0, 1, 0);
+			for(auto& t:terrain.tris) {
+				//get steepness
+				float s=up.cross(t.getNorm()).mag();
+				t.col=gradient_spr->Sample(s, 0);
+			}
+			delete gradient_spr;
+			
+			//house placement
+			Mesh house_model=Mesh::loadFromOBJ("assets/models/house.txt");
+			house_model.scale={1.5f, 1.5f, 1.5f};
+			struct House { vf3d p; float r; olc::Pixel col; };
+			std::vector<House> homes{
+				{{3.54f, 1.37f, 18.2f}, .8f*Pi, olc::WHITE},
+				{{5.64f, 2.86f, 51.79f}, 1.4f*Pi, olc::BLUE},
+				{{51.31f, 1.67f, 41.95f}, .2f*Pi, olc::WHITE},
+				{{62.04f, 1.67f, -5.12f}, .6f*Pi, olc::RED},
+				{{12.09f, 2.16f, -38.03f}, 1.1f*Pi, olc::WHITE},
+				{{-38.35f, 2.63f, -33.38f}, .3f*Pi, olc::GREEN},
+				{{-52.99f, 1.43f, 16.84f}, 1.8f*Pi, olc::WHITE}
+			};
+			for(const auto& h:homes) {
+				house_model.translation=h.p;
+				house_model.rotation.y=h.r;
+				house_model.updateTransforms();
+				house_model.updateTriangles(h.col);
+				obstacles.push_back(house_model);
+			}
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
+		}
 
-	olc::Sprite* arrow_sprite=nullptr;
-	olc::Decal* arrow_decal=nullptr;
+		//randomly sample points on xz plane
+		cmn::AABB3 bounds=terrain.getAABB();
+		auto xz_pts=poissonDiscSample({{bounds.min.x, bounds.min.z}, {bounds.max.x, bounds.max.z}}, 2);
 
-	bool show_grid=true;
-	const float grid_spacing=20.f;
+		//project pts onto terrain
+		std::unordered_map<olc::vf2d*, Node*> xz2way;
+		for(auto& p:xz_pts) {
+			vf3d orig(p.x, bounds.min.y-.1f, p.y);
+			vf3d dir(0, 1, 0);
+			float dist=terrain.intersectRay(orig, dir);
+			graph.nodes.push_back(new Node(orig+(.2f+dist)*dir));
+			xz2way[&p]=graph.nodes.back();
+		}
 
-	bool show_background=false;
-	olc::Sprite* background_sprite=nullptr;
-	olc::Decal* background_decal=nullptr;
+		//triangulate and add links
+		auto tris=delaunay::triangulate(xz_pts);
+		auto edges=delaunay::extractEdges(tris);
+		for(const auto& e:edges) {
+			auto a=xz2way[&xz_pts[e.p[0]]];
+			auto b=xz2way[&xz_pts[e.p[1]]];
+			graph.addLink(a, b);
+			graph.addLink(b, a);
+		}
 
-	bool show_ids=false;
+		//remove any nodes in way of obstacle
+		for(auto it=graph.nodes.begin(); it!=graph.nodes.end();) {
+			auto& n=*it;
+			//check if inside any meshes
+			bool blocked=false;
+			for(const auto& o:obstacles) {
+				if(o.contains(n->pos)) {
+					blocked=true;
+					break;
+				}
+			}
+			if(blocked) {
+				//remove corresponding links
+				for(auto& o:graph.nodes) {
+					auto oit=std::find(o->links.begin(), o->links.end(), n);
+					if(oit!=o->links.end()) o->links.erase(oit);
+				}
+				//deallocate and remove this node
+				delete n;
+				it=graph.nodes.erase(it);
+			} else it++;
+		}
 
-	bool OnUserCreate() override {
-		tv.Initialise(GetScreenSize());
-		tv.SetScaleExtents({.1f, .1f}, {100, 100});
-		tv.EnableScaleClamp(true);
+		//load route marker textures
+		texture_atlas.push_back(new olc::Sprite("assets/img/start.png"));
+		texture_atlas.push_back(new olc::Sprite("assets/img/end.png"));
 
-		//make some "primitives" to draw with
-		prim_rect_spr=new olc::Sprite(1, 1);
-		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
-		prim_rect_dec=new olc::Decal(prim_rect_spr);
+		return true;
+	}
+
+	bool user_destroy() override {
+		for(auto& t:texture_atlas) delete t;
+
+		return true;
+	}
+
+	bool user_update(float dt) override {
+		//look up, down
+		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
+		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
+		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
+
+		//look left, right
+		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
+		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+
+		//polar to cartesian
+		cam_dir=vf3d(
+			std::cos(cam_yaw)*std::cos(cam_pitch),
+			std::sin(cam_pitch),
+			std::sin(cam_yaw)*std::cos(cam_pitch)
+		);
+
+		//speed modifier
+		float speed=dt;
+		if(GetKey(olc::Key::CTRL).bHeld) speed*=3;
+
+		//move up, down
+		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*speed;
+		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*speed;
+
+		//move forward, backward
+		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
+		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*speed*fb_dir;
+		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*speed*fb_dir;
+
+		//move left, right
+		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*speed*lr_dir;
+		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*speed*lr_dir;
+
+		//set light pos
+		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
+
+		//graphics toggles
+		if(GetKey(olc::Key::G).bPressed) show_graph^=true;
+
+		if(GetKey(olc::Key::N).bPressed) {
+			std::cout<<cam_pos.x<<' '<<cam_pos.y<<' '<<cam_pos.z<<'\n';
+		}
+
+		//update mouse ray(matrix could be singular)
+		try {
+			//unprojection matrix
+			cmn::Mat4 inv_vp=cmn::Mat4::inverse(mat_view*mat_proj);
+
+			//get ray thru screen mouse pos
+			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+			vf3d clip(ndc_x, ndc_y, 1);
+			vf3d world=clip*inv_vp;
+			world/=world.w;
+			mouse_dir=(world-cam_pos).norm();
+		} catch(const std::exception& e) {}
+
+		//find node "under" mouse
+		float record=-1;
+		Node* close_node=nullptr;
+		for(auto& n:graph.nodes) {
+			vf3d pa=n->pos-cam_pos;
+			//infront of camera.
+			if(pa.dot(mouse_dir)>0) {
+				//sort by perp dist from ray
+				float dist=pa.cross(mouse_dir).mag();
+				if(record<0||dist<record) {
+					record=dist;
+					close_node=n;
+				}
+			}
+		}
+
+		if(close_node) {
+			//set from waypoint
+			if(GetKey(olc::Key::F).bHeld) {
+				from_node=close_node;
+				if(GetKey(olc::Key::CTRL).bHeld) {
+					route=graph.route(from_node, to_node);
+				} else route.clear();
+			}
+
+			//set to waypoint
+			if(GetKey(olc::Key::T).bHeld) {
+				to_node=close_node;
+				if(GetKey(olc::Key::CTRL).bHeld) {
+					route=graph.route(from_node, to_node);
+				} else route.clear();
+			}
+		}
+
+		//swap waypoints
+		if(GetKey(olc::Key::TAB).bPressed) {
+			std::swap(to_node, from_node);
+			route.clear();
+		}
+
+		//remove waypoints
+		if(GetKey(olc::Key::ESCAPE).bPressed) {
+			from_node=nullptr, to_node=nullptr;
+			route.clear();
+		}
+
+		//route
+		if(GetKey(olc::Key::ENTER).bPressed) {
+			route=graph.route(from_node, to_node);
+		}
+
+		anim_timer+=dt;
+
+		return true;
+	}
+
+	void makeQuad(vf3d p, float w, float h, float ax, float ay, cmn::Triangle& a, cmn::Triangle& b) {
+		//billboarded to point at camera
+		vf3d norm=(p-cam_pos).norm();
+		vf3d up(0, 1, 0);
+		vf3d rgt=norm.cross(up).norm();
+		up=rgt.cross(norm);
+
+		//vertex positioning
+		vf3d tl=p-w*ax*rgt+h*ay*up;
+		vf3d tr=p+w*(1-ax)*rgt+h*ay*up;
+		vf3d bl=p-w*ax*rgt-h*(1-ay)*up;
+		vf3d br=p+w*(1-ax)*rgt-h*(1-ay)*up;
+
+		//texture coords
+		cmn::v2d tl_t{0, 0};
+		cmn::v2d tr_t{1, 0};
+		cmn::v2d bl_t{0, 1};
+		cmn::v2d br_t{1, 1};
+
+		//tessellation
+		a={tl, br, tr, tl_t, br_t, tr_t};
+		b={tl, bl, br, tl_t, bl_t, br_t};
+	}
+
+	bool user_geometry() override {
+		//add terrain mesh
+		tris_to_project.insert(tris_to_project.end(), terrain.tris.begin(), terrain.tris.end());
+
+		//add obstacles
+		for(const auto& o:obstacles) {
+			tris_to_project.insert(tris_to_project.end(), o.tris.begin(), o.tris.end());
+		}
+
+		if(show_graph) {
+			//add links as black lines
+			for(const auto& n:graph.nodes) {
+				for(const auto& o:n->links) {
+					cmn::Line l1{n->pos, o->pos}; l1.col=olc::BLACK;
+					lines_to_project.push_back(l1);
+				}
+			}
+		}
+
+		//add nodes as billboards
+		for(const auto& n:graph.nodes) {
+			//default size, anchor, and id values
+			float sz=.4f, ay=.5f;
+			int id=-1;
+
+			//change if route marker.
+			if(n==from_node) sz*=3, ay=1, id=0;
+			else if(n==to_node) sz*=3, ay=1, id=1;
+			else if(!show_graph) continue;
+
+			//tessellate
+			cmn::Triangle t1, t2;
+			makeQuad(n->pos, sz, sz, .5f, ay, t1, t2);
+
+			//add
+			t1.id=id, t2.id=id;
+			tris_to_project.push_back(t1);
+			tris_to_project.push_back(t2);
+		}
+
+		//place yellow quads along route
 		{
-			int sz=1024;
-			prim_circ_spr=new olc::Sprite(sz, sz);
-			SetDrawTarget(prim_circ_spr);
-			Clear(olc::BLANK);
-			FillCircle(sz/2, sz/2, sz/2);
-			SetDrawTarget(nullptr);
-			prim_circ_dec=new olc::Decal(prim_circ_spr);
-		}
+			bool is_first=true;
+			vf3d prev;
+			//silly little walk animation
+			float anim=fract(anim_timer);
+			for(const auto& r:route) {
+				vf3d curr=r->pos;
+				if(is_first) is_first=false;
+				else {
+					const int num=2;
+					vf3d ba=curr-prev;
+					for(int i=0; i<num; i++) {
+						//interpolate between route pts
+						float t=(anim+i)/num;
+						vf3d pt=prev+t*ba;
 
-		arrow_sprite=new olc::Sprite("assets/arrow.png");
-		arrow_decal=new olc::Decal(arrow_sprite);
-
-		ConsoleCaptureStdOut(true);
-
-		return true;
-	}
-
-	bool OnUserDestroy() override {
-		removeMarkers();
-
-		delete prim_rect_spr;
-		delete prim_rect_dec;
-		delete prim_circ_spr;
-		delete prim_circ_dec;
-
-		delete arrow_sprite;
-		delete arrow_decal;
-
-		delete background_sprite;
-		delete background_decal;
-
-		return true;
-	}
-
-#pragma region GRAPH HELPERS
-	void removeMarkers() {
-		connect_start=nullptr;
-		held_node=nullptr;
-		selection.clear();
-
-		copied.clear();
-
-		route_from=nullptr;
-		route_to=nullptr;
-		route.clear();
-	}
-
-	void zoomToFit() {
-		if(map.nodes.size()>1) {
-			const unsigned int margin=50;
-			cmn::AABB bounds;
-			for(const auto& n:map.nodes) {
-				bounds.fitToEnclose(n->pos);
-			}
-			//how many can fit?
-			vf2d bounds_size=bounds.max-bounds.min;
-			float num_x=ScreenWidth()/bounds_size.x;
-			float num_y=ScreenHeight()/bounds_size.y;
-			float scale;
-			if(num_x>num_y) {//zoom to height
-				scale=(ScreenHeight()-2*margin)/bounds_size.y;
-			} else {//zoom to width
-				scale=(ScreenWidth()-2*margin)/bounds_size.x;
-			}
-			tv.SetWorldScale({scale, scale});
-
-			//where is the middle of the screen in the world?
-			vf2d mid_scr=GetScreenSize()/2;
-			vf2d mid_wld=tv.ScreenToWorld(mid_scr);
-			//move by delta
-			tv.MoveWorldOffset(bounds.getCenter()-mid_wld);
-		}
-	}
-#pragma endregion
-
-	bool update(float dt) {
-		//USER INPUT
-		scr_mouse_pos=GetMousePos();
-		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
-		if(GetKey(olc::Key::SHIFT).bHeld) {
-			//snap to nearest half-block
-			const float spacing=grid_spacing/2;
-			wld_mouse_pos.x=spacing*std::roundf(wld_mouse_pos.x/spacing);
-			wld_mouse_pos.y=spacing*std::roundf(wld_mouse_pos.y/spacing);
-		}
-
-		if(!IsConsoleShowing()) {
-			//selection logic
-			if(GetMouse(olc::Mouse::RIGHT).bPressed) {
-				for(const auto& s:selection) map.seperate(s);
-				selection.clear();
-
-				selecting=true;
-				selection_start=wld_mouse_pos;
-			}
-			if(GetMouse(olc::Mouse::RIGHT).bReleased) {
-				cmn::AABB box;
-				box.fitToEnclose(selection_start);
-				box.fitToEnclose(wld_mouse_pos);
-				for(const auto& n:map.nodes) {
-					if(box.contains(n->pos)) {
-						selection.emplace_back(n);
+						cmn::Triangle t1, t2;
+						makeQuad(pt, .3f, .3f, .5f, .5f, t1, t2);
+						t1.col=olc::YELLOW, t2.col=olc::YELLOW;
+						tris_to_project.push_back(t1);
+						tris_to_project.push_back(t2);
 					}
-				}
-				selecting=false;
-			}
-
-			//drag nodes
-			if(GetMouse(olc::Mouse::LEFT).bPressed) {
-				held_node=nullptr;
-				if(selection.size()) selection_start=wld_mouse_pos;
-				else held_node=map.getNode(wld_mouse_pos);
-			}
-			if(GetMouse(olc::Mouse::LEFT).bHeld) {
-				if(selection.size()) {
-					vf2d delta=wld_mouse_pos-selection_start;
-					for(const auto& s:selection) s->pos+=delta;
-					selection_start=wld_mouse_pos;
-					route.clear();
-				} else if(held_node) {
-					held_node->pos=wld_mouse_pos;
-					route.clear();
-				}
-			}
-			if(GetMouse(olc::Mouse::LEFT).bReleased) {
-				map.seperate(held_node);
-				held_node=nullptr;
-			}
-
-			//handle panning
-			if(GetMouse(olc::Mouse::MIDDLE).bPressed) tv.StartPan(scr_mouse_pos);
-			if(GetMouse(olc::Mouse::MIDDLE).bHeld) tv.UpdatePan(scr_mouse_pos);
-			if(GetMouse(olc::Mouse::MIDDLE).bReleased) tv.EndPan(scr_mouse_pos);
-
-			//handle zoom
-			if(GetMouseWheel()>0) tv.ZoomAtScreenPos(1.07f, GetMousePos());
-			if(GetMouseWheel()<0) tv.ZoomAtScreenPos(1/1.07f, GetMousePos());
-
-			if(GetKey(olc::Key::CTRL).bHeld) {
-				//select all
-				if(GetKey(olc::Key::A).bPressed) selection=map.nodes;
-				//copy
-				if(GetKey(olc::Key::C).bPressed) {
-					copied.clear();
-					for(const auto& s:selection) copied.emplace_back(s);
-				}
-				//paste
-				if(GetKey(olc::Key::V).bPressed) {
-					//clear selection, reset ids
-					selection.clear();
-					for(const auto& n:map.nodes) n->id=0;
-
-					//copy all nodes into map
-					int id=1;
-					for(const auto& c:copied) {
-						c->id=id++;
-						map.nodes.emplace_back(new Node(*c));
-						//update selection to pasted
-						selection.emplace_back(map.nodes.back());
-					}
-
-					//copy links only if in copied
-					for(const auto& c_n:copied) {
-						Node* n=map.getNodeById(-c_n->id);
-						for(const auto& c_l:c_n->links) {
-							bool found=false;
-							for(const auto& o:copied) {
-								if(o==c_l) {
-									found=true;
-									break;
-								}
-							}
-							if(found) map.addLink(n, map.getNodeById(-c_l->id));
-						}
-					}
-				}
-			} else {
-				//visual toggles
-				if(GetKey(olc::Key::G).bPressed) show_grid^=true;
-				if(GetKey(olc::Key::B).bPressed) {
-					show_background^=true;
-					//load on first press
-					if(show_background&&!background_sprite) {
-						background_sprite=new olc::Sprite("assets/background.png");
-						background_decal=new olc::Decal(background_sprite);
-					}
-				}
-				if(GetKey(olc::Key::I).bPressed) show_ids^=true;
-
-				//zoom to fit?
-				if(GetKey(olc::Key::HOME).bPressed) zoomToFit();
-
-				//add nodes
-				if(GetKey(olc::Key::A).bPressed) {
-					map.addNode(wld_mouse_pos);
-				}
-
-				//start new connection
-				if(GetKey(olc::Key::C).bPressed) {
-					connect_start=map.getNode(wld_mouse_pos);
-				}
-
-				//end new connection(add)
-				if(GetKey(olc::Key::C).bReleased) {
-					Node* connect_end=map.getNode(wld_mouse_pos);
-					if(map.addLink(connect_start, connect_end)) route.clear();
-					connect_start=nullptr;
-				}
-
-				//route selection
-				if(GetKey(olc::Key::F).bPressed) {
-					Node* from=map.getNode(wld_mouse_pos);
-					if(from&&from!=route_to) {
-						route_from=from;
-						route.clear();
-					}
-				}
-				if(GetKey(olc::Key::T).bPressed) {
-					Node* to=map.getNode(wld_mouse_pos);
-					if(to&&to!=route_from) {
-						route_to=to;
-						route.clear();
-					}
-				}
-				if(GetKey(olc::TAB).bPressed) {
-					std::swap(route_from, route_to);
-					route.clear();
-				}
-				if(GetKey(olc::Key::ENTER).bPressed) {
-					route=map.route(route_from, route_to);
-				}
-
-				//deleting
-				if(GetKey(olc::Key::X).bHeld) {
-					route.clear();
-					if(map.removeNodesAt(wld_mouse_pos)) removeMarkers();
-					if(map.removeLinksAt(wld_mouse_pos)) removeMarkers();
-
-					//delete all in selection
-					for(const auto& s:selection) {
-						for(auto nit=map.nodes.begin(); nit!=map.nodes.end();) {
-							if(*nit==s) {
-								//remove corresponding links
-								for(const auto& o:map.nodes) {
-									for(auto lit=o->links.begin(); lit!=o->links.end();) {
-										if(*lit==s) lit=o->links.erase(lit);
-										else lit++;
-									}
-								}
-								nit=map.nodes.erase(nit);
-							} else nit++;
-						}
-						delete s;
-					}
-					selection.clear();
-				}
-			}
-		}
-
-		//this is awesome
-		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
-
-		animation+=.3f*dt;
-		return true;
-	}
-
-	bool OnConsoleCommand(const std::string& line) override {
-		std::stringstream line_str(line);
-		std::string cmd; line_str>>cmd;
-
-		if(cmd=="import") {
-			std::string filename;
-			line_str>>filename;
-
-			if(map.importAs(filename)) {
-				std::cout<<"imported "<<map.getInfo()<<" from "<<filename<<'\n';
-				removeMarkers();
-				zoomToFit();
-			} else std::cout<<"invalid filename\n";
-		}
-
-		else if(cmd=="export") {
-			std::string filename;
-			line_str>>filename;
-
-			if(map.exportAs(filename)) {
-				std::cout<<"exported "<<map.getInfo()<<" to "<<filename<<'\n';
-				removeMarkers();
-			} else std::cout<<"invalid filename\n";
-		}
-
-		else if(cmd=="reset") {
-			std::cout<<"reset "<<map.getInfo()<<'\n';
-			removeMarkers();
-			map.clear();
-		}
-
-		else if(cmd=="clear") ConsoleClear();
-
-		return true;
-	}
-
-#pragma region RENDER HELPERS
-	void tvDrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
-		olc::vf2d sub=b-a;
-		float len=sub.mag();
-		olc::vf2d tang=sub.perp()/len;
-
-		float angle=std::atan2f(sub.y, sub.x);
-		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
-	}
-
-	void tvFillCircle(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
-		tv.DrawDecal(pos-offset, prim_circ_dec, scale, col);
-	}
-
-	void tvDrawArrow(const vf2d pos, float angle, float rad, olc::Pixel col) {
-		static const olc::vi2d arrow_size{
-			arrow_decal->sprite->width,
-			arrow_decal->sprite->height
-		};
-		float scl=2*rad/arrow_size.x;
-		tv.DrawRotatedDecal(pos, arrow_decal, angle, arrow_size/2, {scl, scl}, col);
-	}
-#pragma endregion
-
-	bool render() {
-		Clear(olc::Pixel(0, 100, 255));
-		if(show_background) tv.DrawDecal({0, 0}, background_decal);
-
-		if(show_grid) {
-			//screen bounds in world space, snap to nearest
-			vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
-			int i_s=std::floor(tl.x/grid_spacing), j_s=std::floor(tl.y/grid_spacing);
-			int i_e=std::ceil(br.x/grid_spacing), j_e=std::ceil(br.y/grid_spacing);
-
-			//vert
-			for(int i=i_s; i<=i_e; i++) {
-				float x=grid_spacing*i;
-				vf2d top{x, tl.y}, btm{x, br.y};
-				if(i%5==0) tvDrawThickLine(top, btm, 1, olc::GREY);
-				else tv.DrawLineDecal(top, btm, olc::GREY);
-			}
-
-			//horiz
-			for(int j=j_s; j<=j_e; j++) {
-				float y=grid_spacing*j;
-				vf2d lft{tl.x, y}, rgt{br.x, y};
-				if(j%5==0) tvDrawThickLine(lft, rgt, 1, olc::GREY);
-				else tv.DrawLineDecal(lft, rgt, olc::GREY);
-			}
-		}
-
-		//show selection box
-		if(selecting) {
-			cmn::AABB box;
-			box.fitToEnclose(selection_start);
-			box.fitToEnclose(wld_mouse_pos);
-
-			vf2d size=box.max-box.min;
-			tv.FillRectDecal(box.min, size, olc::Pixel(0, 255, 255, 127));
-			tv.DrawRectDecal(box.min, size, olc::BLACK);
-		}
-
-		//show route markers
-		if(route_from) {
-			tvFillCircle(route_from->pos, 4*route_from->rad, olc::Pixel(255, 0, 255, 127));
-		}
-		if(route_to) {
-			tvFillCircle(route_to->pos, 4*route_to->rad, olc::Pixel(0, 255, 255, 127));
-		}
-
-		//links as lines
-		for(const auto& n:map.nodes) {
-			for(const auto& l:n->links) {
-				float rad=.5f*(n->rad+l->rad);
-				tvDrawThickLine(n->pos, l->pos, rad+1, olc::BLACK);
-			}
-		}
-		for(const auto& n:map.nodes) {
-			for(const auto& l:n->links) {
-				float rad=.5f*(n->rad+l->rad);
-				tvDrawThickLine(n->pos, l->pos, rad, olc::WHITE);
-			}
-		}
-
-		//with direction arrows
-		for(const auto& n:map.nodes) {
-			for(const auto& l:n->links) {
-				float rad=.4f*(n->rad+l->rad);
-				vf2d sub=l->pos-n->pos;
-				float angle=atan2f(sub.y, sub.x);
-				tvDrawArrow(n->pos+.5f*sub, angle, rad, olc::DARK_GREY);
-			}
-		}
-
-		//draw new connect as line
-		if(connect_start) {
-			tvDrawThickLine(connect_start->pos, wld_mouse_pos, 1, olc::CYAN);
-		}
-
-		//draw route
-		if(route.size()) {
-			float anim=std::fmod(animation, 1);
-			Node* prev=nullptr;
-			for(const auto& curr:route) {
-				if(prev) {
-					//route links
-					float t_rad=prev->rad+curr->rad;
-					tvDrawThickLine(prev->pos, curr->pos, .5f*t_rad, olc::GREEN);
-
-					//with direction arrows
-					vf2d sub=curr->pos-prev->pos;
-					float angle=atan2f(sub.y, sub.x);
-					tvDrawArrow(prev->pos+anim*sub, angle, .4f*t_rad, olc::BLUE);
-					tvDrawArrow(prev->pos+std::fmod(.5f+anim, 1)*sub, angle, .4f*t_rad, olc::BLUE);
 				}
 				prev=curr;
 			}
 		}
 
-		//draw nodes as circles
-		for(const auto& n:map.nodes) {
-			//can this node be visited and left?
-			bool out=n->links.size(), in=false;
-			for(const auto& o:map.nodes) {
-				if(o==n) continue;
-
-				for(const auto& l:o->links) {
-					if(l==n) {
-						in=true;
-						break;
-					}
-				}
-				if(in) break;
-			}
-			bool valid=in&&out;
-			tvFillCircle(n->pos, n->rad+1, olc::BLACK);
-			tvFillCircle(n->pos, n->rad, valid?olc::WHITE:olc::RED);
-		}
-
-		//show selection
-		for(const auto& s:selection) {
-			tvFillCircle(s->pos, s->rad, olc::DARK_BLUE);
-		}
-
-		//show ids
-		if(show_ids) {
-			for(const auto& n:map.nodes) {
-				auto id_str=std::to_string(n->id);
-				float scale=n->rad/8;
-				vf2d offset(4*id_str.length(), 4);
-				tv.DrawStringDecal(n->pos-scale*offset, id_str, olc::DARK_GREY, {scale, scale});
-			}
-		}
-
-		//draw route nodes
-		for(const auto& n:route) {
-			tvFillCircle(n->pos, n->rad+1, olc::GREEN);
-		}
-
-		//show route marker text
-		if(route_from) {
-			tv.DrawStringDecal(route_from->pos+vf2d(-16, 8), "From", olc::BLACK);
-		}
-		if(route_to) {
-			tv.DrawStringDecal(route_to->pos+vf2d(-8, 8), "To", olc::BLACK);
-		}
-
 		return true;
 	}
 
-	bool OnUserUpdate(float dt) override {
-		update(dt);
+	bool user_render() override {
+		Clear(olc::Pixel(60, 60, 60));
 
-		render();
+		//render 3d stuff
+		resetBuffers();
+
+		for(const auto& t:tris_to_draw) {
+			if(t.id==-1) {
+				FillDepthTriangle(
+					t.p[0].x, t.p[0].y, t.t[0].w,
+					t.p[1].x, t.p[1].y, t.t[1].w,
+					t.p[2].x, t.p[2].y, t.t[2].w,
+					t.col, t.id
+				);
+			} else {
+				SetPixelMode(olc::Pixel::Mode::ALPHA);
+				FillTexturedDepthTriangle(
+					t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
+					t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
+					t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+					texture_atlas[t.id], olc::WHITE, t.id
+				);
+				SetPixelMode(olc::Pixel::Mode::NORMAL);
+			}
+		}
+
+		for(const auto& l:lines_to_draw) {
+			DrawDepthLine(
+				l.p[0].x, l.p[0].y, l.t[0].w,
+				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.col, l.id
+			);
+		}
 
 		return true;
 	}
 };
 
 int main() {
-	AStarUI asui;
-	bool vsync=true;
-	if(asui.Construct(800, 600, 1, 1, false, vsync)) asui.Start();
+	Example e;
+	if(e.Construct(640, 320, 1, 1, false, true)) e.Start();
 
 	return 0;
 }

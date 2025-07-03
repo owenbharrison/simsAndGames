@@ -151,23 +151,21 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="assets\boulder.nav" />
-    <None Include="assets\cloverleaf.nav" />
-    <None Include="assets\cloverleaf2.nav" />
-    <None Include="assets\map.nav" />
-    <None Include="assets\roundabout.nav" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="assets\arrow.png" />
-    <Image Include="assets\background.png" />
     <Image Include="assets\boulder.png" />
+    <Image Include="assets\img\end.png" />
+    <Image Include="assets\img\grass_falloff.png" />
+    <Image Include="assets\img\start.png" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\graph.h" />
+    <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\node.h" />
+    <ClInclude Include="src\poisson_disc.h" />
+    <ClInclude Include="src\triangulate.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\readme.txt" />
+    <Text Include="assets\models\house.txt" />
+    <Text Include="assets\models\terrain.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
