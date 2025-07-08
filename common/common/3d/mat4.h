@@ -178,17 +178,39 @@ namespace cmn {
 		}
 	};
 
+	//matrix-matrix addition
+	Mat4 operator+(const Mat4& a, const Mat4& b) {
+		Mat4 c;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				c.v[i][j]=a.v[i][j]+b.v[i][j];
+			}
+		}
+		return c;
+	}
+
+	//matrix float multiplication
+	Mat4 operator*(const Mat4& a, float f) {
+		Mat4 b;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				b.v[i][j]=a.v[i][j]*f;
+			}
+		}
+		return b;
+	}
+
 	//matrix-matrix multiplication
 	Mat4 operator*(const Mat4& a, const Mat4& b) {
-		Mat4 m;
+		Mat4 c;
 		for(int i=0; i<4; i++) {
 			for(int j=0; j<4; j++) {
 				float sum=0;
 				for(int k=0; k<4; k++) sum+=a.v[i][k]*b.v[k][j];
-				m.v[i][j]=sum;
+				c.v[i][j]=sum;
 			}
 		}
-		return m;
+		return c;
 	}
 
 	//vector-matrix multiplication
