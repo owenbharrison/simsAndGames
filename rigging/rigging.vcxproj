@@ -174,6 +174,31 @@
     <None Include="assets\frames\frame7.arm" />
     <None Include="assets\frames\frame8.arm" />
     <None Include="assets\frames\frame9.arm" />
+    <None Include="assets\knight\bones.arm" />
+    <None Include="assets\knight\frames\frame1.pose" />
+    <None Include="assets\knight\frames\frame10.pose" />
+    <None Include="assets\knight\frames\frame11.pose" />
+    <None Include="assets\knight\frames\frame12.pose" />
+    <None Include="assets\knight\frames\frame13.pose" />
+    <None Include="assets\knight\frames\frame14.pose" />
+    <None Include="assets\knight\frames\frame15.pose" />
+    <None Include="assets\knight\frames\frame16.pose" />
+    <None Include="assets\knight\frames\frame17.pose" />
+    <None Include="assets\knight\frames\frame18.pose" />
+    <None Include="assets\knight\frames\frame19.pose" />
+    <None Include="assets\knight\frames\frame2.pose" />
+    <None Include="assets\knight\frames\frame20.pose" />
+    <None Include="assets\knight\frames\frame3.pose" />
+    <None Include="assets\knight\frames\frame4.pose" />
+    <None Include="assets\knight\frames\frame5.pose" />
+    <None Include="assets\knight\frames\frame6.pose" />
+    <None Include="assets\knight\frames\frame7.pose" />
+    <None Include="assets\knight\frames\frame8.pose" />
+    <None Include="assets\knight\frames\frame9.pose" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\knight\model.txt" />
+    <Text Include="assets\knight\vertex_weights.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
