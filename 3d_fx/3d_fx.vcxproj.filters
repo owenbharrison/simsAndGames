@@ -32,4 +32,7 @@
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\terrain.txt" />
+  </ItemGroup>
 </Project>
