@@ -189,6 +189,22 @@ namespace cmn {
 		return c;
 	}
 
+	//matrix negation
+	Mat4 operator-(const Mat4& a) {
+		Mat4 b;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				b.v[i][j]=-a.v[i][j];
+			}
+		}
+		return b;
+	}
+
+	//matrix-matrix subtraction
+	Mat4 operator-(const Mat4& a, const Mat4& b) {
+		return a+(-b);
+	}
+
 	//matrix float multiplication
 	Mat4 operator*(const Mat4& a, float f) {
 		Mat4 b;

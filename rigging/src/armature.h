@@ -13,6 +13,7 @@
 struct Armature {
 	std::vector<Bone> bones;
 
+	//https://www.youtube.com/watch?v=ZzMnu3v_MOw
 	std::vector<Mat4> calculateAnimationPose(std::vector<Mat4> mat_in) const {
 		std::vector<Mat4> mat_local(bones.size());
 		for(int i=0; i<bones.size(); i++) {

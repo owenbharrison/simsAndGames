@@ -162,11 +162,28 @@ struct RiggingUI : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
-		//get corresponding pose from slider
-		int pose_ix=poses.size()*pose_slider.t;
-		const auto& pose=poses[pose_ix%poses.size()];
-		std::vector<Mat4> mat_pose=armature.calculateAnimationPose(pose.mat_pose);
+		//get pose from slider
+		std::vector<Mat4> mat_pose;
+		{
+			//get left and right anim
+			float ix1f=pose_slider.t*(poses.size()-1);
+			int ix1=ix1f;
+			int ix2=(1+ix1)%poses.size();
 
+			//should have same size...
+			std::vector<Mat4> mat_pose1=armature.calculateAnimationPose(poses[ix1].mat_pose);
+			std::vector<Mat4> mat_pose2=armature.calculateAnimationPose(poses[ix2].mat_pose);
+			int num=std::min(mat_pose1.size(), mat_pose2.size());
+			
+			//interpolate
+			float t=ix1f-ix1;
+			for(int i=0; i<num; i++) {
+				const auto& a=mat_pose1[i];
+				const auto& b=mat_pose2[i];
+				mat_pose.push_back(a+(b-a)*t);
+			}
+		}
+		
 		//transform vertexes
 		std::vector<vf3d> new_verts(vertexes.size());
 		for(int i=0; i<vertexes.size(); i++) {
