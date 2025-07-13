@@ -81,8 +81,8 @@ public:
 	}
 
 	//doesnt change structure per se, but changes node values...(const-ish)
-	[[nodiscard]] std::list<Node*> route(Node* from, Node* to) const {
-		std::list<Node*> path;
+	[[nodiscard]] std::vector<Node*> route(Node* from, Node* to) const {
+		std::vector<Node*> path;
 		if(!from||!to||from==to) return path;
 
 		from->g_cost=0;
@@ -155,8 +155,9 @@ public:
 				break;
 			}
 		}
+		
 		//ensure path contains to and from
-		if(valid) path.reverse();
+		if(valid) std::reverse(path.begin(), path.end());
 		else path.clear();
 
 		return path;

@@ -157,18 +157,47 @@
     <Image Include="assets\img\start.png" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\anim\animated_mesh.h" />
+    <ClInclude Include="src\anim\armature.h" />
     <ClInclude Include="src\graph.h" />
+    <ClInclude Include="src\anim\bone.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\node.h" />
+    <ClInclude Include="src\anim\pose.h" />
     <ClInclude Include="src\poisson_disc.h" />
     <ClInclude Include="src\triangulate.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\models\house.txt" />
+    <Text Include="assets\models\knight\model.txt" />
+    <Text Include="assets\models\knight\vertex_weights.txt" />
     <Text Include="assets\models\terrain.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\models\knight\bones.arm" />
+    <None Include="assets\models\knight\frames\frame1.pose" />
+    <None Include="assets\models\knight\frames\frame10.pose" />
+    <None Include="assets\models\knight\frames\frame11.pose" />
+    <None Include="assets\models\knight\frames\frame12.pose" />
+    <None Include="assets\models\knight\frames\frame13.pose" />
+    <None Include="assets\models\knight\frames\frame14.pose" />
+    <None Include="assets\models\knight\frames\frame15.pose" />
+    <None Include="assets\models\knight\frames\frame16.pose" />
+    <None Include="assets\models\knight\frames\frame17.pose" />
+    <None Include="assets\models\knight\frames\frame18.pose" />
+    <None Include="assets\models\knight\frames\frame19.pose" />
+    <None Include="assets\models\knight\frames\frame2.pose" />
+    <None Include="assets\models\knight\frames\frame20.pose" />
+    <None Include="assets\models\knight\frames\frame3.pose" />
+    <None Include="assets\models\knight\frames\frame4.pose" />
+    <None Include="assets\models\knight\frames\frame5.pose" />
+    <None Include="assets\models\knight\frames\frame6.pose" />
+    <None Include="assets\models\knight\frames\frame7.pose" />
+    <None Include="assets\models\knight\frames\frame8.pose" />
+    <None Include="assets\models\knight\frames\frame9.pose" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

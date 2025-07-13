@@ -32,26 +32,63 @@
     <ClInclude Include="src\mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\poisson_disc.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\triangulate.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\graph.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\node.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\anim\armature.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\anim\animated_mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\anim\pose.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\anim\bone.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\poisson_disc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\triangulate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\models\terrain.txt" />
     <Text Include="assets\models\house.txt" />
+    <Text Include="assets\models\knight\vertex_weights.txt" />
+    <Text Include="assets\models\knight\model.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\models\knight\frames\frame1.pose" />
+    <None Include="assets\models\knight\frames\frame2.pose" />
+    <None Include="assets\models\knight\frames\frame3.pose" />
+    <None Include="assets\models\knight\frames\frame4.pose" />
+    <None Include="assets\models\knight\frames\frame5.pose" />
+    <None Include="assets\models\knight\frames\frame6.pose" />
+    <None Include="assets\models\knight\frames\frame7.pose" />
+    <None Include="assets\models\knight\frames\frame8.pose" />
+    <None Include="assets\models\knight\frames\frame9.pose" />
+    <None Include="assets\models\knight\frames\frame10.pose" />
+    <None Include="assets\models\knight\frames\frame11.pose" />
+    <None Include="assets\models\knight\frames\frame12.pose" />
+    <None Include="assets\models\knight\frames\frame13.pose" />
+    <None Include="assets\models\knight\frames\frame14.pose" />
+    <None Include="assets\models\knight\frames\frame15.pose" />
+    <None Include="assets\models\knight\frames\frame16.pose" />
+    <None Include="assets\models\knight\frames\frame17.pose" />
+    <None Include="assets\models\knight\frames\frame18.pose" />
+    <None Include="assets\models\knight\frames\frame19.pose" />
+    <None Include="assets\models\knight\frames\frame20.pose" />
+    <None Include="assets\models\knight\bones.arm" />
   </ItemGroup>
 </Project>

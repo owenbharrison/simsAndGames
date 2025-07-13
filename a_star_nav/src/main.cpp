@@ -17,12 +17,13 @@ namespace cmn {
 }
 
 #include "poisson_disc.h"
-
 #include "triangulate.h"
 
 #include <unordered_map>
 
 #include "graph.h"
+
+#include "anim/animated_mesh.h"
 
 float fract(float x) {
 	return x-std::floor(x);
@@ -49,17 +50,25 @@ struct Example : cmn::Engine3D {
 
 	//route markers
 	Node* from_node=nullptr, * to_node=nullptr;
-	std::list<Node*> route;
+	std::vector<Node*> route;
 
 	//route fanciness
 	std::vector<olc::Sprite*> texture_atlas;
 	float anim_timer=0;
 
+	bool walking=false;
+	const float time_per_seg=1.3f;
+	float seg_timer=0;
+	int seg_ix=0;
+
+	//super fancy stuff!
+	AnimatedMesh knight;
+
 	bool user_create() override {
 		cam_pos={0, 7, 0};
 		light_pos={0, 45, 0};
 
-		//load terrain & homes
+		//load error prone assets
 		try {
 			//color terrain based on slope
 			terrain=Mesh::loadFromOBJ("assets/models/terrain.txt");
@@ -71,7 +80,7 @@ struct Example : cmn::Engine3D {
 				t.col=gradient_spr->Sample(s, 0);
 			}
 			delete gradient_spr;
-			
+
 			//house placement
 			Mesh house_model=Mesh::loadFromOBJ("assets/models/house.txt");
 			house_model.scale={1.5f, 1.5f, 1.5f};
@@ -92,6 +101,9 @@ struct Example : cmn::Engine3D {
 				house_model.updateTriangles(h.col);
 				obstacles.push_back(house_model);
 			}
+
+			//load animated knight
+			knight=AnimatedMesh::load("assets/models/knight", 1, 20);
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
@@ -199,10 +211,6 @@ struct Example : cmn::Engine3D {
 		//graphics toggles
 		if(GetKey(olc::Key::G).bPressed) show_graph^=true;
 
-		if(GetKey(olc::Key::N).bPressed) {
-			std::cout<<cam_pos.x<<' '<<cam_pos.y<<' '<<cam_pos.z<<'\n';
-		}
-
 		//update mouse ray(matrix could be singular)
 		try {
 			//unprojection matrix
@@ -237,38 +245,73 @@ struct Example : cmn::Engine3D {
 			//set from waypoint
 			if(GetKey(olc::Key::F).bHeld) {
 				from_node=close_node;
-				if(GetKey(olc::Key::CTRL).bHeld) {
-					route=graph.route(from_node, to_node);
-				} else route.clear();
+
+				route.clear();
+				walking=false;
+
+				if(GetKey(olc::Key::CTRL).bHeld) route=graph.route(from_node, to_node);
 			}
 
 			//set to waypoint
 			if(GetKey(olc::Key::T).bHeld) {
 				to_node=close_node;
-				if(GetKey(olc::Key::CTRL).bHeld) {
-					route=graph.route(from_node, to_node);
-				} else route.clear();
+
+				route.clear();
+				walking=false;
+
+				if(GetKey(olc::Key::CTRL).bHeld) route=graph.route(from_node, to_node);
 			}
 		}
 
 		//swap waypoints
 		if(GetKey(olc::Key::TAB).bPressed) {
 			std::swap(to_node, from_node);
+
 			route.clear();
+			walking=false;
 		}
 
 		//remove waypoints
 		if(GetKey(olc::Key::ESCAPE).bPressed) {
 			from_node=nullptr, to_node=nullptr;
+
 			route.clear();
+			walking=false;
 		}
 
 		//route
 		if(GetKey(olc::Key::ENTER).bPressed) {
 			route=graph.route(from_node, to_node);
+
+			walking=false;
 		}
 
 		anim_timer+=dt;
+
+		//walk
+		if(GetKey(olc::Key::R).bPressed) {
+			walking=false;
+
+			//only if walkable
+			if(route.size()>=2) {
+				walking=true;
+
+				seg_ix=0;
+				seg_timer=0;
+			}
+		}
+
+		//walk update
+		if(walking) {
+			seg_timer+=dt;
+
+			if(seg_timer>time_per_seg) {
+				seg_timer=0;
+
+				seg_ix++;
+				if(seg_ix==route.size()-1) walking=false;
+			}
+		}
 
 		return true;
 	}
@@ -363,6 +406,24 @@ struct Example : cmn::Engine3D {
 				}
 				prev=curr;
 			}
+		}
+
+		//add walk point
+		if(walking) {
+			//interpolate between route pts
+			vf3d a=route[seg_ix]->pos, b=route[1+seg_ix]->pos;
+			vf3d ba=b-a;
+			float t=seg_timer/time_per_seg;
+			vf3d pt=a+t*ba;
+
+			//place knight at pt
+			knight.translation=pt;
+			//rotate based on segment xz plane projection
+			knight.rotation.y=std::atan2(ba.z, ba.x)-Pi/2;
+			knight.updateTransforms();
+			knight.applyAnimation(t);
+			//add animated geometry
+			tris_to_project.insert(tris_to_project.end(), knight.tris.begin(), knight.tris.end());
 		}
 
 		return true;
