@@ -26,13 +26,22 @@
     <ClInclude Include="src\mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\packing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\thread_pool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\smoke.png">
+    <Image Include="assets\img\fire_gradient.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\smoke.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\terrain.txt" />
+    <Text Include="assets\models\terrain.txt" />
   </ItemGroup>
 </Project>

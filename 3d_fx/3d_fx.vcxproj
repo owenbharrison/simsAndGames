@@ -149,13 +149,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\mesh.h" />
+    <ClInclude Include="src\packing.h" />
     <ClInclude Include="src\particle.h" />
+    <ClInclude Include="src\thread_pool.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\smoke.png" />
+    <Image Include="assets\img\fire_gradient.png" />
+    <Image Include="assets\img\smoke.png" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\terrain.txt" />
+    <Text Include="assets\models\terrain.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
