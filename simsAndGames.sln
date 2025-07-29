@@ -59,6 +59,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rigging", "rigging\rigging.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3d_fx", "3d_fx\3d_fx.vcxproj", "{294F023B-2EC0-4BCC-B81E-652B45E451A0}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minesweeper", "minesweeper\minesweeper.vcxproj", "{8044612D-40C6-49D1-9561-A56206E053AF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -291,6 +293,14 @@ Global
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Release|x64.Build.0 = Release|x64
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Release|x86.ActiveCfg = Release|Win32
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Release|x86.Build.0 = Release|Win32
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x64.ActiveCfg = Debug|x64
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x64.Build.0 = Debug|x64
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x86.ActiveCfg = Debug|Win32
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x86.Build.0 = Debug|Win32
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x64.ActiveCfg = Release|x64
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x64.Build.0 = Release|x64
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x86.ActiveCfg = Release|Win32
+		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
