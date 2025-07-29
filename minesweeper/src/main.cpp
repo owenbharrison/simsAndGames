@@ -49,20 +49,21 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 	//orbit controls
 	olc::vf2d* orbit_start=nullptr;
-	float temp_yaw, temp_pitch;
-	float cam_rad=0;
+	float temp_yaw=0, temp_pitch=0;
 
-	//cursor controls
-	bool show_controls=false;
+	//user input stuff
 	std::vector<Message> messages;
 	int cursor_i=0, cursor_j=0, cursor_k=0;
-	bool bomb_cursor=false;
 
 	//geometry stuff
 	Mesh cursor_mesh;
+	
 	std::vector<Billboard> billboards;
 	olc::Sprite* gradient=nullptr;
 	int letter_ix=0, number_ix=0, bomb_ix=0, tile_ix=0, flag_ix=0;
+	
+	bool cursor_controls=false;
+	bool bomb_zone=false;
 
 	//graphics things
 	std::vector<olc::Sprite*> texture_atlas;
@@ -71,7 +72,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	const int mtr_tile_size=32;
 	int mtr_num_x=0, mtr_num_y=0;
 	std::vector<cmn::Triangle>* mtr_bins=nullptr;
+	
 	std::vector<olc::vi2d> mtr_jobs;
+	
 	ThreadPool* mtr_pool=nullptr;
 
 	//game things
@@ -156,20 +159,15 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma region GAME SETUP
 		//init game
 		try {
-			game=new Minesweeper(5, 5, 5, 6);
+			game=new Minesweeper(7, 4, 6, 10);
 		} catch(const std::exception& e) {
 			std::cout<<e.what()<<'\n';
 			return false;
 		}
 		game_updateMesh();
 
-		//camera orbit rad based on game size
+		//game dims
 		game_size=vf3d(game->width, game->height, game->depth);
-		cam_rad=1.5f+.5f*std::sqrtf(
-			game->width*game->width+
-			game->height*game->height+
-			game->depth*game->depth
-		);
 #pragma endregion
 
 		return true;
@@ -188,6 +186,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	}
 
 	bool user_update(float dt) override {
+#pragma region CAMERA MOVEMENT
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch+=dt;
@@ -234,32 +233,21 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			std::sinf(temp_yaw)*std::cosf(temp_pitch)
 		);
 
-		//cam always points toward origin
-		cam_pos=-cam_rad*cam_dir;
-		//light always at cam
-		light_pos=cam_pos;
-
-		//toggle cursor control display
-		if(GetKey(olc::Key::C).bPressed) {
-			show_controls^=true;
-
-			std::string msg="cursor control display ";
-			olc::Pixel col;
-			if(show_controls) msg+="ON", col=olc::GREEN;
-			else msg+="OFF", col=olc::RED;
-			messages.push_back({msg, col, 2});
+		//dynamic camera system :D
+		{
+			//find sphere to envelope bounds
+			float st_dist=1+game_size.mag()/2;
+			//step backwards along cam ray
+			vf3d st=-st_dist*cam_dir;
+			//snap pt to bounds & make relative to origin
+			cmn::AABB3 box{-game_size/2, game_size/2};
+			float rad=st_dist-box.intersectRay(st, cam_dir);
+			//push cam back by some some margin
+			cam_pos=-(3+rad)*cam_dir;
+			//light always at cam
+			light_pos=cam_pos;
 		}
-
-		//toggle bomb zone display
-		if(GetKey(olc::Key::B).bPressed) {
-			bomb_cursor^=true;
-
-			std::string msg="bomb influence zone ";
-			olc::Pixel col;
-			if(bomb_cursor) msg+="ON", col=olc::CYAN;
-			else msg+="OFF", col=olc::MAGENTA;
-			messages.push_back({msg, col, 2});
-		}
+#pragma endregion
 
 		//move cursor with keyboard
 		{
@@ -290,7 +278,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 					cursor_j=31&(id>>5);
 					cursor_k=31&id;
 					break;
-				case 2://cursor to billboard
+				case 2: {//cursor to billboard
 					int bb_ix=0xffff&id;
 					//previous frame's billboard list, but its no big deal
 					const auto& b=billboards[bb_ix];
@@ -298,6 +286,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 					cursor_j=b.j;
 					cursor_k=b.k;
 					break;
+				}
 			}
 		}
 
@@ -319,12 +308,39 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			game_updateMesh();
 		}
 
+		//toggle cursor control display
+		if(GetKey(olc::Key::C).bPressed) {
+			cursor_controls^=true;
+
+			std::string msg="cursor control display ";
+			olc::Pixel col;
+			if(cursor_controls) msg+="ON", col=olc::GREEN;
+			else msg+="OFF", col=olc::RED;
+			messages.push_back({msg, col, 2});
+		}
+
+		//toggle bomb zone display
+		if(GetKey(olc::Key::B).bPressed) {
+			bomb_zone^=true;
+
+			std::string msg="bomb influence zone ";
+			olc::Pixel col;
+			if(bomb_zone) msg+="ON", col=olc::CYAN;
+			else msg+="OFF", col=olc::MAGENTA;
+			messages.push_back({msg, col, 2});
+		}
+
 		//update & remove "dead" messages
 		for(auto it=messages.begin(); it!=messages.end();) {
 			it->age+=dt;
 			if(it->age>it->lifespan) it=messages.erase(it);
 			else it++;
 		}
+
+		//sort messages by relative age
+		std::sort(messages.begin(), messages.end(), [] (const Message& a, const Message& b) {
+			return a.age/a.lifespan<b.age/b.lifespan;
+		});
 
 		return true;
 	}
@@ -393,18 +409,18 @@ struct Minesweeper3DUI : cmn::Engine3D {
 					//positioning
 					vf3d pos=.5f+vf3d(i, j, k)-game_size/2;
 
+					//size if cursor on billboard
+					float size=.4f;
+					if(i==cursor_i&&j==cursor_j&&k==cursor_k) size=.65f;
+
 					//add bomb sprite
 					if(cell.bomb) {
-						billboards.push_back({pos, .5f, .5f, .5f, bomb_ix, olc::WHITE, i, j, k});
+						billboards.push_back({pos, 1.5f*size, .5f, .5f, bomb_ix, olc::WHITE, i, j, k});
 						continue;
 					}
 
 					//skip empties
 					if(cell.num_bombs==0) continue;
-
-					//size if cursor on billboard
-					float size=.35f;
-					if(i==cursor_i&&j==cursor_j&&k==cursor_k) size=.6f;
 
 					//display 2or1 digit number
 					int tens=cell.num_bombs/10;
@@ -436,20 +452,22 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 
 		//add cursor controls as arrows and billboards
-		if(show_controls) {
-			//a&d on x axis
+		if(cursor_controls) {
+			//a & d on x axis
 			float edge_x=.5f*game->width;
 			billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, letter_ix+'A'-'A', olc::YELLOW});
 			addArrow(vf3d(.5f+edge_x, 0, 0), vf3d(1.5f+edge_x, 0, 0), .15f, olc::YELLOW);
 			billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, letter_ix+'D'-'A', olc::YELLOW});
 			addArrow(vf3d(-.5f-edge_x, 0, 0), vf3d(-1.5f-edge_x, 0, 0), .15f, olc::YELLOW);
-			//w&s on y axis
+			
+			//w & s on y axis
 			float edge_y=.5f*game->height;
 			billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, letter_ix+'W'-'A', olc::MAGENTA});
 			addArrow(vf3d(0, .5f+edge_y, 0), vf3d(0, 1.5f+edge_y, 0), .15f, olc::MAGENTA);
 			billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, letter_ix+'S'-'A', olc::MAGENTA});
 			addArrow(vf3d(0, -.5f-edge_y, 0), vf3d(0, -1.5f-edge_y, 0), .15f, olc::MAGENTA);
-			//q&e on z axis
+			
+			//q & e on z axis
 			float edge_z=.5f*game->depth;
 			billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, letter_ix+'Q'-'A', olc::GREEN});
 			addArrow(vf3d(0, 0, .5f+edge_z), vf3d(0, 0, 1.5f+edge_z), .15f, olc::GREEN);
@@ -457,12 +475,12 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			addArrow(vf3d(0, 0, -.5f-edge_z), vf3d(0, 0, -1.5f-edge_z), .15f, olc::GREEN);
 		}
 
-		//sort billboards
+		//sort billboards back to front for transparency
 		std::sort(billboards.begin(), billboards.end(), [&] (const Billboard& a, const Billboard& b) {
 			return (a.pos-cam_pos).mag2()>(b.pos-cam_pos).mag2();
 		});
 
-		//tessellate billboards
+		//triangulate billboards
 		cmn::Triangle t1, t2;
 		for(int i=0; i<billboards.size(); i++) {
 			auto& b=billboards[i];
@@ -487,7 +505,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			);
 		}
 
-		if(bomb_cursor) {
+		if(bomb_zone) {
 			//show clamped 3x3 bomb influence zone
 			int min_i=cursor_i-1; if(min_i<0) min_i=0;
 			int min_j=cursor_j-1; if(min_j<0) min_j=0;
@@ -808,6 +826,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 								t.col, t.id,
 								nx, ny, mx, my
 							);
+							break;
 						case 1:
 							//textured cell
 							FillTexturedDepthTriangleWithin(
@@ -818,8 +837,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 								nx, ny, mx, my
 							);
 							break;
-						case 2:
-						{//billboard
+						case 2: {
+							//billboard
 							int bb_ix=0xffff&t.id;
 							FillTexturedDepthTriangleWithin(
 								t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
@@ -847,14 +866,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				l.col, l.id
 			);
 		}
-
+		
 		//display messages
 		{
-			//sort by relative age
-			std::sort(messages.begin(), messages.end(), [] (const Message& a, const Message& b) {
-				return a.age/a.lifespan<b.age/b.lifespan;
-			});
-
 			//display at center from bottom up
 			int y=ScreenHeight()-8;
 			for(const auto& m:messages) {
@@ -870,7 +884,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		{//very basic win/lose screens
 			int cx=ScreenWidth()/2, cy=ScreenHeight()/2;
-			int scl=11;
+			int scl=8;
 			switch(game->state) {
 				case Minesweeper::WON: {
 					//dark background
@@ -903,7 +917,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 int main() {
 	Minesweeper3DUI m3dui;
 	bool vsync=true;
-	if(m3dui.Construct(1000, 800, 1, 1, false, vsync)) m3dui.Start();
+	if(m3dui.Construct(720, 540, 1, 1, false, vsync)) m3dui.Start();
 
 	return 0;
 }
