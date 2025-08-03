@@ -85,7 +85,7 @@ struct FlipFluid {
 
 		//particles
 		max_particles=m;
-		
+
 		particle_pos=new float[2*max_particles];
 		particle_color=new float[3*max_particles];
 		for(int i=0; i<max_particles; i++) {
@@ -99,7 +99,7 @@ struct FlipFluid {
 		particle_radius=r;
 		p_inv_spacing=1/(2.2f*particle_radius);
 		p_num_x=1+width*p_inv_spacing;
-		p_num_x=1+height*p_inv_spacing;
+		p_num_y=1+height*p_inv_spacing;
 		p_num_cells=p_num_x*p_num_y;
 
 		num_cell_particles=new int[p_num_cells];
@@ -215,7 +215,7 @@ struct FlipFluid {
 							float d_sq=dx*dx+dy*dy;
 							if(d_sq>min_dist_sq||d_sq==0) continue;
 
-							float d=std::sqrtf(d_sq);
+							float d=std::sqrt(d_sq);
 							float s=.5f*(min_dist-d)/d;
 							dx*=s, dy*=s;
 							px-=dx, py-=dy;
@@ -238,8 +238,7 @@ struct FlipFluid {
 	}
 
 	//253-311
-	void handleParticleCollisions(float ox, float oy, float orad) {
-		//float h=1/f_inv_spacing;
+	void handleParticleCollisions(float ox, float oy, float vx, float vy, float orad) {
 		float orad_sq=orad*orad;
 		float min_dist=particle_radius+orad;
 		float min_dist_sq=min_dist*min_dist;
@@ -259,11 +258,12 @@ struct FlipFluid {
 
 			//obstacle collision
 			if(d_sq<min_dist_sq) {
-				float d=std::sqrtf(d_sq);
+				float d=std::sqrt(d_sq);
 				float amt=(min_dist-d)/d;
-				//x=ox, y=oy;
 				x+=dx*amt;
 				y+=dy*amt;
+				particle_vel[2*i]=vx;
+				particle_vel[1+2*i]=vy;
 			}
 
 			//wall collisions
@@ -277,7 +277,7 @@ struct FlipFluid {
 			}
 			if(y<min_y) {
 				y=min_y;
-				particle_vel[2*i+1]=0;
+				particle_vel[1+2*i]=0;
 			}
 			if(y>max_y) {
 				y=max_y;
@@ -361,11 +361,11 @@ struct FlipFluid {
 			float dx=comp==0?0:h2;
 			float dy=comp==0?h2:0;
 			
-			float* f=comp==0?u:v;
-			float* prev_f=comp==0?prev_u:prev_v;
-			float* d=comp==0?du:dv;
+			auto& f=comp==0?u:v;
+			auto& prev_f=comp==0?prev_u:prev_v;
+			auto& d=comp==0?du:dv;
 
-			for(int i=0; i<i<num_particles; i++) {
+			for(int i=0; i<num_particles; i++) {
 				float x=particle_pos[2*i];
 				float y=particle_pos[1+2*i];
 
@@ -468,7 +468,7 @@ struct FlipFluid {
 					float sy0=s[bottom];
 					float sy1=s[top];
 					float s_sum=sx0+sx1+sy0+sy1;
-					if(s==0) continue;
+					if(s_sum==0) continue;
 
 					float div=u[right]-u[center]+v[top]-v[center];
 
@@ -559,7 +559,7 @@ struct FlipFluid {
 		float dt, float gravity, float flip_ratio,
 		int num_pressure_iters, int num_particle_iters,
 		float over_relaxation, bool compensate_drift, bool separate_particles,
-		float obstacle_x, float obstacle_y, float obstacle_radius
+		float obstacle_x, float obstacle_y, float obstacle_vel_x, float obstacle_vel_y, float obstacle_radius
 	) {
 		int num_sub_steps=1;
 		float sdt=dt/num_sub_steps;
@@ -567,7 +567,7 @@ struct FlipFluid {
 		for(int step=0; step<num_sub_steps; step++) {
 			integrateParticles(sdt, gravity);
 			if(separate_particles) pushParticlesApart(num_particle_iters);
-			handleParticleCollisions(obstacle_x, obstacle_y, obstacle_radius);
+			handleParticleCollisions(obstacle_x, obstacle_y, obstacle_vel_x, obstacle_vel_y, obstacle_radius);
 			transferVelocities(true);
 			updateParticleDensity();
 			solveIncompressibility(num_pressure_iters, sdt, over_relaxation, compensate_drift);
