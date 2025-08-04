@@ -32,7 +32,6 @@ class Solver {
 
 	void updateCellNum();
 	void reallocateCells();
-	void fillCells();
 
 public:
 	Particle* particles=nullptr;
@@ -96,6 +95,26 @@ public:
 
 	cmn::AABB getBounds() const {
 		return bounds;
+	}
+
+	void fillCells() {
+		//reset grid heads
+		memset(grid_heads, -1, sizeof(int)*num_cell_x*num_cell_y);
+
+		//insert particles into grid
+		for(int i=0; i<num_particles; ++i) {
+			auto& p=particles[i];
+
+			//skip if out of bounds
+			int xi=p.pos.x/cell_size;
+			int yi=p.pos.y/cell_size;
+			if(!cellInRangeX(xi)||!cellInRangeY(yi)) continue;
+
+			//add each particle to front of list
+			int ci=cellIX(xi, yi);
+			particle_next[i]=grid_heads[ci];
+			grid_heads[ci]=i;
+		}
 	}
 
 	void addParticle(const Particle& o) {
@@ -229,25 +248,5 @@ void Solver::updateCellNum() {
 void Solver::reallocateCells() {
 	delete[] grid_heads;
 	grid_heads=new int[num_cell_x*num_cell_y];
-}
-
-void Solver::fillCells() {
-	//reset grid heads
-	memset(grid_heads, -1, sizeof(int)*num_cell_x*num_cell_y);
-
-	//insert particles into grid
-	for(int i=0; i<num_particles; ++i) {
-		auto& p=particles[i];
-
-		//skip if out of bounds
-		int xi=p.pos.x/cell_size;
-		int yi=p.pos.y/cell_size;
-		if(!cellInRangeX(xi)||!cellInRangeY(yi)) continue;
-		
-		//add each particle to front of list
-		int ci=cellIX(xi, yi);
-		particle_next[i]=grid_heads[ci];
-		grid_heads[ci]=i;
-	}
 }
 #endif

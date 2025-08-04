@@ -414,40 +414,39 @@ struct ParticlesUI : olc::PixelGameEngine {
 		//draw squares showing "density"
 		//  or number of particles per cell
 		if(show_density) {
-			//find max cell num
-			int max=0;
-			for(int i=0; i<solver->getNumCellX(); i++) {
-				for(int j=0; j<solver->getNumCellY(); j++) {
-					//get num particles
-					int num=0;
-					int st=solver->grid_heads[solver->cellIX(i, j)];
-					for(int i=st; i!=-1; i=solver->particle_next[i]) num++;
-					if(num>max) max=num;
+			solver->fillCells();
+			
+			//find max cell "mass"
+			float record=0;
+			for(int i=0; i<solver->getNumCellX()*solver->getNumCellY(); i++) {
+				float sum=0;
+				int st=solver->grid_heads[i];
+				for(int j=st; j!=-1; j=solver->particle_next[j]) {
+					sum+=solver->particles[j].mass;
 				}
+				if(sum>record) record=sum;
 			}
-			if(max!=0) {
+
+			if(record>0) {
 				//for each cell
 				const float sz=solver->getCellSize();
 				for(int i=0; i<solver->getNumCellX(); i++) {
 					for(int j=0; j<solver->getNumCellY(); j++) {
-						//get num particles
-						int num=0;
+						//get cell "mass"
+						float sum=0;
 						int st=solver->grid_heads[solver->cellIX(i, j)];
-						for(int i=st; i!=-1; i=solver->particle_next[i]) num++;
-						if(num==0) continue;
+						for(int k=st; k!=-1; k=solver->particle_next[k]) {
+							sum+=solver->particles[k].mass;
+						}
+						if(sum==0) continue;
 
 						//sample gradient texture
-						float u=float(num)/max;
+						float u=sum/record;
 						olc::Pixel col=gradient_spr->Sample(u, 0);
 
 						//draw cell as rect
 						float x=sz*i, y=sz*j;
 						FillRectDecal({x, y}, {sz, sz}, col);
-
-						//number to show particle number
-						float cx=.5f*sz+x, cy=.5f*sz+y;
-						std::string str=std::to_string(num);
-						DrawStringDecal({cx-4*str.length(), cy-4}, str, olc::BLACK);
 					}
 				}
 			}
