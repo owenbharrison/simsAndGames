@@ -202,9 +202,9 @@ public:
 
 		int checks=0;
 
-		//check adjacent including self
-		const int di[5]{1, 1, 0, 0, -1};
-		const int dj[5]{0, 1, 0, 1, 1};
+		//check self & half of neighbors to avoid redundancy
+		const int di[5]{0, 1, -1, 0, 1};
+		const int dj[5]{0, 0, 1, 1, 1};
 
 		//for each cell
 		for(int i=0; i<num_cell_x; i++) {

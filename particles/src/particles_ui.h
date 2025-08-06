@@ -56,7 +56,16 @@ struct ParticlesUI : olc::PixelGameEngine {
 	int num_checks=0;
 
 	//simulation
+	bool update_phys=true;
 	Solver* solver=nullptr;
+
+	int test_num_x=1, test_num_y=1;
+	float* test_wt=nullptr;
+	float* test_d=nullptr;
+	float* test_x=nullptr;
+	float* test_y=nullptr;
+	olc::Sprite* test_spr=nullptr;
+	olc::Decal* test_dec=nullptr;
 
 	const float time_step=1/120.f;
 	const int num_sub_steps=3;
@@ -98,7 +107,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 		//load background image
 		background_spr=new olc::Sprite("assets/cat.png");
-		
+
 		//density gradient
 		gradient_spr=new olc::Sprite("assets/gradient.png");
 
@@ -111,6 +120,12 @@ struct ParticlesUI : olc::PixelGameEngine {
 			vf2d br(ScreenWidth()-margin, h+margin);
 			energy_chart=Chart(250, {tl, br});
 		}
+
+		test_wt=new float[1];
+		test_x=new float[1];
+		test_y=new float[1];
+		test_spr=new olc::Sprite(1, 1);
+		test_dec=new olc::Decal(test_spr);
 
 		return true;
 	}
@@ -170,7 +185,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 					for(int j=0; j<num_y; j++) {
 						float y=map(j, 0, num_y-1, box.min.y, box.max.y);
 						Particle temp({x, y}, cmn::random(2.5f, max_rad));
-						
+
 						//random color
 						temp.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
 
@@ -220,7 +235,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 			grab_particles.clear();
 		}
 
-		//graphics toggles
+		//debug toggles
 		if(GetKey(olc::Key::C).bPressed) show_cells^=true;
 		if(GetKey(olc::Key::D).bPressed) show_density^=true;
 		if(GetKey(olc::Key::E).bPressed) {
@@ -229,6 +244,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 		}
 		if(GetKey(olc::Key::V).bPressed) show_velocity^=true;
 		if(GetKey(olc::Key::B).bPressed) show_background^=true;
+		if(GetKey(olc::Key::P).bPressed) update_phys^=true;
 	}
 
 	void handlePhysics(float dt) {
@@ -281,7 +297,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 		cmn::Stopwatch physics_watch;
 		if(to_time) physics_watch.start();
 
-		handlePhysics(dt);
+		if(update_phys) handlePhysics(dt);
 
 		if(to_time) {
 			physics_watch.stop();
@@ -348,6 +364,25 @@ struct ParticlesUI : olc::PixelGameEngine {
 	void render(float dt) {
 		Clear(olc::BLACK);
 
+		//draw solver hash grid
+		if(show_cells) {
+			//vertical lines
+			for(int i=0; i<=solver->getNumCellX(); i++) {
+				float x=solver->getCellSize()*i;
+				vf2d top(x, 0), btm(x, ScreenHeight());
+				if(i%5==0) DrawThickLineDecal(top, btm, 2, olc::GREY);
+				else DrawLineDecal(top, btm, olc::GREY);
+			}
+
+			//horizontal lines
+			for(int j=0; j<=solver->getNumCellY(); j++) {
+				float y=solver->getCellSize()*j;
+				vf2d lft(0, y), rgt(ScreenWidth(), y);
+				if(j%5==0) DrawThickLineDecal(lft, rgt, 2, olc::GREY);
+				else DrawLineDecal(lft, rgt, olc::GREY);
+			}
+		}
+
 		//show addition radius
 		if(adding) {
 			DrawThickCircleDecal(mouse_pos, selection_radius, 2, olc::GREEN);
@@ -378,7 +413,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 		}
 
 		//show particles
-		if(!show_density&&!show_velocity) {
+		if(!show_density) {
 			for(int i=0; i<solver->getNumParticles(); i++) {
 				const auto& p=solver->particles[i];
 				olc::Pixel col=p.col;
@@ -392,90 +427,123 @@ struct ParticlesUI : olc::PixelGameEngine {
 			}
 		}
 
-		//draw solver hash grid
-		if(show_cells) {
-			//vertical lines
-			for(int i=0; i<=solver->getNumCellX(); i++) {
-				float x=solver->getCellSize()*i;
-				vf2d top(x, 0), btm(x, ScreenHeight());
-				if(i%5==0) DrawThickLineDecal(top, btm, 2, olc::GREY);
-				else DrawLineDecal(top, btm, olc::GREY);
+		//mass "density" view?
+		if(show_density||show_velocity) {
+			//reallocate if needed
+			int s_num_x=solver->getNumCellX();
+			int s_num_y=solver->getNumCellY();
+			if((1+s_num_x)!=test_num_x||(1+s_num_y)!=test_num_y) {
+				test_num_x=1+s_num_x;
+				test_num_y=1+s_num_y;
+
+				delete[] test_wt;
+				delete[] test_d;
+				delete[] test_x;
+				delete[] test_y;
+				test_wt=new float[test_num_x*test_num_y];
+				test_d=new float[test_num_x*test_num_y];
+				test_x=new float[test_num_x*test_num_y];
+				test_y=new float[test_num_x*test_num_y];
+
+				delete test_spr;
+				delete test_dec;
+				test_spr=new olc::Sprite(test_num_x, test_num_y);
+				test_dec=new olc::Decal(test_spr);
 			}
 
-			//horizontal lines
-			for(int j=0; j<=solver->getNumCellY(); j++) {
-				float y=solver->getCellSize()*j;
-				vf2d lft(0, y), rgt(ScreenWidth(), y);
-				if(j%5==0) DrawThickLineDecal(lft, rgt, 2, olc::GREY);
-				else DrawLineDecal(lft, rgt, olc::GREY);
+			//reset both sums for each cell
+			for(int i=0; i<test_num_x*test_num_y; i++) {
+				test_wt[i]=0;
+				test_d[i]=0;
+				test_x[i]=0, test_y[i]=0;
 			}
-		}
 
-		//draw squares showing "density"
-		//  or number of particles per cell
-		if(show_density) {
-			solver->fillCells();
+			//add each particles contribution...
+			float sz=solver->getCellSize();
+			for(int i=0; i<solver->getNumParticles(); i++) {
+				//truncate position
+				const auto& p=solver->particles[i];
+				float xf=p.pos.x/sz, yf=p.pos.y/sz;
+
+				//integer & fractional portions
+				int xi=xf, yi=yf;
+				xf-=xi, yf-=yi;
+
+				//corner indexes
+				int i00=xi+test_num_x*yi;
+				int i10=(1+xi)+test_num_x*yi;
+				int i01=xi+test_num_x*(1+yi);
+				int i11=(1+xi)+test_num_x*(1+yi);
+
+				//corner weights
+				float w00=(1-xf)*(1-yf);
+				float w10=xf*(1-yf);
+				float w01=(1-xf)*yf;
+				float w11=xf*yf;
+
+				//sum weights
+				test_wt[i00]+=w00;
+				test_wt[i10]+=w10;
+				test_wt[i01]+=w01;
+				test_wt[i11]+=w11;
+
+				//get quantities
+				float d=p.mass;
+				vf2d vel=(p.pos-p.oldpos)/dt;
+
+				//sum totals
+				test_d[i00]+=w00*d, test_x[i00]+=w00*vel.x, test_y[i00]+=w00*vel.y;
+				test_d[i10]+=w10*d, test_x[i10]+=w10*vel.x, test_y[i10]+=w10*vel.y;
+				test_d[i01]+=w01*d, test_x[i01]+=w01*vel.x, test_y[i01]+=w01*vel.y;
+				test_d[i11]+=w11*d, test_x[i11]+=w11*vel.x, test_y[i11]+=w11*vel.y;
+			}
+
+			//divide totals by weights
+			for(int i=0; i<test_num_x*test_num_y; i++) {
+				const auto& w=test_wt[i];
+				if(w!=0) test_x[i]/=w, test_y[i]/=w;
+			}
 			
-			//find max cell "mass"
-			float record=0;
-			for(int i=0; i<solver->getNumCellX()*solver->getNumCellY(); i++) {
-				float sum=0;
-				int st=solver->grid_heads[i];
-				for(int j=st; j!=-1; j=solver->particle_next[j]) {
-					sum+=solver->particles[j].mass;
+			if(show_density) {
+				//find range
+				float min=-1, max=-1;
+				for(int i=0; i<test_num_x*test_num_y; i++) {
+					const auto& d=test_d[i];
+					if(min<0||d<min) min=d;
+					if(max<0||d>max) max=d;
+				} 
+
+				//normalize & send to sprite
+				float range=max-min;
+				if(range<1e-6f) range=1;
+				for(int i=0; i<test_num_x; i++) {
+					for(int j=0; j<test_num_y; j++) {
+						float u=(test_d[i+test_num_x*j]-min)/range;
+						test_spr->SetPixel(i, j, gradient_spr->Sample(u, 0));
+					}
 				}
-				if(sum>record) record=sum;
+
+				//update & draw decal
+				test_dec->Update();
+				float scl_x=float(ScreenWidth())/s_num_x;
+				float scl_y=float(ScreenHeight())/s_num_y;
+				DrawDecal({0, 0}, test_dec, {scl_x, scl_y});
 			}
 
-			if(record>0) {
-				//for each cell
-				const float sz=solver->getCellSize();
-				for(int i=0; i<solver->getNumCellX(); i++) {
-					for(int j=0; j<solver->getNumCellY(); j++) {
-						//get cell "mass"
-						float sum=0;
-						int st=solver->grid_heads[solver->cellIX(i, j)];
-						for(int k=st; k!=-1; k=solver->particle_next[k]) {
-							sum+=solver->particles[k].mass;
-						}
-						if(sum==0) continue;
-
-						//sample gradient texture
-						float u=sum/record;
-						olc::Pixel col=gradient_spr->Sample(u, 0);
-
-						//draw cell as rect
+			//draw velocities
+			if(show_velocity) {
+				for(int i=0; i<s_num_x; i++) {
+					for(int j=0; j<s_num_y; j++) {
+						int i00=i+test_num_x*j;
+						int i10=(1+i)+test_num_x*j;
+						int i01=i+test_num_x*(1+j);
+						int i11=(1+i)+test_num_x*(1+j);
+					
 						float x=sz*i, y=sz*j;
-						FillRectDecal({x, y}, {sz, sz}, col);
+						float vx=(test_x[i00]+test_x[i10]+test_x[i01]+test_x[i11])/4;
+						float vy=(test_y[i00]+test_y[i10]+test_y[i01]+test_y[i11])/4;
+						DrawThickLineDecal({x, y}, {x+vx, y+vy}, 1, olc::BLUE);
 					}
-				}
-			}
-		}
-
-		if(show_velocity) {
-			const float sz=solver->getCellSize();
-			for(int i=0; i<solver->getNumCellX(); i++) {
-				float x=sz*(.5f+i);
-				for(int j=0; j<solver->getNumCellY(); j++) {
-					float y=sz*(.5f+j);
-
-					//get weighted avg cell velocity
-					vf2d v_sum;
-					float m_sum=0;
-					int st=solver->grid_heads[solver->cellIX(i, j)];
-					for(int i=st; i!=-1; i=solver->particle_next[i]) {
-						const auto& p=solver->particles[i];
-						v_sum+=p.mass*(p.pos-p.oldpos);
-						m_sum+=p.mass;
-					}
-					vf2d vel=v_sum/m_sum;
-
-					//actual movement in a given frame
-					vel/=dt;
-
-					//color based on speed?
-					vf2d pos(x, y);
-					DrawThickLineDecal(pos, pos+vel, 1, olc::BLUE);
 				}
 			}
 		}
@@ -498,6 +566,11 @@ struct ParticlesUI : olc::PixelGameEngine {
 			}
 			FillRectDecal(box.min-vf2d(1, 1), vf2d(50, 10), olc::BLACK);
 			DrawStringDecal(box.min, "Energy", olc::WHITE);
+		}
+
+		//red border if phys off
+		if(!update_phys) {
+			DrawRectDecal({1, 0}, vf2d(ScreenWidth()-1, ScreenHeight()-1), olc::RED);
 		}
 	}
 
