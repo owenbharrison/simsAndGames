@@ -72,7 +72,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 	float sub_time_step=time_step/num_sub_steps;
 	float update_timer=0;
 
-	float gravity=100;
+	const vf2d gravity{0, 100};
 
 	//graphics stuff
 	bool show_cells=false;
@@ -86,6 +86,8 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 	Chart energy_chart;
 	float energy_chart_timer=0;
+
+	cmn::Stopwatch physics_watch;
 
 	bool OnUserCreate() override {
 		//make some "primitives" to draw with
@@ -150,14 +152,16 @@ struct ParticlesUI : olc::PixelGameEngine {
 		if(adding) {
 			//add as many as possible(ish)
 			for(int i=0; i<100; i++) {
-				float pos_rad=cmn::random(selection_radius);
-				vf2d offset=cmn::polar(pos_rad, cmn::random(2*cmn::Pi));
+				float offset_rad=cmn::random(selection_radius);
+				float offset_angle=cmn::random(2*cmn::Pi);
+				vf2d offset=offset_rad*vf2d(std::cos(offset_angle), std::sin(offset_angle));
 
 				//random size and velocity
-				float ptc_rad=cmn::random(3, 6);
+				float rad=cmn::random(3, 6);
+				Particle temp(mouse_pos+offset, rad);
 				float speed=dt*cmn::random(35);
-				Particle temp(mouse_pos+offset, ptc_rad);
-				temp.oldpos-=cmn::polar(speed, cmn::random(2*cmn::Pi));
+				float vel_angle=cmn::random(2*cmn::Pi);
+				temp.oldpos-=speed*vf2d(std::cos(vel_angle), std::sin(vel_angle));
 
 				//random color
 				temp.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
@@ -253,13 +257,17 @@ struct ParticlesUI : olc::PixelGameEngine {
 		while(update_timer>time_step) {
 			num_checks=0;
 
+			physics_watch.start();
+
 			for(int i=0; i<num_sub_steps; i++) {
 				num_checks+=solver->solveCollisions();
 
-				solver->applyGravity(gravity);
+				solver->accelerate(gravity);
 
 				solver->updateKinematics(sub_time_step);
 			}
+
+			physics_watch.stop();
 
 			update_timer-=time_step;
 		}
@@ -275,7 +283,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 					//mgh
 					float h=solver->getBounds().max.y-p.pos.y;
-					total_energy+=p.mass*gravity*h;
+					total_energy+=p.mass*gravity.mag()*h;
 
 					//1/2mv^2
 					vf2d vel=p.pos-p.oldpos;
@@ -294,14 +302,9 @@ struct ParticlesUI : olc::PixelGameEngine {
 
 		handleUserInput(dt);
 
-		cmn::Stopwatch physics_watch;
-		if(to_time) physics_watch.start();
-
 		if(update_phys) handlePhysics(dt);
 
 		if(to_time) {
-			physics_watch.stop();
-
 			auto dur=physics_watch.getMicros();
 			float dur_ms=dur/1000.f;
 			std::cout<<"physics: ";
@@ -331,27 +334,27 @@ struct ParticlesUI : olc::PixelGameEngine {
 	}
 
 #pragma region RENDER HELPERS
-	void DrawThickLineDecal(const olc::vf2d& a, const olc::vf2d& b, float w, olc::Pixel col) {
-		olc::vf2d sub=b-a;
+	void DrawThickLineDecal(const vf2d& a, const vf2d& b, float w, olc::Pixel col) {
+		vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=sub.perp()/len;
+		vf2d tang=sub.perp()/len;
 
 		float angle=std::atan2f(sub.y, sub.x);
 		DrawRotatedDecal(a-.5f*w*tang, prim_rect_dec, angle, {0, 0}, {len, w}, col);
 	}
 
-	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+	void FillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
+		vf2d offset(rad, rad);
+		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
 		DrawDecal(pos-offset, prim_circ_dec, scale, col);
 	}
 
-	void DrawThickCircleDecal(const olc::vf2d& pos, float rad, float w, const olc::Pixel& col) {
+	void DrawThickCircleDecal(const vf2d& pos, float rad, float w, const olc::Pixel& col) {
 		const int num=32;
-		olc::vf2d first, prev;
+		vf2d first, prev;
 		for(int i=0; i<num; i++) {
 			float angle=2*cmn::Pi*i/num;
-			olc::vf2d curr(pos.x+rad*std::cos(angle), pos.y+rad*std::sin(angle));
+			vf2d curr(pos.x+rad*std::cos(angle), pos.y+rad*std::sin(angle));
 			FillCircleDecal(curr, .5f*w, col);
 			if(i==0) first=curr;
 			else DrawThickLineDecal(prev, curr, w, col);

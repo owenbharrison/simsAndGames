@@ -6,19 +6,11 @@
 #include "common/utils.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
-
-	vf2d polar(float angle, float length) {
-		return polar_generic<vf2d>(angle, length);
-	}
 }
 
 #include "particle.h"
 
 #include <string>
-
-vf2d reflect(const vf2d& in, const vf2d& norm) {
-	return in-2*norm.dot(in)*norm;
-}
 
 class Solver {
 	float cell_size=0;
@@ -165,12 +157,12 @@ public:
 		int checks=0;
 		
 		//nested linked list traversal
-		for(int k1=grid_heads[cellIX(i1, j1)]; k1!=-1; k1=particle_next[k1]) {
-			for(int k2=grid_heads[cellIX(i2, j2)]; k2!=-1; k2=particle_next[k2]) {
+		for(int c1=grid_heads[cellIX(i1, j1)]; c1!=-1; c1=particle_next[c1]) {
+			for(int c2=grid_heads[cellIX(i2, j2)]; c2!=-1; c2=particle_next[c2]) {
 				//dont check self
-				if(k2==k1) continue;
+				if(c2==c1) continue;
 
-				Particle::checkCollide(particles[k1], particles[k2]);
+				Particle::checkCollide(particles[c1], particles[c2]);
 				
 				checks++;
 			}
@@ -191,12 +183,12 @@ public:
 		//for each cell
 		for(int i=0; i<num_cell_x; i++) {
 			for(int j=0; j<num_cell_y; j++) {
-				for(int k=0; k<5; k++) {
+				for(int d=0; d<5; d++) {
 					//skip if out of range
-					int oi=i+di[k], oj=j+dj[k];
-					if(!cellInRangeX(oi)||!cellInRangeY(oj)) continue;
+					int ci=i+di[d], cj=j+dj[d];
+					if(!cellInRangeX(ci)||!cellInRangeY(cj)) continue;
 						
-					checks+=collideCells(i, j, oi, oj);
+					checks+=collideCells(i, j, ci, cj);
 				}
 			}
 		}
@@ -204,10 +196,10 @@ public:
 		return checks;
 	}
 
-	void applyGravity(float g) {
+	void accelerate(const vf2d& a) {
 		for(int i=0; i<num_particles; i++) {
 			auto& p=particles[i];
-			p.applyForce(vf2d(0, p.mass*g));
+			p.applyForce(p.mass*a);
 		}
 	}
 
