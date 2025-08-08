@@ -504,6 +504,7 @@ namespace cmn {
 			float du2=u3-u1, dv2=v3-v1;
 			float dw2=w3-w1;
 
+			float t_step, t;
 			float tex_u, tex_v, tex_w;
 
 			float dax_step=0, dbx_step=0,
@@ -524,6 +525,8 @@ namespace cmn {
 			//start scanline filling triangles
 			if(dy1) {
 				for(int j=y1; j<=y2; j++) {
+					if(!inRangeY(j)) continue;
+
 					int ax=x1+dax_step*(j-y1);
 					int bx=x1+dbx_step*(j-y1);
 					float tex_su=u1+du1_step*(j-y1);
@@ -539,21 +542,23 @@ namespace cmn {
 						std::swap(tex_sv, tex_ev);
 						std::swap(tex_sw, tex_ew);
 					}
-					float t_step=1.f/(bx-ax);
-					float t=0;
+					t_step=1.f/(bx-ax);
 					for(int i=ax; i<bx; i++) {
+						if(!inRangeX(i)) continue;
+
+						t=t_step*(i-ax);
 						tex_u=tex_su+t*(tex_eu-tex_su);
 						tex_v=tex_sv+t*(tex_ev-tex_sv);
 						tex_w=tex_sw+t*(tex_ew-tex_sw);
-						if(inRangeX(i)&&inRangeY(j)) {
-							float& depth=depth_buffer[bufferIX(i, j)];
-							if(tex_w>depth) {
-								Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
+						float& depth=depth_buffer[bufferIX(i, j)];
+						if(tex_w>depth) {
+							olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
+							if(col.a!=0) {
+								Draw(i, j, tint*col);
 								depth=tex_w;
 								id_buffer[bufferIX(i, j)]=id;
 							}
 						}
-						t+=t_step;
 					}
 				}
 			}
@@ -573,6 +578,8 @@ namespace cmn {
 			if(dy1) dw1_step=dw1/std::fabsf(dy1);
 
 			for(int j=y2; j<=y3; j++) {
+				if(!inRangeY(j)) continue;
+
 				int ax=x2+dax_step*(j-y2);
 				int bx=x1+dbx_step*(j-y1);
 				float tex_su=u2+du1_step*(j-y2);
@@ -588,21 +595,23 @@ namespace cmn {
 					std::swap(tex_sv, tex_ev);
 					std::swap(tex_sw, tex_ew);
 				}
-				float t_step=1.f/(bx-ax);
-				float t=0;
+				t_step=1.f/(bx-ax);
 				for(int i=ax; i<bx; i++) {
+					if(!inRangeX(i)) continue;
+
+					t=t_step*(i-ax);
 					tex_u=tex_su+t*(tex_eu-tex_su);
 					tex_v=tex_sv+t*(tex_ev-tex_sv);
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					if(inRangeX(i)&&inRangeY(j)) {
-						float& depth=depth_buffer[bufferIX(i, j)];
-						if(tex_w>depth) {
-							Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
+					float& depth=depth_buffer[bufferIX(i, j)];
+					if(tex_w>depth) {
+						olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
+						if(col.a!=0) {
+							Draw(i, j, tint*col);
 							depth=tex_w;
 							id_buffer[bufferIX(i, j)]=id;
 						}
 					}
-					t+=t_step;
 				}
 			}
 		}
@@ -642,7 +651,7 @@ namespace cmn {
 		lines_to_project.clear();
 		if(!user_geometry()) return false;
 
-		projectAndClip(); 
+		projectAndClip();
 
 		if(!user_render()) return false;
 
