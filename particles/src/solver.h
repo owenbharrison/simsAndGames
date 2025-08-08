@@ -65,37 +65,19 @@ public:
 	//ro3 3
 	Solver& operator=(const Solver& s)=delete;
 
-	float getCellSize() const {
-		return cell_size;
-	}
+	float getCellSize() const { return cell_size; }
 
-	int getNumCellX() const {
-		return num_cell_x;
-	}
+	bool cellInRangeX(int i) const { return i>=0&&i<num_cell_x; }
+	bool cellInRangeY(int j) const { return j>=0&&j<num_cell_y; }
 
-	int getNumCellY() const {
-		return num_cell_y;
-	}
+	int getNumCellX() const { return num_cell_x; }
+	int getNumCellY() const { return num_cell_y; }
 
-	bool cellInRangeX(int i) const {
-		return i>=0&&i<num_cell_x;
-	}
+	int cellIX(int i, int j) const { return i+num_cell_x*j; }
 
-	bool cellInRangeY(int j) const {
-		return j>=0&&j<num_cell_y;
-	}
+	cmn::AABB getBounds() const { return bounds; }
 
-	int cellIX(int i, int j) const {
-		return i+num_cell_x*j;
-	}
-
-	int getNumParticles() const {
-		return num_particles;
-	}
-
-	cmn::AABB getBounds() const {
-		return bounds;
-	}
+	int getNumParticles() const { return num_particles; }
 
 	void fillCells() {
 		//reset grid heads
@@ -106,8 +88,8 @@ public:
 			auto& p=particles[i];
 
 			//skip if out of bounds
-			int xi=p.pos.x/cell_size;
-			int yi=p.pos.y/cell_size;
+			int xi=(p.pos.x-bounds.min.x)/cell_size;
+			int yi=(p.pos.y-bounds.min.y)/cell_size;
 			if(!cellInRangeX(xi)||!cellInRangeY(yi)) continue;
 
 			//add each particle to front of list
