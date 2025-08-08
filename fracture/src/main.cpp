@@ -18,6 +18,7 @@ struct Example : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=-Pi/2;
 	float cam_pitch=0;
+	vf3d light_pos;
 
 	Mesh mesh;
 
@@ -169,6 +170,9 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		//split mesh and color each side accordingly
 		vf3d norm{0, 1, 0};
 		Mat4 mat_x=Mat4::makeRotX(rot_x);

@@ -25,6 +25,7 @@ struct VoxelGame : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=cmn::Pi/2;
 	float cam_pitch=-.3f;
+	vf3d light_pos;
 
 	//scene stuff
 	Mesh model;
@@ -448,6 +449,9 @@ struct VoxelGame : cmn::Engine3D {
 	bool user_geometry() override {
 		geom_watch.start();
 		
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+
 		//add each particle as a quad
 		tris_to_project=model.triangles;
 		for(const auto& p:particles) {

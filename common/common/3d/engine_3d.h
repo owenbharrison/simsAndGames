@@ -14,6 +14,8 @@
 #include "triangle.h"
 #include "line.h"
 
+#include "light.h"
+
 #include <stack>
 
 namespace cmn {
@@ -36,7 +38,8 @@ namespace cmn {
 		Mat4 mat_proj, mat_view;
 
 		//lighting info
-		vf3d light_pos;
+		float ambient_light=.5f;
+		std::vector<Light> lights;
 
 		//graphics pipeline stages
 		std::vector<Triangle> tris_to_project;
@@ -119,8 +122,15 @@ namespace cmn {
 				//is triangle pointing towards me? culling
 				if(norm.dot(tri.p[0]-cam_pos)<0) {
 					//lighting
-					vf3d light_dir=(light_pos-tri.getCtr()).norm();
-					float dp=std::max(.5f, norm.dot(light_dir));
+					vf3d light;
+					for(const auto& l:lights) {
+						vf3d light_dir=(l.pos-tri.getCtr()).norm();
+						float dp=std::max(0.f, norm.dot(light_dir));
+						light+=dp/255*vf3d(l.col.r, l.col.g, l.col.b);
+					}
+					light.x=std::clamp(light.x, ambient_light, 1.f);
+					light.y=std::clamp(light.y, ambient_light, 1.f);
+					light.z=std::clamp(light.z, ambient_light, 1.f);
 
 					//transform triangles given camera positioning
 					Triangle tri_view;
@@ -128,7 +138,7 @@ namespace cmn {
 						tri_view.p[i]=tri.p[i]*mat_view;
 						tri_view.t[i]=tri.t[i];
 					}
-					tri_view.col=tri.col*dp;
+					tri_view.col=tri.col*olc::PixelF(light.x, light.y, light.z);
 					tri_view.id=tri.id;
 
 					//clip
@@ -627,6 +637,7 @@ namespace cmn {
 	bool Engine3D::OnUserUpdate(float dt) {
 		if(!user_update(dt)) return false;
 
+		lights.clear();
 		tris_to_project.clear();
 		lines_to_project.clear();
 		if(!user_geometry()) return false;

@@ -20,6 +20,7 @@ struct BlockGame : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=0;
 	float cam_pitch=0;
+	vf3d light_pos;
 
 	//debug toggles
 	bool show_outlines=false;
@@ -402,6 +403,9 @@ struct BlockGame : cmn::Engine3D {
 	bool user_geometry() override {
 		if(to_time) geom_timer.start();
 		
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+
 		//add all chunk meshes
 		for(const auto& c:chunks) {
 			tris_to_project.insert(tris_to_project.end(), c.triangles.begin(), c.triangles.end());

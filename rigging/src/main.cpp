@@ -27,6 +27,7 @@ struct RiggingUI : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=4.15f;
 	float cam_pitch=-.42f;
+	vf3d light_pos;
 
 	std::vector<vf3d> vertexes;
 	std::list<IndexTriangle> index_tris;
@@ -162,6 +163,9 @@ struct RiggingUI : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		//get pose from slider
 		std::vector<Mat4> mat_pose;
 		{

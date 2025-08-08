@@ -22,6 +22,7 @@ struct Cloth3DUI : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=-Pi/2;
 	float cam_pitch=0;
+	vf3d light_pos;
 
 	//user input stuff
 	vf3d mouse_dir;
@@ -293,6 +294,9 @@ struct Cloth3DUI : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		//realize surface
 		for(const auto& pt:surface) {
 			//twofaced to prevent culling

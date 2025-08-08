@@ -20,6 +20,7 @@ struct TrackingUI : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=-1.83f;
 	float cam_pitch=-0.37f;
+	vf3d light_pos;
 
 	//scene stuff
 	Mesh model;
@@ -308,6 +309,9 @@ struct TrackingUI : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		//show model
 		tris_to_project=model.tris;
 

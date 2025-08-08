@@ -24,6 +24,7 @@ struct Example : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=-cmn::Pi/2;
 	float cam_pitch=-.1f;
+	vf3d light_pos;
 
 	//ui stuff
 	vf2d mouse_pos;
@@ -257,6 +258,9 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+
 		//combine all meshes triangles
 		for(const auto& m:meshes) {
 			tris_to_project.insert(tris_to_project.end(),

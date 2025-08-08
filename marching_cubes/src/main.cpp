@@ -22,6 +22,7 @@ struct Example : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=Pi/4;
 	float cam_pitch=-.1f;
+	vf3d light_pos;
 
 	int width=0, height=0, depth=0;
 	float* values=nullptr;
@@ -146,8 +147,10 @@ struct Example : cmn::Engine3D {
 		return true;
 	}
 
-	//combine all scene geometry
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		for(int i=0; i<width-1; i++) {
 			float min_x=i, max_x=1+i;
 			for(int j=0; j<height-1; j++) {

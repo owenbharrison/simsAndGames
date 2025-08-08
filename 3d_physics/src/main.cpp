@@ -36,6 +36,7 @@ struct Physics3DUI : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=-Pi/2;
 	float cam_pitch=-.36f;
+	vf3d light_pos;
 
 	//ui stuff
 	vf3d mouse_dir;
@@ -462,6 +463,9 @@ struct Physics3DUI : cmn::Engine3D {
 	//combine all scene geometry
 	bool user_geometry() override {
 		if(to_time) geom_watch.start();
+
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
 
 		//realize shape geometry
 		if(show_edges) {

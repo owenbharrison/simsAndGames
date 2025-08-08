@@ -37,6 +37,7 @@ struct Example : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=Pi/2;
 	float cam_pitch=0;
+	vf3d light_pos;
 
 	//ui stuff
 	vf3d mouse_dir;
@@ -341,6 +342,9 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		//add terrain mesh
 		tris_to_project.insert(tris_to_project.end(), terrain.tris.begin(), terrain.tris.end());
 

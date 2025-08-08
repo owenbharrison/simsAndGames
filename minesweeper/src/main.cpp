@@ -46,6 +46,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	//camera direction
 	float cam_yaw=1.07f;
 	float cam_pitch=-.56f;
+	vf3d light_pos;
 
 	//orbit controls
 	olc::vf2d* orbit_start=nullptr;
@@ -159,7 +160,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma region GAME SETUP
 		//init game
 		try {
-			game=new Minesweeper(7, 4, 6, 10);
+			game=new Minesweeper(7, 5, 8, 21);
 		} catch(const std::exception& e) {
 			std::cout<<e.what()<<'\n';
 			return false;
@@ -208,7 +209,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		temp_yaw=cam_yaw;
 		if(orbit_start) {
 			olc::vf2d diff=GetMousePos()-*orbit_start;
-			temp_pitch-=.01f*diff.y;
+			temp_pitch-=.0067f*diff.y;
 			//clamp new pitch
 			if(temp_pitch<-Pi/2) temp_pitch=.001f-Pi/2;
 			if(temp_pitch>Pi/2) temp_pitch=Pi/2-.001f;
@@ -390,6 +391,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma endregion
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		//show unswept
 		tris_to_project.insert(tris_to_project.end(),
 			game->unswept_tris.begin(), game->unswept_tris.end()
