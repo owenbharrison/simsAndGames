@@ -63,6 +63,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minesweeper", "minesweeper\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "flip_fluid", "flip_fluid\flip_fluid.vcxproj", "{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fluid", "fluid\fluid.vcxproj", "{239173C1-28E7-409B-A1F5-A54123F290DD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -311,6 +313,14 @@ Global
 		{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}.Release|x64.Build.0 = Release|x64
 		{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}.Release|x86.ActiveCfg = Release|Win32
 		{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}.Release|x86.Build.0 = Release|Win32
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Debug|x64.ActiveCfg = Debug|x64
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Debug|x64.Build.0 = Debug|x64
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Debug|x86.ActiveCfg = Debug|Win32
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Debug|x86.Build.0 = Debug|Win32
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Release|x64.ActiveCfg = Release|x64
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Release|x64.Build.0 = Release|x64
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Release|x86.ActiveCfg = Release|Win32
+		{239173C1-28E7-409B-A1F5-A54123F290DD}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
