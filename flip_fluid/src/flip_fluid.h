@@ -238,7 +238,7 @@ struct FlipFluid {
 	}
 
 	//253-311
-	void handleParticleCollisions(float ox, float oy, float vx, float vy, float orad) {
+	void handleParticleCollisions(float ox, float oy, float ovx, float ovy, float orad) {
 		float orad_sq=orad*orad;
 		float min_dist=particle_radius+orad;
 		float min_dist_sq=min_dist*min_dist;
@@ -252,37 +252,26 @@ struct FlipFluid {
 			float& x=particle_pos[2*i];
 			float& y=particle_pos[1+2*i];
 			
-			float dx=x-ox;
-			float dy=y-oy;
+			float& vx=particle_vel[2*i];
+			float& vy=particle_vel[1+2*i];
+
+			float dx=x-ox, dy=y-oy;
 			float d_sq=dx*dx+dy*dy;
 
 			//obstacle collision
 			if(d_sq<min_dist_sq) {
-				float d=std::sqrt(d_sq);
-				float amt=(min_dist-d)/d;
-				x+=dx*amt;
-				y+=dy*amt;
-				particle_vel[2*i]=vx;
-				particle_vel[1+2*i]=vy;
+				//float d=std::sqrt(d_sq);
+				//float amt=(min_dist-d)/d;
+				//x+=dx*amt;
+				//y+=dy*amt;
+				vx=ovx, vy=ovy;
 			}
 
 			//wall collisions
-			if(x<min_x) {
-				x=min_x;
-				particle_vel[2*i]=0;
-			}
-			if(x>max_x) {
-				x=max_x;
-				particle_vel[2*i]=0;
-			}
-			if(y<min_y) {
-				y=min_y;
-				particle_vel[1+2*i]=0;
-			}
-			if(y>max_y) {
-				y=max_y;
-				particle_vel[1+2*i]=0;
-			}
+			if(x<min_x) x=min_x, vx=0;
+			if(x>max_x) x=max_x, vx=0;
+			if(y<min_y) y=min_y, vy=0;
+			if(y>max_y) y=max_y, vy=0;
 		}
 	}
 

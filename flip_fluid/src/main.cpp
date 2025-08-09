@@ -6,6 +6,8 @@ using olc::vf2d;
 
 #include "flip_fluid.h"
 
+#include "common/stopwatch.h"
+
 struct FluidUI : olc::PixelGameEngine {
 	FluidUI() {
 		sAppName="Flip Fluid Simulation";
@@ -26,6 +28,8 @@ struct FluidUI : olc::PixelGameEngine {
 
 	olc::Sprite* prim_circ_spr=nullptr;
 	olc::Decal* prim_circ_dec=nullptr;
+
+	bool show_density=false;
 
 	bool OnUserCreate() override {
 		float sim_height=3;
@@ -75,7 +79,7 @@ struct FluidUI : olc::PixelGameEngine {
 		setObstacle(3, 2, true);
 
 		{
-			int sz=256;
+			int sz=512;
 			prim_circ_spr=new olc::Sprite(sz, sz);
 			SetDrawTarget(prim_circ_spr);
 			Clear(olc::BLANK);
@@ -133,6 +137,10 @@ struct FluidUI : olc::PixelGameEngine {
 	}
 
 	bool OnUserUpdate(float dt) override {
+		cmn::Stopwatch update_watch;
+		update_watch.start();
+		if(GetKey(olc::Key::D).bPressed) show_density^=true;
+		
 		const auto mouse_left=GetMouse(olc::Mouse::LEFT);
 		if(mouse_left.bPressed) {
 			float x=GetMouseX()/c_scale;
@@ -159,8 +167,11 @@ struct FluidUI : olc::PixelGameEngine {
 
 			update_timer-=time_step;
 		}
+		update_watch.stop();
 
 		//render
+		cmn::Stopwatch render_watch;
+		render_watch.start();
 		Clear(olc::BLACK);
 		FillCircleDecal({c_scale*obstacle_x, c_scale*obstacle_y}, c_scale*obstacle_radius, olc::RED);
 		for(int i=0; i<fluid->num_particles; i++) {
@@ -168,8 +179,31 @@ struct FluidUI : olc::PixelGameEngine {
 			float x=c_scale*fluid->particle_pos[2*i];
 			float y=c_scale*fluid->particle_pos[1+2*i];
 
-			FillCircleDecal({x, y}, c_scale*fluid->particle_radius, olc::WHITE);
+			float r=fluid->particle_color[3*i];
+			float g=fluid->particle_color[1+3*i];
+			float b=fluid->particle_color[2+3*i];
+			FillCircleDecal({x, y}, c_scale*fluid->particle_radius, olc::PixelF(r, g, b));
 		}
+		if(show_density) {
+			float sz_x=float(ScreenWidth())/fluid->f_num_x;
+			float sz_y=float(ScreenHeight())/fluid->f_num_y;
+			for(int i=0; i<fluid->f_num_x; i++) {
+				for(int j=0; j<fluid->f_num_y; j++) {
+					float x=sz_x*i, y=sz_y*j;
+					int cell_nr=j+fluid->f_num_y*i;
+					float r=fluid->cell_color[3*cell_nr];
+					float g=fluid->cell_color[1+3*cell_nr];
+					float b=fluid->cell_color[2+3*cell_nr];
+					FillRectDecal({x, y}, {sz_x, sz_y}, olc::PixelF(r, g, b));
+				}
+			}
+		}
+		render_watch.stop();
+
+		auto update_dur=update_watch.getMicros();
+		std::cout<<"update: "<<update_dur<<"us ("<<(update_dur/1000.f)<<"ms)\n";
+		auto render_dur=render_watch.getMicros();
+		std::cout<<"render: "<<render_dur<<"us ("<<(render_dur/1000.f)<<"ms)\n";
 
 		return true;
 	}
@@ -179,7 +213,7 @@ struct FluidUI : olc::PixelGameEngine {
 int main() {
 	FluidUI fui;
 	bool vsync=true;
-	if(fui.Construct(800, 600, 1, 1, false, vsync)) fui.Start();
+	if(fui.Construct(640, 480, 1, 1, false, vsync)) fui.Start();
 
 	return 0;
 }
