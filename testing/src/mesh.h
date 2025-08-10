@@ -85,7 +85,7 @@ struct Mesh {
 	}
 
 	float intersectRay(const vf3d& orig, const vf3d& dir) const {
-		if(!rayIntersectBox(orig, dir, getAABB())) return -1;
+		if(getAABB().intersectRay(orig, dir)<0) return -1;
 
 		//sort by closest
 		float record=-1;

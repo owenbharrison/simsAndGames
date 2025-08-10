@@ -44,6 +44,12 @@
     <ClInclude Include="src\thread_pool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\solver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\particle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\bench.scn" />

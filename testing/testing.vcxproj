@@ -157,9 +157,11 @@
     <ClInclude Include="src\billboard.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\packing.h" />
+    <ClInclude Include="src\particle.h" />
     <ClInclude Include="src\quat.h" />
     <ClInclude Include="src\scene.h" />
     <ClInclude Include="src\slider.h" />
+    <ClInclude Include="src\solver.h" />
     <ClInclude Include="src\sprite_sheet.h" />
     <ClInclude Include="src\thread_pool.h" />
   </ItemGroup>
