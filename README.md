@@ -6,20 +6,29 @@ Clone the repo
 ```
 git clone https://github.com/owenbharrison/simsAndGames.git
 ```
-Enter the directory
-```
-cd simsAndGames
-```
-Open the solution with Visual Studio
-```
-simsAndGames.sln
-```
 
 ### Running the projects
-In Visual Studio, `right click` the solution and select `Properties`.
-Under `Configure Startup Projects`, select `Current selection`.
-Press `OK`.
-Select your desired project, and press the `Start Without Debugging` or `Ctrl+F5` to run!
+
+#### Visual Studio
+1. Open the simsAndGames.sln file.
+2. Open the Solution Explorer.
+3. In Visual Studio, **right click** the solution and select `Properties`.
+4. Under `Configure Startup Projects`, select `Current selection` and press `OK`.
+5. Select your desired project and press the `Start Without Debugging` or `Ctrl+F5` to run!
+
+#### CMake
+1. Generate build system for Visual Studio
+```
+cmake -B build -G "Visual Studio 17 2022"
+```
+2. Build individual projects
+```
+cmake --build build --config Release --target raycasting
+```
+3. Run the project
+```
+"build/Release/raycasting/raycasting.exe"
+```
 
 ## Gallery
 
