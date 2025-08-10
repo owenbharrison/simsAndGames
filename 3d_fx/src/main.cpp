@@ -18,6 +18,7 @@ struct FXUI : cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=1.07f;
 	float cam_pitch=-.56f;
+	vf3d light_pos;
 
 	//ui stuff
 	vf3d mouse_dir;
@@ -105,9 +106,9 @@ struct FXUI : cmn::Engine3D {
 
 		//polar to cartesian
 		cam_dir=vf3d(
-			std::cosf(cam_yaw)*std::cosf(cam_pitch),
-			std::sinf(cam_pitch),
-			std::sinf(cam_yaw)*std::cosf(cam_pitch)
+			std::cos(cam_yaw)*std::cos(cam_pitch),
+			std::sin(cam_pitch),
+			std::sin(cam_yaw)*std::cos(cam_pitch)
 		);
 
 		//move up, down
@@ -115,7 +116,7 @@ struct FXUI : cmn::Engine3D {
 		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 		//move forward, backward
-		vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
 		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -193,6 +194,9 @@ struct FXUI : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
 		//add terrain mesh
 		tris_to_project.insert(tris_to_project.end(),
 			terrain.triangles.begin(), terrain.triangles.end()
