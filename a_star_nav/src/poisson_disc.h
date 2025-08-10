@@ -30,7 +30,7 @@ std::vector<olc::vf2d> poissonDiscSample(const cmn::AABB& box, float rad) {
 		for(; k<samples; k++) {
 			float angle=cmn::random(2*cmn::Pi);
 			float dist=cmn::random(rad, 2*rad);
-			olc::vf2d cand=spawn+cmn::polar(dist, angle);
+			olc::vf2d cand=spawn+cmn::polar<olc::vf2d>(dist, angle);
 			if(!box.contains(cand)) continue;
 
 			//check 3x3 region around candidate

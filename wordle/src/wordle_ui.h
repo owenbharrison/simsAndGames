@@ -7,11 +7,6 @@ using olc::vf2d;
 #include "message_effect.h"
 
 #include "common/utils.h"
-namespace cmn{
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-}
 
 struct WordleUI : olc::PixelGameEngine {
 	WordleUI() {
@@ -72,7 +67,7 @@ struct WordleUI : olc::PixelGameEngine {
 		//random velocities
 		float angle=cmn::random(2*cmn::Pi);
 		float speed=cmn::random(25, 50);
-		vf2d vel=cmn::polar(speed, angle);
+		vf2d vel=cmn::polar<vf2d>(speed, angle);
 		float rot_vel=cmn::random(-cmn::Pi, cmn::Pi);
 
 		//random size
@@ -171,16 +166,16 @@ struct WordleUI : olc::PixelGameEngine {
 		}
 	}
 
-	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
-		olc::vf2d sub=b-a;
+	void DrawThickLine(const vf2d& a, const vf2d& b, float rad, olc::Pixel col) {
+		vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=sub.perp()/len;
+		vf2d tang=sub.perp()/len;
 
 		float angle=std::atan2f(sub.y, sub.x);
 		DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void DrawThickRect(const olc::vf2d& pos, const olc::vf2d& sz, float rad, olc::Pixel col) {
+	void DrawThickRect(const vf2d& pos, const vf2d& sz, float rad, olc::Pixel col) {
 		FillRectDecal(pos, {rad, sz.y}, col);//left
 		FillRectDecal(pos, {sz.x, rad}, col);//top
 		FillRectDecal({pos.x+sz.x-rad, pos.y}, {rad, sz.y}, col);//right

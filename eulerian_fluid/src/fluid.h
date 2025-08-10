@@ -16,9 +16,11 @@ const T& max(const T& a, const T& b) {
 	return a>b?a:b;
 }
 
-struct Fluid {
-	size_t num_x=0, num_y=0;
-	size_t num_cells=0;
+class Fluid {
+	int num_x=0, num_y=0;
+	int num_cells=0;
+
+public:
 	float density=0;
 	float h=0, h1=0;
 	float* u=nullptr, * v=nullptr;
@@ -36,7 +38,7 @@ struct Fluid {
 
 	Fluid()=default;
 
-	Fluid(size_t x, size_t y, float d, float h_) {
+	Fluid(int x, int y, float d, float h_) {
 		//allow for border
 		num_x=2+x, num_y=2+y;
 		num_cells=num_x*num_y;
@@ -58,7 +60,7 @@ struct Fluid {
 		new_m=new float[num_cells];
 
 		//set defaults
-		for(size_t i=0; i<num_cells; i++) {
+		for(int i=0; i<num_cells; i++) {
 			u[i]=0.f;
 			v[i]=0.f;
 			solid[i]=false;
@@ -66,39 +68,11 @@ struct Fluid {
 		}
 	}
 
-	void copyFrom(const Fluid& f) {
-		num_x=f.num_x;
-		num_y=f.num_y;
-		num_cells=f.num_cells;
-		density=f.density;
-		h=f.h;
-		h1=f.h1;
-
-		u=new float[num_cells];
-		v=new float[num_cells];
-		new_u=new float[num_cells];
-		new_v=new float[num_cells];
-		pressure=new float[num_cells];
-		solid=new bool[num_cells];
-		m=new float[num_cells];
-		new_m=new float[num_cells];
-
-		memcpy(u, f.u, sizeof(float)*num_cells);
-		memcpy(v, f.v, sizeof(float)*num_cells);
-		memcpy(new_u, f.new_u, sizeof(float)*num_cells);
-		memcpy(new_v, f.new_v, sizeof(float)*num_cells);
-		memcpy(pressure, f.pressure, sizeof(float)*num_cells);
-		memcpy(solid, f.solid, sizeof(bool)*num_cells);
-		memcpy(m, f.m, sizeof(float)*num_cells);
-		memcpy(new_m, f.new_m, sizeof(float)*num_cells);
-	}
-
 	//1
-	Fluid(const Fluid& f) {
-		copyFrom(f);
-	}
+	Fluid(const Fluid& f)=delete;
 
-	void clear() {
+	//2
+	~Fluid() {
 		delete[] u;
 		delete[] v;
 		delete[] new_u;
@@ -109,38 +83,29 @@ struct Fluid {
 		delete[] new_m;
 	}
 
-	//2
-	~Fluid() {
-		clear();
-	}
-
 	//3
-	Fluid& operator=(const Fluid& f) {
-		if(&f==this) return *this;
+	Fluid& operator=(const Fluid& f)=delete;
 
-		clear();
-
-		copyFrom(f);
-
-		return *this;
-	}
+	int getNumX() const { return num_x; }
+	int getNumY() const { return num_y; }
+	int getNumCells() const { return num_cells; }
 
 	//2d -> 1d flattening
-	size_t ix(size_t i, size_t j) const {
+	int ix(int i, int j) const {
 		return i*num_y+j;
 	}
 
-	void solveIncompressibility(size_t num_iter, float dt) {
+	void solveIncompressibility(int num_iter, float dt) {
 		//pressure coefficient
 		float cp=density*h/dt;
-		for(size_t i=0; i<num_cells; i++) {
+		for(int i=0; i<num_cells; i++) {
 			pressure[i]=0.f;
 		}
 
 		//for each cell
-		for(size_t iter=0; iter<num_iter; iter++) {
-			for(size_t i=1; i<num_x-1; i++) {
-				for(size_t j=1; j<num_y-1; j++) {
+		for(int iter=0; iter<num_iter; iter++) {
+			for(int i=1; i<num_x-1; i++) {
+				for(int j=1; j<num_y-1; j++) {
 					//skip solid cells
 					if(solid[ix(i, j)]) continue;
 
@@ -149,7 +114,7 @@ struct Fluid {
 					bool sx1=!solid[ix(i+1, j)];
 					bool sy0=!solid[ix(i, j-1)];
 					bool sy1=!solid[ix(i, j+1)];
-					size_t s=sx0+sx1+sy0+sy1;
+					int s=sx0+sx1+sy0+sy1;
 					//if none "fluid", skip
 					if(s==0) continue;
 
@@ -175,17 +140,17 @@ struct Fluid {
 
 	//set borders to neighbors
 	void extrapolate() {
-		for(size_t i=0; i<num_x; i++) {
+		for(int i=0; i<num_x; i++) {
 			u[ix(i, 0)]=u[ix(i, 1)];//top
 			u[ix(i, num_y-1)]=u[ix(i, num_y-2)];//bottom
 		}
-		for(size_t j=0; j<num_y; j++) {
+		for(int j=0; j<num_y; j++) {
 			v[ix(0, j)]=v[ix(1, j)];//left
 			v[ix(num_x-1, j)]=v[ix(num_x-2, j)];//right	
 		}
 	}
 
-	float sampleField(float x, float y, size_t field) const {
+	float sampleField(float x, float y, int field) const {
 		//clamp query
 		x=max(h, min(x, num_x*h));
 		y=max(h, min(y, num_y*h));
@@ -204,10 +169,10 @@ struct Fluid {
 		if(!f) return 0.f;
 
 		//find four corners to interpolate
-		size_t x0=min(size_t(h1*(x-dx)), num_x-1);
-		size_t y0=min(size_t(h1*(y-dy)), num_y-1);
-		size_t x1=min(x0+1, num_x-1);
-		size_t y1=min(y0+1, num_y-1);
+		int x0=min(int(h1*(x-dx)), num_x-1);
+		int y0=min(int(h1*(y-dy)), num_y-1);
+		int x1=min(x0+1, num_x-1);
+		int y1=min(y0+1, num_y-1);
 
 		//find interpolation factors
 		float tx=h1*((x-dx)-h*x0);
@@ -223,7 +188,7 @@ struct Fluid {
 	}
 
 	//why j-1?
-	float avgU(size_t i, size_t j) const {
+	float avgU(int i, int j) const {
 		return (
 			u[ix(i, j)]+
 			u[ix(i, j-1)]+
@@ -233,7 +198,7 @@ struct Fluid {
 	}
 
 	//why i-1?
-	float avgV(size_t i, size_t j) const {
+	float avgV(int i, int j) const {
 		return (
 			v[ix(i, j)]+
 			v[ix(i, j+1)]+
@@ -244,13 +209,13 @@ struct Fluid {
 
 	void advectVel(float dt) {
 		//store so as not to update as iterating
-		memcpy(new_u, u, sizeof(float)*num_cells);
-		memcpy(new_v, v, sizeof(float)*num_cells);
+		std::memcpy(new_u, u, sizeof(float)*num_cells);
+		std::memcpy(new_v, v, sizeof(float)*num_cells);
 
 		float h2=h/2;
 
-		for(size_t i=1; i<num_x; i++) {
-			for(size_t j=1; j<num_y; j++) {
+		for(int i=1; i<num_x; i++) {
+			for(int j=1; j<num_y; j++) {
 				if(solid[ix(i, j)]) continue;
 
 				if(!solid[ix(i-1, j)]&&j<num_y-1) {
@@ -269,17 +234,17 @@ struct Fluid {
 		}
 
 		//copy values over
-		memcpy(u, new_u, sizeof(float)*num_cells);
-		memcpy(v, new_v, sizeof(float)*num_cells);
+		std::memcpy(u, new_u, sizeof(float)*num_cells);
+		std::memcpy(v, new_v, sizeof(float)*num_cells);
 	}
 
 	void advectSmoke(float dt) {
-		memcpy(new_m, m, sizeof(float)*num_cells);
+		std::memcpy(new_m, m, sizeof(float)*num_cells);
 
 		float h2=h/2;
 
-		for(size_t i=1; i<num_x-1; i++) {
-			for(size_t j=1; j<num_y-1; j++) {
+		for(int i=1; i<num_x-1; i++) {
+			for(int j=1; j<num_y-1; j++) {
 				//skip solid cells
 				if(solid[ix(i, j)]) continue;
 				float u0=(u[ix(i, j)]+u[ix(i+1, j)])/2;
@@ -290,7 +255,7 @@ struct Fluid {
 			}
 		}
 
-		memcpy(m, new_m, sizeof(float)*num_cells);
+		std::memcpy(m, new_m, sizeof(float)*num_cells);
 	}
 };
 #endif

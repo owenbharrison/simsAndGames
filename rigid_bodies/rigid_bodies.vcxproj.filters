@@ -23,8 +23,5 @@
     <ClInclude Include="src\shape.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\aabb.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

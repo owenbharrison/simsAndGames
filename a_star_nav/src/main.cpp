@@ -10,10 +10,6 @@ constexpr float Pi=3.1415927f;
 #include "common/utils.h"
 namespace cmn {
 	using AABB=AABB_generic<olc::vf2d>;
-
-	olc::vf2d polar(float rad, float angle) {
-		return polar_generic<olc::vf2d>(rad, angle);
-	}
 }
 
 #include "poisson_disc.h"

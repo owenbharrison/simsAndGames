@@ -37,17 +37,17 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 	void placeAllRandomly() {
 		for(const auto& s:shapes) {
 			//random rotation
-			s->rot=random(2*Pi);
+			s->rot=cmn::random(2*cmn::Pi);
 			//reset rot vel
 			s->old_rot=s->rot;
 
 			//aabb needs cossin
 			s->updateRot();
-			AABB box=s->getAABB();
+			cmn::AABB box=s->getAABB();
 
 			//easier to just offset based on where it already is
-			s->pos.x+=random(-box.min.x, ScreenWidth()-box.max.x);
-			s->pos.y+=random(-box.min.y, ScreenHeight()-box.max.y);
+			s->pos.x+=cmn::random(-box.min.x, ScreenWidth()-box.max.x);
+			s->pos.y+=cmn::random(-box.min.y, ScreenHeight()-box.max.y);
 			//reset vel
 			s->old_pos=s->pos;
 		}
@@ -276,7 +276,7 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 		//show all shapes
 		for(const auto& s:shapes) {
 			if(show_bounds) {
-				AABB box=s->getAABB();
+				cmn::AABB box=s->getAABB();
 				bool overlaps=false;
 				for(const auto& o:shapes) {
 					if(o==s) continue;

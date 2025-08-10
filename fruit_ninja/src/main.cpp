@@ -202,9 +202,9 @@ struct FruitNinja : olc::PixelGameEngine {
 						int num=cmn::random(20, 35);
 						for(int i=0; i<num; i++) {
 							float pos_rad=cmn::random(rad);
-							vf2d offset=cmn::polar(pos_rad, cmn::random(2*cmn::Pi));
+							vf2d offset=cmn::polar<vf2d>(pos_rad, cmn::random(2*cmn::Pi));
 							float speed=cmn::random(5, 15);
-							vf2d vel=cmn::polar(speed, cmn::random(2*cmn::Pi));
+							vf2d vel=cmn::polar<vf2d>(speed, cmn::random(2*cmn::Pi));
 							float lifespan=cmn::random(2, 3);
 							float rad=cmn::random(3, 4);
 							particles.emplace_back(new Splatter(ctr+offset, vel, f->col, lifespan, rad));
@@ -228,7 +228,7 @@ struct FruitNinja : olc::PixelGameEngine {
 
 						//random movement
 						float speed=cmn::random(50, 75);
-						vf2d vel=cmn::polar(speed, cmn::random(2*cmn::Pi));
+						vf2d vel=cmn::polar<vf2d>(speed, cmn::random(2*cmn::Pi));
 						float rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
 						float lifespan=cmn::random(2, 4);
 						particles.push_back(new Message(f->pos, vel, col, lifespan, msg, rot_vel));
@@ -237,10 +237,10 @@ struct FruitNinja : olc::PixelGameEngine {
 					//update new fruit velocities
 					{
 						float speed_a=cmn::random(40, 70);
-						fa.vel=cmn::polar(speed_a, cmn::random(2*cmn::Pi));
+						fa.vel=cmn::polar<vf2d>(speed_a, cmn::random(2*cmn::Pi));
 						fa.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
 						float speed_b=cmn::random(40, 70);
-						fb.vel=cmn::polar(speed_b, cmn::random(2*cmn::Pi));
+						fb.vel=cmn::polar<vf2d>(speed_b, cmn::random(2*cmn::Pi));
 						fb.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
 						//point opposite directions
 						if(fa.vel.dot(fb.vel)>0) fb.vel*=-1;
@@ -290,7 +290,7 @@ struct FruitNinja : olc::PixelGameEngine {
 			float r_max=cmn::random(40, 60);
 			Fruit f(num);
 			for(int i=0; i<num; i++) {
-				vf2d dir=cmn::polar(1, 2*cmn::Pi*i/num);
+				vf2d dir=cmn::polar<vf2d>(1, 2*cmn::Pi*i/num);
 				float r=cmn::random(r_min, r_max);
 				f.pts[i]=r*dir;
 			}
@@ -407,9 +407,9 @@ struct FruitNinja : olc::PixelGameEngine {
 		return true;
 	}
 
-	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+	void FillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
+		vf2d offset(rad, rad);
+		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
 		DrawDecal(pos-offset, prim_circ_dec, scale, col);
 	}
 

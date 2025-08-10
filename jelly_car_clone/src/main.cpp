@@ -597,7 +597,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			//show anchors
 			if(shp->anchored) {
 				//rotation matrix
-				vf2d cosin=cmn::polar(1, shp->anchor_rot);
+				vf2d cosin=cmn::polar<vf2d>(1, shp->anchor_rot);
 				auto rotate=[cosin] (const vf2d& p) {
 					return vf2d(
 						p.x*cosin.x-p.y*cosin.y,

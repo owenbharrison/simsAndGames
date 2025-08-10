@@ -144,7 +144,7 @@ struct PixelGame : olc::PixelGameEngine {
 			std::vector<vf2d> pts;
 			for(int i=0; i<3; i++) {
 				float angle=2*cmn::Pi*i/3;
-				pts.emplace_back(cmn::polar(rad, angle));
+				pts.emplace_back(cmn::polar<vf2d>(rad, angle));
 			}
 
 			PixelSet* thing=new PixelSet(PixelSet::fromPolygon(pts, 10));
@@ -676,27 +676,27 @@ struct PixelGame : olc::PixelGameEngine {
 	}
 
 #pragma region RENDER HELPERS
-	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
-		olc::vf2d sub=b-a;
+	void DrawThickLine(const vf2d& a, const vf2d& b, float rad, olc::Pixel col) {
+		vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=perp(sub/len);
+		vf2d tang=perp(sub/len);
 
 		float angle=std::atan2f(sub.y, sub.x);
 		DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void tvDrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float rad, olc::Pixel col) {
-		olc::vf2d sub=b-a;
+	void tvDrawThickLine(const vf2d& a, const vf2d& b, float rad, olc::Pixel col) {
+		vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=perp(sub/len);
+		vf2d tang=perp(sub/len);
 
 		float angle=std::atan2f(sub.y, sub.x);
 		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void tvFillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+	void tvFillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
+		vf2d offset(rad, rad);
+		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
 		tv.DrawDecal(pos-offset, prim_circ_dec, scale, col);
 	}
 

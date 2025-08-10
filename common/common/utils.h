@@ -34,27 +34,27 @@ namespace cmn {
 
 	//polar to cartesian helper
 	template<typename V2D>
-	V2D polar_generic(float rad, float angle) {
-		return rad*V2D(std::cosf(angle), std::sinf(angle));
+	V2D polar(float rad, float angle) {
+		return rad*V2D(std::cos(angle), std::sin(angle));
 	}
 
 	//thanks wikipedia + pattern recognition
 	//NOTE: this returns t and u, NOT the point.
 	template<typename V2D>
-	V2D lineLineIntersection_generic(
+	V2D lineLineIntersection(
 		const V2D& a, const V2D& b,
 		const V2D& c, const V2D& d) {
 		//get segments
 		V2D ab=a-b, ac=a-c, cd=c-d;
 
 		//parallel
-		float denom=ab.cross(cd);
+		float denom=ab.x*cd.y-ab.y*cd.x;
 		if(std::abs(denom)<1e-6f) return V2D(-1, -1);
 
 		//find interpolators
 		return V2D(
-			ac.cross(cd),
-			ac.cross(ab)
+			ac.x*cd.y-ac.y*cd.x,
+			ac.x*ab.y-ac.y*ab.x
 		)/denom;
 	}
 }

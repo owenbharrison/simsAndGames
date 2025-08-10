@@ -8,16 +8,6 @@
 #include "common/utils.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
-
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-
-	vf2d lineLineIntersection(
-		const vf2d& a, const vf2d& b,
-		const vf2d& c, const vf2d& d) {
-		return lineLineIntersection_generic(a, b, c, d);
-	}
 }
 
 vf2d reflect(const vf2d& in, const vf2d& norm) {
@@ -61,7 +51,7 @@ public:
 		points=new PointMass[num_pts];
 		for(int i=0; i<num_pts; i++) {
 			float angle=cmn::map(i, 0, num_pts, 0, 2*cmn::Pi);
-			vf2d off=cmn::polar(rad, angle);
+			vf2d off=cmn::polar<vf2d>(rad, angle);
 			points[i]=PointMass(pos+off);
 		}
 
@@ -236,7 +226,7 @@ public:
 		if(!getAABB().contains(p)) return false;
 
 		//deterministic, but avoids edge artifacing
-		vf2d dir=cmn::polar(1, cmn::random(2*cmn::Pi));
+		vf2d dir=cmn::polar<vf2d>(1, cmn::random(2*cmn::Pi));
 
 		int num_ix=0;
 		for(const auto& c:shell) {
@@ -259,7 +249,7 @@ public:
 	void update(float dt) {
 		if(anchored) {
 			//rotation matrix
-			vf2d cosin=cmn::polar(1, anchor_rot);
+			vf2d cosin=cmn::polar<vf2d>(1, anchor_rot);
 			auto rotate=[cosin] (const vf2d& p) {
 				return vf2d(
 					p.x*cosin.x-p.y*cosin.y,

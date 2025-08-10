@@ -6,11 +6,6 @@ using olc::vi2d;
 #include <stack>
 
 #include "common/utils.h"
-namespace cmn {
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-}
 
 struct Example : olc::PixelGameEngine {
 	Example() {
@@ -230,7 +225,7 @@ struct Example : olc::PixelGameEngine {
 		mouse_pos=GetMousePos();
 
 		//player "update"
-		player_dir=cmn::polar(1, player_rot);
+		player_dir=cmn::polar<vf2d>(1, player_rot);
 
 		//where is mouse in grid?
 		mi=mouse_pos.x/cell_size;
@@ -270,18 +265,18 @@ struct Example : olc::PixelGameEngine {
 	}
 
 #pragma region RENDER HELPERS
-	void DrawThickLine(const olc::vf2d& a, const olc::vf2d& b, float w, olc::Pixel col) {
-		olc::vf2d sub=b-a;
+	void DrawThickLine(const vf2d& a, const vf2d& b, float w, olc::Pixel col) {
+		vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=sub.perp()/len;
+		vf2d tang=sub.perp()/len;
 
 		float angle=std::atan2f(sub.y, sub.x);
 		DrawRotatedDecal(a-w/2*tang, rect_decal, angle, {0, 0}, {len, w}, col);
 	}
 
-	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/circle_sprite->width, 2*rad/circle_sprite->width};
+	void FillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
+		vf2d offset(rad, rad);
+		vf2d scale{2*rad/circle_sprite->width, 2*rad/circle_sprite->width};
 		DrawDecal(pos-offset, circle_decal, scale, col);
 	}
 
@@ -343,7 +338,7 @@ struct Example : olc::PixelGameEngine {
 		const int num_shadows=256;
 		for(int i=0; i<=num_shadows; i++) {
 			const vf2d orig=light_pos/cell_size;
-			vf2d dir=cmn::polar(1, 2*cmn::Pi*i/num_shadows);
+			vf2d dir=cmn::polar<vf2d>(1, 2*cmn::Pi*i/num_shadows);
 			float dist=traceRay(orig, dir);
 			if(dist>0) {
 				//point on cell
@@ -372,7 +367,7 @@ struct Example : olc::PixelGameEngine {
 			float angle01=i/(num_fov-1.f);
 			float angle55=angle01-.5f;
 			float angle=player_rot+player_fov*angle55;
-			vf2d dir=cmn::polar(1, angle);
+			vf2d dir=cmn::polar<vf2d>(1, angle);
 
 			//trace ray
 			float dist=traceRay(player_pos/cell_size, dir);

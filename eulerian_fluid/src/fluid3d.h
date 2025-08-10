@@ -16,8 +16,8 @@ const T& max(const T& a, const T& b) {
 }
 
 struct Fluid3D {
-	size_t num_x=0, num_y=0, num_z=0;
-	size_t num_cells=0;
+	int num_x=0, num_y=0, num_z=0;
+	int num_cells=0;
 	float density=0;
 	float h=0;
 	float* u=nullptr, * v=nullptr, * w=nullptr;
@@ -36,7 +36,7 @@ struct Fluid3D {
 
 	Fluid3D()=default;
 
-	Fluid3D(size_t x, size_t y, size_t z, float d, float h_) {
+	Fluid3D(int x, int y, int z, float d, float h_) {
 		//allow for border
 		num_x=2+x, num_y=2+y, num_z=2+z;
 		num_cells=num_x*num_y*num_z;
@@ -59,7 +59,7 @@ struct Fluid3D {
 		new_m=new float[num_cells];
 
 		//set defaults
-		for(size_t i=0; i<num_cells; i++) {
+		for(int i=0; i<num_cells; i++) {
 			u[i]=0.f, v[i]=0.f, w[i]=0.f;
 			solid[i]=false;
 			m[i]=1.f;
@@ -129,22 +129,22 @@ struct Fluid3D {
 	}
 
 	//2d -> 1d flattening
-	size_t ix(size_t i, size_t j, size_t k) const {
+	int ix(int i, int j, int k) const {
 		return i+num_x*j+num_y*num_x*k;
 	}
 
-	void solveIncompressibility(size_t num_iter, float dt) {
+	void solveIncompressibility(int num_iter, float dt) {
 		//pressure coefficient
 		float cp=density*h/dt;
-		for(size_t i=0; i<num_cells; i++) {
+		for(int i=0; i<num_cells; i++) {
 			pressure[i]=0.f;
 		}
 
 		//for each cell
-		for(size_t iter=0; iter<num_iter; iter++) {
-			for(size_t i=1; i<num_x-1; i++) {
-				for(size_t j=1; j<num_y-1; j++) {
-					for(size_t k=1; k<num_z-1; k++) {
+		for(int iter=0; iter<num_iter; iter++) {
+			for(int i=1; i<num_x-1; i++) {
+				for(int j=1; j<num_y-1; j++) {
+					for(int k=1; k<num_z-1; k++) {
 					//skip solid cells
 						if(solid[ix(i, j, k)]) continue;
 
@@ -155,7 +155,7 @@ struct Fluid3D {
 						bool sy1=!solid[ix(i, j+1, k)];
 						bool sz0=!solid[ix(i, j, k-1)];
 						bool sz1=!solid[ix(i, j, k+1)];
-						size_t s=sx0+sx1+sy0+sy1+sz0+sz1;
+						int s=sx0+sx1+sy0+sy1+sz0+sz1;
 						//if none "fluid", skip
 						if(s==0) continue;
 
@@ -185,24 +185,24 @@ struct Fluid3D {
 
 	//set borders to neighbors
 	void extrapolate() {
-		for(size_t i=0; i<num_x; i++) {
-			for(size_t j=0; j<num_y; j++) {
+		for(int i=0; i<num_x; i++) {
+			for(int j=0; j<num_y; j++) {
 				u[ix(i, j, 0)]=u[ix(i, j, 1)];
 				u[ix(i, j, num_z-1)]=u[ix(i, j, num_z-2)];
 				v[ix(i, j, 0)]=v[ix(i, j, 1)];
 				v[ix(i, j, num_z-1)]=v[ix(i, j, num_z-2)];
 			}
 		}
-		for(size_t j=0; j<num_y; j++) {
-			for(size_t k=0; k<num_z; k++) {
+		for(int j=0; j<num_y; j++) {
+			for(int k=0; k<num_z; k++) {
 				v[ix(0, j, k)]=v[ix(1, j, k)];
 				v[ix(num_x-1, j, k)]=v[ix(num_x-2, j, k)];
 				w[ix(0, j, k)]=w[ix(1, j, k)];
 				w[ix(num_x-1, j, k)]=w[ix(num_x-2, j, k)];
 			}
 		}
-		for(size_t k=0; k<num_z; k++) {
-			for(size_t i=0; i<num_x; i++) {
+		for(int k=0; k<num_z; k++) {
+			for(int i=0; i<num_x; i++) {
 				w[ix(i, 0, k)]=w[ix(i, 1, k)];
 				w[ix(i, num_y-1, k)]=w[ix(i, num_y-2, k)];
 				u[ix(i, 0, k)]=u[ix(i, 1, k)];
@@ -211,7 +211,7 @@ struct Fluid3D {
 		}
 	}
 
-	float sampleField(float x, float y, float z, size_t field) const {
+	float sampleField(float x, float y, float z, int field) const {
 		float h1=1/h;
 		float h2=h/2;
 
@@ -233,12 +233,12 @@ struct Fluid3D {
 		if(!f) return 0.f;
 
 		//find four corners to interpolate
-		size_t x0=min(size_t(h1*(x-dx)), num_x-1);
-		size_t y0=min(size_t(h1*(y-dy)), num_y-1);
-		size_t z0=min(size_t(h1*(z-dz)), num_z-1);
-		size_t x1=min(x0+1, num_x-1);
-		size_t y1=min(y0+1, num_y-1);
-		size_t z1=min(z0+1, num_z-1);
+		int x0=min(int(h1*(x-dx)), num_x-1);
+		int y0=min(int(h1*(y-dy)), num_y-1);
+		int z0=min(int(h1*(z-dz)), num_z-1);
+		int x1=min(x0+1, num_x-1);
+		int y1=min(y0+1, num_y-1);
+		int z1=min(z0+1, num_z-1);
 
 		//find interpolation factors
 		float tx=h1*((x-dx)-h*x0);
@@ -259,7 +259,7 @@ struct Fluid3D {
 			tx*ty*tz*f[ix(x1, y1, z1)];
 	}
 
-	float avgU(size_t i, size_t j, size_t k) const {
+	float avgU(int i, int j, int k) const {
 		return (
 			u[ix(i, j, k)]+
 			u[ix(i, j, k-1)]+
@@ -272,7 +272,7 @@ struct Fluid3D {
 			)/8;
 	}
 
-	float avgV(size_t i, size_t j, size_t k) const {
+	float avgV(int i, int j, int k) const {
 		return (
 			v[ix(i, j, k)]+
 			v[ix(i, j, k-1)]+
@@ -285,7 +285,7 @@ struct Fluid3D {
 			)/8;
 	}
 
-	float avgW(size_t i, size_t j, size_t k) const {
+	float avgW(int i, int j, int k) const {
 		return (
 			w[ix(i, j, k)]+
 			w[ix(i, j-1, k)]+
@@ -306,9 +306,9 @@ struct Fluid3D {
 
 		float h2=h/2;
 
-		for(size_t i=1; i<num_x; i++) {
-			for(size_t j=1; j<num_y; j++) {
-				for(size_t k=1; k<num_y; k++) {
+		for(int i=1; i<num_x; i++) {
+			for(int j=1; j<num_y; j++) {
+				for(int k=1; k<num_y; k++) {
 					if(solid[ix(i, j, k)]) continue;
 
 					if(!solid[ix(i-1, j, k)]&&j<num_y-1&&k<num_z-1) {
@@ -347,9 +347,9 @@ struct Fluid3D {
 
 		float h2=h/2;
 
-		for(size_t i=1; i<num_x-1; i++) {
-			for(size_t j=1; j<num_y-1; j++) {
-				for(size_t k=1; k<num_z-1; k++) {
+		for(int i=1; i<num_x-1; i++) {
+			for(int j=1; j<num_y-1; j++) {
+				for(int k=1; k<num_z-1; k++) {
 				//skip solid cells
 					if(solid[ix(i, j, k)]) continue;
 

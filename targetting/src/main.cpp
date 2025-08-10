@@ -10,11 +10,6 @@ using cmn::Mat4;
 #include "mesh.h"
 
 #include "common/utils.h"
-namespace cmn {
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-}
 
 struct Example : cmn::Engine3D {
 	Example() {
@@ -340,9 +335,9 @@ struct Example : cmn::Engine3D {
 			float dist=sub.mag();
 			float rad=std::max(20.f, dist);
 			float angle=std::atan2f(sub.y, sub.x);
-			vf2d a=rot_start+cmn::polar(rad, angle);
-			vf2d b=rot_start+cmn::polar(rad, angle+.667f*cmn::Pi);
-			vf2d c=rot_start+cmn::polar(rad, angle+1.33f*cmn::Pi);
+			vf2d a=rot_start+cmn::polar<vf2d>(rad, angle);
+			vf2d b=rot_start+cmn::polar<vf2d>(rad, angle+.667f*cmn::Pi);
+			vf2d c=rot_start+cmn::polar<vf2d>(rad, angle+1.33f*cmn::Pi);
 			DrawLine(a, b, olc::GREEN);
 			DrawLine(b, c, olc::GREEN);
 			DrawLine(c, a, olc::GREEN);

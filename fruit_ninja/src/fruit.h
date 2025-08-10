@@ -6,18 +6,7 @@
 #include "common/utils.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
-
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-
-	vf2d lineLineIntersection(
-		const vf2d& a, const vf2d& b,
-		const vf2d& c, const vf2d& d) {
-		return lineLineIntersection_generic(a, b, c, d);
-	}
 }
-
 
 class Fruit {
 	int num_pts=0;
@@ -54,7 +43,7 @@ public:
 		pos=p;
 		for(int i=0; i<num_pts; i++) {
 			float angle=2*cmn::Pi*i/num_pts;
-			pts[i]=cmn::polar(r, angle);
+			pts[i]=cmn::polar<vf2d>(r, angle);
 		}
 
 		col=c;
@@ -165,7 +154,7 @@ public:
 
 		//deterministic, but removes artifacting
 		float angle=cmn::random(2*cmn::Pi);
-		vf2d dir=cmn::polar(1, angle);
+		vf2d dir=cmn::polar<vf2d>(1, angle);
 
 		//for every edge...
 		int num=0;
@@ -183,7 +172,7 @@ public:
 	//precompute cos and sin
 	//this makes things a lot faster
 	void updateRot() {
-		cossin=cmn::polar(1, rot);
+		cossin=cmn::polar<vf2d>(1, rot);
 	}
 
 	void applyForce(const vf2d& f) {

@@ -11,7 +11,7 @@ struct Point {
 
 		//dont divide by 0
 		vf2d norm;
-		if(curr<1e-6f) norm=cmn::polar(1, cmn::random(2*cmn::Pi));
+		if(curr<1e-6f) norm=cmn::polar<vf2d>(1, cmn::random(2*cmn::Pi));
 		else norm=sub/curr;
 
 		//find change

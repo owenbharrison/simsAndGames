@@ -3,11 +3,6 @@
 using olc::vf2d;
 
 #include "common/utils.h"
-namespace cmn {
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-}
 
 void update(vf2d& a, vf2d& b, float len) {
 	vf2d sub=a-b;
@@ -15,7 +10,7 @@ void update(vf2d& a, vf2d& b, float len) {
 
 	//dont divide by 0
 	vf2d norm;
-	if(curr<1e-6f) norm=cmn::polar(1, cmn::random(2*cmn::Pi));
+	if(curr<1e-6f) norm=cmn::polar<vf2d>(1, cmn::random(2*cmn::Pi));
 	else norm=sub/curr;
 
 	//find change

@@ -5,11 +5,6 @@ using olc::vf2d;
 #include "smoke.h"
 
 #include "common/utils.h"
-namespace cmn {
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-}
 
 struct SmokeDemo : olc::PixelGameEngine {
 	SmokeDemo() {
@@ -111,7 +106,7 @@ struct SmokeDemo : olc::PixelGameEngine {
 			int num=20+rand()%20;
 			for(int i=0; i<num; i++) {
 				float speed=cmn::random(30, 70);
-				vf2d vel=cmn::polar(speed, cmn::random(2*cmn::Pi));
+				vf2d vel=cmn::polar<vf2d>(speed, cmn::random(2*cmn::Pi));
 
 				float rot=cmn::random(2*cmn::Pi);
 				float rot_vel=cmn::random(-1.5f, 1.5f);

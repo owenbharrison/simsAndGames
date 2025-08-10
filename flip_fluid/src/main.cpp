@@ -130,9 +130,9 @@ struct FluidUI : olc::PixelGameEngine {
 		return true;
 	}
 
-	void FillCircleDecal(olc::vf2d pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+	void FillCircleDecal(vf2d pos, float rad, olc::Pixel col) {
+		vf2d offset(rad, rad);
+		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
 		DrawDecal(pos-offset, prim_circ_dec, scale, col);
 	}
 

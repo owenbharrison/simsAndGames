@@ -2,34 +2,10 @@
 #ifndef SHAPE_CLASS_H
 #define SHAPE_CLASS_H
 
-constexpr float Pi=3.1415927f;
-
-vf2d polar(float rad, float angle) {
-	return {rad*std::cosf(angle), rad*std::sinf(angle)};
-}
-
-#include "aabb.h"
-
-//clever default param placement:
-//random()=0-1
-//random(a)=0-a
-//random(a, b)=a-b
-float random(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
-	return a+t*(b-a);
-}
-
-//thanks wikipedia + pattern recognition
-//this returns (t, u), NOT the point
-vf2d lineLineIntersection(
-	const vf2d& a, const vf2d& b,
-	const vf2d& c, const vf2d& d) {
-	vf2d ab=a-b, ac=a-c, cd=c-d;
-	return vf2d(
-		ac.cross(cd),
-		ac.cross(ab)
-	)/ab.cross(cd);
+#include "common/utils.h"
+#include "common/aabb.h"
+namespace cmn {
+	using AABB=AABB_generic<vf2d>;
 }
 
 class Shape {
@@ -57,8 +33,8 @@ public:
 		
 		//make n-gon
 		for(int i=0; i<num_pts; i++) {
-			float angle=2*Pi*i/num_pts;
-			points[i]=ctr+polar(rad, angle);
+			float angle=2*cmn::Pi*i/num_pts;
+			points[i]=ctr+cmn::polar<vf2d>(rad, angle);
 		}
 
 		initMass();
@@ -106,8 +82,8 @@ public:
 	}
 
 	//optimize??
-	AABB getAABB() const {
-		AABB box;
+	cmn::AABB getAABB() const {
+		cmn::AABB box;
 		for(int i=0; i<num_pts; i++) {
 			box.fitToEnclose(localToWorld(points[i]));
 		}
@@ -120,13 +96,13 @@ public:
 
 		//deterministic, but no artifacts
 		vf2d pa=worldToLocal(pt);
-		vf2d pb=pa+polar(1, random(2*Pi));
+		vf2d pb=pa+cmn::polar<vf2d>(1, cmn::random(2*cmn::Pi));
 
 		int num_ix=0;
 		for(int i=0; i<num_pts; i++) {
 			const auto& a=points[i];
 			const auto& b=points[(i+1)%num_pts];
-			vf2d tu=lineLineIntersection(a, b, pa, pb);
+			vf2d tu=cmn::lineLineIntersection(a, b, pa, pb);
 			if(tu.x>0&&tu.x<1&&tu.y>0) num_ix++;
 		}
 
@@ -216,7 +192,7 @@ public:
 
 	//percompute for rotation matrix
 	void updateRot() {
-		cossin=polar(1, rot);
+		cossin=cmn::polar<vf2d>(1, rot);
 	}
 
 	void update(float dt) {

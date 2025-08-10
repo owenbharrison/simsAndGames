@@ -46,7 +46,7 @@ struct Physics3DUI : cmn::Engine3D {
 	Particle mouse_particle;
 	std::list<Spring> mouse_springs;
 
-	olc::vf2d menu_pos;
+	vf2d menu_pos;
 	const float menu_sz=105;
 	const float menu_min_sz=.2f*menu_sz;
 	const float menu_logo_sz=.4f*menu_sz;
@@ -411,7 +411,7 @@ struct Physics3DUI : cmn::Engine3D {
 		//menu selection
 		if(GetMouse(olc::Mouse::RIGHT).bReleased) {
 			//get relative offset
-			olc::vf2d sub=menu_pos-GetMousePos();
+			vf2d sub=menu_pos-GetMousePos();
 			//ensure within selection radius
 			float dist=sub.mag();
 			if(dist>menu_min_sz&&dist<menu_sz) {
@@ -538,27 +538,27 @@ struct Physics3DUI : cmn::Engine3D {
 	}
 
 #pragma region RENDER HELPERS
-	void DrawThickLineDecal(const olc::vf2d& a, const olc::vf2d& b, float w, olc::Pixel col) {
-		olc::vf2d sub=b-a;
+	void DrawThickLineDecal(const vf2d& a, const vf2d& b, float w, olc::Pixel col) {
+		vf2d sub=b-a;
 		float len=sub.mag();
-		olc::vf2d tang=(sub/len).perp();
+		vf2d tang=(sub/len).perp();
 
 		float angle=std::atan2f(sub.y, sub.x);
 		DrawRotatedDecal(a-w*tang, prim_rect_dec, angle, {0, 0}, {len, 2*w}, col);
 	}
 
-	void FillCircleDecal(const olc::vf2d& pos, float rad, olc::Pixel col) {
-		olc::vf2d offset(rad, rad);
-		olc::vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+	void FillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
+		vf2d offset(rad, rad);
+		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
 		DrawDecal(pos-offset, prim_circ_dec, scale, col);
 	}
 
-	void DrawThickCircleDecal(const olc::vf2d& pos, float rad, float w, const olc::Pixel& col) {
+	void DrawThickCircleDecal(const vf2d& pos, float rad, float w, const olc::Pixel& col) {
 		const int num=32;
-		olc::vf2d first, prev;
+		vf2d first, prev;
 		for(int i=0; i<num; i++) {
 			float angle=2*Pi*i/num;
-			olc::vf2d curr(pos.x+rad*std::cos(angle), pos.y+rad*std::sin(angle));
+			vf2d curr(pos.x+rad*std::cos(angle), pos.y+rad*std::sin(angle));
 			FillCircleDecal(curr, w, col);
 			if(i==0) first=curr;
 			else DrawThickLineDecal(prev, curr, w, col);
@@ -691,15 +691,15 @@ struct Physics3DUI : cmn::Engine3D {
 			for(const auto& s:shaders) {
 				//draw logo
 				float logo_angle=Pi*(-.5f+2.f*i/shaders.size());
-				olc::vf2d logo_dir(std::cos(logo_angle), std::sin(logo_angle));
-				olc::vf2d ctr=menu_pos+.67f*menu_sz*logo_dir;
-				olc::vf2d size(s.logo_spr->width, s.logo_spr->height);
+				vf2d logo_dir(std::cos(logo_angle), std::sin(logo_angle));
+				vf2d ctr=menu_pos+.67f*menu_sz*logo_dir;
+				vf2d size(s.logo_spr->width, s.logo_spr->height);
 				float scl=menu_logo_sz/size.x;
 				DrawDecal(ctr-scl/2*size, s.logo_dec, {scl, scl});
 					
 				//draw divider
 				float div_angle=logo_angle+Pi/shaders.size();
-				olc::vf2d div_dir(std::cos(div_angle), std::sin(div_angle));
+				vf2d div_dir(std::cos(div_angle), std::sin(div_angle));
 				DrawThickLineDecal(menu_pos+menu_min_sz*div_dir, menu_pos+menu_sz*div_dir, 1, olc::WHITE);
 
 				i++;

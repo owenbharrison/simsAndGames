@@ -15,16 +15,6 @@ typedef unsigned char byte;
 #include "common/utils.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
-
-	vf2d polar(float rad, float angle) {
-		return polar_generic<vf2d>(rad, angle);
-	}
-
-	vf2d lineLineIntersection(
-		const vf2d& a, const vf2d& b,
-		const vf2d& c, const vf2d& d) {
-		return lineLineIntersection_generic(a, b, c, d);
-	}
 }
 
 #include <stack>
@@ -139,7 +129,7 @@ public:
 
 				//deterministic, but less artifacting
 				float angle=cmn::random(2*cmn::Pi);
-				vf2d dir=cmn::polar(1, angle);
+				vf2d dir=cmn::polar<vf2d>(1, angle);
 
 				//polygon raycast algorithm
 				int num=0;
@@ -858,7 +848,7 @@ public:
 
 	void updateRot() {
 		//precompute trig
-		cossin=cmn::polar(1, rot);
+		cossin=cmn::polar<vf2d>(1, rot);
 	}
 
 	void update(float dt) {
