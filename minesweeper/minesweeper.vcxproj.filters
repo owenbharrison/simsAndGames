@@ -21,10 +21,13 @@
     <Image Include="assets\img\flag_tile.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\img\gradient.png">
+    <Image Include="assets\img\number_gradient.png">
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\img\tile.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\fire_gradient.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
@@ -47,6 +50,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\thread_pool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\particle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\billboard.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -2,6 +2,8 @@
 #ifndef MINESWEEPER_3D_CLASS_H
 #define MINESWEEPER_3D_CLASS_H
 
+#define CELL_TRIANGLE 1
+
 #include <string>
 #include <vector>
 
@@ -16,10 +18,13 @@ class Minesweeper {
 	bool floodsweep(int i, int j, int k);
 	void autosweep(int i, int j, int k);
 
+	void checkWin(), checkLose();
+
 public:
 	const int width=0, height=0, depth=0;
 	const int num_cells=0;
 	Cell* cells=nullptr;
+	Cell* prev_cells=nullptr;
 	const int num_bombs=0;
 
 	enum State {
@@ -41,6 +46,7 @@ public:
 		if(width>32||height>32||depth>32) throw std::runtime_error("game dims must be <=32");
 		if(num_bombs>=num_cells) throw std::runtime_error("too many bombs");
 		cells=new Cell[num_cells];
+		prev_cells=new Cell[num_cells];
 		reset();
 	}
 
@@ -50,6 +56,7 @@ public:
 	//2
 	~Minesweeper() {
 		delete[] cells;
+		delete[] prev_cells;
 	}
 
 	//3
@@ -71,6 +78,7 @@ public:
 
 		for(int i=0; i<num_cells; i++) {
 			cells[i]=Cell{};
+			prev_cells[i]=Cell{};
 		}
 
 		//fill grid with bombs
@@ -110,25 +118,13 @@ public:
 				}
 			}
 		}
+
+		updatePrev();
 	}
 
-	//all nonbombs are swept
-	void checkWin() {
+	void updatePrev() {
 		for(int i=0; i<num_cells; i++) {
-			Cell& c=cells[i];
-			if(!c.bomb&&!c.swept) return;
-		}
-		state=WON;
-	}
-
-	//any bomb is swept
-	void checkLose() {
-		for(int i=0; i<num_cells; i++) {
-			Cell& c=cells[i];
-			if(c.bomb&&c.swept) {
-				state=LOST;
-				return;
-			}
+			prev_cells[i]=cells[i];
 		}
 	}
 
@@ -182,7 +178,8 @@ public:
 			int i, int j, int k, bool tf, vf3d* v, int a, int b, int c, int d
 		) {
 			int ix=tf?tile_ix:flag_ix;
-			int id=(1<<24)|(ix<<16)|(i<<10)|(j<<5)|k;
+			//pack coordinates into bottom 15 bits of id
+			int id=(CELL_TRIANGLE<<24)|(ix<<16)|(i<<10)|(j<<5)|k;
 			unswept_tris.push_back({
 				v[a], v[c], v[b],
 				vt[2], vt[1], vt[0],
@@ -275,6 +272,26 @@ bool Minesweeper::floodsweep(int i, int j, int k) {
 	}
 
 	return flood;
+}
+
+//all nonbombs are swept
+void Minesweeper::checkWin() {
+	for(int i=0; i<num_cells; i++) {
+		Cell& c=cells[i];
+		if(!c.bomb&&!c.swept) return;
+	}
+	state=WON;
+}
+
+//any bomb is swept
+void Minesweeper::checkLose() {
+	for(int i=0; i<num_cells; i++) {
+		Cell& c=cells[i];
+		if(c.bomb&&c.swept) {
+			state=LOST;
+			return;
+		}
+	}
 }
 
 void Minesweeper::autosweep(int i, int j, int k) {

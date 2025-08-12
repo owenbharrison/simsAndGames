@@ -1,38 +1,32 @@
 /*TODO
-use vi3d more?
-
-explosion particles
-
 saving/loading
+
+help screen
 
 add difficulty modes
 add game timer
 */
 
-#define OLC_GFX_OPENGL33
 #include "common/3d/engine_3d.h"
 using cmn::vf3d;
 using cmn::Mat4;
 
-constexpr float Pi=3.1415927f;
+vf3d polar3D(float yaw, float pitch) {
+	return {
+		std::cos(yaw)* std::cos(pitch),
+		std::sin(pitch),
+		std::sin(yaw)* std::cos(pitch)
+	};
+}
 
-struct Message {
-	std::string str;
-	olc::Pixel col;
-	float lifespan=0;
-	float age=0;
-};
+#include "common/utils.h"
+
+#include "particle.h"
 
 #include "mesh.h"
 
-struct Billboard {
-	vf3d pos;
-	float size=1;
-	float ax=.5f, ay=.5f;
-	int spr_ix=0;
-	olc::Pixel col=olc::WHITE;
-	int i=0, j=0, k=0;
-};
+#define BILLBOARD_TRIANGLE 2
+#include "billboard.h"
 
 #include "thread_pool.h"
 
@@ -53,24 +47,32 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	float temp_yaw=0, temp_pitch=0;
 
 	//user input stuff
-	std::vector<Message> messages;
 	int cursor_i=0, cursor_j=0, cursor_k=0;
 
 	//geometry stuff
+	float light_spin=0;
+
 	Mesh cursor_mesh;
-	
+
 	std::vector<Billboard> billboards;
-	olc::Sprite* gradient=nullptr;
-	int letter_ix=0, number_ix=0, bomb_ix=0, tile_ix=0, flag_ix=0;
 	
-	bool cursor_controls=false;
-	bool bomb_zone=false;
+	const vf3d gravity{0, -9.8f, 0};
+	std::list<Particle> particles;
+
+	olc::Sprite* fire_gradient=nullptr;
+	olc::Sprite* number_gradient=nullptr;
+
+	bool show_cursor_controls=false;
+	bool show_bomb_zone=false;
 
 	//graphics things
 	std::vector<olc::Sprite*> texture_atlas;
+	int ta_letter_ix=0, ta_number_ix=0;
+	int ta_bomb_ix=0, ta_tile_ix=0, ta_flag_ix=0;
+	int ta_circ_ix=0;
 
 	//multithreaded rendering
-	const int mtr_tile_size=32;
+	const int mtr_tile_size=64;
 	int mtr_num_x=0, mtr_num_y=0;
 	std::vector<cmn::Triangle>* mtr_bins=nullptr;
 	
@@ -82,17 +84,16 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	Minesweeper* game=nullptr;
 	vf3d game_size;
 
-	void game_updateMesh() {
-		game->triangulateUnswept(tile_ix, flag_ix);
-	}
-
 	bool user_create() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		light_pos={10, 20, 30};
 
-		//load gradient
-		gradient=new olc::Sprite("assets/img/gradient.png");
+		//load fire gradient
+		fire_gradient=new olc::Sprite("assets/img/fire_gradient.png");
+
+		//load number gradient
+		number_gradient=new olc::Sprite("assets/img/number_gradient.png");
 
 		//load cursor model
 		try {
@@ -104,40 +105,48 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 #pragma region TEXTURE ATLAS SETUP
 		//add letters to texture atlas
-		letter_ix=texture_atlas.size();
+		ta_letter_ix=texture_atlas.size();
 		for(char c='A'; c<='Z'; c++) {
 			olc::Sprite* spr=new olc::Sprite(8, 8);
 			SetDrawTarget(spr);
-
 			Clear(olc::BLANK);
 			DrawString(0, 0, std::string(1, c), olc::WHITE);
-
 			texture_atlas.push_back(spr);
 		}
 		SetDrawTarget(nullptr);
 
 		//add numbers to texture atlas
-		number_ix=texture_atlas.size();
+		ta_number_ix=texture_atlas.size();
 		for(int i=0; i<=9; i++) {
 			olc::Sprite* spr=new olc::Sprite(8, 8);
 			SetDrawTarget(spr);
-
 			Clear(olc::BLANK);
 			DrawString(0, 0, std::to_string(i), olc::WHITE);
-
 			texture_atlas.push_back(spr);
 		}
 		SetDrawTarget(nullptr);
 
 		//add tile, flag, & bomb to texture atlas
-		tile_ix=texture_atlas.size();
+		ta_tile_ix=texture_atlas.size();
 		texture_atlas.push_back(new olc::Sprite("assets/img/tile.png"));
 
-		flag_ix=texture_atlas.size();
+		ta_flag_ix=texture_atlas.size();
 		texture_atlas.push_back(new olc::Sprite("assets/img/flag_tile.png"));
 
-		bomb_ix=texture_atlas.size();
+		ta_bomb_ix=texture_atlas.size();
 		texture_atlas.push_back(new olc::Sprite("assets/img/bomb.png"));
+
+		//add circle to texture atlas
+		ta_circ_ix=texture_atlas.size();
+		{
+			const int sz=512;
+			olc::Sprite* circ_spr=new olc::Sprite(sz, sz);
+			SetDrawTarget(circ_spr);
+			Clear(olc::BLANK);
+			FillCircle(sz/2, sz/2, sz/2, olc::WHITE);
+			SetDrawTarget(nullptr);
+			texture_atlas.push_back(circ_spr);
+		}
 #pragma endregion
 
 #pragma region MULTI THREADING RENDERING SETUP
@@ -175,8 +184,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	}
 
 	bool user_destroy() override {
+		delete fire_gradient;
+		delete number_gradient;
 		for(auto& t:texture_atlas) delete t;
-		delete gradient;
 
 		delete[] mtr_bins;
 		delete mtr_pool;
@@ -186,14 +196,18 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		return true;
 	}
 
-	bool user_update(float dt) override {
-#pragma region CAMERA MOVEMENT
+#pragma region UPDATE HELPERS
+	void game_updateMesh() {
+		game->triangulateUnswept(ta_tile_ix, ta_flag_ix);
+	}
+
+	void handleCameraMovement(float dt) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch+=dt;
 		//clamp pitch
-		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
-		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
+		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
 
 		//look left, right
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
@@ -211,8 +225,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			olc::vf2d diff=GetMousePos()-*orbit_start;
 			temp_pitch-=.0067f*diff.y;
 			//clamp new pitch
-			if(temp_pitch<-Pi/2) temp_pitch=.001f-Pi/2;
-			if(temp_pitch>Pi/2) temp_pitch=Pi/2-.001f;
+			if(temp_pitch<-cmn::Pi/2) temp_pitch=.001f-cmn::Pi/2;
+			if(temp_pitch>cmn::Pi/2) temp_pitch=cmn::Pi/2-.001f;
 			temp_yaw+=.01f*diff.x;
 		}
 
@@ -227,12 +241,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			orbit_start=nullptr;
 		}
 
-		//polar to cartesian
-		cam_dir=vf3d(
-			std::cosf(temp_yaw)*std::cosf(temp_pitch),
-			std::sinf(temp_pitch),
-			std::sinf(temp_yaw)*std::cosf(temp_pitch)
-		);
+		//angles to direction
+		cam_dir=polar3D(temp_yaw, temp_pitch);
 
 		//dynamic camera system :D
 		{
@@ -248,7 +258,55 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			//light always at cam
 			light_pos=cam_pos;
 		}
+	}
+
+	void spawnCellParticles(const vf3d& ctr, int num) {
+		for(int i=0; i<num; i++) {
+			//pos offset in any direction
+			float pos_yaw=cmn::random(2*cmn::Pi);
+			float pos_pitch=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
+			float pos_rad=cmn::random(.5f);
+			vf3d pos=ctr+pos_rad*polar3D(pos_yaw, pos_pitch);
+
+			//random vel in any direction
+			float vel_yaw=cmn::random(2*cmn::Pi);
+			float vel_pitch=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
+			float speed=cmn::random(.6f, 1.2f);
+			vf3d vel=speed*polar3D(vel_yaw, vel_pitch);
+
+			//random size, lifespan
+			float size=cmn::random(.03f, .07f);
+			float lifespan=cmn::random(.6f, .9f);
+			Particle p(Particle::Debris, pos, vel, size, lifespan);
+			particles.push_back(p);
+		}
+	}
+
+	void spawnExplodeParticles(const vf3d& ctr, int num) {
+		for(int i=0; i<num; i++) {
+			//pos offset in any direction
+			float pos_yaw=cmn::random(2*cmn::Pi);
+			float pos_pitch=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
+			float pos_rad=cmn::random(.5f);
+			vf3d pos=ctr+pos_rad*polar3D(pos_yaw, pos_pitch);
+
+			//random vel upward
+			float vel_yaw=cmn::random(2*cmn::Pi);
+			float vel_pitch=cmn::random(.5f*cmn::Pi);
+			float speed=cmn::random(2.5f, 3.7f);
+			vf3d vel=speed*polar3D(vel_yaw, vel_pitch);
+
+			//random size, lifespan
+			float size=cmn::random(.08f, .15f);
+			float lifespan=cmn::random(1.1f, 1.7f);
+			Particle p(Particle::Explode, pos, vel, size, lifespan);
+			particles.push_back(p);
+		}
+	}
 #pragma endregion
+
+	bool user_update(float dt) override {
+		handleCameraMovement(dt);
 
 		//move cursor with keyboard
 		{
@@ -268,21 +326,23 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			if(cursor_k>=game->depth) cursor_k=game->depth-1;
 		}
 
-		//set things at mouse
+		//set cursor to object under mouse
 		if(GetMouse(olc::Mouse::LEFT).bPressed) {
 			//previous frame's id buffer, but its no big deal
 			int id=id_buffer[bufferIX(GetMouseX(), GetMouseY())];
 			int type=0xff&(id>>24);
 			switch(type) {
-				case 1://cursor to cell
+				case CELL_TRIANGLE://cursor to cell
 					cursor_i=31&(id>>10);
 					cursor_j=31&(id>>5);
 					cursor_k=31&id;
 					break;
-				case 2: {//cursor to billboard
+				case BILLBOARD_TRIANGLE: {//cursor to billboard
 					int bb_ix=0xffff&id;
 					//previous frame's billboard list, but its no big deal
 					const auto& b=billboards[bb_ix];
+					if(b.i==-1||b.j==-1||b.k==-1) break;
+
 					cursor_i=b.i;
 					cursor_j=b.j;
 					cursor_k=b.k;
@@ -309,39 +369,43 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			game_updateMesh();
 		}
 
-		//toggle cursor control display
-		if(GetKey(olc::Key::C).bPressed) {
-			cursor_controls^=true;
+		//find changes from prev->curr
+		for(int i=0; i<game->width; i++) {
+			for(int j=0; j<game->height; j++) {
+				for(int k=0; k<game->depth; k++) {
+					vf3d pos=.5f+vf3d(i, j, k)-game_size/2;
 
-			std::string msg="cursor control display ";
-			olc::Pixel col;
-			if(cursor_controls) msg+="ON", col=olc::GREEN;
-			else msg+="OFF", col=olc::RED;
-			messages.push_back({msg, col, 2});
+					int ix=game->ix(i, j, k);
+					const auto& prev=game->prev_cells[ix];
+					const auto& curr=game->cells[ix];
+					if(curr.swept&&!prev.swept) {
+						//swept a cell
+						int num_swept=5+std::rand()%11;
+						spawnCellParticles(pos, num_swept);
+						if(curr.bomb){
+							//swept a bomb
+							int num_explode=30+std::rand()%31;
+							spawnExplodeParticles(pos, num_explode);
+						}
+					}
+				}
+			}
 		}
+		game->updatePrev();
 
-		//toggle bomb zone display
-		if(GetKey(olc::Key::B).bPressed) {
-			bomb_zone^=true;
+		//display toggles
+		if(GetKey(olc::Key::C).bPressed) show_cursor_controls^=true;
+		if(GetKey(olc::Key::B).bPressed) show_bomb_zone^=true;
 
-			std::string msg="bomb influence zone ";
-			olc::Pixel col;
-			if(bomb_zone) msg+="ON", col=olc::CYAN;
-			else msg+="OFF", col=olc::MAGENTA;
-			messages.push_back({msg, col, 2});
-		}
-
-		//update & remove "dead" messages
-		for(auto it=messages.begin(); it!=messages.end();) {
-			it->age+=dt;
-			if(it->age>it->lifespan) it=messages.erase(it);
+		//update & sanitize particles
+		for(auto it=particles.begin(); it!=particles.end();) {
+			it->accelerate(gravity);
+			it->update(dt);
+			if(it->isDead()) it=particles.erase(it);
 			else it++;
 		}
 
-		//sort messages by relative age
-		std::sort(messages.begin(), messages.end(), [] (const Message& a, const Message& b) {
-			return a.age/a.lifespan<b.age/b.lifespan;
-		});
+		light_spin+=dt;
 
 		return true;
 	}
@@ -391,15 +455,37 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma endregion
 
 	bool user_geometry() override {
-		//add main light
-		lights.push_back({light_pos, olc::WHITE});
-		
+		//fancy lights?
+		{
+			//local coordinate system pointed to ctr
+			vf3d up(0, 1, 0);
+			vf3d rgt=cam_dir.cross(up).norm();
+			up=rgt.cross(cam_dir);
+			//triangle of lights on plane w/ norm=cam_dir
+			//vf3d dir_r=std::cos(light_spin)*rgt+std::sin(light_spin)*up;
+			//lights.push_back();
+			//vf3d dir_g=std::cos(2*cmn::Pi/3+light_spin)*rgt+std::sin(2*cmn::Pi/3+light_spin)*up;
+			//vf3d dir_b=std::cos(2*cmn::Pi/3+light_spin)*rgt+std::sin(4*cmn::Pi/3+light_spin)*up;
+			lights.push_back({light_pos, olc::WHITE});
+		}
+
 		//show unswept
 		tris_to_project.insert(tris_to_project.end(),
 			game->unswept_tris.begin(), game->unswept_tris.end()
 		);
 
 		billboards.clear();
+
+		//add particles as billboards
+		for(const auto& p:particles) {
+			olc::Pixel col=olc::WHITE;
+			float life=1-p.age/p.lifespan;
+			if(p.type==Particle::Explode) {
+				col=fire_gradient->Sample(1-life, 0);
+			}
+			col.a=255*life;
+			billboards.push_back({p.pos, p.size, .5f, .5f, ta_circ_ix, col});
+		}
 
 		//add neighbor counts as billboards
 		for(int i=0; i<game->width; i++) {
@@ -419,7 +505,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 					//add bomb sprite
 					if(cell.bomb) {
-						billboards.push_back({pos, 1.5f*size, .5f, .5f, bomb_ix, olc::WHITE, i, j, k});
+						billboards.push_back({pos, 1.5f*size, .5f, .5f, ta_bomb_ix, olc::WHITE});
 						continue;
 					}
 
@@ -440,42 +526,42 @@ struct Minesweeper3DUI : cmn::Engine3D {
 						case 5: col=olc::DARK_RED; break;
 						default: {//6-26
 							float t=(cell.num_bombs-6.f)/(26-6);
-							col=gradient->Sample(t, 0);
+							col=number_gradient->Sample(t, 0);
 							break;
 						}
 					}
 					if(tens) {
 						//different anchoring if 2digit
-						billboards.push_back({pos, size, 1, .5f, number_ix+tens, col, i, j, k});
-						billboards.push_back({pos, size, 0, .5f, number_ix+ones, col, i, j, k});
+						billboards.push_back({pos, size, 1, .5f, ta_number_ix+tens, col, i, j, k});
+						billboards.push_back({pos, size, 0, .5f, ta_number_ix+ones, col, i, j, k});
 					} else {
-						billboards.push_back({pos, size, .5f, .5f, number_ix+ones, col, i, j, k});
+						billboards.push_back({pos, size, .5f, .5f, ta_number_ix+ones, col, i, j, k});
 					}
 				}
 			}
 		}
 
 		//add cursor controls as arrows and billboards
-		if(cursor_controls) {
+		if(show_cursor_controls) {
 			//a & d on x axis
 			float edge_x=.5f*game->width;
-			billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, letter_ix+'A'-'A', olc::YELLOW});
+			billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'A'-'A', olc::YELLOW});
 			addArrow(vf3d(.5f+edge_x, 0, 0), vf3d(1.5f+edge_x, 0, 0), .15f, olc::YELLOW);
-			billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, letter_ix+'D'-'A', olc::YELLOW});
+			billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'D'-'A', olc::YELLOW});
 			addArrow(vf3d(-.5f-edge_x, 0, 0), vf3d(-1.5f-edge_x, 0, 0), .15f, olc::YELLOW);
 			
 			//w & s on y axis
 			float edge_y=.5f*game->height;
-			billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, letter_ix+'W'-'A', olc::MAGENTA});
+			billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'W'-'A', olc::MAGENTA});
 			addArrow(vf3d(0, .5f+edge_y, 0), vf3d(0, 1.5f+edge_y, 0), .15f, olc::MAGENTA);
-			billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, letter_ix+'S'-'A', olc::MAGENTA});
+			billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'S'-'A', olc::MAGENTA});
 			addArrow(vf3d(0, -.5f-edge_y, 0), vf3d(0, -1.5f-edge_y, 0), .15f, olc::MAGENTA);
 			
 			//q & e on z axis
 			float edge_z=.5f*game->depth;
-			billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, letter_ix+'Q'-'A', olc::GREEN});
+			billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, ta_letter_ix+'Q'-'A', olc::GREEN});
 			addArrow(vf3d(0, 0, .5f+edge_z), vf3d(0, 0, 1.5f+edge_z), .15f, olc::GREEN);
-			billboards.push_back({vf3d(0, 0, -2-edge_z), .5f, .5f, .5f, letter_ix+'E'-'A', olc::GREEN});
+			billboards.push_back({vf3d(0, 0, -2-edge_z), .5f, .5f, .5f, ta_letter_ix+'E'-'A', olc::GREEN});
 			addArrow(vf3d(0, 0, -.5f-edge_z), vf3d(0, 0, -1.5f-edge_z), .15f, olc::GREEN);
 		}
 
@@ -487,10 +573,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		//triangulate billboards
 		cmn::Triangle t1, t2;
 		for(int i=0; i<billboards.size(); i++) {
-			auto& b=billboards[i];
+			const auto& b=billboards[i];
 			makeQuad(b.pos, b.size, b.ax, b.ay, t1, t2);
 			//pack type=2, spr_ix, and billboard index
-			t1.id=t2.id=(2<<24)|(b.spr_ix<<16)|i;
+			t1.id=t2.id=(BILLBOARD_TRIANGLE<<24)|(b.spr_ix<<16)|i;
 			tris_to_project.push_back(t1);
 			tris_to_project.push_back(t2);
 		}
@@ -509,7 +595,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			);
 		}
 
-		if(bomb_zone) {
+		if(show_bomb_zone) {
 			//show clamped 3x3 bomb influence zone
 			int min_i=cursor_i-1; if(min_i<0) min_i=0;
 			int min_j=cursor_j-1; if(min_j<0) min_j=0;
@@ -638,7 +724,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		int x1, int y1, float u1, float v1, float w1,
 		int x2, int y2, float u2, float v2, float w2,
 		int x3, int y3, float u3, float v3, float w3,
-		const olc::Sprite& spr, olc::Pixel tint, int id,
+		olc::Sprite* spr, olc::Pixel tint, int id,
 		int nx, int ny, int mx, int my
 	) {
 		//sort by y
@@ -714,7 +800,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					float& depth=depth_buffer[bufferIX(i, j)];
 					if(tex_w>depth) {
-						olc::Pixel col=spr.Sample(tex_u/tex_w, tex_v/tex_w);
+						olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
 						if(col.a!=0) {
 							Draw(i, j, tint*col);
 							depth=tex_w;
@@ -765,7 +851,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				float& depth=depth_buffer[bufferIX(i, j)];
 				if(tex_w>depth) {
-					olc::Pixel col=spr.Sample(tex_u/tex_w, tex_v/tex_w);
+					olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
 					if(col.a!=0) {
 						Draw(i, j, tint*col);
 						depth=tex_w;
@@ -819,6 +905,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				int my=std::clamp(mtr_tile_size+ny, 0, ScreenHeight());
 				const auto& bin=mtr_bins[j.x+mtr_num_x*j.y];
 				for(const auto& t:bin) {
+					//what type of triangle is this?
 					int type=0xff&(t.id>>24);
 					int spr_ix=0xff&(t.id>>16);
 					switch(type) {
@@ -831,24 +918,23 @@ struct Minesweeper3DUI : cmn::Engine3D {
 								nx, ny, mx, my
 							);
 							break;
-						case 1:
-							//textured cell
+						case CELL_TRIANGLE:
 							FillTexturedDepthTriangleWithin(
 								t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 								t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 								t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-								*texture_atlas[spr_ix], t.col, t.id,
+								texture_atlas[spr_ix], t.col, t.id,
 								nx, ny, mx, my
 							);
 							break;
-						case 2: {
-							//billboard
+						case BILLBOARD_TRIANGLE: {
+							//this way we avoid lighting for billboards.
 							int bb_ix=0xffff&t.id;
 							FillTexturedDepthTriangleWithin(
 								t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 								t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 								t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-								*texture_atlas[spr_ix], billboards[bb_ix].col, t.id,
+								texture_atlas[spr_ix], billboards[bb_ix].col, t.id,
 								nx, ny, mx, my
 							);
 							break;
@@ -870,25 +956,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				l.col, l.id
 			);
 		}
-		
-		//display messages
-		{
-			//display at center from bottom up
-			int y=ScreenHeight()-8;
-			for(const auto& m:messages) {
-				int x=ScreenWidth()/2-4*m.str.length();
-				//transparency based on relative age
-				float life=m.age/m.lifespan;
-				olc::Pixel col=m.col;
-				col.a=255*(1-life*life*life);
-				DrawString(x, y, m.str, col);
-				y-=8;
-			}
-		}
 
 		{//very basic win/lose screens
-			int cx=ScreenWidth()/2, cy=ScreenHeight()/2;
-			int scl=8;
+			const int cx=ScreenWidth()/2, cy=ScreenHeight()/2;
+			const int scl=8;
 			switch(game->state) {
 				case Minesweeper::WON: {
 					//dark background

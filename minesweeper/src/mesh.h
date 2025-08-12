@@ -12,11 +12,6 @@ struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
 
-float random() {
-	static const float rand_max=RAND_MAX;
-	return rand()/rand_max;
-}
-
 struct Mesh {
 	std::vector<vf3d> vertexes;
 	std::vector<IndexTriangle> index_tris;
@@ -47,41 +42,6 @@ struct Mesh {
 			t.col=col;
 			tris.push_back(t);
 		}
-	}
-
-	cmn::AABB3 getAABB() const {
-		cmn::AABB3 box;
-		for(const auto& v:vertexes) {
-			box.fitToEnclose(v*mat_world);
-		}
-		return box;
-	}
-
-	float intersectRay(const vf3d& orig, const vf3d& dir) const {
-		float record=-1;
-		for(const auto& t:tris) {
-			float dist=t.intersectSeg(orig, orig+dir);
-			if(dist>0) {
-				if(record<0||dist<record) {
-					record=dist;
-				}
-			}
-		}
-		return record;
-	}
-
-	bool contains(const vf3d& pt) const {
-		vf3d dir=vf3d(
-			.5f-random(),
-			.5f-random(),
-			.5f-random()
-		).norm();
-		int num=0;
-		for(const auto& t:tris) {
-			float dist=t.intersectSeg(pt, pt+dir);
-			if(dist>0) num++;
-		}
-		return num%2;
 	}
 
 	static Mesh loadFromOBJ(const std::string& filename) {

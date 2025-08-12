@@ -133,8 +133,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <Image Include="assets\img\bomb.png" />
+    <Image Include="assets\img\fire_gradient.png" />
     <Image Include="assets\img\flag_tile.png" />
-    <Image Include="assets\img\gradient.png" />
+    <Image Include="assets\img\number_gradient.png" />
     <Image Include="assets\img\tile.png" />
   </ItemGroup>
   <ItemGroup>
@@ -144,9 +145,11 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\billboard.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\minesweeper.h" />
     <ClInclude Include="src\packing.h" />
+    <ClInclude Include="src\particle.h" />
     <ClInclude Include="src\thread_pool.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
