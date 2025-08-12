@@ -463,12 +463,12 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			up=rgt.cross(cam_dir);
 			
 			//triangle of lights on plane w/ norm=cam_dir
-			const float rad=.4f;
+			const float rad=.45f;
 			vf3d dir_r=std::cos(light_spin)*rgt+std::sin(light_spin)*up;
 			lights.push_back({light_pos+rad*dir_r, olc::RED});
 			vf3d dir_g=std::cos(2*cmn::Pi/3+light_spin)*rgt+std::sin(2*cmn::Pi/3+light_spin)*up;
 			lights.push_back({light_pos+rad*dir_g, olc::GREEN});
-			vf3d dir_b=std::cos(2*cmn::Pi/3+light_spin)*rgt+std::sin(4*cmn::Pi/3+light_spin)*up;
+			vf3d dir_b=std::cos(4*cmn::Pi/3+light_spin)*rgt+std::sin(4*cmn::Pi/3+light_spin)*up;
 			lights.push_back({light_pos+rad*dir_b, olc::BLUE});
 		}
 
