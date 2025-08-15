@@ -13,9 +13,9 @@ using cmn::Mat4;
 
 vf3d polar3D(float yaw, float pitch) {
 	return {
-		std::cos(yaw)* std::cos(pitch),
+		std::cos(yaw)*std::cos(pitch),
 		std::sin(pitch),
-		std::sin(yaw)* std::cos(pitch)
+		std::sin(yaw)*std::cos(pitch)
 	};
 }
 
@@ -55,7 +55,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	Mesh cursor_mesh;
 
 	std::vector<Billboard> billboards;
-	
+
 	const vf3d gravity{0, -9.8f, 0};
 	std::list<Particle> particles;
 
@@ -75,14 +75,13 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	const int mtr_tile_size=64;
 	int mtr_num_x=0, mtr_num_y=0;
 	std::vector<cmn::Triangle>* mtr_bins=nullptr;
-	
+
 	std::vector<olc::vi2d> mtr_jobs;
-	
+
 	ThreadPool* mtr_pool=nullptr;
 
 	//game things
-	Minesweeper* game=nullptr;
-	vf3d game_size;
+	Minesweeper game;
 
 	bool user_create() override {
 		std::srand(std::time(0));
@@ -169,16 +168,16 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma region GAME SETUP
 		//init game
 		try {
-			game=new Minesweeper(7, 5, 8, 21);
+			game=Minesweeper(7, 5, 8, 21);
 		} catch(const std::exception& e) {
 			std::cout<<e.what()<<'\n';
 			return false;
 		}
 		game_updateMesh();
-
-		//game dims
-		game_size=vf3d(game->width, game->height, game->depth);
 #pragma endregion
+
+		//capture std cout to integrated console
+		ConsoleCaptureStdOut(true);
 
 		return true;
 	}
@@ -191,17 +190,110 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		delete[] mtr_bins;
 		delete mtr_pool;
 
-		delete game;
-
 		return true;
+	}
+
+	bool OnConsoleCommand(const std::string& line) override {
+		std::stringstream line_str(line);
+		std::string cmd; line_str>>cmd;
+
+		if(cmd=="clear") {
+			ConsoleClear();
+
+			return true;
+		}
+
+		if(cmd=="export") {
+			std::string filename;
+			line_str>>filename;
+			if(filename.empty()) {
+				std::cout<<"  no filename. try using:\n  export <filename>\n";
+
+				return false;
+			}
+
+			try {
+				game.save(filename);
+
+				return true;
+			} catch(const std::exception& e) {
+				std::cout<<"  "<<e.what()<<'\n';
+
+				return false;
+			}
+		}
+
+		if(cmd=="import") {
+			std::string filename;
+			line_str>>filename;
+			if(filename.empty()) {
+				std::cout<<"  no filename. try using:\n  import <filename>\n";
+
+				return false;
+			}
+
+			try {
+				//load game, set this to that, update tris
+				Minesweeper m=Minesweeper::load(filename);
+				game=m;
+				game_updateMesh();
+
+				return true;
+			} catch(const std::exception& e) {
+				std::cout<<"  "<<e.what()<<'\n';
+
+				return false;
+			}
+		}
+
+		if(cmd=="help") {
+			std::cout<<
+				"  clear        clears the console\n"
+				"  export       exports pixelsets to specified file\n"
+				"  import       imports pixelsets from specified file\n"
+				"  keybinds     which keys to press for this program?\n"
+				"  mousebinds   which buttons to press for this program?\n";
+
+			return true;
+		}
+
+		if(cmd=="keybinds") {
+			std::cout<<
+				"  C      toggle cursor control display\n"
+				"  A/D    move cursor +/- in X axis\n"
+				"  W/S    move cursor +/- in Y axis\n"
+				"  Q/E    move cursor +/- in Z axis\n"
+				"  B      toggle bomb zone display\n"
+				"  F      flag cell\n"
+				"  ENTER  sweep cell\n"
+				"  R      reset game\n"
+				"  ESC    toggle integrated console\n"
+				"  HOME   reset zoom and pan\n";
+
+			return true;
+		}
+
+		if(cmd=="mousebinds") {
+			std::cout<<
+				"  LEFT     drag to orbit game\n"
+				"  LEFT     drag to select cell/number\n"
+				"  RIGHT    apply spring force to pixelset\n"
+				"  MIDDLE   scroll to zoom, drag to pan\n";
+
+			std::cout<<"  unknown command. type help for list of commands.\n";
+
+			return false;
+		}
 	}
 
 #pragma region UPDATE HELPERS
 	void game_updateMesh() {
-		game->triangulateUnswept(ta_tile_ix, ta_flag_ix);
+		game.triangulateUnswept(ta_tile_ix, ta_flag_ix);
 	}
 
 	void handleCameraMovement(float dt) {
+		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
+		
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch+=dt;
@@ -260,7 +352,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 	}
 
-	void spawnCellParticles(const vf3d& ctr, int num) {
+	void spawnCellParticles(const vf3d& ctr) {
+		int num=5+std::rand()%11;
 		for(int i=0; i<num; i++) {
 			//pos offset in any direction
 			float pos_yaw=cmn::random(2*cmn::Pi);
@@ -282,7 +375,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 	}
 
-	void spawnExplodeParticles(const vf3d& ctr, int num) {
+	void spawnExplodeParticles(const vf3d& ctr) {
+		int num=30+std::rand()%31;
 		for(int i=0; i<num; i++) {
 			//pos offset in any direction
 			float pos_yaw=cmn::random(2*cmn::Pi);
@@ -305,7 +399,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	}
 #pragma endregion
 
-	bool user_update(float dt) override {
+	void handleUserInput(float dt) {
+		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
+		
 		handleCameraMovement(dt);
 
 		//move cursor with keyboard
@@ -321,9 +417,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			if(cursor_i<0) cursor_i=0;
 			if(cursor_j<0) cursor_j=0;
 			if(cursor_k<0) cursor_k=0;
-			if(cursor_i>=game->width) cursor_i=game->width-1;
-			if(cursor_j>=game->height) cursor_j=game->height-1;
-			if(cursor_k>=game->depth) cursor_k=game->depth-1;
+			if(cursor_i>=game.getWidth()) cursor_i=game.getWidth()-1;
+			if(cursor_j>=game.getHeight()) cursor_j=game.getHeight()-1;
+			if(cursor_k>=game.getDepth()) cursor_k=game.getDepth()-1;
 		}
 
 		//set cursor to object under mouse
@@ -353,49 +449,57 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		//flag at cursor
 		if(GetKey(olc::Key::F).bPressed) {
-			game->flag(cursor_i, cursor_j, cursor_k);
+			game.flag(cursor_i, cursor_j, cursor_k);
 			game_updateMesh();
 		}
 
 		//sweep at cursor
 		if(GetKey(olc::Key::ENTER).bPressed) {
-			game->sweep(cursor_i, cursor_j, cursor_k);
+			game.sweep(cursor_i, cursor_j, cursor_k);
 			game_updateMesh();
 		}
 
 		//reset game
 		if(GetKey(olc::Key::R).bPressed) {
-			game->reset();
+			game.reset();
 			game_updateMesh();
 		}
 
-		//find changes from prev->curr
-		for(int i=0; i<game->width; i++) {
-			for(int j=0; j<game->height; j++) {
-				for(int k=0; k<game->depth; k++) {
-					vf3d pos=.5f+vf3d(i, j, k)-game_size/2;
+		//display toggles
+		if(GetKey(olc::Key::C).bPressed) show_cursor_controls^=true;
+		if(GetKey(olc::Key::B).bPressed) show_bomb_zone^=true;
+	}
 
-					int ix=game->ix(i, j, k);
-					const auto& prev=game->prev_cells[ix];
-					const auto& curr=game->cells[ix];
+	bool user_update(float dt) override {
+		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
+		
+		//open and close the integrated console
+		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
+
+		//only allow input when console NOT open
+		if(!IsConsoleShowing()) handleUserInput(dt);
+
+		//find changes from prev->curr
+		for(int i=0; i<game.getWidth(); i++) {
+			for(int j=0; j<game.getHeight(); j++) {
+				for(int k=0; k<game.getDepth(); k++) {
+					vf3d ctr=.5f+vf3d(i, j, k)-game_size/2;
+
+					int ix=game.ix(i, j, k);
+					const auto& prev=game.prev_cells[ix];
+					const auto& curr=game.cells[ix];
 					if(curr.swept&&!prev.swept) {
 						//swept a cell
-						int num_swept=5+std::rand()%11;
-						spawnCellParticles(pos, num_swept);
-						if(curr.bomb){
+						spawnCellParticles(ctr);
+						if(curr.bomb) {
 							//swept a bomb
-							int num_explode=30+std::rand()%31;
-							spawnExplodeParticles(pos, num_explode);
+							spawnExplodeParticles(ctr);
 						}
 					}
 				}
 			}
 		}
-		game->updatePrev();
-
-		//display toggles
-		if(GetKey(olc::Key::C).bPressed) show_cursor_controls^=true;
-		if(GetKey(olc::Key::B).bPressed) show_bomb_zone^=true;
+		game.updatePrev();
 
 		//update & sanitize particles
 		for(auto it=particles.begin(); it!=particles.end();) {
@@ -455,13 +559,15 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma endregion
 
 	bool user_geometry() override {
+		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
+		
 		//fancy lights?
 		{
 			//local coordinate system pointed to ctr
 			vf3d up(0, 1, 0);
 			vf3d rgt=cam_dir.cross(up).norm();
 			up=rgt.cross(cam_dir);
-			
+
 			//triangle of lights on plane w/ norm=cam_dir
 			const float rad=.45f;
 			vf3d dir_r=std::cos(light_spin)*rgt+std::sin(light_spin)*up;
@@ -474,7 +580,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		//show unswept
 		tris_to_project.insert(tris_to_project.end(),
-			game->unswept_tris.begin(), game->unswept_tris.end()
+			game.unswept_tris.begin(), game.unswept_tris.end()
 		);
 
 		billboards.clear();
@@ -491,10 +597,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 
 		//add neighbor counts as billboards
-		for(int i=0; i<game->width; i++) {
-			for(int j=0; j<game->height; j++) {
-				for(int k=0; k<game->depth; k++) {
-					const auto& cell=game->cells[game->ix(i, j, k)];
+		for(int i=0; i<game.getWidth(); i++) {
+			for(int j=0; j<game.getHeight(); j++) {
+				for(int k=0; k<game.getDepth(); k++) {
+					const auto& cell=game.cells[game.ix(i, j, k)];
 
 					//skip unswept
 					if(!cell.swept) continue;
@@ -547,21 +653,21 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		//add cursor controls as arrows and billboards
 		if(show_cursor_controls) {
 			//a & d on x axis
-			float edge_x=.5f*game->width;
+			float edge_x=.5f*game.getWidth();
 			billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'A'-'A', olc::YELLOW});
 			addArrow(vf3d(.5f+edge_x, 0, 0), vf3d(1.5f+edge_x, 0, 0), .15f, olc::YELLOW);
 			billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'D'-'A', olc::YELLOW});
 			addArrow(vf3d(-.5f-edge_x, 0, 0), vf3d(-1.5f-edge_x, 0, 0), .15f, olc::YELLOW);
-			
+
 			//w & s on y axis
-			float edge_y=.5f*game->height;
+			float edge_y=.5f*game.getHeight();
 			billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'W'-'A', olc::MAGENTA});
 			addArrow(vf3d(0, .5f+edge_y, 0), vf3d(0, 1.5f+edge_y, 0), .15f, olc::MAGENTA);
 			billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'S'-'A', olc::MAGENTA});
 			addArrow(vf3d(0, -.5f-edge_y, 0), vf3d(0, -1.5f-edge_y, 0), .15f, olc::MAGENTA);
-			
+
 			//q & e on z axis
-			float edge_z=.5f*game->depth;
+			float edge_z=.5f*game.getDepth();
 			billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, ta_letter_ix+'Q'-'A', olc::GREEN});
 			addArrow(vf3d(0, 0, .5f+edge_z), vf3d(0, 0, 1.5f+edge_z), .15f, olc::GREEN);
 			billboards.push_back({vf3d(0, 0, -2-edge_z), .5f, .5f, .5f, ta_letter_ix+'E'-'A', olc::GREEN});
@@ -603,9 +709,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			int min_i=cursor_i-1; if(min_i<0) min_i=0;
 			int min_j=cursor_j-1; if(min_j<0) min_j=0;
 			int min_k=cursor_k-1; if(min_k<0) min_k=0;
-			int max_i=cursor_i+2; if(max_i>=game->width) max_i=game->width;
-			int max_j=cursor_j+2; if(max_j>=game->height) max_j=game->height;
-			int max_k=cursor_k+2; if(max_k>=game->depth) max_k=game->depth;
+			int max_i=cursor_i+2; if(max_i>=game.getWidth()) max_i=game.getWidth();
+			int max_j=cursor_j+2; if(max_j>=game.getHeight()) max_j=game.getHeight();
+			int max_k=cursor_k+2; if(max_k>=game.getDepth()) max_k=game.getDepth();
 			vf3d min_ijk(min_i, min_j, min_k);
 			vf3d max_ijk(max_i, max_j, max_k);
 			addAABB({min_ijk-game_size/2-.05f, max_ijk-game_size/2+.05f}, olc::Pixel(255, 120, 0));
@@ -963,7 +1069,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		{//very basic win/lose screens
 			const int cx=ScreenWidth()/2, cy=ScreenHeight()/2;
 			const int scl=8;
-			switch(game->state) {
+			switch(game.state) {
 				case Minesweeper::WON: {
 					//dark background
 					SetPixelMode(olc::Pixel::ALPHA);

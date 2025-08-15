@@ -7,6 +7,11 @@
 #include <string>
 #include <vector>
 
+#include <exception>
+
+#include <fstream>
+#include <sstream>
+
 struct Cell {
 	int num_bombs=-1;
 	bool bomb=false;
@@ -15,17 +20,21 @@ struct Cell {
 };
 
 class Minesweeper {
+	int width=0, height=0, depth=0;
+	int num_cells=0;
+
+	int num_bombs=0;
+	
+	void copyFrom(const Minesweeper&), clear();
+	
 	bool floodsweep(int i, int j, int k);
 	void autosweep(int i, int j, int k);
 
 	void checkWin(), checkLose();
 
 public:
-	const int width=0, height=0, depth=0;
-	const int num_cells=0;
 	Cell* cells=nullptr;
 	Cell* prev_cells=nullptr;
-	const int num_bombs=0;
 
 	enum State {
 		START=0,
@@ -43,6 +52,7 @@ public:
 		width(w), height(h), depth(d),
 		num_cells(width* height* depth),
 		num_bombs(nb) {
+		if(width<1||height<1||depth<1) throw std::runtime_error("game dims must be >=1");
 		if(width>32||height>32||depth>32) throw std::runtime_error("game dims must be <=32");
 		if(num_bombs>=num_cells) throw std::runtime_error("too many bombs");
 		cells=new Cell[num_cells];
@@ -50,17 +60,31 @@ public:
 		reset();
 	}
 
-	//1
-	Minesweeper(const Minesweeper&)=delete;
-
-	//2
-	~Minesweeper() {
-		delete[] cells;
-		delete[] prev_cells;
+	//ro3 1
+	Minesweeper(const Minesweeper& m) {
+		copyFrom(m);
 	}
 
-	//3
-	Minesweeper& operator=(const Minesweeper&)=delete;
+	//ro3 2
+	~Minesweeper() {
+		clear();
+	}
+
+	//ro3 3
+	Minesweeper& operator=(const Minesweeper& m) {
+		if(&m==this) return *this;
+
+		clear();
+
+		copyFrom(m);
+
+		return *this;
+	}
+
+	int getWidth() const { return width; }
+	int getHeight() const { return height; }
+	int getDepth() const { return depth; }
+	int getNumCells() const { return num_cells; }
 
 	bool inRangeX(int i) const { return i>=0&&i<width; }
 	bool inRangeY(int j) const { return j>=0&&j<height; }
@@ -72,6 +96,8 @@ public:
 	int ix(int i, int j, int k) const {
 		return i+width*j+width*height*k;
 	}
+
+	int getNumBombs() const { return num_bombs; }
 
 	void reset() {
 		state=START;
@@ -86,9 +112,9 @@ public:
 			//find NON bombed cell
 			int i, j, k;
 			do {
-				i=rand()%width;
-				j=rand()%height;
-				k=rand()%depth;
+				i=std::rand()%width;
+				j=std::rand()%height;
+				k=std::rand()%depth;
 			} while(cells[ix(i, j, k)].bomb);
 			//bomb it
 			cells[ix(i, j, k)].bomb=true;
@@ -234,7 +260,87 @@ public:
 			}
 		}
 	}
+
+	void save(const std::string& filename) const {
+		std::ofstream file(filename);
+		if(file.fail()) throw std::runtime_error("invalid filename");
+
+		file<<width<<' '<<height<<' '<<depth<<'\n';
+		file<<num_bombs<<' '<<state<<'\n';
+		for(int i=0; i<num_cells; i++) {
+			const auto& c=cells[i];
+			file<<
+				c.num_bombs<<' '<<
+				c.bomb<<' '<<
+				c.swept<<' '<<
+				c.flagged<<'\n';
+		}
+
+		file.close();
+	}
+
+	static Minesweeper load(const std::string& filename) {
+		std::ifstream file(filename);
+		if(file.fail()) throw std::runtime_error("invalid filename");
+
+		std::string line;
+		std::stringstream line_str;
+
+		//get header
+		std::getline(file, line);
+		line_str.str(line), line_str.clear();
+		int width=0, height=0, depth=0;
+		line_str>>width>>height>>depth;
+		std::getline(file, line);
+		line_str.str(line), line_str.clear();
+		int num_bombs=0;
+		State state=START;
+		line_str<<num_bombs<<state;
+
+		//initialize game
+		Minesweeper m(width, height, depth, num_bombs);
+		m.state=state;
+
+		//read cells
+		for(int i=0; i<m.num_cells; i++) {
+			std::getline(file, line);
+			line_str.str(line), line_str.clear();
+			
+			auto& c=m.cells[i];
+			line_str>>
+				c.num_bombs>>
+				c.bomb>>
+				c.swept>>
+				c.flagged;
+		}
+
+		//update previous
+		m.updatePrev();
+
+		file.close();
+
+		return m;
+	}
 };
+
+void Minesweeper::copyFrom(const Minesweeper& m) {
+	width=m.width;
+	height=m.height;
+	depth=m.depth;
+	num_cells=m.num_cells;
+	cells=new Cell[num_cells];
+	std::memcpy(cells, m.cells, sizeof(Cell)*num_cells);
+	prev_cells=new Cell[num_cells];
+	std::memcpy(prev_cells, m.prev_cells, sizeof(Cell)*num_cells);
+	num_bombs=m.num_bombs;
+	state=m.state;
+	unswept_tris=m.unswept_tris;
+}
+
+void Minesweeper::clear() {
+	delete[] cells;
+	delete[] prev_cells;
+}
 
 //returns whether function made a cavity.
 bool Minesweeper::floodsweep(int i, int j, int k) {
