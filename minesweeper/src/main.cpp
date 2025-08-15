@@ -215,6 +215,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			try {
 				game.save(filename);
 
+				std::cout<<"  successfully exported to: "<<filename<<'\n';
+
 				return true;
 			} catch(const std::exception& e) {
 				std::cout<<"  "<<e.what()<<'\n';
@@ -235,6 +237,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			try {
 				//load game, set this to that, update tris
 				Minesweeper m=Minesweeper::load(filename);
+				
+				std::cout<<"  successfully imported from: "<<filename<<'\n';
+
 				game=m;
 				game_updateMesh();
 
@@ -249,8 +254,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		if(cmd=="help") {
 			std::cout<<
 				"  clear        clears the console\n"
-				"  export       exports pixelsets to specified file\n"
-				"  import       imports pixelsets from specified file\n"
+				"  export       exports game to specified file\n"
+				"  import       imports game from specified file\n"
 				"  keybinds     which keys to press for this program?\n"
 				"  mousebinds   which buttons to press for this program?\n";
 
