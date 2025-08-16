@@ -1,13 +1,15 @@
 /*TODO
-saving/loading
-
-help screen
-
 add difficulty modes
 add game timer
 */
 
 #include "common/3d/engine_3d.h"
+
+#define MULTITHREADING
+#ifdef __EMSCRIPTEN__
+#undef MULTITHREADING
+#endif
+
 using cmn::vf3d;
 using cmn::Mat4;
 
@@ -28,7 +30,9 @@ vf3d polar3D(float yaw, float pitch) {
 #define BILLBOARD_TRIANGLE 2
 #include "billboard.h"
 
+#ifdef MULTITHREADING
 #include "thread_pool.h"
+#endif
 
 #include "minesweeper.h"
 
@@ -72,6 +76,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	int ta_circ_ix=0;
 
 	//multithreaded rendering
+#ifdef MULTITHREADING
 	const int mtr_tile_size=64;
 	int mtr_num_x=0, mtr_num_y=0;
 	std::vector<cmn::Triangle>* mtr_bins=nullptr;
@@ -79,6 +84,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	std::vector<olc::vi2d> mtr_jobs;
 
 	ThreadPool* mtr_pool=nullptr;
+#endif
 
 	//game things
 	Minesweeper game;
@@ -149,6 +155,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma endregion
 
 #pragma region MULTI THREADING RENDERING SETUP
+#ifdef MULTITHREADING
 		//allocate tiles
 		mtr_num_x=1+ScreenWidth()/mtr_tile_size;
 		mtr_num_y=1+ScreenHeight()/mtr_tile_size;
@@ -163,6 +170,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		//make thread pool
 		mtr_pool=new ThreadPool(std::thread::hardware_concurrency());
+#endif
 #pragma endregion
 
 #pragma region GAME SETUP
@@ -187,8 +195,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		delete number_gradient;
 		for(auto& t:texture_atlas) delete t;
 
+#ifdef MULTITHREADING
 		delete[] mtr_bins;
 		delete mtr_pool;
+#endif
 
 		return true;
 	}
@@ -237,7 +247,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			try {
 				//load game, set this to that, update tris
 				Minesweeper m=Minesweeper::load(filename);
-				
+
 				std::cout<<"  successfully imported from: "<<filename<<'\n';
 
 				game=m;
@@ -298,7 +308,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 	void handleCameraMovement(float dt) {
 		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
-		
+
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch+=dt;
@@ -402,11 +412,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			particles.push_back(p);
 		}
 	}
-#pragma endregion
 
 	void handleUserInput(float dt) {
 		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
-		
+
 		handleCameraMovement(dt);
 
 		//move cursor with keyboard
@@ -474,10 +483,11 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		if(GetKey(olc::Key::C).bPressed) show_cursor_controls^=true;
 		if(GetKey(olc::Key::B).bPressed) show_bomb_zone^=true;
 	}
+#pragma endregion
 
 	bool user_update(float dt) override {
 		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
-		
+
 		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
 
@@ -565,7 +575,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 	bool user_geometry() override {
 		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
-		
+
 		//fancy lights?
 		{
 			//local coordinate system pointed to ctr
@@ -619,7 +629,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 					//add bomb sprite
 					if(cell.bomb) {
-						billboards.push_back({pos, 1.5f*size, .5f, .5f, ta_bomb_ix, olc::WHITE});
+						billboards.push_back({pos, 1.5f*size, .5f, .5f, ta_bomb_ix, olc::WHITE, i, j, k});
 						continue;
 					}
 
@@ -984,6 +994,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		resetBuffers();
 
 		SetPixelMode(olc::Pixel::ALPHA);
+#ifdef MULTITHREADING
 		//clear tile bins
 		for(int i=0; i<mtr_num_x*mtr_num_y; i++) mtr_bins[i].clear();
 
@@ -1019,7 +1030,6 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				int my=std::clamp(mtr_tile_size+ny, 0, ScreenHeight());
 				const auto& bin=mtr_bins[j.x+mtr_num_x*j.y];
 				for(const auto& t:bin) {
-					//what type of triangle is this?
 					int type=0xff&(t.id>>24);
 					int spr_ix=0xff&(t.id>>16);
 					switch(type) {
@@ -1061,6 +1071,41 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		//wait for raster to finish
 		while(tiles_remaining);
+#else
+		for(const auto& t:tris_to_draw) {
+			int type=0xff&(t.id>>24);
+			int spr_ix=0xff&(t.id>>16);
+			switch(type) {
+				default://meshes
+					FillDepthTriangle(
+						t.p[0].x, t.p[0].y, t.t[0].w,
+						t.p[1].x, t.p[1].y, t.t[1].w,
+						t.p[2].x, t.p[2].y, t.t[2].w,
+						t.col, t.id
+					);
+					break;
+				case CELL_TRIANGLE:
+					FillTexturedDepthTriangle(
+						t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
+						t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
+						t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+						texture_atlas[spr_ix], t.col, t.id
+					);
+					break;
+				case BILLBOARD_TRIANGLE: {
+					//this way we avoid lighting for billboards.
+					int bb_ix=0xffff&t.id;
+					FillTexturedDepthTriangle(
+						t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
+						t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
+						t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+						texture_atlas[spr_ix], billboards[bb_ix].col, t.id
+					);
+					break;
+				}
+			}
+		}
+#endif
 		SetPixelMode(olc::Pixel::NORMAL);
 
 		for(const auto& l:lines_to_draw) {
@@ -1102,7 +1147,6 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	}
 };
 
-//i like the pixellated look
 int main() {
 	Minesweeper3DUI m3dui;
 	bool vsync=true;

@@ -310,7 +310,7 @@ public:
 			line_str>>
 				c.num_bombs>>
 				c.bomb>>
-				c.swept>>
+				c.swept>> 
 				c.flagged;
 		}
 
@@ -410,8 +410,9 @@ void Minesweeper::autosweep(int i, int j, int k) {
 				int ni=i+di, nj=j+dj, nk=k+dk;
 				if(!inRange(ni, nj, nk)) continue;
 
+				//only count unswept flagged cells
 				Cell& c=cells[ix(ni, nj, nk)];
-				if(c.flagged) num_flags++;
+				if(!c.swept&&c.flagged) num_flags++;
 			}
 		}
 	}
