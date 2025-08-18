@@ -11,8 +11,8 @@ using olc::vf2d;
 
 #include "shape.h"
 
-struct RigidBodyDemo : olc::PixelGameEngine {
-	RigidBodyDemo() {
+struct RigidBodyUI : olc::PixelGameEngine {
+	RigidBodyUI() {
 		sAppName="Rigid Body Simulation";
 	}
 
@@ -34,33 +34,73 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 	bool show_vertexes=false;
 
 	//place shapes such that their bounds lie inside the screen
-	void placeAllRandomly() {
+	void placeShapesRandomly() {
+		//dont place ontop of other shapes.
+		std::list<Shape*> to_check_against;
 		for(const auto& s:shapes) {
+			if(s->locked) to_check_against.push_back(s);
+		}
+		//place all non locked shapes
+		for(const auto& s:shapes) {
+			if(s->locked) continue;
+
 			//random rotation
 			s->rot=cmn::random(2*cmn::Pi);
+			s->updateRot();
 			//reset rot vel
 			s->old_rot=s->rot;
 
-			//aabb needs cossin
-			s->updateRot();
+			//assume erroneous position
+			bool overlaps=true;
 			cmn::AABB box=s->getAABB();
+			do {
+				//easier to just offset based on where it already is
+				s->pos.x+=cmn::random(-box.min.x, ScreenWidth()-box.max.x);
+				s->pos.y+=cmn::random(-box.min.y, ScreenHeight()-box.max.y);
+				box=s->getAABB();
 
-			//easier to just offset based on where it already is
-			s->pos.x+=cmn::random(-box.min.x, ScreenWidth()-box.max.x);
-			s->pos.y+=cmn::random(-box.min.y, ScreenHeight()-box.max.y);
+				//check all prior shapes
+				overlaps=false;
+				for(const auto& o:to_check_against) {
+					if(box.overlaps(o->getAABB())) {
+						overlaps=true;
+						break;
+					}
+				}
+			} while(overlaps);
 			//reset vel
 			s->old_pos=s->pos;
+
+			//we now have to also check against this.
+			to_check_against.push_back(s);
 		}
 	}
 
 	bool OnUserCreate() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
-		shapes.emplace_back(new Shape({0, 0}, 100, 16));
-		shapes.emplace_back(new Shape({0, 0}, 50, 3));
-		shapes.emplace_back(new Shape({0, 0}, 75, 4));
+		//add walls
+		{
+			const float sz=5;
+			Shape* top=new Shape(cmn::AABB{vf2d(-sz, -sz), vf2d(ScreenWidth()+sz, sz)});
+			top->locked=true;
+			Shape* right=new Shape(cmn::AABB{vf2d(ScreenWidth()-sz, -sz), vf2d(ScreenWidth()+sz, ScreenHeight()+sz)});
+			right->locked=true;
+			Shape* bottom=new Shape(cmn::AABB{vf2d(-sz, ScreenHeight()-sz), vf2d(ScreenWidth()+sz, ScreenHeight()+sz)});
+			bottom->locked=true;
+			Shape* left=new Shape(cmn::AABB{vf2d(-sz, -sz), vf2d(sz, ScreenHeight()+sz)});
+			left->locked=true;
+			shapes.push_back(top);
+			shapes.push_back(right);
+			shapes.push_back(bottom);
+			shapes.push_back(left);
+		}
 
-		placeAllRandomly();
+		shapes.push_back(new Shape({0, 0}, 100, 16));
+		shapes.push_back(new Shape({0, 0}, 50, 3));
+		shapes.push_back(new Shape({0, 0}, 75, 4));
+
+		placeShapesRandomly();
 
 		return true;
 	}
@@ -78,16 +118,7 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 		return true;
 	}
 
-	bool OnUserUpdate(float dt) override {
-#pragma region USER_INPUT
-		mouse_pos=GetMousePos();
-
-		//graphics toggles
-		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
-		if(GetKey(olc::Key::M).bPressed) show_masses^=true;
-		if(GetKey(olc::Key::V).bPressed) show_vertexes^=true;
-		if(GetKey(olc::Key::R).bPressed) placeAllRandomly();
-
+	void handleUserInput(float dt) {
 		//spring interactivity
 		const auto l_mouse=GetMouse(olc::Mouse::LEFT);
 		if(l_mouse.bPressed) {
@@ -130,13 +161,13 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 					}
 				}
 				//add mouse point
-				if(!exists) addition.emplace_back(mouse_pos);
+				if(!exists) addition.push_back(mouse_pos);
 			}
 		}
 		addition_timer-=dt;
 		if(a_key.bReleased) {
 			//add shape IF at least a triangle.
-			if(addition.size()>2) shapes.emplace_back(new Shape(addition));
+			if(addition.size()>2) shapes.push_back(new Shape(addition));
 			addition.clear();
 		}
 
@@ -152,111 +183,35 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 				} else it++;
 			}
 		}
-#pragma endregion
 
-#pragma region PHYSICS
-#if 0
-		//seperating axis theorem
-		for(const auto& s:shapes) s->col=olc::BLACK;
-		
-		//for every shape pair
+		//graphics toggles
+		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		if(GetKey(olc::Key::M).bPressed) show_masses^=true;
+		if(GetKey(olc::Key::V).bPressed) show_vertexes^=true;
+		if(GetKey(olc::Key::R).bPressed) placeShapesRandomly();
+	}
+
+	void handlePhysics(float dt) {
+		//collisions
 		for(auto ait=shapes.begin(); ait!=shapes.end(); ait++) {
-			auto& sa=*ait;
 			for(auto bit=std::next(ait); bit!=shapes.end(); bit++) {
-				auto& sb=*bit;
-
-				//get combined list of axes
-				std::list<vf2d> axes;
-				for(int j=0; j<2; j++) {
-					const auto& s=j?sa:sb;
-					//find tangents of shape's edges
-					for(int i=0; i<s->getNum(); i++) {
-						const auto& a=s->localToWorld(s->points[i]);
-						const auto& b=s->localToWorld(s->points[(i+1)%s->getNum()]);
-						axes.emplace_back((b-a).perp().norm());
-					}
-				}
-				
-				float record=INFINITY;
-
-				//for all axes
-				bool collide=true;
-				for(const auto& axis:axes) {
-					float a_min=INFINITY, a_max=-a_min;
-					float b_min=a_min, b_max=a_max;
-					int a_min_ix, a_max_ix;
-					int b_min_ix, b_max_ix;
-					//for each shape
-					for(int j=0; j<2; j++) {
-						const auto& s=j?sa:sb;
-						float& min=j?a_min:b_min;
-						float& max=j?a_max:b_max;
-						int& min_ix=j?a_min_ix:b_min_ix;
-						int& max_ix=j?a_min_ix:b_max_ix;
-						//project points onto said axis
-						for(int i=0; i<s->getNum(); i++) {
-							vf2d pt=s->localToWorld(s->points[i]);
-							float proj=pt.dot(axis);
-							if(proj<min) min=proj, min_ix=i;
-							if(proj>max) max=proj, max_ix=i;
-						}
-					}
-
-					//if no separation, objects DONT collide
-					if(a_max<b_min||b_max<a_min) {
-						collide=false;
-						break;
-					}
-
-					float dist=std::min(std::abs(a_max-b_min), std::abs(b_max-a_min));
-					if(dist<record) {
-						record=dist;
-					}
-				}
-			
-				//display whether colliding
-				if(collide) {
-					sa->col=olc::RED;
-					sb->col=olc::RED;
-				}
-			}
-		}
-#endif
-		{
-			struct Contact {
-				Shape* s_a, *s_b;
-				vf2d pt_a, pt_b;
-				vf2d norm;
-				float dist;
-			};
-			for(const auto& sa:shapes) {
-				for(const auto& sb:shapes) {
-					//dont check self
-					if(sb==sa) continue;
-
-					//list of both shapes' edge norms
-					std::list<vf2d> axes;
-					for(int j=0; j<2; j++) {
-						//for both shapes
-						Shape* s=j?sa:sb;
-						for(int i=0; i<s->getNum(); i++) {
-							//perpendicular vector on edge
-							const auto& a=s->localToWorld(s->points[i]);
-							const auto& b=s->localToWorld(s->points[(i+1)%s->getNum()]);
-							axes.emplace_back((a-b).norm().perp());
-						}
-					}
-
-
-				}
+				Shape::collide(**ait, **bit, dt);
 			}
 		}
 
+		//updating
 		for(const auto& s:shapes) {
 			//s->applyForce(s->mass*gravity, s->pos);
 			s->update(dt);
 		}
-#pragma endregion
+	}
+
+	bool OnUserUpdate(float dt) override {
+		mouse_pos=GetMousePos();
+		
+		handleUserInput(dt);
+
+		handlePhysics(dt);
 
 #pragma region RENDER
 		Clear(olc::GREY);
@@ -299,7 +254,7 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 			{
 				//initialize indexes
 				std::list<int> indexes;
-				for(int i=0; i<s->getNum(); i++) indexes.emplace_back(i);
+				for(int i=0; i<s->getNum(); i++) indexes.push_back(i);
 
 				//ear clipping triangulation
 				for(auto curr=indexes.begin(); curr!=indexes.end();) {
@@ -338,7 +293,8 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 						FillTriangleDecal(
 							s->localToWorld(pt_p),
 							s->localToWorld(pt_c),
-							s->localToWorld(pt_n)
+							s->localToWorld(pt_n),
+							s->col
 						);
 
 						//remove this index and start over
@@ -355,7 +311,7 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 				DrawLineDecal(
 					s->localToWorld(a),
 					s->localToWorld(b),
-					s->col
+					olc::BLACK
 				);
 			}
 
@@ -389,8 +345,8 @@ struct RigidBodyDemo : olc::PixelGameEngine {
 };
 
 int main() {
-	RigidBodyDemo rbd;
-	if(rbd.Construct(600, 800, 1, 1, false, true)) rbd.Start();
+	RigidBodyUI rbui;
+	if(rbui.Construct(600, 800, 1, 1, false, true)) rbui.Start();
 
 	return 0;
 }
