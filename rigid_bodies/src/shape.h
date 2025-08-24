@@ -8,7 +8,7 @@ namespace cmn {
 	using AABB=AABB_generic<vf2d>;
 }
 
-#include <list>
+#include <vector>
 #include <algorithm>
 #include <string>
 
@@ -22,7 +22,7 @@ public:
 	vf2d pos, old_pos, forces;
 	float mass=1;
 	float inv_mass=1;
-	
+
 	float rot=0, old_rot=0, torques=0;
 	vf2d cossin{1, 0};
 	float rotational_inertia=1;
@@ -38,7 +38,7 @@ public:
 		//allocate
 		num_pts=n;
 		points=new vf2d[num_pts];
-		
+
 		//make n-gon
 		for(int i=0; i<num_pts; i++) {
 			float angle=2*cmn::Pi*i/num_pts;
@@ -48,7 +48,7 @@ public:
 		initMass();
 		initInertia();
 	}
-	
+
 	Shape(const cmn::AABB& a) {
 		//allocate
 		num_pts=4;
@@ -65,7 +65,7 @@ public:
 	}
 
 	//ro3 1
-	Shape(const std::list<vf2d>& pts) {
+	Shape(const std::vector<vf2d>& pts) {
 		//allocate
 		num_pts=pts.size();
 		points=new vf2d[num_pts];
@@ -93,7 +93,7 @@ public:
 	Shape& operator=(const Shape& s) {
 		//dont remake self
 		if(&s==this) return *this;
-		
+
 		//deallocate
 		clear();
 
@@ -250,109 +250,106 @@ public:
 		torques=0;
 	}
 
-	static void collide(Shape& sa, Shape& sb, float dt) {
-		//combine both shapes normals into axes list
-		std::list<vf2d> axes;
-		for(int i=0; i<sa.num_pts; i++) {
-			vf2d a=sa.localToWorld(sa.points[i]);
-			vf2d b=sa.localToWorld(sa.points[(1+i)%sa.num_pts]);
-			vf2d tang=(b-a).norm();
-			vf2d norm(tang.y, -tang.x);
-			axes.push_back(norm);
-		}
-		for(int i=0; i<sb.num_pts; i++) {
-			vf2d a=sb.localToWorld(sb.points[i]);
-			vf2d b=sb.localToWorld(sb.points[(1+i)%sb.num_pts]);
-			vf2d tang=(b-a).norm();
-			vf2d norm(tang.y, -tang.x);
-			axes.push_back(norm);
-		}
+	static void collide(Shape& shp_a, Shape& shp_b, float dt) {
+		//separating axis theorem
+		float best_overlap=-1;
+		vf2d best_axis;
+		for(int si=0; si<2; si++) {
+			Shape& sa=si==0?shp_a:shp_b;
+			Shape& sb=si==0?shp_b:shp_a;
+			for(int i=0; i<sa.getNum(); i++) {
+				//get axis
+				vf2d a=sa.localToWorld(sa.points[i]);
+				vf2d b=sa.localToWorld(sa.points[(1+i)%sa.getNum()]);
+				vf2d tang=(b-a).norm();
+				vf2d axis(tang.y, -tang.x);
 
-		//for each axis
-		float collide_dist=-1;
-		vf2d collide_norm;
-		vf2d collide_pt;
-		for(const auto& n:axes) {
-			//project a's pts
-			float min_a=0, max_a=0;
-			int min_a_ix=0;
-			for(int i=0; i<sa.num_pts; i++) {
-				float v=n.dot(sa.localToWorld(sa.points[i]));
-				if(i==0||v<min_a) min_a=v, min_a_ix=i;
-				if(i==0||v>max_a) max_a=v;
-			}
-			//project b's pts
-			float min_b=0, max_b=0;
-			int min_b_ix=0;
-			for(int i=0; i<sb.num_pts; i++) {
-				float v=n.dot(sb.localToWorld(sb.points[i]));
-				if(i==0||v<min_b) min_b=v, min_b_ix=i;
-				if(i==0||v>max_b) max_b=v;
-			}
+				//project a's pts onto axis
+				float min_a=0, max_a=0;
+				for(int j=0; j<sa.getNum(); j++) {
+					float v=axis.dot(sa.localToWorld(sa.points[j]));
+					if(j==0||v<min_a) min_a=v;
+					if(j==0||v>max_a) max_a=v;
+				}
 
-			//are ranges overlapping?
-			float dab=max_a-min_b;
-			if(dab<0) return;
-			float dba=max_b-min_a;
-			if(dba<0) return;
+				//project b's pts onto axis
+				float min_b=0, max_b=0;
+				for(int j=0; j<sb.getNum(); j++) {
+					float v=axis.dot(sb.localToWorld(sb.points[j]));
+					if(j==0||v<min_b) min_b=v;
+					if(j==0||v>max_b) max_b=v;
+				}
 
-			//which side
-			float d=0;
-			vf2d pt;
-			if(dab<dba) d=dab, pt=sb.localToWorld(sb.points[min_b_ix]);
-			else d=dba, pt=sa.localToWorld(sa.points[min_a_ix]);
-
-			//get min overlap
-			if(collide_dist<0||d<collide_dist) {
-				collide_dist=d;
-				collide_norm=n;
-				collide_pt=pt;
+				//find overlap of ranges
+				float overlap=std::min(max_a, max_b)-std::max(min_a, min_b);
+				if(overlap<0) return;//separating axis found
+				if(best_overlap<0||overlap<best_overlap) {
+					best_overlap=overlap;
+					best_axis=axis;
+				}
 			}
 		}
 
-		//make sure norm pushes apart
-		if(collide_norm.dot(sa.pos-sb.pos)<0) collide_norm*=-1;
-		vf2d diff=.5f*collide_dist*collide_norm;
-		
+		//ensure axis points from a->b
+		if(best_axis.dot(shp_b.pos-shp_a.pos)<0) best_axis*=-1;
+
+		//which points of a inside b
+		std::vector<vf2d> contacts;
+		for(int i=0; i<shp_a.num_pts; i++) {
+			vf2d pt=shp_a.localToWorld(shp_a.points[i]);
+			if(shp_b.contains(pt)) contacts.push_back(pt);
+		}
+		//which points of b inside a
+		for(int i=0; i<shp_b.num_pts; i++) {
+			vf2d pt=shp_b.localToWorld(shp_b.points[i]);
+			if(shp_a.contains(pt)) contacts.push_back(pt);
+		}
+
 		//update positions
-		if(!sa.locked) sa.pos+=diff;
-		if(!sb.locked) sb.pos-=diff;
+		vf2d mtv=.5f*best_overlap*best_axis;
+		if(!shp_a.locked) shp_a.pos-=mtv;
+		if(!shp_b.locked) shp_b.pos+=mtv;
 
-		//get relative velocities
-		vf2d ra=collide_pt-sa.pos;
-		vf2d rb=collide_pt-sb.pos;
-		vf2d vel_a=(sa.pos-sa.old_pos)/dt;
-		vf2d vel_b=(sb.pos-sb.old_pos)/dt;
-		float rot_vel_a=(sa.rot-sa.old_rot)/dt;
-		float rot_vel_b=(sb.rot-sb.old_rot)/dt;
-		vf2d va=vel_a+rot_vel_a*ra;
-		vf2d vb=vel_b+rot_vel_b*rb;
-		float vrel=collide_norm.dot(vb-va);
-		
-		//impulse magnitude
-		if(vrel<0) {
-			const float e=.5f;//restitution
-			float raxn=ra.x*collide_norm.y-ra.y*collide_norm.x;
-			float rbxn=rb.x*collide_norm.y-rb.y*collide_norm.x;
-			float denom=sa.inv_mass+sb.inv_mass+
-				sa.inv_rotational_inertia*raxn*raxn+
-				sb.inv_rotational_inertia*rbxn*rbxn;
-			float impulse=-(1+e)*vrel/denom;
+		//apply impulses
+		vf2d vel_a=(shp_a.pos-shp_a.old_pos)/dt;
+		vf2d vel_b=(shp_b.pos-shp_b.old_pos)/dt;
+		float rot_vel_a=(shp_a.rot-shp_a.old_rot)/dt;
+		float rot_vel_b=(shp_b.rot-shp_b.old_rot)/dt;
+		for(const auto& c:contacts) {
+			//get relative velocities
+			vf2d ra=c-shp_a.pos;
+			vf2d rb=c-shp_b.pos;
+			vf2d va=vel_a+rot_vel_a*ra;
+			vf2d vb=vel_b+rot_vel_b*rb;
+			float vrel=best_axis.dot(vb-va);
 
-			//update velocities
-			vel_a-=sa.inv_mass*impulse*collide_norm;
-			vel_b-=sa.inv_mass*impulse*collide_norm;
-			//update old_pos
-			if(!sa.locked) sa.old_pos=sa.pos-dt*vel_a;
-			if(!sb.locked) sb.old_pos=sb.pos-dt*vel_b;
+			//impulse magnitude
+			if(vrel<0) {
+				const float e=.5f;//restitution
+				float raxn=ra.x*best_axis.y-ra.y*best_axis.x;
+				float rbxn=rb.x*best_axis.y-rb.y*best_axis.x;
+				float denom=shp_a.inv_mass+shp_b.inv_mass+
+					shp_a.inv_rotational_inertia*raxn*raxn+
+					shp_b.inv_rotational_inertia*rbxn*rbxn;
+				float impulse=-(1+e)*vrel/denom;
 
-			//update rotational velocities
-			rot_vel_a-=sa.inv_rotational_inertia*impulse*raxn;
-			rot_vel_b-=sb.inv_rotational_inertia*impulse*rbxn;
-			//update old_rot
-			if(!sa.locked) sa.old_rot=sa.rot-dt*rot_vel_a;
-			if(!sb.locked) sb.old_rot=sb.rot-dt*rot_vel_b;
+				//update velocities
+				vel_a-=shp_a.inv_mass*impulse*best_axis;
+				vel_b+=shp_a.inv_mass*impulse*best_axis;
+
+				//update rotational velocities
+				rot_vel_a-=shp_a.inv_rotational_inertia*impulse*raxn;
+				rot_vel_b+=shp_b.inv_rotational_inertia*impulse*rbxn;
+			}
 		}
+
+		//update old_pos
+		if(!shp_a.locked) shp_a.old_pos=shp_a.pos-dt*vel_a;
+		if(!shp_b.locked) shp_b.old_pos=shp_b.pos-dt*vel_b;
+
+		//update old_rot
+		if(!shp_a.locked) shp_a.old_rot=shp_a.rot-dt*rot_vel_a;
+		if(!shp_b.locked) shp_b.old_rot=shp_b.rot-dt*rot_vel_b;
 	}
 #pragma endregion
 };
