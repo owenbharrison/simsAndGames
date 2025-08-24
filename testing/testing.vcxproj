@@ -151,19 +151,14 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\imgui\imgui.cpp" />
+    <ClCompile Include="src\imgui\imgui_demo.cpp" />
+    <ClCompile Include="src\imgui\imgui_draw.cpp" />
+    <ClCompile Include="src\imgui\imgui_impl_opengl2.cpp" />
+    <ClCompile Include="src\imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="src\imgui\imgui_tables.cpp" />
+    <ClCompile Include="src\imgui\imgui_widgets.cpp" />
     <ClCompile Include="src\main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="src\billboard.h" />
-    <ClInclude Include="src\mesh.h" />
-    <ClInclude Include="src\packing.h" />
-    <ClInclude Include="src\particle.h" />
-    <ClInclude Include="src\quat.h" />
-    <ClInclude Include="src\scene.h" />
-    <ClInclude Include="src\slider.h" />
-    <ClInclude Include="src\solver.h" />
-    <ClInclude Include="src\sprite_sheet.h" />
-    <ClInclude Include="src\thread_pool.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\bench.scn" />
@@ -173,6 +168,18 @@
     <Text Include="assets\dragon.txt" />
     <Text Include="assets\house.txt" />
     <Text Include="assets\suzanne.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\imgui\imconfig.h" />
+    <ClInclude Include="src\imgui\imgui.h" />
+    <ClInclude Include="src\imgui\imgui_impl_opengl2.h" />
+    <ClInclude Include="src\imgui\imgui_impl_opengl3.h" />
+    <ClInclude Include="src\imgui\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="src\imgui\imgui_impl_pge.h" />
+    <ClInclude Include="src\imgui\imgui_internal.h" />
+    <ClInclude Include="src\imgui\imstb_rectpack.h" />
+    <ClInclude Include="src\imgui\imstb_textedit.h" />
+    <ClInclude Include="src\imgui\imstb_truetype.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
