@@ -3,53 +3,64 @@
 #include "olcPixelGameEngine.h"
 
 #define OLC_PGEX_DEAR_IMGUI_IMPLEMENTATION
-#include "imgui/imgui_impl_pge.h"
+#include "olcPGEX_ImGui.h"
 
 class Example : public olc::PixelGameEngine {
 	olc::imgui::PGE_ImGUI pge_imgui;
 	int game_layer=0;
 
+	bool left_side=false;
+	bool right_side=false;
+
+	float background_col[3];
+
 public:
-	//PGE_ImGui can automatically call the SetLayerCustomRenderFunction by passing
-	//true into the constructor.  false is the default value.
-	Example() : pge_imgui(false) {
-		sAppName="Test Application";
+	Example() : pge_imgui(true) {
+		sAppName="ImGui testing";
 	}
 
 public:
 	bool OnUserCreate() override {
-		//Create a new Layer which will be used for the game
 		game_layer=CreateLayer();
-		//The layer is not enabled by default,  so we need to enable it
 		EnableLayer(game_layer, true);
-
-		//Set a custom render function on layer 0.  Since DrawUI is a member of
-		//our class, we need to use std::bind
-		//If the pge_imgui was constructed with _register_handler = true, this line is not needed
-		SetLayerCustomRenderFunction(0, std::bind(&Example::DrawUI, this));
 
 		return true;
 	}
 
 	bool OnUserUpdate(float fElapsedTime) override {
-		//Change the Draw Target to not be Layer 0
 		SetDrawTarget((uint8_t)game_layer);
 
-		//Create and react to your UI here, it will be drawn during the layer draw function
-		ImGui::ShowDemoWindow();
+		static float f=0.0f;
+		static int counter=0;
+
+		ImGui::Begin("Hello, world!");
+
+		ImGui::Text("paragraph");
+		ImGui::Checkbox("left_side", &left_side);
+		ImGui::Checkbox("right_side", &right_side);
+
+		ImGui::SliderFloat("float", &f, 0, 1);
+		ImGui::ColorPicker3("col", background_col);
+
+		ImGui::End();
+
+		Clear(olc::PixelF(background_col[0], background_col[1], background_col[2]));
+
+		{
+			int margin=20;
+			olc::Pixel left_col=left_side?olc::GREEN:olc::RED;
+			FillRect(margin, margin, ScreenWidth()/2-3*margin/2, ScreenHeight()-2*margin, left_col);
+			olc::Pixel right_col=right_side?olc::GREEN:olc::RED;
+			DrawRect(ScreenWidth()/2+margin/2, margin, ScreenWidth()/2-3*margin/2, ScreenHeight()-2*margin, right_col);
+		}
 
 		return true;
-	}
-
-	void DrawUI(void) {
-		//This finishes the Dear ImGui and renders it to the screen
-		pge_imgui.ImGui_ImplPGE_Render();
 	}
 };
 
 int main() {
 	Example demo;
-	if(demo.Construct(640, 360, 2, 2)) demo.Start();
+	if(demo.Construct(640, 480, 1, 1)) demo.Start();
 
 	return 0;
 }
