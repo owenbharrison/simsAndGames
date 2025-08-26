@@ -1,315 +1,273 @@
-#define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+/*TODO
+make bounding volume hierarchy
+	to speed up voxelization
+
+place stud models
+
+textured models to find color
+
+color palatte lookup
+
+api prices for bill of materials
+
+instructions
+*/
+
+#define OLC_GFX_OPENGL33
+#include "common/3d/engine_3d.h"
+using cmn::vf3d;
 using olc::vf2d;
-using olc::vi2d;
+
+#define OLC_PGEX_DEAR_IMGUI_IMPLEMENTATION
+#include "olcPGEX_ImGui.h"
 
 #include "common/utils.h"
-#include "common/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
-}
 
-#include "common/stopwatch.h"
+#include "conversions.h"
 
-struct Rect {
-	vi2d ij, wh;
-};
+class SlicerUI : public cmn::Engine3D {
+	//camera direction
+	float cam_yaw=1.07f;
+	float cam_pitch=-.56f;
+	vf3d light_pos;
 
-//sorted by descending area?
-static const std::list<vi2d> allowed_sizes{
-	{2, 8},  {2, 6}, {1, 8},
-	{2, 4}, {1, 6}, {2, 3}, {1, 4},
-	{2, 2}, {1, 3}, {1, 2}, {1, 1}
-};
+	//orbit controls
+	olc::vf2d* orbit_start=nullptr;
+	float temp_yaw=0, temp_pitch=0;
+	
+	//scene stuff
+	cmn::AABB3 build_volume;
+	Mesh model;
 
-struct Example : olc::PixelGameEngine {
-	Example() {
-		sAppName="wall edit testing";
+	//lego stud width
+	float resolution=7.8f;
+	
+	//imgui stuff
+	olc::imgui::PGE_ImGUI pge_imgui;
+	int game_layer=0;
+
+	bool prev_reslice=false;
+
+	VoxelSet voxels;
+	Mesh voxels_mesh;
+
+public:
+	SlicerUI() : pge_imgui(true) {
+		sAppName="Slicer Demo";
 	}
 
-	//"primitive" render helpers
-	olc::Sprite* prim_rect_spr=nullptr;
-	olc::Decal* prim_rect_dec=nullptr;
+	bool user_create() override {
+		std::srand(std::time(0));
+		
+		//try load test model
+		try {
+			model=Mesh::loadFromOBJ("assets/3DBenchy.txt");
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
+		}
 
-	int width=0, height=0, depth=0;
-	bool* grid=nullptr;
-	int ix(int i, int j, int k) const {
-		return i+width*(j+height*k);
+		//prusa mk4 build volume(250x210x220mm)
+		build_volume={{-125, -105, -110}, {125, 105, 110}};
+
+		//scale model into build volume
+		{
+			vf3d build_dims=build_volume.max-build_volume.min;
+			cmn::AABB3 model_box=model.getLocalAABB();
+			vf3d box_dims=model_box.max-model_box.min;
+
+			//which dimension is the weak link?
+			vf3d num=build_dims/box_dims;
+			float scl=std::min(num.x, std::min(num.y, num.z));
+
+			//scale & place model in center
+			model.scale={scl, scl, scl};
+			model.offset=build_volume.getCenter()-model_box.getCenter();
+
+			model.updateTransforms();
+			model.updateTriangles();
+			model.colorNormally();
+
+			//translate model onto floor?
+		}
+
+		game_layer=CreateLayer();
+		EnableLayer(game_layer, true);
+
+		return true;
 	}
-	std::list<Rect>* rects=nullptr;
-	int list_index=0;
 
-	cmn::AABB box;
-	vf2d box_start;
+	void handleCameraMovement(float dt) {
+		//look up, down
+		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
+		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch+=dt;
+		//clamp pitch
+		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
+		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
 
-	//spiral tower!
-	void makeTower() {
-		delete[] grid;
+		//look left, right
+		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
+		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
 
-		//width&depth= 10-50
-		width=5+rand()%16;
-		depth=width;
-		height=width*width;
-		grid=new bool[width*height*depth];
-		memset(grid, false, sizeof(bool)*width*height*depth);
+		//start orbit
+		const auto orbit_action=GetMouse(olc::Mouse::RIGHT);
+		if(orbit_action.bPressed) {
+			orbit_start=new olc::vf2d(GetMousePos());
+		}
 
-		auto makeColumn=[&] (int i, int k, int h) {
-			for(int j=0; j<h; j++) grid[ix(i, j, k)]=true;
+		//temporary orbit direction
+		temp_pitch=cam_pitch;
+		temp_yaw=cam_yaw;
+		if(orbit_start) {
+			olc::vf2d diff=GetMousePos()-*orbit_start;
+			temp_pitch-=.0067f*diff.y;
+			//clamp new pitch
+			if(temp_pitch<-cmn::Pi/2) temp_pitch=.001f-cmn::Pi/2;
+			if(temp_pitch>cmn::Pi/2) temp_pitch=cmn::Pi/2-.001f;
+			temp_yaw+=.01f*diff.x;
+		}
+
+		//end orbit
+		if(orbit_action.bReleased) {
+			//set actual direction to temp direction
+			cam_yaw=temp_yaw;
+			cam_pitch=temp_pitch;
+
+			//clear pointer flags
+			delete orbit_start;
+			orbit_start=nullptr;
+		}
+
+		//angles to direction
+		cam_dir={
+			std::cos(temp_yaw)* std::cos(temp_pitch),
+			std::sin(temp_pitch),
+			std::sin(temp_yaw)* std::cos(temp_pitch)
 		};
 
-		int lft=0, rgt=width-1, back=0, front=depth-1;
-		int num=width*depth;
-		for(int s=0; s<num;) {
-			for(int i=lft; i<=rgt&&s<num; i++, s++) {
-				makeColumn(i, back, s+1);
-			}
-			back++;
-
-			for(int k=back; k<=front&&s<num; k++, s++) {
-				makeColumn(rgt, k, s+1);
-			}
-			rgt--;
-
-			for(int i=rgt; i>=lft&&s<num; i--, s++) {
-				makeColumn(i, front, s+1);
-			}
-			front--;
-
-			for(int k=front; k>=back&&s<num; k--, s++) {
-				makeColumn(lft, k, s+1);
-			}
-			lft++;
+		//dynamic camera system :D
+		{
+			//find sphere to envelope bounds
+			vf3d ctr=build_volume.getCenter();
+			float st_dist=1+(build_volume.max-ctr).mag();
+			//step backwards along cam ray
+			vf3d st=ctr-st_dist*cam_dir;
+			//snap pt to bounds & make relative to origin
+			float rad=st_dist-build_volume.intersectRay(st, cam_dir);
+			//push cam back by some some margin
+			cam_pos=-(136.5f+rad)*cam_dir;
+			//light at camera
+			light_pos=cam_pos;
 		}
-
-		reslice();
-	}
-
-	void makeEllipsoid() {
-		delete[] grid;
-
-		//size for each dimension: 10-50
-		width=10+rand()%41;
-		height=10+rand()%41;
-		depth=10+rand()%41;
-		grid=new bool[width*height*depth];
-		
-		float a=.5f*width;
-		float b=.5f*height;
-		float c=.5f*depth;
-		for(int i=0; i<width; i++) {
-			float x=i-a;
-			for(int j=0; j<height; j++) {
-				float y=j-b;
-				for(int k=0; k<depth; k++) {
-					float z=k-c;
-					float lhs=x*x/a/a+y*y/b/b+z*z/c/c;
-					grid[ix(i, j, k)]=lhs>.5&&lhs<1;
-				}
-			}
-		}
-
-		reslice();
 	}
 
 	void reslice() {
-		delete[] rects;
-		rects=new std::list<Rect>[height];
-		
-		list_index=0;
-
-		bool* meshed=new bool[width*depth];
-		auto ik_ix=[this] (int i, int k) {
-			return i+width*k;
-		};
-
-		int dims[2]{width, depth};
-		int ik[2];
-
-		for(int j=0; j<height; j++) {
-			memset(meshed, false, sizeof(bool)*width*depth);
-			//flip prioritized axis each slice
-			const int axis_a=j%2, axis_b=(axis_a+1)%2;
-			const int dim_a=dims[axis_a], dim_b=dims[axis_b];
-			for(int a=0; a<dim_a; a++) {
-				for(int b=0; b<dim_b; b++) {
-					ik[axis_a]=a, ik[axis_b]=b;
-
-					//skip if air or meshed
-					if(!grid[ix(ik[0], j, ik[1])]||meshed[ik_ix(ik[0], ik[1])]) continue;
-
-					//try combine in x
-					int sz_a=1;
-					for(int a_=1+a; a_<dim_a; a_++, sz_a++) {
-						//stop if air or meshed
-						ik[axis_a]=a_, ik[axis_b]=b;
-						if(!grid[ix(ik[0], j, ik[1])]||meshed[ik_ix(ik[0], ik[1])]) break;
-					}
-
-					//try combine combination in z
-					int sz_b=1;
-					for(int b_=1+b; b_<dim_b; b_++, sz_b++) {
-						bool able=true;
-						for(int a_=0; a_<sz_a; a_++) {
-							//stop if air or meshed
-							ik[axis_a]=a+a_, ik[axis_b]=b_;
-							if(!grid[ix(ik[0], j, ik[1])]||meshed[ik_ix(ik[0], ik[1])]) {
-								able=false;
-								break;
-							}
-						}
-						if(!able) break;
-					}
-					
-					//limit size to available blocks
-					for(const auto& as:allowed_sizes) {
-						if(as.x<=sz_a&&as.y<=sz_b) {
-							sz_a=as.x, sz_b=as.y;
-							break;
-						}
-						if(as.x<=sz_b&&as.y<=sz_a) {
-							sz_b=as.x, sz_a=as.y;
-							break;
-						}
-					}
-
-					//set meshed
-					for(int a_=0; a_<sz_a; a_++) {
-						for(int b_=0; b_<sz_b; b_++) {
-							ik[axis_a]=a+a_, ik[axis_b]=b+b_;
-							meshed[ik_ix(ik[0], ik[1])]=true;
-						}
-					}
-
-					//append to meshlist
-					Rect r;
-					ik[axis_a]=a, ik[axis_b]=b;
-					r.ij.x=ik[0], r.ij.y=ik[1];
-					ik[axis_a]=sz_a, ik[axis_b]=sz_b;
-					r.wh.x=ik[0], r.wh.y=ik[1];
-					rects[j].push_back(r);
-				}
-			}
-		}
-
-		delete[] meshed;
+		voxels=meshToVoxels(model, resolution);
+		voxels_mesh=voxelsToMesh(voxels);
 	}
 
-	bool OnUserCreate() override {
-		srand(time(0));
-
-		//make some "primitives" to draw with
-		prim_rect_spr=new olc::Sprite(1, 1);
-		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
-		prim_rect_dec=new olc::Decal(prim_rect_spr);
-
-		makeEllipsoid();
-
-		auto margin=23;
-		vf2d offset(margin, margin);
-		vf2d resolution(ScreenWidth(), ScreenHeight());
-		box={offset, resolution-offset};
-
-		return true;
-	}
-
-	bool OnUserDestroy() override {
-		delete[] grid;
-
-		return true;
-	}
-
-	void DrawThickLine(const vf2d& a, const vf2d& b, float rad, const olc::Pixel& col) {
-		vf2d sub=b-a;
-		float len=sub.mag();
-		vf2d tang=sub.perp()/len;
-
-		float angle=std::atan2f(sub.y, sub.x);
-		DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
-	}
-
-	void DrawThickRect(const vf2d& tl, const vf2d& size, float rad, const olc::Pixel& col) {
-		vf2d br=tl+size;
-		vf2d tr(br.x, tl.y);
-		vf2d bl(tl.x, br.y);
-		DrawThickLine(tl, tr, rad, col);
-		DrawThickLine(tr, br, rad, col);
-		DrawThickLine(br, bl, rad, col);
-		DrawThickLine(bl, tl, rad, col);
-	}
-
-	bool OnUserUpdate(float dt) override {
+	bool user_update(float dt) override {
 		const vf2d mouse_pos=GetMousePos();
 
-		//reset grid
-		if(GetKey(olc::Key::T).bPressed) {
-			cmn::Stopwatch watch; watch.start();
-			makeTower();
-			watch.stop();
-			auto dur=watch.getMicros();
-			std::cout<<"tower took: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+		handleCameraMovement(dt);
+
+		ImGui::Begin("Slicer Options");
+		
+		ImGui::Text("size(mm)");
+		ImGui::SameLine();
+		//nanoblock -> duplo
+		ImGui::SliderFloat("", &resolution, 4, 15.6f);
+		
+		if(ImGui::Button("Reslice")) reslice();
+		ImGui::SameLine();
+		if(ImGui::Button("Color Normals")) voxels_mesh.colorNormally();
+
+		ImGui::End();
+
+		return true;
+	}
+
+#pragma region GEOMETRY HELPERS
+	//this looks nice :D
+	void addArrow(const vf3d& a, const vf3d& b, float sz, const olc::Pixel& col) {
+		vf3d ba=b-a;
+		float mag=ba.mag();
+		vf3d ca=cam_pos-a;
+		vf3d perp=.5f*sz*mag*ba.cross(ca).norm();
+		vf3d c=b-sz*ba;
+		vf3d l=c-perp, r=c+perp;
+		cmn::Line l1{a, c}; l1.col=col;
+		lines_to_project.push_back(l1);
+		cmn::Line l2{l, r}; l2.col=col;
+		lines_to_project.push_back(l2);
+		cmn::Line l3{l, b}; l3.col=col;
+		lines_to_project.push_back(l3);
+		cmn::Line l4{r, b}; l4.col=col;
+		lines_to_project.push_back(l4);
+	}
+#pragma endregion
+
+	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+
+		//add model
+		//tris_to_project.insert(tris_to_project.end(),
+			//model.tris.begin(), model.tris.end()
+		//);
+
+		//add voxels mesh
+		tris_to_project.insert(tris_to_project.end(),
+			voxels_mesh.tris.begin(), voxels_mesh.tris.end()
+		);
+
+		//add scene bounds
+		addAABB(build_volume, olc::BLACK);
+
+		//add axis
+		{
+			vf3d corner=.1f+build_volume.min;
+			float sz=.6f;
+			addArrow(corner, corner+vf3d(sz, 0, 0), .2f, olc::RED);
+			addArrow(corner, corner+vf3d(0, sz, 0), .2f, olc::BLUE);
+			addArrow(corner, corner+vf3d(0, 0, sz), .2f, olc::GREEN);
 		}
-		if(GetKey(olc::Key::E).bPressed) {
-			cmn::Stopwatch watch; watch.start();
-			makeEllipsoid();
-			watch.stop();
-			auto dur=watch.getMicros();
-			std::cout<<"ellipsoid took: "<<dur<<"us ("<<(dur/1000.f)<<" ms)\n";
+
+		return true;
+	}
+
+	bool user_render() override {
+		SetDrawTarget(game_layer);
+		
+		Clear(olc::GREY);
+
+		//render 3d stuff
+		resetBuffers();
+
+		for(const auto& t:tris_to_draw) {
+			FillDepthTriangle(
+				t.p[0].x, t.p[0].y, t.t[0].w,
+				t.p[1].x, t.p[1].y, t.t[1].w,
+				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.col, t.id
+			);
+		}
+
+		for(const auto& l:lines_to_draw) {
+			DrawDepthLine(
+				l.p[0].x, l.p[0].y, l.t[0].w,
+				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.col, l.id
+			);
 		}
 		
-		//slice thru layers
-		if(GetKey(olc::Key::UP).bPressed||GetMouseWheel()>0) list_index++;
-		if(GetKey(olc::Key::DOWN).bPressed||GetMouseWheel()<0) list_index--;
-		list_index=(list_index+height)%height;
-
-		//grey background, black slice box
-		Clear(olc::WHITE);
-		vf2d dim=box.max-box.min;
-		FillRect(box.min, dim, olc::GREY);
-
-		//show underlying grid
-		vf2d sz=dim/vf2d(width, depth);
-		for(int i=0; i<=width; i++) {
-			float x=cmn::map(i, 0, width, box.min.x, box.max.x);
-			vf2d top(x, box.min.y), btm(x, box.max.y);
-			DrawLineDecal(top, btm, olc::BLACK);
-		}
-		for(int j=0; j<=depth; j++) {
-			float y=cmn::map(j, 0, depth, box.min.y, box.max.y);
-			vf2d lft(box.min.x, y), rgt(box.max.x, y);
-			DrawLineDecal(lft, rgt, olc::BLACK);
-		}
-
-		//show slice rects
-		for(const auto& r:rects[list_index]) {
-			//choose color based on efficiency?
-			olc::Pixel col=olc::RED;
-			switch((r.wh.x>1)+(r.wh.y>1)) {
-				case 1: col=olc::YELLOW; break;
-				case 2: col=olc::BLUE; break;
-			}
-
-			//show rect with outline
-			vf2d xy=box.min+sz*r.ij;
-			vf2d wh=sz*r.wh;
-			FillRectDecal(xy, wh, olc::DARK_GREY);
-			DrawThickRect(xy, wh, 1, col);
-
-			//show size on it
-			std::string str=std::to_string(r.wh.x)+"x"+std::to_string(r.wh.y);
-			vf2d offset(4*str.length(), 4);
-			DrawStringDecal(xy+wh/2-offset, str);
-		}
-
-		//show layer
-		DrawString(0, 0, "layer "+std::to_string(list_index), olc::BLACK);
-
 		return true;
 	}
 };
 
 int main() {
-	Example e;
-	if(e.Construct(600, 600, 1, 1, false, true)) e.Start();
+	SlicerUI sui;
+	if(sui.Construct(600, 600, 1, 1, false, true)) sui.Start();
 
 	return 0;
 }
