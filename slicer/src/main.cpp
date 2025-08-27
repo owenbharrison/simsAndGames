@@ -40,7 +40,7 @@ class SlicerUI : public cmn::Engine3D {
 	Mesh model;
 
 	//lego stud width
-	float resolution=7.8f;
+	vf3d resolution{7.8f, 9.6f, 7.8f};
 	
 	//imgui stuff
 	olc::imgui::PGE_ImGUI pge_imgui;
@@ -173,11 +173,17 @@ public:
 
 		ImGui::Begin("Slicer Options");
 		
-		ImGui::Text("size(mm)");
-		ImGui::SameLine();
 		//nanoblock -> duplo
-		ImGui::SliderFloat("", &resolution, 4, 15.6f);
-		
+		ImGui::Text("size_x(mm)");
+		ImGui::SameLine();
+		ImGui::SliderFloat("##sz_x", &resolution.x, 4, 15.6f);
+		ImGui::Text("size_y(mm)");
+		ImGui::SameLine();
+		ImGui::SliderFloat("##sz_y", &resolution.y, 4, 15.6f);
+		ImGui::Text("size_z(mm)");
+		ImGui::SameLine();
+		ImGui::SliderFloat("##sz_z", &resolution.z, 4, 15.6f);
+
 		if(ImGui::Button("Reslice")) reslice();
 		ImGui::SameLine();
 		if(ImGui::Button("Color Normals")) voxels_mesh.colorNormally();

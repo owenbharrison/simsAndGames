@@ -12,7 +12,7 @@ class VoxelSet {
 public:
 	bool* grid=nullptr;
 
-	float scale=1;
+	vf3d scale{1, 1, 1};
 	vf3d offset;
 
 	VoxelSet() {}

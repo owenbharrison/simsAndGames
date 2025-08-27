@@ -7,7 +7,7 @@
 
 #include <thread>
 
-VoxelSet meshToVoxels(const Mesh& m, float res) {
+VoxelSet meshToVoxels(const Mesh& m, vf3d res) {
 	//get global mesh dimensions
 	cmn::AABB3 m_box;
 	for(const auto& v:m.verts) {
@@ -16,9 +16,9 @@ VoxelSet meshToVoxels(const Mesh& m, float res) {
 
 	//determine sizing
 	vf3d m_dims=m_box.max-m_box.min;
-	int width=1+m_dims.x/res;
-	int height=1+m_dims.y/res;
-	int depth=1+m_dims.z/res;
+	int width=1+m_dims.x/res.x;
+	int height=1+m_dims.y/res.y;
+	int depth=1+m_dims.z/res.z;
 
 	//allocate
 	VoxelSet v(width, height, depth);
@@ -71,7 +71,7 @@ Mesh voxelsToMesh(const VoxelSet& v) {
 
 	Mesh m;
 	m.offset=v.offset;
-	m.scale={v.scale, v.scale, v.scale};
+	m.scale=v.scale;
 
 	//mesh vertex lookup
 	int* lookup=new int[(1+width)*(1+height)*(1+depth)];
