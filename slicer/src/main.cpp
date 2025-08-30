@@ -25,6 +25,28 @@ using olc::vf2d;
 
 #include "conversions.h"
 
+const int valid_sizes[][2]{
+	{2, 10},
+	{2, 8},
+	{2, 6},
+	{1, 10},
+	{1, 8},
+	{2, 4},
+	{1, 6},
+	{2, 3},
+	{1, 4},
+	{2, 2},
+	{1, 3},
+	{1, 2},
+	{1, 1}
+};
+const int num_valid_sizes=sizeof(valid_sizes)/sizeof(valid_sizes[0]);
+
+struct Prism {
+	int x=0, y=0, z=0;
+	int w=0, d=0;
+};
+
 class SlicerUI : public cmn::Engine3D {
 	//camera direction
 	float cam_yaw=1.07f;
@@ -49,7 +71,10 @@ class SlicerUI : public cmn::Engine3D {
 	bool prev_reslice=false;
 
 	VoxelSet voxels;
-	Mesh voxels_mesh;
+	std::vector<Prism> prisms;
+	int min_layer=0;
+	int max_layer=0;
+	bool show_edges=true;
 
 public:
 	SlicerUI() : pge_imgui(true) {
@@ -155,15 +180,108 @@ public:
 			//snap pt to bounds & make relative to origin
 			float rad=st_dist-build_volume.intersectRay(st, cam_dir);
 			//push cam back by some some margin
-			cam_pos=-(136.5f+rad)*cam_dir;
+			cam_pos=-(110+rad)*cam_dir;
 			//light at camera
 			light_pos=cam_pos;
 		}
 	}
 
 	void reslice() {
+		//voxellize mesh
 		voxels=meshToVoxels(model, resolution);
-		voxels_mesh=voxelsToMesh(voxels);
+		const int& v_w=voxels.getWidth();
+		const int& v_h=voxels.getHeight();
+		const int& v_d=voxels.getDepth();
+
+		//clear prism list
+		prisms.clear();
+		
+		//which voxels have i used?
+		bool* meshed=new bool[v_w*v_d];
+		auto ik_ix=[v_w] (int i, int k) {
+			return i+v_w*k;
+		};
+
+		//generalized indexing logic
+		const int dims[2]{v_w, v_d};
+		int ik[2];
+
+		//slice along height
+		for(int j=0; j<v_h; j++) {
+			//reset meshed
+			std::memset(meshed, false, sizeof(bool)*v_w*v_d);
+			
+			//flip prioritized axis each slice
+			const int axis_a=j%2, axis_b=(axis_a+1)%2;
+			const int dim_a=dims[axis_a], dim_b=dims[axis_b];
+			for(int a=0; a<dim_a; a++) {
+				for(int b=0; b<dim_b; b++) {
+					ik[axis_a]=a, ik[axis_b]=b;
+
+					//skip if air or meshed
+					if(!voxels.grid[voxels.ix(ik[0], j, ik[1])]
+						||meshed[ik_ix(ik[0], ik[1])]) continue;
+
+					//try combine in a
+					int sz_a=1;
+					for(int a_=1+a; a_<dim_a; a_++, sz_a++) {
+						//stop if air or meshed
+						ik[axis_a]=a_, ik[axis_b]=b;
+						if(!voxels.grid[voxels.ix(ik[0], j, ik[1])]
+							||meshed[ik_ix(ik[0], ik[1])]) break;
+					}
+
+					//try combine combination in b
+					int sz_b=1;
+					for(int b_=1+b; b_<dim_b; b_++, sz_b++) {
+						bool able=true;
+						for(int a_=0; a_<sz_a; a_++) {
+							//stop if air or meshed
+							ik[axis_a]=a+a_, ik[axis_b]=b_;
+							if(!voxels.grid[voxels.ix(ik[0], j, ik[1])]
+								||meshed[ik_ix(ik[0], ik[1])]) {
+								able=false;
+								break;
+							}
+						}
+						if(!able) break;
+					}
+
+					//limit size to valid
+					for(int s=0; s<num_valid_sizes; s++) {
+						//check both ways
+						const auto& w=valid_sizes[s][0];
+						const auto& h=valid_sizes[s][1];
+						if(w<=sz_a&&h<=sz_b) {
+							sz_a=w, sz_b=h;
+							break;
+						}
+						if(w<=sz_b&&h<=sz_a) {
+							sz_b=w, sz_a=h;
+							break;
+						}
+					}
+
+					//set meshed
+					for(int a_=0; a_<sz_a; a_++) {
+						for(int b_=0; b_<sz_b; b_++) {
+							ik[axis_a]=a+a_, ik[axis_b]=b+b_;
+							meshed[ik_ix(ik[0], ik[1])]=true;
+						}
+					}
+
+					//append to prism list
+					Prism p;
+					ik[axis_a]=a, ik[axis_b]=b;
+					p.x=ik[0], p.y=j, p.z=ik[1];
+					ik[axis_a]=sz_a, ik[axis_b]=sz_b;
+					p.w=ik[0], p.d=ik[1];
+					prisms.push_back(p);
+				}
+			}
+		}
+
+		delete[] meshed;
 	}
 
 	bool user_update(float dt) override {
@@ -176,17 +294,27 @@ public:
 		//nanoblock -> duplo
 		ImGui::Text("size_x(mm)");
 		ImGui::SameLine();
-		ImGui::SliderFloat("##sz_x", &resolution.x, 4, 15.6f);
+		ImGui::SliderFloat("##sx", &resolution.x, 4, 15.6f);
 		ImGui::Text("size_y(mm)");
 		ImGui::SameLine();
-		ImGui::SliderFloat("##sz_y", &resolution.y, 4, 15.6f);
+		ImGui::SliderFloat("##sy", &resolution.y, 4, 15.6f);
 		ImGui::Text("size_z(mm)");
 		ImGui::SameLine();
-		ImGui::SliderFloat("##sz_z", &resolution.z, 4, 15.6f);
+		ImGui::SliderFloat("##sz", &resolution.z, 4, 15.6f);
 
 		if(ImGui::Button("Reslice")) reslice();
+
+		ImGui::Text("Min Layer");
 		ImGui::SameLine();
-		if(ImGui::Button("Color Normals")) voxels_mesh.colorNormally();
+		ImGui::SliderInt("##nl", &min_layer, 0, voxels.getHeight());
+		ImGui::Text("Max Layer");
+		ImGui::SameLine();
+		ImGui::SliderInt("##xl", &max_layer, 0, voxels.getHeight());
+		if(min_layer>max_layer) std::swap(min_layer, max_layer);
+
+		ImGui::Text("Show Edges");
+		ImGui::SameLine();
+		ImGui::Checkbox("##se", &show_edges);
 
 		ImGui::End();
 
@@ -211,6 +339,30 @@ public:
 		cmn::Line l4{r, b}; l4.col=col;
 		lines_to_project.push_back(l4);
 	}
+
+	void fillAABB(const cmn::AABB3& box, const olc::Pixel& col) {
+		vf3d v0=box.min, v7=box.max;
+		vf3d v1(v7.x, v0.y, v0.z);
+		vf3d v2(v0.x, v7.y, v0.z);
+		vf3d v3(v7.x, v7.y, v0.z);
+		vf3d v4(v0.x, v0.y, v7.z);
+		vf3d v5(v7.x, v0.y, v7.z);
+		vf3d v6(v0.x, v7.y, v7.z);
+		cmn::Triangle t1;
+		t1={v0, v1, v4}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v1, v5, v4}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v0, v2, v1}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v2, v3, v1}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v1, v3, v7}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v1, v7, v5}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v5, v7, v6}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v5, v6, v4}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v0, v6, v2}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v0, v4, v6}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v2, v7, v3}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v2, v6, v7}, t1.col=col, tris_to_project.push_back(t1);
+		t1={v0, v1, v2}, t1.col=col, tris_to_project.push_back(t1);
+	}
 #pragma endregion
 
 	bool user_geometry() override {
@@ -222,10 +374,28 @@ public:
 			//model.tris.begin(), model.tris.end()
 		//);
 
-		//add voxels mesh
-		tris_to_project.insert(tris_to_project.end(),
-			voxels_mesh.tris.begin(), voxels_mesh.tris.end()
-		);
+		//add prisms
+		for(const auto& p:prisms) {
+			//skip in not in layer range
+			if(p.y<min_layer) continue;
+			if(p.y>max_layer) continue;
+
+			//scale to correct position
+			vf3d pos=voxels.offset+voxels.scale*vf3d(p.x, p.y, p.z);
+			vf3d size=voxels.scale*vf3d(p.w, 1, p.d);
+			//shrink if showing edges
+			float margin=show_edges?.25f:0;
+			fillAABB({pos+margin, pos+size-margin}, olc::WHITE);
+			if(show_edges) {
+				//color aabb based on efficiency?
+				olc::Pixel col=olc::RED;
+				switch((p.w>1)+(p.d>1)) {
+					case 1: col=olc::YELLOW; break;
+					case 2: col=olc::BLUE; break;
+				}
+				addAABB({pos, pos+size}, col);
+			}
+		}
 
 		//add scene bounds
 		addAABB(build_volume, olc::BLACK);
@@ -273,7 +443,8 @@ public:
 
 int main() {
 	SlicerUI sui;
-	if(sui.Construct(600, 600, 1, 1, false, true)) sui.Start();
+	bool vsync=true;
+	if(sui.Construct(800, 800, 1, 1, false, vsync)) sui.Start();
 
 	return 0;
 }
