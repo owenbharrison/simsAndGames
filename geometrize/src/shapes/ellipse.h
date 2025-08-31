@@ -17,17 +17,20 @@ struct EllipseShape : ShapePrimitive {
 
 	void addToImage(olc::Sprite* spr) const override {
 		//get world bounds of ellipse
-		float r=std::max(size.x, size.y);
-		float min_x=ctr.x-r;
-		float min_y=ctr.y-r;
-		float max_x=ctr.x+r;
-		float max_y=ctr.y+r;
+		const float r=std::max(size.x, size.y);
+		const float min_x=ctr.x-r;
+		const float min_y=ctr.y-r;
+		const float max_x=ctr.x+r;
+		const float max_y=ctr.y+r;
 
 		//get screen bounds of ellipse
 		const int sx=std::max(0, int(min_x));
 		const int sy=std::max(0, int(min_y));
 		const int ex=std::min(spr->width-1, int(max_x));
 		const int ey=std::min(spr->height-1, int(max_y));
+
+		//precompute rotation matrix
+		const float c=std::cos(rot), s=std::sin(rot);
 
 		//check all points in rect
 		for(int i=sx; i<=ex; i++) {
@@ -37,7 +40,6 @@ struct EllipseShape : ShapePrimitive {
 				float dy=.5f+j-ctr.y;
 
 				//find deltas in new coordinate system
-				float c=std::cos(rot), s=std::sin(rot);
 				float rdx=dx*c-dy*s;
 				float rdy=dx*s+dy*c;
 
@@ -47,6 +49,10 @@ struct EllipseShape : ShapePrimitive {
 				}
 			}
 		}
+	}
+
+	virtual std::vector<float*> getVariables() override {
+		return {&ctr.x, &ctr.y, &size.x, &size.y, &rot};
 	}
 };
 #endif

@@ -16,10 +16,10 @@ struct TriangleShape : ShapePrimitive {
 
 	void addToImage(olc::Sprite* spr) const override {
 		//get world bounds of triangle
-		float min_x=std::min(a.x, std::min(b.x, c.x));
-		float min_y=std::min(a.y, std::min(b.y, c.y));
-		float max_x=std::max(a.x, std::max(b.x, c.x));
-		float max_y=std::max(a.y, std::max(b.y, c.y));
+		const float min_x=std::min(a.x, std::min(b.x, c.x));
+		const float min_y=std::min(a.y, std::min(b.y, c.y));
+		const float max_x=std::max(a.x, std::max(b.x, c.x));
+		const float max_y=std::max(a.y, std::max(b.y, c.y));
 
 		//get screen bounds of triangle
 		const int sx=std::max(0, int(min_x));
@@ -52,6 +52,10 @@ struct TriangleShape : ShapePrimitive {
 				}
 			}
 		}
+	}
+
+	virtual std::vector<float*> getVariables() override {
+		return {&a.x, &a.y, &b.x, &b.y, &c.x, &c.y};
 	}
 };
 #endif

@@ -18,5 +18,7 @@ struct ShapePrimitive {
 	virtual void randomize(const vf2d&)=0;
 
 	virtual void addToImage(olc::Sprite* spr) const=0;
+
+	virtual std::vector<float*> getVariables()=0;
 };
 #endif

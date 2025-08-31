@@ -15,10 +15,10 @@ struct RectangleShape : ShapePrimitive {
 
 	void addToImage(olc::Sprite* spr) const override {
 		//get world bounds of rectangle
-		float min_x=ctr.x-size.x;
-		float min_y=ctr.y-size.y;
-		float max_x=ctr.x+size.x;
-		float max_y=ctr.y+size.y;
+		const float min_x=ctr.x-size.x;
+		const float min_y=ctr.y-size.y;
+		const float max_x=ctr.x+size.x;
+		const float max_y=ctr.y+size.y;
 
 		//get screen bounds of triangle
 		const int sx=std::max(0, int(min_x));
@@ -33,6 +33,10 @@ struct RectangleShape : ShapePrimitive {
 				spr->SetPixel(i, j, col);
 			}
 		}
+	}
+
+	virtual std::vector<float*> getVariables() override {
+		return {&ctr.x, &ctr.y, &size.x, &size.y};
 	}
 };
 #endif
