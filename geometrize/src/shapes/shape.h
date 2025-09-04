@@ -15,9 +15,20 @@ struct ShapePrimitive {
 		col.a=255;
 	}
 
-	virtual void randomize(const vf2d&)=0;
+	void chooseColor(olc::Sprite* spr) {
+		col=getAvgColor(spr);
 
-	virtual void addToImage(olc::Sprite* spr) const=0;
+		//add some random to it
+		col.r+=40-std::rand()%81;
+		col.g+=40-std::rand()%81;
+		col.b+=40-std::rand()%81;
+	}
+
+	virtual void randomizeGeometry(const vf2d&)=0;
+
+	virtual olc::Pixel getAvgColor(olc::Sprite*)=0;
+	
+	virtual void addToImage(olc::Sprite*)=0;
 
 	virtual std::vector<float*> getVariables()=0;
 };

@@ -4,58 +4,58 @@
 
 #include "shape.h"
 
+#define FOREACH(func)\
+/*get bounds of triangle*/\
+const int min_x=std::min(a.x, std::min(b.x, c.x));\
+const int min_y=std::min(a.y, std::min(b.y, c.y));\
+const int max_x=std::max(a.x, std::max(b.x, c.x));\
+const int max_y=std::max(a.y, std::max(b.y, c.y));\
+/*get edge vectors*/\
+const vf2d ab=b-a;\
+const vf2d bc=c-b;\
+const vf2d ca=a-c;\
+/*check each point in bounding box*/\
+for(int i=min_x; i<=max_x; i++) {\
+	for(int j=min_y; j<=max_y; j++) {\
+		/*get corner vectors*/\
+		vf2d p(.5f+i, .5f+j);\
+		vf2d pa=p-a;\
+		vf2d pb=p-b;\
+		vf2d pc=p-c;\
+		/*what side of each edge is point on*/\
+		bool sab=pa.x*ab.y-pa.y*ab.x>0;\
+		bool sbc=pb.x*bc.y-pb.y*bc.x>0;\
+		bool sca=pc.x*ca.y-pc.y*ca.x>0;\
+		/*is point on same side of all?*/\
+		if(sab==sbc&&sbc==sca) {\
+			func\
+		}\
+	}\
+}
+
 struct TriangleShape : ShapePrimitive {
 	vf2d a, b, c;
 
-	void randomize(const vf2d& res) override {
+	void randomizeGeometry(const vf2d& res) override {
 		//vertex positioning
 		a={cmn::random(res.x), cmn::random(res.y)};
 		b={cmn::random(res.x), cmn::random(res.y)};
 		c={cmn::random(res.x), cmn::random(res.y)};
 	}
 
-	void addToImage(olc::Sprite* spr) const override {
-		//get world bounds of triangle
-		const float min_x=std::min(a.x, std::min(b.x, c.x));
-		const float min_y=std::min(a.y, std::min(b.y, c.y));
-		const float max_x=std::max(a.x, std::max(b.x, c.x));
-		const float max_y=std::max(a.y, std::max(b.y, c.y));
-
-		//get screen bounds of triangle
-		const int sx=std::max(0, int(min_x));
-		const int sy=std::max(0, int(min_y));
-		const int ex=std::min(spr->width-1, int(max_x));
-		const int ey=std::min(spr->height-1, int(max_y));
-
-		//get edge vectors
-		const vf2d ab=b-a;
-		const vf2d bc=c-b;
-		const vf2d ca=a-c;
-
-		//for every point in rect:
-		for(int i=sx; i<=ex; i++) {
-			for(int j=sy; j<=ey; j++) {
-				//get corner vectors
-				vf2d p(.5f+i, .5f+j);
-				vf2d pa=p-a;
-				vf2d pb=p-b;
-				vf2d pc=p-c;
-
-				//what side of each edge is point on
-				bool sab=pa.x*ab.y-pa.y*ab.x>0;
-				bool sbc=pb.x*bc.y-pb.y*bc.x>0;
-				bool sca=pc.x*ca.y-pc.y*ca.x>0;
-
-				//is point on same side of all?
-				if(sab==sbc&&sbc==sca) {
-					spr->SetPixel(i, j, col);
-				}
-			}
-		}
+	olc::Pixel getAvgColor(olc::Sprite* spr) override {
+		int red=0, green=0, blue=0, num=0;
+		FOREACH(const auto& p=spr->GetPixel(i, j); red+=p.r; green+=p.g; blue+=p.b; num++;);
+		return num==0?olc::WHITE:olc::Pixel(red/num, green/num, blue/num);
 	}
 
-	virtual std::vector<float*> getVariables() override {
+	void addToImage(olc::Sprite* spr) override {
+		FOREACH(spr->SetPixel(i, j, col););
+	}
+
+	std::vector<float*> getVariables() override {
 		return {&a.x, &a.y, &b.x, &b.y, &c.x, &c.y};
 	}
 };
+#undef FOREACH
 #endif
