@@ -69,6 +69,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "testing", "testing\testing.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "geometrize", "geometrize\geometrize.vcxproj", "{E862E08A-96AB-4637-B7B2-BE98CB662750}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "steering_behaviors", "steering_behaviors\steering_behaviors.vcxproj", "{63037F6E-A904-4E75-B7A6-E7229E3DFF92}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -333,6 +335,14 @@ Global
 		{E862E08A-96AB-4637-B7B2-BE98CB662750}.Release|x64.Build.0 = Release|x64
 		{E862E08A-96AB-4637-B7B2-BE98CB662750}.Release|x86.ActiveCfg = Release|Win32
 		{E862E08A-96AB-4637-B7B2-BE98CB662750}.Release|x86.Build.0 = Release|Win32
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Debug|x64.ActiveCfg = Debug|x64
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Debug|x64.Build.0 = Debug|x64
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Debug|x86.ActiveCfg = Debug|Win32
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Debug|x86.Build.0 = Debug|Win32
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Release|x64.ActiveCfg = Release|x64
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Release|x64.Build.0 = Release|x64
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Release|x86.ActiveCfg = Release|Win32
+		{63037F6E-A904-4E75-B7A6-E7229E3DFF92}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -343,6 +353,5 @@ Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		imgui\imgui.vcxitems*{b984500b-9ee2-42eb-99fe-e03803f72825}*SharedItemsImports = 4
 		imgui\imgui.vcxitems*{c7b5f2e8-f83d-4404-8fa3-7a96aa249946}*SharedItemsImports = 9
-		imgui\imgui.vcxitems*{fcc50571-17e8-424a-ac3e-5b8bb94cb762}*SharedItemsImports = 4
 	EndGlobalSection
 EndGlobal
