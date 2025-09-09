@@ -5,16 +5,19 @@
 #include <cmath>
 
 struct Vehicle {
+	static float max_speed, max_force;
+	
 	vf2d pos, vel, acc;
 	vf2d target;
-	float max_speed=3500;
-	float max_force=230;
+
+	olc::Pixel col=olc::WHITE;
 
 	Vehicle() {}
 
-	Vehicle(const vf2d& p, const vf2d& t) {
+	Vehicle(const vf2d& p, const vf2d& t, const olc::Pixel& c) {
 		pos=p;
 		target=t;
+		col=c;
 	}
 
 	void accelerate(const vf2d& a) {
@@ -56,7 +59,7 @@ struct Vehicle {
 		return steer;
 	}
 
-	vf2d getFlee(vf2d t) {
+	vf2d getFlee(const vf2d& t) const {
 		//where DONT i want to be?
 		vf2d des=pos-t;
 		float des_mag=des.mag();
@@ -75,4 +78,7 @@ struct Vehicle {
 		return steer;
 	}
 };
+
+float Vehicle::max_speed=3500;
+float Vehicle::max_force=230;
 #endif

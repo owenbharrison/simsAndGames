@@ -17,6 +17,8 @@ static float random01() {
 class SteeringBehaviorsUI : public olc::PixelGameEngine {
 	olc::Sprite* prim_circ_spr=nullptr;
 	olc::Decal* prim_circ_dec=nullptr;
+	olc::Sprite* prim_rect_spr=nullptr;
+	olc::Decal* prim_rect_dec=nullptr;
 
 	olc::vi2d letter_sizes[62];
 	std::vector<vf2d> letter_points[62];
@@ -29,7 +31,10 @@ public:
 	}
 
 	bool OnUserCreate() override {
-		//make a circle sprite to draw with
+		//make some "primitives" to draw with
+		prim_rect_spr=new olc::Sprite(1, 1);
+		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
+		prim_rect_dec=new olc::Decal(prim_rect_spr);
 		{
 			int sz=1024;
 			prim_circ_spr=new olc::Sprite(sz, sz);
@@ -95,7 +100,7 @@ public:
 
 		//place some text in middle of screen
 		{
-			std::string str="testing\nABC123";
+			std::string str="testing\nABC123\nqwerty";
 			auto height=120;
 			vf2d size=textSize(str, height);
 			vf2d ctr(ScreenWidth()/2, ScreenHeight()/2);
@@ -108,8 +113,11 @@ public:
 					ScreenWidth()*random01(),
 					ScreenHeight()*random01()
 				);
-				Vehicle v(pos, t);
-				vehicles.push_back(v);
+				//random BRIGHT color
+				float r=random01(), g=random01(), b=random01();
+				float l=std::max(r, std::max(g, b));
+				olc::Pixel col=olc::PixelF(r/l, g/l, b/l);
+				vehicles.push_back(Vehicle(pos, t, col));
 			}
 		}
 
@@ -117,12 +125,15 @@ public:
 	}
 
 	bool OnUserDestroy() override {
+		delete prim_rect_dec;
+		delete prim_rect_spr;
 		delete prim_circ_dec;
 		delete prim_circ_spr;
 
 		return true;
 	}
 
+	//find bounds of string
 	vf2d textSize(const std::string& str, float height) {
 		//for every character in string
 		vf2d offset, size;
@@ -153,7 +164,6 @@ public:
 		return size;
 	}
 	
-	//fit in aabb next
 	std::vector<vf2d> textToDots(const vf2d& pos, const std::string& str, float height) {
 		//for every character in string
 		vf2d offset=pos;
@@ -185,6 +195,15 @@ public:
 		return pts;
 	}
 
+	void DrawThickLineDecal(const vf2d& a, const vf2d& b, float w, olc::Pixel col) {
+		vf2d sub=b-a;
+		float len=sub.mag();
+		vf2d tang=(sub/len).perp();
+
+		float angle=std::atan2(sub.y, sub.x);
+		DrawRotatedDecal(a-w*tang, prim_rect_dec, angle, {0, 0}, {len, 2*w}, col);
+	}
+
 	void FillCircleDecal(const vf2d& pos, float rad, const olc::Pixel& col) {
 		vf2d offset(rad, rad);
 		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
@@ -204,11 +223,40 @@ public:
 				v.accelerate(50*v.getFlee(mouse_pos));
 			}
 
+			//kinematics
 			v.update(dt);
 		}
 
+		//draw background grid
+		FillRectDecal({0, 0}, GetScreenSize(), olc::BLACK);
+
+		//show grid
+		{
+			const auto grid_spacing=30;
+
+			const int num_x=1+ScreenWidth()/grid_spacing;
+			const int num_y=1+ScreenHeight()/grid_spacing;
+
+			//vertical lines
+			for(int i=0; i<=num_x; i++) {
+				float x=grid_spacing*i;
+				vf2d top(x, 0), btm(x, ScreenHeight());
+				if(i%5==0) DrawThickLineDecal(top, btm, 2, olc::VERY_DARK_GREY);
+				else DrawLineDecal(top, btm, olc::VERY_DARK_GREY);
+			}
+
+			//horizontal lines
+			for(int j=0; j<=num_y; j++) {
+				float y=grid_spacing*j;
+				vf2d lft(0, y), rgt(ScreenWidth(), y);
+				if(j%5==0) DrawThickLineDecal(lft, rgt, 2, olc::VERY_DARK_GREY);
+				else DrawLineDecal(lft, rgt, olc::VERY_DARK_GREY);
+			}
+		}
+
+		//draw "vehicles"
 		for(const auto& v:vehicles) {
-			FillCircleDecal(v.pos, 2, olc::WHITE);
+			FillCircleDecal(v.pos, 3.2f, v.col);
 		}
 
 		return true;
@@ -218,7 +266,7 @@ public:
 int main() {
 	SteeringBehaviorsUI sbui;
 	bool vsync=true;
-	if(sbui.Construct(640, 360, 1, 1, false, vsync)) sbui.Start();
+	if(sbui.Construct(720, 480, 1, 1, false, vsync)) sbui.Start();
 
 	return 0;
 }
