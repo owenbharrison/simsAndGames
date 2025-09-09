@@ -2,18 +2,44 @@
 #include "olcPixelGameEngine.h"
 using olc::vf2d;
 
+#include <vector>
+
+#include <random>
+
+static float random01() {
+	static std::mt19937 rng{std::random_device{}()};
+	static std::uniform_real_distribution<float> dist(0, 1);
+	return dist(rng);
+}
+
+#include "vehicle.h"
+
 class SteeringBehaviorsUI : public olc::PixelGameEngine {
+	olc::Sprite* prim_circ_spr=nullptr;
+	olc::Decal* prim_circ_dec=nullptr;
+
 	olc::vi2d letter_sizes[26];
 	std::vector<vf2d> letter_points[26];
 
-	std::vector<vf2d> word;
+	std::vector<Vehicle> vehicles;
 
 public:
-	SteeringBehaviorsUI() {
+	SteeringBehaviorsUI(){
 		sAppName="Steering Behaviors";
 	}
 
 	bool OnUserCreate() override {
+		//make a circle sprite to draw with
+		{
+			int sz=1024;
+			prim_circ_spr=new olc::Sprite(sz, sz);
+			SetDrawTarget(prim_circ_spr);
+			Clear(olc::BLANK);
+			FillCircle(sz/2, sz/2, sz/2);
+			SetDrawTarget(nullptr);
+			prim_circ_dec=new olc::Decal(prim_circ_spr);
+		}
+		
 		//for each letter
 		for(int l=0; l<26; l++) {
 			//load letter sprite
@@ -50,7 +76,7 @@ public:
 						//only place new point so close to any other
 						bool unique=true;
 						for(const auto& p:letter_points[l]) {
-							if((uv-p).mag2()<.006f) {
+							if((uv-p).mag2()<.0025f) {
 								unique=false;
 								break;
 							}
@@ -62,7 +88,24 @@ public:
 			delete spr;
 		}
 
-		word=textToDots({50, 50}, " HELLO\nWORLD", 120);
+		//vehicle target should be points on text contour
+		const auto positions=textToDots({50, 50}, " HELLO\nWORLD", 120);
+		for(const auto& t:positions) {
+			//random start position
+			vf2d pos(
+				ScreenWidth()*random01(),
+				ScreenHeight()*random01()
+			);
+			Vehicle v(pos, t);
+			vehicles.push_back(v);
+		}
+
+		return true;
+	}
+
+	bool OnUserDestroy() override {
+		delete prim_circ_dec;
+		delete prim_circ_spr;
 
 		return true;
 	}
@@ -92,11 +135,30 @@ public:
 		return pts;
 	}
 
-	bool OnUserUpdate(float dt) override {
-		Clear(olc::BLACK);
+	void FillCircleDecal(const vf2d& pos, float rad, const olc::Pixel& col) {
+		vf2d offset(rad, rad);
+		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
+		DrawDecal(pos-offset, prim_circ_dec, scale, col);
+	}
 
-		for(const auto& p:word) {
-			FillCircle(p, 2);
+	bool OnUserUpdate(float dt) override {
+		const vf2d mouse_pos=GetMousePos();
+		
+		//steering behaviors
+		for(auto& v:vehicles) {
+			//arrive at target
+			v.accelerate(v.getArrive(v.target));
+			
+			//if mouse too close, flee
+			if((mouse_pos-v.pos).mag2()<1600) {
+				v.accelerate(4*v.getFlee(mouse_pos));
+			}
+
+			v.update(dt);
+		}
+
+		for(const auto& v:vehicles) {
+			FillCircleDecal(v.pos, 2, olc::WHITE);
 		}
 
 		return true;
@@ -105,7 +167,7 @@ public:
 
 int main() {
 	SteeringBehaviorsUI sbui;
-	bool vsync=false;
+	bool vsync=true;
 	if(sbui.Construct(640, 360, 1, 1, false, vsync)) sbui.Start();
 
 	return 0;
