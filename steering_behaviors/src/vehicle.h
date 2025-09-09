@@ -7,8 +7,8 @@
 struct Vehicle {
 	vf2d pos, vel, acc;
 	vf2d target;
-	float max_speed=1061.7f;
-	float max_force=1989.67f;
+	float max_speed=3500;
+	float max_force=230;
 
 	Vehicle() {}
 
@@ -30,99 +30,48 @@ struct Vehicle {
 	}
 
 	//behavior forces
-	vf2d getSeek(const vf2d& t) const {
-		vf2d desired=t-pos;
-
-		//dont divide by zero
-		vf2d desired_norm(1, 0);
-		float desired_mag_sq=desired.mag2();
-		if(desired_mag_sq>1e-6f) {
-			desired_norm=desired/std::sqrt(desired_mag_sq);
-		}
-
-		//want to move as fast as possible
-		desired=max_speed*desired_norm;
-
-		vf2d steer=desired-vel;
-
-		//dont divide by zero
-		vf2d steer_norm(1, 0);
-		float steer_mag_sq=steer.mag2();
-		if(steer_mag_sq>1e-6f) {
-			steer_norm=desired/std::sqrt(steer_mag_sq);
-		}
-
-		//limit steer force
-		if(steer_mag_sq>max_force*max_force) {
-			steer=max_force*steer_norm;
-		}
-		return steer;
-	}
-
 	vf2d getArrive(const vf2d& t) const {
-		vf2d desired=t-pos;
+		//where do i want to be?
+		vf2d des=t-pos;
+		float des_mag=des.mag();
 
-		//dont divide by zero
-		vf2d desired_norm(1, 0);
-		float desired_mag_sq=desired.mag2();
-		if(desired_mag_sq>1e-6f) {
-			desired_norm=desired/std::sqrt(desired_mag_sq);
-		}
-
-		//move as fast as possible
+		//if im there, forget it.
+		if(des_mag==0) return {0, 0};
+		
+		//go as fast as possible
 		float speed=max_speed;
 
-		//except when close enough
-		const float slow_rad=100;
-		if(desired_mag_sq<slow_rad*slow_rad) {
-			speed=max_speed*std::sqrt(desired_mag_sq)/slow_rad;
-		}
+		//unless close enough
+		const float slow_rad=750;
+		if(des_mag<slow_rad) speed=max_speed*des_mag/slow_rad;
+		
+		//set desired mag to speed
+		des*=speed/des_mag;
+		
+		//limit force applied
+		vf2d steer=des-vel;
+		float steer_mag=steer.mag();
+		if(steer_mag>max_force) steer*=max_force/steer_mag;
 
-		desired=speed*desired_norm;
-
-		vf2d steer=desired-vel;
-
-		//dont divide by zero
-		vf2d steer_norm(1, 0);
-		float steer_mag_sq=steer.mag2();
-		if(steer_mag_sq>1e-6f) {
-			steer_norm=desired/std::sqrt(steer_mag_sq);
-		}
-
-		//limit steer force
-		if(steer_mag_sq>max_force*max_force) {
-			steer=max_force*steer_norm;
-		}
 		return steer;
 	}
 
-	vf2d getFlee(const vf2d& t) const {
-		//move in opposite direction
-		vf2d desired=pos-t;
+	vf2d getFlee(vf2d t) {
+		//where DONT i want to be?
+		vf2d des=pos-t;
+		float des_mag=des.mag();
 
-		//dont divide by zero
-		vf2d desired_norm(1, 0);
-		float desired_mag_sq=desired.mag2();
-		if(desired_mag_sq>1e-6f) {
-			desired_norm=desired/std::sqrt(desired_mag_sq);
-		}
+		//if im there, uhh...
+		if(des_mag==0) return {0, 0};
 
-		//want to move as fast as possible
-		desired=max_speed*desired_norm;
+		//opposite
+		des*=max_speed/des_mag;
 
-		vf2d steer=desired-vel;
+		//limit force applied
+		vf2d steer=des-vel;
+		float steer_mag=steer.mag();
+		if(steer_mag>max_force) steer*=max_force/steer_mag;
 
-		//dont divide by zero
-		vf2d steer_norm(1, 0);
-		float steer_mag_sq=steer.mag2();
-		if(steer_mag_sq>1e-6f) {
-			steer_norm=desired/std::sqrt(steer_mag_sq);
-		}
-
-		//limit steer force
-		if(steer_mag_sq>max_force*max_force) {
-			steer=max_force*steer_norm;
-		}
 		return steer;
 	}
 };

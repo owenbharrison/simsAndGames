@@ -20,88 +20,196 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\z.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\a.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\b.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\c.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\d.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\e.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\f.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\g.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\h.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\i.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\j.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\k.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\l.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\m.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\n.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\o.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\p.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\q.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\r.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\s.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\t.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\u.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\v.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\w.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\x.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\y.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="src\vehicle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\upper\z.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\a.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\b.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\c.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\d.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\e.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\f.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\g.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\h.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\i.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\j.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\k.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\l.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\m.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\n.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\o.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\p.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\q.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\r.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\s.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\t.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\u.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\v.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\w.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\x.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\upper\y.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\z.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\a.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\b.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\c.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\d.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\e.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\f.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\g.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\h.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\i.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\j.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\k.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\l.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\m.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\n.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\o.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\p.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\q.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\r.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\s.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\t.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\u.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\v.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\w.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\x.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\lower\y.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\9.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\0.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\1.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\2.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\3.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\4.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\5.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\6.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\7.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\digit\8.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
