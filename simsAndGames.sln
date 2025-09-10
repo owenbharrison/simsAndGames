@@ -351,6 +351,7 @@ Global
 		SolutionGuid = {A3D42CDF-52DC-41C6-8C7C-FF2451E99C08}
 	EndGlobalSection
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		imgui\imgui.vcxitems*{63037f6e-a904-4e75-b7a6-e7229e3dff92}*SharedItemsImports = 4
 		imgui\imgui.vcxitems*{b984500b-9ee2-42eb-99fe-e03803f72825}*SharedItemsImports = 4
 		imgui\imgui.vcxitems*{c7b5f2e8-f83d-4404-8fa3-7a96aa249946}*SharedItemsImports = 9
 	EndGlobalSection
