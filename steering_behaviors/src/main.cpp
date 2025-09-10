@@ -26,6 +26,8 @@ class SteeringBehaviorsUI : public olc::PixelGameEngine {
 
 	std::vector<Vehicle> vehicles;
 
+	olc::Sprite* gradient_spr=nullptr;
+
 public:
 	SteeringBehaviorsUI() {
 		sAppName="Steering Behaviors";
@@ -56,43 +58,57 @@ public:
 			letter_sizes[ix]={spr->width, spr->height};
 
 			//for each pixel
-			for(int i=0; i<spr->width-1; i++) {
-				for(int j=0; j<spr->height-1; j++) {
+			for(int i=1; i<spr->width-1; i++) {
+				for(int j=1; j<spr->height-1; j++) {
 					const auto& curr=spr->GetPixel(i, j);
 
-					//check right
-					const auto& right=spr->GetPixel(1+i, j);
-					int cr_dr=curr.r-right.r;
-					int cr_dg=curr.g-right.g;
-					int cr_db=curr.b-right.b;
-					int cr_dist_sq=cr_dr*cr_dr+cr_dg*cr_dg+cr_db*cr_db;
+					//check neighboring pixels
+					bool edge=false;
+					const int di[4]{-1, 0, 1, 0};
+					const int dj[4]{0, -1, 0, 1};
+					for(int d=0; d<4; d++) {
+						int ci=i+di[d], cj=j+dj[d];
 
-					//check down
-					const auto& down=spr->GetPixel(i, 1+j);
-					int cd_dr=curr.r-down.r;
-					int cd_dg=curr.g-down.g;
-					int cd_db=curr.b-down.b;
-					int cd_dist_sq=cd_dr*cd_dr+cd_dg*cd_dg+cd_db*cd_db;
+						//get difference
+						const auto& other=spr->GetPixel(ci, cj);
+						int dr=curr.r-other.r;
+						int dg=curr.g-other.g;
+						int db=curr.b-other.b;
+						int d_sq=dr*dr+dg*dg+db*db;
 
-					//if different: likely an edge
-					const int thr=200;
-					if(cr_dist_sq>thr*thr||cd_dist_sq>thr*thr) {
-						//use uv coords
-						vf2d uv((.5f+i)/spr->width, (.5f+j)/spr->height);
-
-						//only place new point so close to any other
-						bool unique=true;
-						for(const auto& p:letter_points[ix]) {
-							if((uv-p).mag2()<.0025f) {
-								unique=false;
-								break;
-							}
+						//if different: likely an edge
+						const int col_thr=200;
+						if(d_sq>col_thr*col_thr) {
+							edge=true;
+							break;
 						}
-						if(unique) letter_points[ix].push_back(uv);
 					}
+
+					if(!edge) continue;
+
+					//use uv coords
+					vf2d ij(.5f+i, .5f+j);
+
+					//check proximity to other points
+					bool unique=true;
+					for(const auto& p:letter_points[ix]) {
+						const float rad_thr=9;
+						if((ij-p).mag2()<rad_thr*rad_thr) {
+							unique=false;
+							break;
+						}
+					}
+
+					//only place new point so close to any other
+					if(unique) letter_points[ix].push_back(ij);
 				}
 			}
+			
+			//unload sprite
 			delete spr;
+
+			//turn into uvs
+			for(auto& p:letter_points[ix]) p/=letter_sizes[ix];
 		}
 
 		//place some text in middle of screen
@@ -101,31 +117,31 @@ public:
 			const auto margin=25;
 			const vf2d min(margin, margin);
 			const vf2d max(ScreenWidth()-margin, ScreenHeight()-margin);
+
 			//get "size" if height=1
 			std::string str="Hello, World!\ntesting...\nA1B2C3";
 			vf2d size=textSize(str, 1);
+
 			//how many times can that fit into the box?
 			float scl_x=(max.x-min.x)/size.x;
 			float scl_y=(max.y-min.y)/size.y;
+
 			//take minimum
 			float scl=std::min(scl_x, scl_y);
 			const vf2d ctr=(min+max)/2;
 			const auto positions=textToDots(ctr-size*scl/2, str, scl);
 		
 			//vehicle target should be points on text contour
+			olc::Sprite* rainbow_spr=new olc::Sprite("assets/rainbow.png");
 			for(const auto& t:positions) {
-				//random start position
-				vf2d pos(
-					ScreenWidth()*random01(),
-					ScreenHeight()*random01()
-				);
-				//random BRIGHT color
-				float r=random01(), g=random01(), b=random01();
-				float l=std::max(r, std::max(g, b));
-				olc::Pixel col=olc::PixelF(r/l, g/l, b/l);
-				vehicles.push_back(Vehicle(pos, t, col));
+				//random color from gradient
+				float u=random01();
+				vehicles.push_back(Vehicle(t, t, rainbow_spr->Sample(u, 0)));
 			}
+			delete rainbow_spr;
 		}
+
+		randomizeVehicles();
 
 		return true;
 	}
@@ -135,6 +151,8 @@ public:
 		delete prim_rect_spr;
 		delete prim_circ_dec;
 		delete prim_circ_spr;
+
+		delete gradient_spr;
 
 		return true;
 	}
@@ -189,6 +207,14 @@ public:
 		return pts;
 	}
 
+	//random vehicle positions
+	void randomizeVehicles() {
+		for(auto& v:vehicles) {
+			v.pos.x=ScreenWidth()*random01();
+			v.pos.y=ScreenHeight()*random01();
+		}
+	}
+
 	void DrawThickLineDecal(const vf2d& a, const vf2d& b, float w, olc::Pixel col) {
 		vf2d sub=b-a;
 		float len=sub.mag();
@@ -206,6 +232,8 @@ public:
 
 	bool OnUserUpdate(float dt) override {
 		const vf2d mouse_pos=GetMousePos();
+
+		if(GetKey(olc::Key::R).bPressed) randomizeVehicles();
 
 		//steering behaviors
 		for(auto& v:vehicles) {
@@ -248,9 +276,17 @@ public:
 			}
 		}
 
-		//draw "vehicles"
+		//draw "vehicles" as circles
+		//close = white, far = random
 		for(const auto& v:vehicles) {
-			FillCircleDecal(v.pos, 3.2f, v.col);
+			float dist=(v.pos-v.target).mag();
+			float u=1-std::exp(-dist/45);
+			olc::Pixel col=olc::PixelF(
+				1+u*(v.col.r/255.f-1),
+				1+u*(v.col.g/255.f-1),
+				1+u*(v.col.b/255.f-1)
+			);
+			FillCircleDecal(v.pos, 2.9f, col);
 		}
 
 		return true;

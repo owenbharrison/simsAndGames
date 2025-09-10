@@ -211,5 +211,290 @@
     <Image Include="assets\digit\8.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\ascii\126.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\33.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\34.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\35.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\36.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\37.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\38.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\39.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\40.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\41.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\42.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\43.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\44.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\45.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\46.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\47.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\48.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\49.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\50.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\51.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\52.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\53.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\54.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\55.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\56.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\57.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\58.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\59.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\60.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\61.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\62.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\63.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\64.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\65.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\66.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\67.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\68.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\69.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\70.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\71.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\72.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\73.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\74.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\75.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\76.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\77.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\78.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\79.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\80.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\81.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\82.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\83.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\84.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\85.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\86.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\87.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\88.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\89.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\90.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\91.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\92.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\93.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\94.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\95.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\96.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\97.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\98.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\99.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\100.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\101.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\102.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\103.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\104.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\105.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\106.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\107.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\108.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\109.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\110.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\111.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\112.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\113.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\114.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\115.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\116.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\117.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\118.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\119.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\120.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\121.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\122.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\123.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\124.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ascii\125.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\rainbow.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
