@@ -21,12 +21,14 @@ class Example : public olc::PixelGameEngine {
 		Glitch
 	} leader_stage=LeaderStage::Slideshow;
 
-	float leader_timer=.25f;
-
 	std::vector<olc::Renderable> leader_slideshow;
 	int leader_slideshow_ix=0;
+	const float leader_slideshow_time=.1667f;
 
 	int leader_count=0;
+	const float leader_count_time=.75f;
+
+	float leader_timer=leader_slideshow_time;
 
 	olc::sound::WaveEngine sound_engine;
 	olc::sound::Wave leader_low_beep, leader_high_beep;
@@ -87,21 +89,21 @@ public:
 		switch(leader_stage) {
 			case LeaderStage::Slideshow:
 				if(leader_timer<0) {
-					leader_timer+=.125f;
+					leader_timer+=leader_slideshow_time;
 
 					leader_slideshow_ix++;
 
 					//send to countdown...
 					if(leader_slideshow_ix==leader_slideshow.size()) {
 						leader_stage=LeaderStage::Countdown;
-						leader_timer=1;
+						leader_timer=leader_count_time;
 						leader_count=5;
 					}
 				}
 				break;
 			case LeaderStage::Countdown:
 				if(leader_timer<0) {
-					leader_timer+=1;
+					leader_timer+=leader_count_time;
 
 					leader_count--;
 
@@ -178,7 +180,7 @@ public:
 				const vf2d ctr=screen_size/2;
 				const float rad=10+ctr.mag();
 				const float st=-.5f*Pi;
-				const float len=2*Pi*(1-leader_timer);
+				const float len=2*Pi*(1-leader_timer/leader_count_time);
 				FillPieDecal(ctr, rad, st, len, olc::GREY);
 
 				//draw centerlines
