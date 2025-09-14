@@ -5,7 +5,7 @@
 #include "constraint.h"
 #include "spring.h"
 
-#include "index_triangle.h"
+#include "../index_triangle.h"
 
 struct IndexEdge {
 	int a=0, b=0;
@@ -100,7 +100,7 @@ public:
 		h=1+std::max(1, h);
 		int d=std::ceil(sz.z/res);
 		d=1+std::max(1, d);
-		
+
 		//allocate
 		num_ptc=w*h*d;
 		particles=new Particle[num_ptc];
@@ -182,7 +182,7 @@ public:
 						Spring s2(&particles[ix(i-1, j, k-1)], &particles[ix(i, j, k)], dt);
 						s2.stiffness*=sq2, s2.damping*=sq2, springs.push_back(s2);
 					}
-					
+
 					//cube diagonals
 					if(i0&&j0&&k0) {
 						Spring s1(&particles[ix(i, j-1, k-1)], &particles[ix(i-1, j, k)], dt);
@@ -217,7 +217,7 @@ public:
 			edges.emplace_back(ix(0, h-1, k-1), ix(0, h-1, k));
 			edges.emplace_back(ix(w-1, h-1, k-1), ix(w-1, h-1, k));
 		}
-		
+
 		//face edges
 		for(int i=1; i<w-1; i++) {
 			for(int j=1; j<h; j++) {

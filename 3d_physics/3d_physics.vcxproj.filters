@@ -58,6 +58,7 @@
     <None Include="assets\fx\gaussian_blur.glsl" />
     <None Include="assets\fx\ascii.glsl" />
     <None Include="assets\fx\voronoi.glsl" />
+    <None Include="assets\fx\glitch.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\logos\cmyk.png">
@@ -76,6 +77,15 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\logos\crosshatch.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\logos\ascii.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\logos\voronoi.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\logos\glitch.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

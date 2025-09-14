@@ -35,8 +35,8 @@ void main() {
 	//get time from top left pixel
 	vec4 rgba=texelFetch(tex1, ivec2(0, 0), 0);
 	ivec4 byte_vals=ivec4(.5+255*rgba);
-	uint frame_count=uint(byte_vals.r)|(uint(byte_vals.g)<<8)|(uint(byte_vals.b)<<16)|(uint(byte_vals.a)<<24);
-	float time=frame_count/165.;
+	uint ms_count=uint(byte_vals.r)|(uint(byte_vals.g)<<8)|(uint(byte_vals.b)<<16)|(uint(byte_vals.a)<<24);
+	float time=ms_count/1000.;
 	
 	//randomly offsetted to avoid moire
 	float rand_seed=round(FPS*time)/FPS;

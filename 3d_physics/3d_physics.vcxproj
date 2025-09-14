@@ -163,6 +163,7 @@
     <None Include="assets\fx\cmyk_ht.glsl" />
     <None Include="assets\fx\crt.glsl" />
     <None Include="assets\fx\gaussian_blur.glsl" />
+    <None Include="assets\fx\glitch.glsl" />
     <None Include="assets\fx\identity.glsl" />
     <None Include="assets\fx\rainbow_sobel.glsl" />
     <None Include="assets\fx\rgb_ht.glsl" />
@@ -170,12 +171,15 @@
     <None Include="assets\fx\voronoi.glsl" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\logos\ascii.png" />
     <Image Include="assets\logos\cmyk.png" />
     <Image Include="assets\logos\crosshatch.png" />
     <Image Include="assets\logos\crt.png" />
+    <Image Include="assets\logos\glitch.png" />
     <Image Include="assets\logos\identity.png" />
     <Image Include="assets\logos\rgb.png" />
     <Image Include="assets\logos\sobel.png" />
+    <Image Include="assets\logos\voronoi.png" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\models\icosahedron.txt" />

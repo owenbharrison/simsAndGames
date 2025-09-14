@@ -49,7 +49,7 @@ struct Physics3DUI : cmn::Engine3D {
 	vf2d menu_pos;
 	const float menu_sz=105;
 	const float menu_min_sz=.2f*menu_sz;
-	const float menu_logo_sz=.4f*menu_sz;
+	const float menu_logo_sz=.33f*menu_sz;
 
 	//physics stuff
 	Scene scene;
@@ -70,17 +70,11 @@ struct Physics3DUI : cmn::Engine3D {
 	bool show_joints=false;
 
 	//render stuff
-	olc::Sprite* prim_rect_spr=nullptr;
-	olc::Decal* prim_rect_dec=nullptr;
-	olc::Sprite* prim_circ_spr=nullptr;
-	olc::Decal* prim_circ_dec=nullptr;
+	olc::Renderable prim_rect, prim_circ;
 
 	//post processing stuff
-	olc::Sprite* source_spr=nullptr;
-	olc::Decal* source_dec=nullptr;
-	olc::Sprite* target_spr=nullptr;
-	olc::Decal* target_dec=nullptr;
-	unsigned int frame_count=0;
+	olc::Renderable source, target;
+	float total_dt=0;
 
 	//shader stuff
 	olc::Shade shade;
@@ -93,7 +87,7 @@ struct Physics3DUI : cmn::Engine3D {
 	cmn::Stopwatch update_watch, geom_watch, pc_watch, render_watch, pp_watch;
 
 	bool user_create() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		cam_pos={0, 5.5f, 8};
 		light_pos={0, 12, 0};
@@ -141,24 +135,22 @@ struct Physics3DUI : cmn::Engine3D {
 		}
 
 		//make some "primitives" to help draw with
-		prim_rect_spr=new olc::Sprite(1, 1);
-		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
-		prim_rect_dec=new olc::Decal(prim_rect_spr);
+		prim_rect.Create(1, 1);
+		prim_rect.Sprite()->SetPixel(0, 0, olc::WHITE);
+		prim_rect.Decal()->Update();
 		{
 			int sz=1024;
-			prim_circ_spr=new olc::Sprite(sz, sz);
-			SetDrawTarget(prim_circ_spr);
+			prim_circ.Create(sz, sz);
+			SetDrawTarget(prim_circ.Sprite());
 			Clear(olc::BLANK);
 			FillCircle(sz/2, sz/2, sz/2);
-			SetDrawTarget(nullptr); 
-			prim_circ_dec=new olc::Decal(prim_circ_spr);
+			SetDrawTarget(nullptr);
+			prim_circ.Decal()->Update();
 		}
 
 		//allocate source and target buffers
-		source_spr=new olc::Sprite(ScreenWidth(), ScreenHeight());
-		source_dec=new olc::Decal(source_spr);
-		target_spr=new olc::Sprite(ScreenWidth(), ScreenHeight());
-		target_dec=new olc::Decal(target_spr);
+		source.Create(ScreenWidth(), ScreenHeight());
+		target.Create(ScreenWidth(), ScreenHeight());
 
 		//load shader options
 		try {
@@ -166,11 +158,12 @@ struct Physics3DUI : cmn::Engine3D {
 			shaders.push_back(Shader(shade, "assets/logos/identity.png", {"assets/fx/identity.glsl"}));
 			identity_pass=&shaders.back().passes.front();
 			chosen_shader=&shaders.back();
-			
+
 			shaders.push_back(Shader(shade, "assets/logos/rgb.png", {"assets/fx/rgb_ht.glsl"}));
 			shaders.push_back(Shader(shade, "assets/logos/ascii.png", {"assets/fx/ascii.glsl"}));
 			shaders.push_back(Shader(shade, "assets/logos/cmyk.png", {"assets/fx/cmyk_ht.glsl"}));
 			shaders.push_back(Shader(shade, "assets/logos/crt.png", {"assets/fx/crt.glsl"}));
+			shaders.push_back(Shader(shade, "assets/logos/glitch.png", {"assets/fx/glitch.glsl"}));
 			shaders.push_back(Shader(shade, "assets/logos/sobel.png", {"assets/fx/rainbow_sobel.glsl"}));
 			shaders.push_back(Shader(shade, "assets/logos/crosshatch.png", {
 				"assets/fx/crosshatch.glsl",
@@ -186,22 +179,6 @@ struct Physics3DUI : cmn::Engine3D {
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
 		ConsoleCaptureStdOut(true);
-
-		return true;
-	}
-
-	bool user_destroy() override {
-		//deallocate helpers
-		delete prim_rect_spr;
-		delete prim_rect_dec;
-		delete prim_circ_spr;
-		delete prim_circ_dec;
-
-		//deallocate buffers
-		delete source_dec;
-		delete source_spr;
-		delete target_dec;
-		delete target_spr;
 
 		return true;
 	}
@@ -455,6 +432,9 @@ struct Physics3DUI : cmn::Engine3D {
 			}
 		}
 
+		//shader time
+		total_dt+=dt;
+
 		if(to_time) update_watch.stop();
 
 		return true;
@@ -530,9 +510,9 @@ struct Physics3DUI : cmn::Engine3D {
 			lines_to_project.push_back(l8);
 		}
 
-		if(to_time)  geom_watch.stop();
+		if(to_time) geom_watch.stop();
 
-		if(to_time)  pc_watch.start();
+		if(to_time) pc_watch.start();
 
 		return true;
 	}
@@ -543,14 +523,14 @@ struct Physics3DUI : cmn::Engine3D {
 		float len=sub.mag();
 		vf2d tang=(sub/len).perp();
 
-		float angle=std::atan2f(sub.y, sub.x);
-		DrawRotatedDecal(a-w*tang, prim_rect_dec, angle, {0, 0}, {len, 2*w}, col);
+		float angle=std::atan2(sub.y, sub.x);
+		DrawRotatedDecal(a-w*tang, prim_rect.Decal(), angle, {0, 0}, {len, 2*w}, col);
 	}
 
 	void FillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
 		vf2d offset(rad, rad);
-		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
-		DrawDecal(pos-offset, prim_circ_dec, scale, col);
+		vf2d scale{2*rad/prim_circ.Sprite()->width, 2*rad/prim_circ.Sprite()->width};
+		DrawDecal(pos-offset, prim_circ.Decal(), scale, col);
 	}
 
 	void DrawThickCircleDecal(const vf2d& pos, float rad, float w, const olc::Pixel& col) {
@@ -574,7 +554,7 @@ struct Physics3DUI : cmn::Engine3D {
 		if(to_time) render_watch.start();
 
 		//render to source sprite
-		SetDrawTarget(source_spr);
+		SetDrawTarget(source.Sprite());
 
 		//dark grey background
 		Clear(olc::Pixel(60, 60, 60));
@@ -654,35 +634,37 @@ struct Physics3DUI : cmn::Engine3D {
 		if(to_time) pp_watch.start();
 
 		//update frame info
-		Draw(0, 0, {
-			0xFF&frame_count,
-			0xFF&(frame_count>>8),
-			0xFF&(frame_count>>16),
-			0xFF&(frame_count>>24)
-			});
-		frame_count++;
+		{
+			int ms_count=1000*total_dt;
+			Draw(0, 0, olc::Pixel(
+				0xFF&ms_count,
+				0xFF&(ms_count>>8),
+				0xFF&(ms_count>>16),
+				0xFF&(ms_count>>24)
+			));
+		}
 
 		//update source decal with sprite
-		source_dec->Update();
+		source.Decal()->Update();
 
 		//apply each shader pass
 		for(auto& p:chosen_shader->passes) {
-			shade.SetSourceDecal(source_dec);
-			shade.SetTargetDecal(target_dec);
+			shade.SetSourceDecal(source.Decal());
+			shade.SetTargetDecal(target.Decal());
 			shade.Start(&p);
 			shade.DrawQuad({-1, -1}, {2, 2});
 			shade.End();
 
 			//put target in source
-			shade.SetSourceDecal(target_dec);
-			shade.SetTargetDecal(source_dec);
+			shade.SetSourceDecal(target.Decal());
+			shade.SetTargetDecal(source.Decal());
 			shade.Start(identity_pass);
 			shade.DrawQuad({-1, -1}, {2, 2});
 			shade.End();
 		}
 
 		//draw effect
-		DrawDecal({0, 0}, target_dec);
+		DrawDecal({0, 0}, target.Decal());
 
 		//show shader menu
 		if(GetMouse(olc::Mouse::RIGHT).bHeld) {
@@ -696,7 +678,7 @@ struct Physics3DUI : cmn::Engine3D {
 				vf2d size(s.logo_spr->width, s.logo_spr->height);
 				float scl=menu_logo_sz/size.x;
 				DrawDecal(ctr-scl/2*size, s.logo_dec, {scl, scl});
-					
+
 				//draw divider
 				float div_angle=logo_angle+Pi/shaders.size();
 				vf2d div_dir(std::cos(div_angle), std::sin(div_angle));
@@ -736,7 +718,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 int main() {
 	Physics3DUI p3dui;
-	bool vsync=true;
+	bool vsync=false;
 	if(p3dui.Construct(720, 480, 1, 1, false, vsync)) p3dui.Start();
 
 	return 0;
