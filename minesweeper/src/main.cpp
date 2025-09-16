@@ -571,6 +571,24 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		cmn::Line l4{r, b}; l4.col=col;
 		lines_to_project.push_back(l4);
 	}
+
+	olc::Pixel getCellColor(int num_bombs) const {
+		olc::Pixel col;
+		switch(num_bombs) {
+			case 1: col=olc::Pixel(0, 100, 255); break;//light blue
+			case 2: col=olc::Pixel(0, 200, 0); break;//dark green
+			case 3: col=olc::Pixel(220, 220, 0); break;//dark yellow
+			case 4: col=olc::RED; break;
+			case 5: col=olc::DARK_RED; break;
+			default:
+			{//6-26
+				float t=(num_bombs-6.f)/(26-6);
+				col=number_gradient->Sample(t, 0);
+				break;
+			}
+		}
+		return col;
+	}
 #pragma endregion
 
 	bool user_geometry() override {
@@ -641,19 +659,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 					int ones=cell.num_bombs%10;
 
 					//color based on cell value
-					olc::Pixel col;
-					switch(cell.num_bombs) {
-						case 1: col=olc::Pixel(0, 100, 255); break;//light blue
-						case 2: col=olc::Pixel(0, 200, 0); break;//dark green
-						case 3: col=olc::Pixel(220, 220, 0); break;//dark yellow
-						case 4: col=olc::RED; break;
-						case 5: col=olc::DARK_RED; break;
-						default: {//6-26
-							float t=(cell.num_bombs-6.f)/(26-6);
-							col=number_gradient->Sample(t, 0);
-							break;
-						}
-					}
+					olc::Pixel col=getCellColor(cell.num_bombs);
 					if(tens) {
 						//different anchoring if 2digit
 						billboards.push_back({pos, size, 1, .5f, ta_number_ix+tens, col, i, j, k});
@@ -710,10 +716,19 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		//add cursor mesh
 		{
+			//color based on cell
+			const auto& cell=game.cells[game.ix(cursor_i, cursor_j, cursor_k)];
+			olc::Pixel col=olc::RED;
+			if(cell.swept) {
+				if(cell.num_bombs==0) col=olc::WHITE;
+				else col=getCellColor(cell.num_bombs);
+			}
+
+			//add mesh
 			vf3d ijk(cursor_i, cursor_j, cursor_k);
 			cursor_mesh.translation=.5f+ijk-game_size/2;
 			cursor_mesh.updateTransforms();
-			cursor_mesh.updateTriangles(olc::RED);
+			cursor_mesh.updateTriangles(col);
 			tris_to_project.insert(tris_to_project.end(),
 				cursor_mesh.tris.begin(), cursor_mesh.tris.end()
 			);
