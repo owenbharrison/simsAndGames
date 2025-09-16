@@ -163,6 +163,7 @@
     <Image Include="assets\london.jpg" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="assets\fx\diff.glsl" />
     <None Include="assets\fx\eab\blur_st.glsl" />
     <None Include="assets\fx\eab\calc_st.glsl" />
     <None Include="assets\fx\eab\lic.glsl" />

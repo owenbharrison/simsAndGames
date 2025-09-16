@@ -7,12 +7,13 @@ using olc::vf2d;
 #include "olcPGEX_Shaders.h"
 
 #include <fstream>
+#include <exception>
 #include <sstream>
 
 olc::EffectConfig loadEffect(const std::string& filename) {
 	//get file
 	std::ifstream file(filename);
-	if(file.fail()) return olc::fx::FX_NORMAL;
+	if(file.fail()) throw std::runtime_error("invalid filename");
 
 	//dump contents into str stream
 	std::stringstream mid;
@@ -31,49 +32,39 @@ struct Demo : public olc::PixelGameEngine {
 		sAppName="Shaders";
 	}
 
-	olc::Renderable source1, source2;
-	olc::Renderable source12;
+	olc::Renderable prev_src, curr_src;
+	olc::Renderable stitch_src;
 	olc::Renderable target;
 
 	olc::Shade shader;
 	olc::Effect uv_effect, identity_effect;
-	olc::Effect avg_effect;
+	olc::Effect avg_effect, difference_effect;
 
 	bool OnUserCreate() override {
 		//initialize buffers
-		source1.Create(ScreenWidth(), ScreenHeight());
-		source2.Create(ScreenWidth(), ScreenHeight());
-		source12.Create(2*ScreenWidth(), ScreenHeight());
+		prev_src.Create(ScreenWidth(), ScreenHeight());
+		curr_src.Create(ScreenWidth(), ScreenHeight());
+		stitch_src.Create(2*ScreenWidth(), ScreenHeight());
 		target.Create(ScreenWidth(), ScreenHeight());
-		
-		//red circle on source1
-		SetDrawTarget(source1.Sprite());
-		Clear(olc::BLACK);
-		FillCircle(200, 200, 50, olc::RED);
-		source1.Decal()->Update();
 
-		//blue rect on source2
-		SetDrawTarget(source2.Sprite());
-		Clear(olc::BLACK);
-		FillRect(100, 100, 200, 200, olc::BLUE);
-		source2.Decal()->Update();
-
-		SetDrawTarget(nullptr);
-
-		//load effect passes
-		uv_effect=shader.MakeEffect(loadEffect("assets/fx/uv.glsl"));
-		if(!uv_effect.IsOK()) {
-			std::cout<<"uv_effect err:\n"<<uv_effect.GetStatus();
-			return false;
-		}
-		identity_effect=shader.MakeEffect(loadEffect("assets/fx/identity.glsl"));
-		if(!identity_effect.IsOK()) {
-			std::cout<<"identity_effect err:\n"<<identity_effect.GetStatus();
-			return false;
-		}
-		avg_effect=shader.MakeEffect(loadEffect("assets/fx/avg.glsl"));
-		if(!avg_effect.IsOK()) {
-			std::cout<<"avg_effect err:\n"<<avg_effect.GetStatus();
+		//load effects
+		try {
+			struct EffectLoader {olc::Effect* eff; std::string str; };
+			const std::vector<EffectLoader> effect_loaders{
+				{&uv_effect, "assets/fx/uv.glsl"},
+				{&identity_effect, "assets/fx/identity.glsl"},
+				{&avg_effect, "assets/fx/avg.glsl"},
+				{&difference_effect, "assets/fx/diff.glsl"}
+			};
+			for(auto& el:effect_loaders) {
+				*el.eff=shader.MakeEffect(loadEffect(el.str));
+				if(!el.eff->IsOK()) {
+					std::cerr<<"  "<<el.str<<":\n"<<uv_effect.GetStatus();
+					return false;
+				}
+			}
+		} catch(const std::exception& e) {
+			std::cerr<<"  "<<e.what()<<'\n';
 			return false;
 		}
 
@@ -81,23 +72,43 @@ struct Demo : public olc::PixelGameEngine {
 	}
 
 	bool OnUserUpdate(float dt) override {
-		//stitch sources 1&2 into source12
-		shader.SetTargetDecal(source12.Decal());
+		//prev=curr
+		shader.SetTargetDecal(prev_src.Decal());
 		shader.Start(&identity_effect);
-		shader.SetSourceDecal(source1.Decal());
+		shader.SetSourceDecal(curr_src.Decal());
+		shader.DrawQuad({-1, -1}, {2, 2});
+		shader.End();
+		
+		//draw to curr
+		SetDrawTarget(curr_src.Sprite());
+		//black background
+		Clear(olc::BLACK);
+		//circle at mouse
+		FillCircle(GetMouseX(), GetMouseY(), 50, olc::WHITE);
+		//draw to regular
+		SetDrawTarget(nullptr);
+
+		//update curr decal
+		curr_src.Decal()->Update();
+
+		//stitch sources together side by side
+		shader.SetTargetDecal(stitch_src.Decal());
+		shader.Start(&identity_effect);
+		shader.SetSourceDecal(prev_src.Decal());
 		shader.DrawQuad({-1, -1}, {1, 2});
-		shader.SetSourceDecal(source2.Decal());
+		shader.SetSourceDecal(curr_src.Decal());
 		shader.DrawQuad({0, -1}, {1, 2});
 		shader.End();
 
-		//apply average into target
+		//apply difference
 		shader.SetTargetDecal(target.Decal());
-		shader.Start(&avg_effect);
-		shader.SetSourceDecal(source12.Decal());
+		shader.Start(&difference_effect);
+		shader.SetSourceDecal(stitch_src.Decal());
 		shader.DrawQuad({-1, -1}, {2, 2});
 		shader.End();
 
-		DrawDecal({0, 0}, target.Decal());
+		//show it
+		DrawDecal({0,0}, target.Decal());
 
 		return true;
 	}
@@ -106,7 +117,7 @@ struct Demo : public olc::PixelGameEngine {
 int main() {
 	Demo d;
 	bool vsync=true;
-	if(d.Construct(400, 400, 1, 1, false, vsync)) d.Start();
+	if(d.Construct(640, 480, 1, 1, false, vsync)) d.Start();
 
 	return 0;
 }
