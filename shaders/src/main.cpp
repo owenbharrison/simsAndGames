@@ -7,6 +7,7 @@ using olc::vf2d;
 #include "olcPGEX_Shaders.h"
 
 #include <fstream>
+#include <sstream>
 
 olc::EffectConfig loadEffect(const std::string& filename) {
 	//get file
@@ -30,80 +31,73 @@ struct Demo : public olc::PixelGameEngine {
 		sAppName="Shaders";
 	}
 
-	olc::Shade shade;
-	olc::Effect calc_st_pass, blur_st_pass, lic_pass;
+	olc::Renderable source1, source2;
+	olc::Renderable source12;
+	olc::Renderable target;
 
-	struct Buffer {
-		olc::Sprite* spr=nullptr;
-		olc::Decal* dec=nullptr;
-
-		~Buffer() {
-			delete spr;
-			delete dec;
-		}
-	};
-
-	Buffer source, buf_a, buf_b, target;
+	olc::Shade shader;
+	olc::Effect uv_effect, identity_effect;
+	olc::Effect avg_effect;
 
 	bool OnUserCreate() override {
 		//initialize buffers
-		source.spr=new olc::Sprite("assets/london.jpg");
-		source.dec=new olc::Decal(source.spr);
-		buf_a.spr=new olc::Sprite(2*source.spr->width, source.spr->height);
-		buf_a.dec=new olc::Decal(buf_a.spr);
-		buf_b.spr=new olc::Sprite(2*source.spr->width, source.spr->height);
-		buf_b.dec=new olc::Decal(buf_b.spr);
-		target.spr=new olc::Sprite(source.spr->width, source.spr->height);
-		target.dec=new olc::Decal(target.spr);
+		source1.Create(ScreenWidth(), ScreenHeight());
+		source2.Create(ScreenWidth(), ScreenHeight());
+		source12.Create(2*ScreenWidth(), ScreenHeight());
+		target.Create(ScreenWidth(), ScreenHeight());
 		
+		//red circle on source1
+		SetDrawTarget(source1.Sprite());
+		Clear(olc::BLACK);
+		FillCircle(200, 200, 50, olc::RED);
+		source1.Decal()->Update();
+
+		//blue rect on source2
+		SetDrawTarget(source2.Sprite());
+		Clear(olc::BLACK);
+		FillRect(100, 100, 200, 200, olc::BLUE);
+		source2.Decal()->Update();
+
+		SetDrawTarget(nullptr);
+
 		//load effect passes
-		calc_st_pass=shade.MakeEffect(loadEffect("assets/fx/eeb/calc_st.glsl"));
-		if(!calc_st_pass.IsOK()) {
-			std::cout<<"calc st err:\n"<<calc_st_pass.GetStatus();
+		uv_effect=shader.MakeEffect(loadEffect("assets/fx/uv.glsl"));
+		if(!uv_effect.IsOK()) {
+			std::cout<<"uv_effect err:\n"<<uv_effect.GetStatus();
 			return false;
 		}
-		blur_st_pass=shade.MakeEffect(loadEffect("assets/fx/eeb/blur_st.glsl"));
-		if(!blur_st_pass.IsOK()) {
-			std::cout<<"blur st err:\n"<<blur_st_pass.GetStatus();
+		identity_effect=shader.MakeEffect(loadEffect("assets/fx/identity.glsl"));
+		if(!identity_effect.IsOK()) {
+			std::cout<<"identity_effect err:\n"<<identity_effect.GetStatus();
 			return false;
 		}
-		lic_pass=shade.MakeEffect(loadEffect("assets/fx/eeb/lic.glsl"));
-		if(!lic_pass.IsOK()) {
-			std::cout<<"lic err:\n"<<lic_pass.GetStatus();
+		avg_effect=shader.MakeEffect(loadEffect("assets/fx/avg.glsl"));
+		if(!avg_effect.IsOK()) {
+			std::cout<<"avg_effect err:\n"<<avg_effect.GetStatus();
 			return false;
 		}
 
-		//apply them
-		shade.SetSourceDecal(source.dec);
-		shade.SetTargetDecal(buf_a.dec);
-		shade.Start(&calc_st_pass);
-		shade.DrawQuad({-1, -1}, {2, 2});
-		shade.End();
-
-		shade.SetSourceDecal(buf_a.dec);
-		shade.SetTargetDecal(buf_b.dec);
-		shade.Start(&blur_st_pass);
-		shade.DrawQuad({-1, -1}, {2, 2});
-		shade.End();
-
-		shade.SetSourceDecal(buf_b.dec);
-		shade.SetTargetDecal(target.dec);
-		shade.Start(&lic_pass);
-		shade.DrawQuad({-1, -1}, {2, 2});
-		shade.End();
-
-		return true;
-	}
-
-	bool OnUserDestroy() override {
 		return true;
 	}
 
 	bool OnUserUpdate(float dt) override {
-		Clear(olc::BLACK);
+		//stitch sources 1&2 into source12
+		shader.SetTargetDecal(source12.Decal());
+		shader.Start(&identity_effect);
+		shader.SetSourceDecal(source1.Decal());
+		shader.DrawQuad({-1, -1}, {1, 2});
+		shader.SetSourceDecal(source2.Decal());
+		shader.DrawQuad({0, -1}, {1, 2});
+		shader.End();
 
-		if(GetKey(olc::Key::SPACE).bHeld) DrawDecal({0, 0}, source.dec);
-		else DrawDecal({0, 0}, target.dec);
+		//apply average into target
+		shader.SetTargetDecal(target.Decal());
+		shader.Start(&avg_effect);
+		shader.SetSourceDecal(source12.Decal());
+		shader.DrawQuad({-1, -1}, {2, 2});
+		shader.End();
+
+		DrawDecal({0, 0}, target.Decal());
 
 		return true;
 	}
@@ -112,7 +106,7 @@ struct Demo : public olc::PixelGameEngine {
 int main() {
 	Demo d;
 	bool vsync=true;
-	if(d.Construct(700, 400, 1, 1, false, vsync)) d.Start();
+	if(d.Construct(400, 400, 1, 1, false, vsync)) d.Start();
 
 	return 0;
 }
