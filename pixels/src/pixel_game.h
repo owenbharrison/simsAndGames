@@ -58,7 +58,7 @@ struct PixelGame : olc::PixelGameEngine {
 	//place pixelsets such that their bounds lie inside the screen
 	void placeAllRandomly() {
 		for(const auto& p:pixelsets) {
-			p->rot=cmn::random(2*cmn::Pi);
+			p->rot=cmn::randFloat(2*cmn::Pi);
 			p->old_rot=p->rot;
 
 			//aabb needs cossin
@@ -66,8 +66,8 @@ struct PixelGame : olc::PixelGameEngine {
 			cmn::AABB box=p->getAABB();
 
 			//easier to just offset based on where it already is
-			p->pos.x+=cmn::random(-box.min.x, ScreenWidth()-box.max.x);
-			p->pos.y+=cmn::random(-box.min.y, ScreenHeight()-box.max.y);
+			p->pos.x+=cmn::randFloat(-box.min.x, ScreenWidth()-box.max.x);
+			p->pos.y+=cmn::randFloat(-box.min.y, ScreenHeight()-box.max.y);
 
 			//reset vel
 			p->old_pos=p->pos;
@@ -75,7 +75,7 @@ struct PixelGame : olc::PixelGameEngine {
 	}
 
 	bool OnUserCreate() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
@@ -140,7 +140,7 @@ struct PixelGame : olc::PixelGameEngine {
 		}
 
 		{//make triangle
-			float rad=cmn::random(120, 240);
+			float rad=cmn::randFloat(120, 240);
 			std::vector<vf2d> pts;
 			for(int i=0; i<3; i++) {
 				float angle=2*cmn::Pi*i/3;
@@ -548,7 +548,7 @@ struct PixelGame : olc::PixelGameEngine {
 			//ensure its a polygon
 			if(addition.size()>=3) {
 				//choose random scale
-				float scale=cmn::random(1, 10);
+				float scale=cmn::randFloat(1, 10);
 				PixelSet* thing=new PixelSet(PixelSet::fromPolygon(addition, scale));
 
 				pixelsets.emplace_back(thing);
@@ -667,7 +667,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 		//clear colliding displays
 		for(const auto& p:pixelsets) {
-			memset(p->colliding, false, sizeof(bool)*p->getW()*p->getH());
+			std::memset(p->colliding, false, sizeof(bool)*p->getW()*p->getH());
 		}
 
 		//after import, something looks wrong...
@@ -681,7 +681,7 @@ struct PixelGame : olc::PixelGameEngine {
 		float len=sub.mag();
 		vf2d tang=perp(sub/len);
 
-		float angle=std::atan2f(sub.y, sub.x);
+		float angle=std::atan2(sub.y, sub.x);
 		DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
@@ -690,7 +690,7 @@ struct PixelGame : olc::PixelGameEngine {
 		float len=sub.mag();
 		vf2d tang=perp(sub/len);
 
-		float angle=std::atan2f(sub.y, sub.x);
+		float angle=std::atan2(sub.y, sub.x);
 		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 

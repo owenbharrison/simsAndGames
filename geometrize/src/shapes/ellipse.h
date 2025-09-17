@@ -35,9 +35,9 @@ struct EllipseShape : ShapePrimitive {
 
 	void randomizeGeometry(const vf2d& res) override {
 		//position, size, & rotation
-		ctr={cmn::random(res.x), cmn::random(res.y)};
-		size={cmn::random(50), cmn::random(50)};
-		rot=cmn::random(0, 2*cmn::Pi);
+		ctr={cmn::randFloat(res.x), cmn::randFloat(res.y)};
+		size={cmn::randFloat(50), cmn::randFloat(50)};
+		rot=cmn::randFloat(0, 2*cmn::Pi);
 	}
 
 	olc::Pixel getAvgColor(olc::Sprite* spr) override {

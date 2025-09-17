@@ -79,10 +79,10 @@ public:
 
 	PixelSet(int _w, int _h) : w(_w), h(_h) {
 		grid=new byte[w*h];
-		memset(grid, false, sizeof(byte)*w*h);
+		std::memset(grid, false, sizeof(byte)*w*h);
 
 		colliding=new bool[w*h];
-		memset(colliding, false, sizeof(bool)*w*h);
+		std::memset(colliding, false, sizeof(bool)*w*h);
 
 		updateRot();
 	}
@@ -128,7 +128,7 @@ public:
 				vf2d pos=p.localToWorld(vf2d(i, j));
 
 				//deterministic, but less artifacting
-				float angle=cmn::random(2*cmn::Pi);
+				float angle=cmn::randFloat(2*cmn::Pi);
 				vf2d dir=cmn::polar<vf2d>(1, angle);
 
 				//polygon raycast algorithm
@@ -345,7 +345,7 @@ public:
 	[[nodiscard]] std::vector<PixelSet> floodfill() const {
 		//store which weve visited
 		bool* filled=new bool[w*h];
-		memset(filled, false, sizeof(bool)*w*h);
+		std::memset(filled, false, sizeof(bool)*w*h);
 
 		//store current part
 		std::vector<int> blob;
@@ -442,7 +442,7 @@ public:
 
 		//recolor if split
 		if(pixelsets.size()!=1) for(auto& p:pixelsets) {
-			p.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
+			p.col=olc::Pixel(std::rand()%256, std::rand()%256, std::rand()%256);
 		}
 
 		//update graphics
@@ -474,8 +474,8 @@ public:
 
 		//find hypot scale factors
 		vf2d hypot(
-			std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
-			std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
+			std::sqrt(1+dir.y*dir.y/dir.x/dir.x),
+			std::sqrt(1+dir.x*dir.x/dir.y/dir.y)
 		);
 
 		//which way am i going
@@ -522,7 +522,7 @@ public:
 		int ci=std::floor(orig.x), cj=std::floor(orig.y);
 
 		//must start in shape. 
-		if(!inRangeX(ci)||!inRangeX(ci)||grid[ix(ci, cj)]==PixelSet::Empty) {
+		if(!inRangeX(ci)||!inRangeY(ci)||grid[ix(ci, cj)]==PixelSet::Empty) {
 			return -1;
 		}
 
@@ -534,8 +534,8 @@ public:
 
 		//find hypot scale factors
 		vf2d hypot(
-			std::sqrtf(1+dir.y*dir.y/dir.x/dir.x),
-			std::sqrtf(1+dir.x*dir.x/dir.y/dir.y)
+			std::sqrt(1+dir.y*dir.y/dir.x/dir.x),
+			std::sqrt(1+dir.x*dir.x/dir.y/dir.y)
 		);
 
 		//which way am i going
@@ -582,7 +582,7 @@ public:
 
 		//store which blocks have been meshed
 		bool* meshed=new bool[w*h];
-		memset(meshed, false, sizeof(bool)*w*h);
+		std::memset(meshed, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont mesh air
@@ -640,7 +640,7 @@ public:
 
 #pragma region TOP
 		//which edges should we consider?
-		memset(to_line, false, sizeof(bool)*w*h);
+		std::memset(to_line, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont line air
@@ -653,7 +653,7 @@ public:
 		}
 
 		//greedy lining
-		memset(lined, false, sizeof(bool)*w*h);
+		std::memset(lined, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont reline
@@ -678,7 +678,7 @@ public:
 
 #pragma region LEFT
 		//which edges should we consider?
-		memset(to_line, false, sizeof(bool)*w*h);
+		std::memset(to_line, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont line air
@@ -691,7 +691,7 @@ public:
 		}
 
 		//greedy lining
-		memset(lined, false, sizeof(bool)*w*h);
+		std::memset(lined, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont reline
@@ -716,7 +716,7 @@ public:
 
 #pragma region BOTTOM
 		//which edges should we consider?
-		memset(to_line, false, sizeof(bool)*w*h);
+		std::memset(to_line, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont line air
@@ -729,7 +729,7 @@ public:
 		}
 
 		//greedy lining
-		memset(lined, false, sizeof(bool)*w*h);
+		std::memset(lined, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont reline
@@ -754,7 +754,7 @@ public:
 
 #pragma region RIGHT
 		//which edges should we consider?
-		memset(to_line, false, sizeof(bool)*w*h);
+		std::memset(to_line, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont line air
@@ -767,7 +767,7 @@ public:
 		}
 
 		//greedy lining
-		memset(lined, false, sizeof(bool)*w*h);
+		std::memset(lined, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont reline
@@ -921,9 +921,9 @@ void PixelSet::copyFrom(const PixelSet& p) {
 	//reallocate and copy over grid stuff
 	w=p.w, h=p.h;
 	grid=new byte[w*h];
-	memcpy(grid, p.grid, sizeof(byte)*w*h);
+	std::memcpy(grid, p.grid, sizeof(byte)*w*h);
 	colliding=new bool[w*h];
-	memcpy(colliding, p.colliding, sizeof(bool)*w*h);
+	std::memcpy(colliding, p.colliding, sizeof(bool)*w*h);
 
 	//positions
 	pos=p.pos;

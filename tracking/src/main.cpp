@@ -126,7 +126,7 @@ struct TrackingUI : cmn::Engine3D {
 			//10cm square in front of camera
 			const float c_w=.1f, c_h=.1f;
 			//10-20cm away
-			float d=cmn::random(.1f, .2f);
+			float d=cmn::randFloat(.1f, .2f);
 
 			//vertex positioning
 			vf3d ctr=c.pos+d*c.dir;
@@ -184,9 +184,9 @@ struct TrackingUI : cmn::Engine3D {
 
 		//polar to cartesian
 		cam_dir=vf3d(
-			std::cosf(cam_yaw)*std::cosf(cam_pitch),
-			std::sinf(cam_pitch),
-			std::sinf(cam_yaw)*std::cosf(cam_pitch)
+			std::cos(cam_yaw)*std::cos(cam_pitch),
+			std::sin(cam_pitch),
+			std::sin(cam_yaw)*std::cos(cam_pitch)
 		);
 
 		//move up, down
@@ -194,7 +194,7 @@ struct TrackingUI : cmn::Engine3D {
 		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 		//move forward, backward
-		vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
 		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -252,7 +252,7 @@ struct TrackingUI : cmn::Engine3D {
 						olc::Pixel prev=c.prev_spr->GetPixel(x, y);
 						vf3d prev01(prev.r/255.f, prev.r/255.f, prev.r/255.f);
 						float prev_lum=prev01.dot(rgb_weights);
-						float lum_diff=std::fabsf(curr_lum-prev_lum);
+						float lum_diff=std::abs(curr_lum-prev_lum);
 						x_sum+=lum_diff*x;
 						y_sum+=lum_diff*y;
 						w_sum+=lum_diff;
@@ -320,7 +320,7 @@ struct TrackingUI : cmn::Engine3D {
 			//camera sizing
 			float w=.75f, h=w*c.height/c.width;
 			float cam_fov_rad=cam_fov_deg/180*cmn::Pi;
-			float d=w/2/std::tanf(cam_fov_rad/2);
+			float d=w/2/std::tan(cam_fov_rad/2);
 
 			//camera positioning
 			vf3d up(0, 1, 0);

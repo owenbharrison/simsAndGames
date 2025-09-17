@@ -219,14 +219,14 @@ public:
 			cross+=anc.x*sub.y-anc.y*sub.x;
 		}
 		//signed angle
-		rot=std::atan2f(cross, dot);
+		rot=std::atan2(cross, dot);
 	}
 
 	bool contains(const vf2d& p) const {
 		if(!getAABB().contains(p)) return false;
 
 		//deterministic, but avoids edge artifacing
-		vf2d dir=cmn::polar<vf2d>(1, cmn::random(2*cmn::Pi));
+		vf2d dir=cmn::polar<vf2d>(1, cmn::randFloat(2*cmn::Pi));
 
 		int num_ix=0;
 		for(const auto& c:shell) {

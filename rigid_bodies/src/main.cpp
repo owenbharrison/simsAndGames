@@ -60,7 +60,7 @@ struct RigidBodyUI : olc::PixelGameEngine {
 			if(s->locked) continue;
 
 			//random rotation
-			s->rot=cmn::random(2*cmn::Pi);
+			s->rot=cmn::randFloat(2*cmn::Pi);
 			s->updateRot();
 			//reset rot vel
 			s->old_rot=s->rot;
@@ -74,8 +74,8 @@ struct RigidBodyUI : olc::PixelGameEngine {
 				vf2d delta_min=box.min-s_box.min;
 				vf2d delta_max=box.max-s_box.max;
 				vf2d delta(
-					cmn::random(delta_min.x, delta_max.x),
-					cmn::random(delta_min.y, delta_max.y)
+					cmn::randFloat(delta_min.x, delta_max.x),
+					cmn::randFloat(delta_min.y, delta_max.y)
 				);
 				s->pos+=delta;
 				s_box.min+=delta, s_box.max+=delta;
@@ -151,7 +151,7 @@ struct RigidBodyUI : olc::PixelGameEngine {
 
 		//random assortment of shapes
 		for(int i=0; i<12; i++) {
-			float rad=cmn::random(.2f, .5f);
+			float rad=cmn::randFloat(.2f, .5f);
 			int num=3+std::rand()%7;
 			shapes.push_back(new Shape({0, 0}, rad, num));
 		}
@@ -334,7 +334,7 @@ struct RigidBodyUI : olc::PixelGameEngine {
 		float len=sub.mag();
 		vf2d tang=(sub/len).perp();
 
-		float angle=std::atan2f(sub.y, sub.x);
+		float angle=std::atan2(sub.y, sub.x);
 		tv.DrawRotatedDecal(a-w/2*tang, prim_rect_dec, angle, {0, 0}, {len, w}, col);
 	}
 

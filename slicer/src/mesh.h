@@ -99,7 +99,7 @@ struct Mesh {
 		if(!getLocalAABB().contains(pos*mat_inv_total)) return false;
 		
 		//random direction
-		vf3d dir(cmn::random(), cmn::random(), cmn::random());
+		vf3d dir(cmn::randFloat(), cmn::randFloat(), cmn::randFloat());
 		dir=(.5f-dir).norm();
 
 		//for every tri

@@ -122,7 +122,7 @@ public:
 
 		//deterministic, but no artifacts
 		vf2d pa=worldToLocal(pt);
-		vf2d pb=pa+cmn::polar<vf2d>(1, cmn::random(2*cmn::Pi));
+		vf2d pb=pa+cmn::polar<vf2d>(1, cmn::randFloat(2*cmn::Pi));
 
 		int num_ix=0;
 		for(int i=0; i<num_pts; i++) {

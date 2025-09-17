@@ -1,4 +1,4 @@
-/*TODO
+ /*TODO
 add difficulty modes
 add game timer
 */
@@ -371,20 +371,20 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		int num=5+std::rand()%11;
 		for(int i=0; i<num; i++) {
 			//pos offset in any direction
-			float pos_yaw=cmn::random(2*cmn::Pi);
-			float pos_pitch=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
-			float pos_rad=cmn::random(.5f);
+			float pos_yaw=cmn::randFloat(2*cmn::Pi);
+			float pos_pitch=cmn::randFloat(-.5f*cmn::Pi, .5f*cmn::Pi);
+			float pos_rad=cmn::randFloat(.5f);
 			vf3d pos=ctr+pos_rad*polar3D(pos_yaw, pos_pitch);
 
 			//random vel in any direction
-			float vel_yaw=cmn::random(2*cmn::Pi);
-			float vel_pitch=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
-			float speed=cmn::random(.6f, 1.2f);
+			float vel_yaw=cmn::randFloat(2*cmn::Pi);
+			float vel_pitch=cmn::randFloat(-.5f*cmn::Pi, .5f*cmn::Pi);
+			float speed=cmn::randFloat(.6f, 1.2f);
 			vf3d vel=speed*polar3D(vel_yaw, vel_pitch);
 
 			//random size, lifespan
-			float size=cmn::random(.03f, .07f);
-			float lifespan=cmn::random(.6f, .9f);
+			float size=cmn::randFloat(.03f, .07f);
+			float lifespan=cmn::randFloat(.6f, .9f);
 			Particle p(Particle::Debris, pos, vel, size, lifespan);
 			particles.push_back(p);
 		}
@@ -394,20 +394,20 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		int num=30+std::rand()%31;
 		for(int i=0; i<num; i++) {
 			//pos offset in any direction
-			float pos_yaw=cmn::random(2*cmn::Pi);
-			float pos_pitch=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
-			float pos_rad=cmn::random(.5f);
+			float pos_yaw=cmn::randFloat(2*cmn::Pi);
+			float pos_pitch=cmn::randFloat(-.5f*cmn::Pi, .5f*cmn::Pi);
+			float pos_rad=cmn::randFloat(.5f);
 			vf3d pos=ctr+pos_rad*polar3D(pos_yaw, pos_pitch);
 
 			//random vel upward
-			float vel_yaw=cmn::random(2*cmn::Pi);
-			float vel_pitch=cmn::random(.5f*cmn::Pi);
-			float speed=cmn::random(2.5f, 3.7f);
+			float vel_yaw=cmn::randFloat(2*cmn::Pi);
+			float vel_pitch=cmn::randFloat(.5f*cmn::Pi);
+			float speed=cmn::randFloat(2.5f, 3.7f);
 			vf3d vel=speed*polar3D(vel_yaw, vel_pitch);
 
 			//random size, lifespan
-			float size=cmn::random(.08f, .15f);
-			float lifespan=cmn::random(1.1f, 1.7f);
+			float size=cmn::randFloat(.08f, .15f);
+			float lifespan=cmn::randFloat(1.1f, 1.7f);
 			Particle p(Particle::Explode, pos, vel, size, lifespan);
 			particles.push_back(p);
 		}

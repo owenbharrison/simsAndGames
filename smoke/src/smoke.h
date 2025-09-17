@@ -1,4 +1,4 @@
-  #pragma once
+#pragma once
 #ifndef SMOKE_STRUCT_H
 #define SMOKE_STRUCT_H
 

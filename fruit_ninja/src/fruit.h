@@ -153,7 +153,7 @@ public:
 		p=worldToLocal(p);
 
 		//deterministic, but removes artifacting
-		float angle=cmn::random(2*cmn::Pi);
+		float angle=cmn::randFloat(2*cmn::Pi);
 		vf2d dir=cmn::polar<vf2d>(1, angle);
 
 		//for every edge...

@@ -73,10 +73,10 @@ public:
 
 	void fillCells() {
 		//reset grid heads
-		memset(grid_heads, -1, sizeof(int)*num_cell_x*num_cell_y);
+		std::memset(grid_heads, -1, sizeof(int)*num_cell_x*num_cell_y);
 
 		//insert particles into grid
-		for(int i=0; i<num_particles; ++i) {
+		for(int i=0; i<num_particles; i++) {
 			auto& p=particles[i];
 
 			//skip if out of bounds

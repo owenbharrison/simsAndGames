@@ -152,19 +152,19 @@ struct ParticlesUI : olc::PixelGameEngine {
 		if(adding) {
 			//add as many as possible(ish)
 			for(int i=0; i<100; i++) {
-				float offset_rad=cmn::random(selection_radius);
-				float offset_angle=cmn::random(2*cmn::Pi);
+				float offset_rad=cmn::randFloat(selection_radius);
+				float offset_angle=cmn::randFloat(2*cmn::Pi);
 				vf2d offset=offset_rad*vf2d(std::cos(offset_angle), std::sin(offset_angle));
 
 				//random size and velocity
-				float rad=cmn::random(3, 6);
+				float rad=cmn::randFloat(3, 6);
 				Particle temp(mouse_pos+offset, rad);
-				float speed=dt*cmn::random(35);
-				float vel_angle=cmn::random(2*cmn::Pi);
+				float speed=dt*cmn::randFloat(35);
+				float vel_angle=cmn::randFloat(2*cmn::Pi);
 				temp.oldpos-=speed*vf2d(std::cos(vel_angle), std::sin(vel_angle));
 
 				//random color
-				temp.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
+				temp.col=olc::Pixel(std::rand()%256, std::rand()%256, std::rand()%256);
 
 				//try to add particle
 				solver->addParticle(temp);
@@ -188,10 +188,10 @@ struct ParticlesUI : olc::PixelGameEngine {
 					float x=map(i, 0, num_x-1, box.min.x, box.max.x);
 					for(int j=0; j<num_y; j++) {
 						float y=map(j, 0, num_y-1, box.min.y, box.max.y);
-						Particle temp({x, y}, cmn::random(2.5f, max_rad));
+						Particle temp({x, y}, cmn::randFloat(2.5f, max_rad));
 
 						//random color
-						temp.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
+						temp.col=olc::Pixel(std::rand()%256, std::rand()%256, std::rand()%256);
 
 						solver->addParticle(temp);
 					}
@@ -339,7 +339,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 		float len=sub.mag();
 		vf2d tang=sub.perp()/len;
 
-		float angle=std::atan2f(sub.y, sub.x);
+		float angle=std::atan2(sub.y, sub.x);
 		DrawRotatedDecal(a-.5f*w*tang, prim_rect_dec, angle, {0, 0}, {len, w}, col);
 	}
 

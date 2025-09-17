@@ -1,5 +1,10 @@
-#define OLC_GFX_OPENGL33
 #include "common/3d/engine_3d.h"
+
+#define MULTITHREADING
+#ifdef __EMSCRIPTEN__
+#undef MULTITHREADING
+#endif
+
 using cmn::vf3d;
 
 #include "mesh.h"
@@ -8,7 +13,9 @@ using cmn::vf3d;
 
 #include "common/utils.h"
 
+#ifdef MULTITHREADING
 #include "thread_pool.h"
+#endif
 
 struct FXUI : cmn::Engine3D {
 	FXUI() {
@@ -38,6 +45,7 @@ struct FXUI : cmn::Engine3D {
 	olc::Sprite* fire_gradient=nullptr;
 
 	//multithreaded rendering
+#ifdef MULTITHREADING
 	const int tile_size=32;
 	int tiles_x=0, tiles_y=0;
 	std::vector<cmn::Triangle>* tile_bins=nullptr;
@@ -45,6 +53,7 @@ struct FXUI : cmn::Engine3D {
 	std::vector<olc::vi2d> tile_jobs;
 	
 	ThreadPool* raster_pool=nullptr;
+#endif
 
 	bool user_create() override {
 		cam_pos={-.47f, 9.19f, -8.36f};
@@ -65,6 +74,7 @@ struct FXUI : cmn::Engine3D {
 
 		fire_gradient=new olc::Sprite("assets/img/fire_gradient.png");
 
+#ifdef MULTITHREADING
 		//allocate tiles
 		tiles_x=1+ScreenWidth()/tile_size;
 		tiles_y=1+ScreenHeight()/tile_size;
@@ -79,6 +89,7 @@ struct FXUI : cmn::Engine3D {
 
 		//make thread pool
 		raster_pool=new ThreadPool(std::thread::hardware_concurrency());
+#endif
 
 		return true;
 	}
@@ -87,8 +98,10 @@ struct FXUI : cmn::Engine3D {
 		for(auto& t:texture_atlas) delete t;
 		delete fire_gradient;
 
+#ifdef MULTITHREADING
 		delete[] tile_bins;
 		delete raster_pool;
+#endif
 
 		return true;
 	}
@@ -155,14 +168,14 @@ struct FXUI : cmn::Engine3D {
 				if(dist>0) {
 					vf3d pt=cam_pos+dist*mouse_dir;
 
-					vf3d dir(cmn::random(-1, 1), cmn::random(-1, 1), cmn::random(-1, 1));
-					float speed=cmn::random(1, 2);
+					vf3d dir(cmn::randFloat(-1, 1), cmn::randFloat(-1, 1), cmn::randFloat(-1, 1));
+					float speed=cmn::randFloat(1, 2);
 					vf3d vel=speed*dir.norm();
-					float rot=cmn::random(2*cmn::Pi);
-					float rot_vel=cmn::random(-1.5f, 1.5f);
-					float size=cmn::random(.5f, 1.5f);
-					float size_vel=cmn::random(.5f, .9f);
-					float lifespan=cmn::random(2, 4);
+					float rot=cmn::randFloat(2*cmn::Pi);
+					float rot_vel=cmn::randFloat(-1.5f, 1.5f);
+					float size=cmn::randFloat(.5f, 1.5f);
+					float size_vel=cmn::randFloat(.5f, .9f);
+					float lifespan=cmn::randFloat(2, 4);
 					particles.push_back(Particle(Particle::SMOKE, pt, vel, rot, rot_vel, size, size_vel, lifespan));
 				}
 			}
@@ -358,7 +371,7 @@ struct FXUI : cmn::Engine3D {
 		int x1, int y1, float u1, float v1, float w1,
 		int x2, int y2, float u2, float v2, float w2,
 		int x3, int y3, float u3, float v3, float w3,
-		const olc::Sprite& spr, olc::Pixel tint, int id,
+		olc::Sprite* spr, olc::Pixel tint, int id,
 		int nx, int ny, int mx, int my
 	) {
 		//sort by y
@@ -434,7 +447,7 @@ struct FXUI : cmn::Engine3D {
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					float& depth=depth_buffer[bufferIX(i, j)];
 					if(tex_w>depth) {
-						Draw(i, j, tint*spr.Sample(tex_u/tex_w, tex_v/tex_w));
+						Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
 						depth=tex_w;
 						id_buffer[bufferIX(i, j)]=id;
 					}
@@ -482,7 +495,7 @@ struct FXUI : cmn::Engine3D {
 				tex_w=tex_sw+t*(tex_ew-tex_sw);
 				float& depth=depth_buffer[bufferIX(i, j)];
 				if(tex_w>depth) {
-					Draw(i, j, tint*spr.Sample(tex_u/tex_w, tex_v/tex_w));
+					Draw(i, j, tint*spr->Sample(tex_u/tex_w, tex_v/tex_w));
 					depth=tex_w;
 					id_buffer[bufferIX(i, j)]=id;
 				}
@@ -497,6 +510,8 @@ struct FXUI : cmn::Engine3D {
 		//render 3d stuff
 		resetBuffers();
 
+		SetPixelMode(olc::Pixel::ALPHA);
+#ifdef MULTITHREADING
 		//clear tile bins
 		for(int i=0; i<tiles_x*tiles_y; i++) tile_bins[i].clear();
 
@@ -522,7 +537,6 @@ struct FXUI : cmn::Engine3D {
 		}
 
 		//queue work
-		SetPixelMode(olc::Pixel::ALPHA);
 		std::atomic<int> tiles_remaining=tile_jobs.size();
 		for(const auto& j:tile_jobs) {
 			raster_pool->enqueue([&] {
@@ -544,7 +558,7 @@ struct FXUI : cmn::Engine3D {
 							t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
 							t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
 							t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
-							*texture_atlas[t.id], t.col, t.id,
+							texture_atlas[t.id], t.col, t.id,
 							nx, ny, mx, my
 						);
 					}
@@ -555,12 +569,31 @@ struct FXUI : cmn::Engine3D {
 
 		//wait for raster to finish
 		while(tiles_remaining);
+#else
+		for(const auto& t:tris_to_draw) {
+			if(t.id==-1) {
+				FillDepthTriangle(
+					t.p[0].x, t.p[0].y, t.t[0].w,
+					t.p[1].x, t.p[1].y, t.t[1].w,
+					t.p[2].x, t.p[2].y, t.t[2].w,
+					t.col, t.id
+				);
+			} else {
+				FillTexturedDepthTriangle(
+					t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
+					t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
+					t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+					texture_atlas[t.id], t.col, t.id
+				);
+			}
+		}
+#endif
 		SetPixelMode(olc::Pixel::NORMAL);
 
 		//counts of each particle type
 		{
 			int counts[Particle::NUM_TYPES];
-			memset(counts, 0, sizeof(int)*Particle::NUM_TYPES);
+			std::memset(counts, 0, sizeof(int)*Particle::NUM_TYPES);
 			for(const auto& p:particles) {
 				counts[p.type]++;
 			}

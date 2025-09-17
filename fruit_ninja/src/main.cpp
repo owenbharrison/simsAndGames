@@ -71,7 +71,7 @@ struct FruitNinja : olc::PixelGameEngine {
 	olc::sound::Wave throw_sound, slice1_sound, slice2_sound;
 
 	bool OnUserCreate() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		{//"primitive" to draw with
 			int sz=1024;
@@ -199,14 +199,14 @@ struct FruitNinja : olc::PixelGameEngine {
 						cmn::AABB box=f->getAABB();
 						vf2d ctr=box.getCenter();
 						float rad=(box.max-ctr).mag();
-						int num=cmn::random(20, 35);
+						int num=cmn::randInt(20, 35);
 						for(int i=0; i<num; i++) {
-							float pos_rad=cmn::random(rad);
-							vf2d offset=cmn::polar<vf2d>(pos_rad, cmn::random(2*cmn::Pi));
-							float speed=cmn::random(5, 15);
-							vf2d vel=cmn::polar<vf2d>(speed, cmn::random(2*cmn::Pi));
-							float lifespan=cmn::random(2, 3);
-							float rad=cmn::random(3, 4);
+							float pos_rad=cmn::randFloat(rad);
+							vf2d offset=cmn::polar<vf2d>(pos_rad, cmn::randFloat(2*cmn::Pi));
+							float speed=cmn::randFloat(5, 15);
+							vf2d vel=cmn::polar<vf2d>(speed, cmn::randFloat(2*cmn::Pi));
+							float lifespan=cmn::randFloat(2, 3);
+							float rad=cmn::randFloat(3, 4);
 							particles.emplace_back(new Splatter(ctr+offset, vel, f->col, lifespan, rad));
 						}
 					}
@@ -227,21 +227,21 @@ struct FruitNinja : olc::PixelGameEngine {
 						else msg="bad!", col=olc::RED;
 
 						//random movement
-						float speed=cmn::random(50, 75);
-						vf2d vel=cmn::polar<vf2d>(speed, cmn::random(2*cmn::Pi));
-						float rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
-						float lifespan=cmn::random(2, 4);
+						float speed=cmn::randFloat(50, 75);
+						vf2d vel=cmn::polar<vf2d>(speed, cmn::randFloat(2*cmn::Pi));
+						float rot_vel=cmn::randFloat(-.5f*cmn::Pi, .5f*cmn::Pi);
+						float lifespan=cmn::randFloat(2, 4);
 						particles.push_back(new Message(f->pos, vel, col, lifespan, msg, rot_vel));
 					}
 
 					//update new fruit velocities
 					{
-						float speed_a=cmn::random(40, 70);
-						fa.vel=cmn::polar<vf2d>(speed_a, cmn::random(2*cmn::Pi));
-						fa.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
-						float speed_b=cmn::random(40, 70);
-						fb.vel=cmn::polar<vf2d>(speed_b, cmn::random(2*cmn::Pi));
-						fb.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
+						float speed_a=cmn::randFloat(40, 70);
+						fa.vel=cmn::polar<vf2d>(speed_a, cmn::randFloat(2*cmn::Pi));
+						fa.rot_vel=cmn::randFloat(-.5f*cmn::Pi, .5f*cmn::Pi);
+						float speed_b=cmn::randFloat(40, 70);
+						fb.vel=cmn::polar<vf2d>(speed_b, cmn::randFloat(2*cmn::Pi));
+						fb.rot_vel=cmn::randFloat(-.5f*cmn::Pi, .5f*cmn::Pi);
 						//point opposite directions
 						if(fa.vel.dot(fb.vel)>0) fb.vel*=-1;
 						if(fa.rot_vel*fb.rot_vel>0) fb.rot_vel*=-1;
@@ -256,7 +256,7 @@ struct FruitNinja : olc::PixelGameEngine {
 					it=fruits.erase(it);
 
 					//play random slide noise
-					if(cmn::random()<.5f) sound_engine.PlayWaveform(&slice1_sound);
+					if(cmn::randFloat()<.5f) sound_engine.PlayWaveform(&slice1_sound);
 					else sound_engine.PlayWaveform(&slice2_sound);
 				} else it++;
 			}
@@ -282,16 +282,16 @@ struct FruitNinja : olc::PixelGameEngine {
 	void automaticUpdate(float dt) {
 		//every now and then throw a fruit
 		if(throw_timer<0) {
-			throw_timer=cmn::random(1, 4);
+			throw_timer=cmn::randFloat(1, 4);
 
 			//make random polygon
-			int num=4+rand()%16;
-			float r_min=cmn::random(20, 30);
-			float r_max=cmn::random(40, 60);
+			int num=4+std::rand()%16;
+			float r_min=cmn::randFloat(20, 30);
+			float r_max=cmn::randFloat(40, 60);
 			Fruit f(num);
 			for(int i=0; i<num; i++) {
 				vf2d dir=cmn::polar<vf2d>(1, 2*cmn::Pi*i/num);
-				float r=cmn::random(r_min, r_max);
+				float r=cmn::randFloat(r_min, r_max);
 				f.pts[i]=r*dir;
 			}
 			f.init();
@@ -300,15 +300,15 @@ struct FruitNinja : olc::PixelGameEngine {
 			//place on bottom
 			f.pos.y=screen_bounds.max.y-box.max.y;
 			//random along bottom
-			f.pos.x=cmn::random(-box.min.x, screen_bounds.max.x-box.max.x);
+			f.pos.x=cmn::randFloat(-box.min.x, screen_bounds.max.x-box.max.x);
 
 			//random velocity
-			f.vel.x=cmn::random(-50, 50);
-			f.vel.y=cmn::random(-220, -150);
-			f.rot_vel=cmn::random(-.5f*cmn::Pi, .5f*cmn::Pi);
+			f.vel.x=cmn::randFloat(-50, 50);
+			f.vel.y=cmn::randFloat(-220, -150);
+			f.rot_vel=cmn::randFloat(-.5f*cmn::Pi, .5f*cmn::Pi);
 
 			//random col	
-			f.col=olc::Pixel(rand()%256, rand()%256, rand()%256);
+			f.col=olc::Pixel(std::rand()%256, std::rand()%256, std::rand()%256);
 
 			//add the sucker
 			fruits.emplace_back(new Fruit(f));

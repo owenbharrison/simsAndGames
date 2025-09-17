@@ -36,7 +36,7 @@ struct SmokeDemo : olc::PixelGameEngine {
 	bool show_outlines=false;
 
 	bool OnUserCreate() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		//"primitives" to draw with
 		prim_rect_spr=new olc::Sprite(1, 1);
@@ -72,46 +72,46 @@ struct SmokeDemo : olc::PixelGameEngine {
 		bool emit_rainbow=GetMouse(olc::Mouse::RIGHT).bHeld;
 		if(emit_action.bPressed||emit_rainbow) {
 			//randomize col each click
-			emitter_col.r=rand()%256;
-			emitter_col.g=rand()%256;
-			emitter_col.b=rand()%256;
+			emitter_col.r=cmn::randInt(0, 255);
+			emitter_col.g=cmn::randInt(0, 255);
+			emitter_col.b=cmn::randInt(0, 255);
 		}
 		//add particles at mouse
 		if(emit_action.bHeld||emit_rainbow) {
 			vf2d sub=mouse_pos-emitter_pos;
 			float dist=sub.mag();
 			vf2d dir=sub/dist;
-			float speed=std::max(0.f, dist+cmn::random(-100, 100));
+			float speed=std::max(0.f, dist+cmn::randFloat(-100, 100));
 			vf2d vel=speed*dir;
-			float rot=cmn::random(2*cmn::Pi);
-			float rot_vel=cmn::random(-1.5f, 1.5f);
-			float size=cmn::random(10, 20);
-			float size_vel=cmn::random(15, 25);
+			float rot=cmn::randFloat(2*cmn::Pi);
+			float rot_vel=cmn::randFloat(-1.5f, 1.5f);
+			float size=cmn::randFloat(10, 20);
+			float size_vel=cmn::randFloat(15, 25);
 			particles.push_back(Smoke(emitter_pos, vel, emitter_col, rot, rot_vel, size, size_vel));
 		}
 
 		if(GetMouse(olc::Mouse::MIDDLE).bPressed) {
 			//randomize col each click
 			olc::Pixel debris_col(
-				rand()%256,
-				rand()%256,
-				rand()%256
+				cmn::randInt(0, 255),
+				cmn::randInt(0, 255),
+				cmn::randInt(0, 255)
 			);
 			olc::Pixel smoke_col(
-				rand()%256,
-				rand()%256,
-				rand()%256
+				cmn::randInt(0, 255),
+				cmn::randInt(0, 255),
+				cmn::randInt(0, 255)
 			);
 			//spawn a random number
-			int num=20+rand()%20;
+			int num=cmn::randInt(20, 40);
 			for(int i=0; i<num; i++) {
-				float speed=cmn::random(30, 70);
-				vf2d vel=cmn::polar<vf2d>(speed, cmn::random(2*cmn::Pi));
+				float speed=cmn::randFloat(30, 70);
+				vf2d vel=cmn::polar<vf2d>(speed, cmn::randFloat(2*cmn::Pi));
 
-				float rot=cmn::random(2*cmn::Pi);
-				float rot_vel=cmn::random(-1.5f, 1.5f);
-				float size=cmn::random(10, 20);
-				float size_vel=cmn::random(15, 25);
+				float rot=cmn::randFloat(2*cmn::Pi);
+				float rot_vel=cmn::randFloat(-1.5f, 1.5f);
+				float size=cmn::randFloat(10, 20);
+				float size_vel=cmn::randFloat(15, 25);
 				particles.push_back(Smoke(mouse_pos, vel, smoke_col, rot, rot_vel, size, size_vel));
 			}
 		}
@@ -173,7 +173,7 @@ struct SmokeDemo : olc::PixelGameEngine {
 			if(show_outlines) {
 				//for each corner
 				vf2d corners[4]{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
-				float c=std::cosf(p.rot), s=std::sinf(p.rot);
+				float c=std::cos(p.rot), s=std::sin(p.rot);
 				for(int i=0; i<4; i++) {
 					//scale corners
 					corners[i]*=p.size/2;

@@ -16,9 +16,9 @@ struct Quat {
 	}
 
 	static Quat fromAxisAngle(const vf3d& dir, float theta) {
-		float s=std::sinf(theta/2);
+		float s=std::sin(theta/2);
 		return {
-			std::cosf(theta/2),
+			std::cos(theta/2),
 			s*dir.x,
 			s*dir.y,
 			s*dir.z

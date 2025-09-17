@@ -10,15 +10,20 @@ namespace cmn {
 	//random()=0-1
 	//random(a)=0-a
 	//random(a, b)=a-b
-	float random(float b=1, float a=0) {
+	float randFloat(float b=1, float a=0) {
 		static const float rand_max=RAND_MAX;
 		float t=rand()/rand_max;
 		return a+t*(b-a);
 	}
 
+	//inclusive integer choice [a, b]
+	int randInt(int a, int b) {
+		return a+std::rand()%(1+b-a);
+	}
+
 	//clamps x to [a, b]
 	template<typename T>
-	T clamp(T x, T a, T b) {
+	T clamp(const T& x, const T& a, const T& b) {
 		if(x<a) return a;
 		if(x>b) return b;
 		return x;

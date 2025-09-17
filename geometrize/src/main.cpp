@@ -91,6 +91,7 @@ public:
 	}
 
 	bool OnUserUpdate(float dt) override {
+		//add ten shapes per frame
 		for(int i=0; i<10; i++) {
 			//set guess to approx
 			std::memcpy(guess_spr->GetData(), approx_spr->GetData(), sizeof(olc::Pixel)*image_width*image_height);

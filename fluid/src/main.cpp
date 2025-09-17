@@ -27,7 +27,7 @@ struct Example : olc::PixelGameEngine {
 	bool show_div=true;
 
 	bool OnUserCreate() override {
-		srand(time(0));
+		std::srand(std::time(0));
 		
 		//detemine sizing
 		width=20;
@@ -53,10 +53,10 @@ struct Example : olc::PixelGameEngine {
 
 	void randomizeComponents() {
 		for(int i=0; i<(width-1)*height; i++) {
-			u[i]=cmn::random(-div_amt, div_amt);
+			u[i]=cmn::randFloat(-div_amt, div_amt);
 		}
 		for(int i=0; i<width*(height-1); i++) {
-			v[i]=cmn::random(-div_amt, div_amt);
+			v[i]=cmn::randFloat(-div_amt, div_amt);
 		}
 	}
 

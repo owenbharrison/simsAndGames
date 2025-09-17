@@ -9,9 +9,9 @@ struct ShapePrimitive {
 
 	ShapePrimitive() {
 		//generate random color
-		col.r=std::rand()%256;
-		col.g=std::rand()%256;
-		col.b=std::rand()%256;
+		col.r=cmn::randInt(0, 255);
+		col.g=cmn::randInt(0, 255);
+		col.b=cmn::randInt(0, 255);
 		col.a=255;
 	}
 
@@ -19,9 +19,9 @@ struct ShapePrimitive {
 		col=getAvgColor(spr);
 
 		//add some random to it
-		col.r+=40-std::rand()%81;
-		col.g+=40-std::rand()%81;
-		col.b+=40-std::rand()%81;
+		col.r+=cmn::randInt(-40, 40);
+		col.g+=cmn::randInt(-40, 40);
+		col.b+=cmn::randInt(-40, 40);
 	}
 
 	virtual void randomizeGeometry(const vf2d&)=0;

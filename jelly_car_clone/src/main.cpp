@@ -16,7 +16,7 @@ using olc::vf2d;
 //https://www.rapidtables.com/convert/color/hsv-to-rgb.html
 olc::Pixel hsv2rgb(int h, float s, float v) {
 	float c=v*s;
-	float x=c*(1-std::fabsf(1-std::fmodf(h/60.f, 2.f)));
+	float x=c*(1-std::abs(1-std::fmod(h/60.f, 2)));
 	float m=v-c;
 	float r=0, g=0, b=0;
 	switch(h/60) {
@@ -32,11 +32,11 @@ olc::Pixel hsv2rgb(int h, float s, float v) {
 
 olc::Pixel randomPastel() {
 	//hue=pure color
-	int h=rand()%360;
+	int h=std::rand()%360;
 	//saturation=intensity
-	float s=cmn::random(.1f, .4f);
+	float s=cmn::randFloat(.1f, .4f);
 	//value=brightness
-	float v=cmn::random(.75f, 1);
+	float v=cmn::randFloat(.75f, 1);
 	return hsv2rgb(h, s, v);
 }
 
@@ -86,7 +86,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 	olc::Decal* cut_dec=nullptr;
 
 	bool OnUserCreate() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		//setup some primitives to draw with
 		prim_rect_spr=new olc::Sprite(1, 1);
@@ -299,8 +299,8 @@ struct JellyCarGame : olc::PixelGameEngine {
 	void handleUserInput(float dt) {
 		//adding ngons
 		if(GetMouse(olc::Mouse::RIGHT).bPressed) {
-			int num=3+rand()%9;
-			float rad=cmn::random(1, 3);
+			int num=3+std::rand()%9;
+			float rad=cmn::randFloat(1, 3);
 			Shape* s=new Shape(wld_mouse_pos, rad, num);
 			s->col=randomPastel();
 			scene.shapes.push_back(s);
@@ -318,7 +318,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 			box.fitToEnclose(wld_mouse_pos);
 
 			//add
-			float res=cmn::random(.75f, 2);
+			float res=cmn::randFloat(.75f, 2);
 			scene.shapes.push_back(new Shape(box, res));
 
 			//reset
@@ -522,7 +522,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 		float len=sub.mag();
 		vf2d tang=sub.perp()/len;
 
-		float angle=std::atan2f(sub.y, sub.x);
+		float angle=std::atan2(sub.y, sub.x);
 		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
 	}
 
@@ -725,7 +725,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 		//this was super finicky
 		if(cut.size()) {
-			float angle=cmn::Pi+std::atan2f(smooth_dy, smooth_dx);
+			float angle=cmn::Pi+std::atan2(smooth_dy, smooth_dx);
 			float diff=cut_anim?.017f:.352f;
 			vf2d sz(cut_spr->width, cut_spr->height);
 			vf2d ctr(.5047f, .1917f);

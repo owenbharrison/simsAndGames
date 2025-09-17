@@ -21,15 +21,15 @@ std::vector<olc::vf2d> poissonDiscSample(const cmn::AABB& box, float rad) {
 	while(spawn_pts.size()) {
 		//choose random spawn pt
 		auto it=spawn_pts.begin();
-		std::advance(it, rand()%spawn_pts.size());
+		std::advance(it, std::rand()%spawn_pts.size());
 		const auto& spawn=*it;
 
 		//try n times to add pt
 		int k=0;
 		const int samples=20;
 		for(; k<samples; k++) {
-			float angle=cmn::random(2*cmn::Pi);
-			float dist=cmn::random(rad, 2*rad);
+			float angle=cmn::randFloat(2*cmn::Pi);
+			float dist=cmn::randFloat(rad, 2*rad);
 			olc::vf2d cand=spawn+cmn::polar<olc::vf2d>(dist, angle);
 			if(!box.contains(cand)) continue;
 

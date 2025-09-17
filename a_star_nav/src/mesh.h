@@ -14,7 +14,7 @@ struct IndexTriangle {
 
 float random() {
 	static const float rand_max=RAND_MAX;
-	return rand()/rand_max;
+	return std::rand()/rand_max;
 }
 
 struct Mesh {
