@@ -1,3 +1,4 @@
+#define OLC_GFX_OPENGL33
 #define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
 using olc::vf2d;
@@ -5,33 +6,63 @@ using olc::vf2d;
 #define OLC_SOUNDWAVE
 #include "olcSoundWaveEngine.h"
 
-constexpr float Pi=3.1415927f;
+#define OLC_PGEX_SHADERS
+#include "olcPGEX_Shaders.h"
+
+olc::EffectConfig loadEffect(const std::string& filename) {
+	//get file
+	std::ifstream file(filename);
+	if(file.fail()) throw std::runtime_error("invalid filename: "+filename);
+
+	//dump contents into str stream
+	std::stringstream mid;
+	mid<<file.rdbuf();
+
+	return {
+		DEFAULT_VS,
+		mid.str(),
+		1,
+		1
+	};
+}
+
+#include "common/utils.h"
 
 class Example : public olc::PixelGameEngine {
 	//"primitive" render helpers
-	olc::Sprite* prim_rect_spr=nullptr;
-	olc::Decal* prim_rect_dec=nullptr;
-	olc::Sprite* prim_circ_spr=nullptr;
-	olc::Decal* prim_circ_dec=nullptr;
+	olc::Renderable prim_rect, prim_circ;
 
-	enum struct LeaderStage {
+	enum struct Stage {
+		Wait,
 		Slideshow,
 		Countdown,
-		Burnout,
-		Glitch
-	} leader_stage=LeaderStage::Slideshow;
+		Finished
+	} stage=Stage::Wait;
 
-	std::vector<olc::Renderable> leader_slideshow;
-	int leader_slideshow_ix=0;
-	const float leader_slideshow_time=.1667f;
+	static const int slideshow_num=11;
+	olc::Renderable slideshow[slideshow_num];
+	int slideshow_ix=0;
+	const float slideshow_time=.1667f;
 
-	int leader_count=0;
-	const float leader_count_time=.75f;
+	int countdown=0;
+	const float countdown_time=.75f;
 
-	float leader_timer=leader_slideshow_time;
+	//some delay for things to load??
+	float timer=.5f;
 
+	//sound stuff
 	olc::sound::WaveEngine sound_engine;
-	olc::sound::Wave leader_low_beep, leader_high_beep;
+	olc::sound::Wave low_beep, high_beep;
+
+	//post processing stuff
+	olc::Renderable source;
+	olc::Renderable target;
+	olc::Shade shader;
+	float total_dt=0;
+	std::vector<olc::Effect> effects;
+	float effect_timer=0;
+	int effect_index=0;
+
 public:
 	Example() {
 		sAppName="glitch demo";
@@ -39,126 +70,192 @@ public:
 
 public:
 	bool OnUserCreate() override {
+		std::srand(std::time(0));
+
 		//make some "primitives" to draw with
-		prim_rect_spr=new olc::Sprite(1, 1);
-		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
-		prim_rect_dec=new olc::Decal(prim_rect_spr);
+		prim_rect.Create(1, 1);
+		prim_rect.Sprite()->SetPixel(0, 0, olc::WHITE);
+		prim_rect.Decal()->Update();
 		{
 			int sz=1024;
-			prim_circ_spr=new olc::Sprite(sz, sz);
-			SetDrawTarget(prim_circ_spr);
+			prim_circ.Create(sz, sz);
+			SetDrawTarget(prim_circ.Sprite());
 			Clear(olc::BLANK);
 			FillCircle(sz/2, sz/2, sz/2);
 			SetDrawTarget(nullptr);
-			prim_circ_dec=new olc::Decal(prim_circ_spr);
+			prim_circ.Decal()->Update();
 		}
 
 		//load leader slideshow
-		for(int i=1; i<11; i++) {
-			std::string filename="assets/leader/"+std::to_string(i)+".png";
-			leader_slideshow.push_back({});
-			leader_slideshow.back().Load(filename);
+		for(int l=0; l<slideshow_num; l++) {
+			//load image
+			std::string filename="assets/img/leader"+std::to_string(1+l)+".png";
+			olc::Sprite* spr=new olc::Sprite(filename);
+
+			//downsample image
+			slideshow[l].Create(ScreenWidth(), ScreenHeight());
+			for(int i=0; i<ScreenWidth(); i++) {
+				for(int j=0; j<ScreenHeight(); j++) {
+					float u=(.5f+i)/ScreenWidth();
+					float v=(.5f+j)/ScreenHeight();
+					const auto& col=spr->SampleBL(u, v);
+					slideshow[l].Sprite()->SetPixel(i, j, col);
+				}
+			}
+
+			//update decal
+			slideshow[l].Decal()->Update();
+
+			//free sprite
+			delete spr;
 		}
 
-		//load audio
-		sound_engine.InitialiseAudio();
-		sound_engine.SetOutputVolume(.3f);
-		if(!leader_low_beep.LoadAudioWaveform("assets/leader/low.wav")) {
-			std::cout<<"error loading audio\n";
+		//initialize audio & load sounds
+		{
+			sound_engine.InitialiseAudio();
+			sound_engine.SetOutputVolume(.3f);
+			struct SoundLoader { olc::sound::Wave* wav; std::string str; };
+			const std::vector<SoundLoader> sound_loaders{
+				{&low_beep, "assets/sound/leader_low.wav"},
+				{&high_beep, "assets/sound/leader_high.wav"}
+			};
+			for(const auto& sl:sound_loaders) {
+				if(!sl.wav->LoadAudioWaveform(sl.str)) {
+					std::cout<<"  err loading: "<<sl.str<<'\n';
+					return false;
+				}
+			}
+		}
+
+		//allocate source and target buffers
+		source.Create(ScreenWidth(), ScreenHeight());
+		target.Create(ScreenWidth(), ScreenHeight());
+
+		//load effects
+		try {
+			const std::vector<std::string> effect_files{
+				"assets/fx/glitch.glsl",
+				"assets/fx/crosshatch.glsl",
+				"assets/fx/rgb_ht.glsl",
+				"assets/fx/ascii.glsl",
+				"assets/fx/rainbow_sobel.glsl",
+				"assets/fx/crt.glsl",
+				"assets/fx/cmyk_ht.glsl",
+				"assets/fx/mlv.glsl"
+			};
+			for(auto& str:effect_files) {
+				olc::Effect eff=shader.MakeEffect(loadEffect(str));
+				if(!eff.IsOK()) {
+					std::cerr<<"  err loading: "<<str<<":\n"<<eff.GetStatus();
+					return false;
+				}
+				effects.push_back(eff);
+			}
+		} catch(const std::exception& e) {
+			std::cerr<<"  "<<e.what()<<'\n';
 			return false;
 		}
-		if(!leader_high_beep.LoadAudioWaveform("assets/leader/high.wav")) {
-			std::cout<<"error loading audio\n";
-			return false;
-		}
 
-		return true;
-	}
-
-	bool OnUserDestroy() override {
-		delete prim_rect_dec;
-		delete prim_rect_spr;
-		delete prim_circ_dec;
-		delete prim_circ_spr;
-		
 		return true;
 	}
 
 	bool update(float dt) {
-		leader_timer-=dt;
-		switch(leader_stage) {
-			case LeaderStage::Slideshow:
-				if(leader_timer<0) {
-					leader_timer+=leader_slideshow_time;
+		//exit on escape
+		if(GetKey(olc::Key::ESCAPE).bPressed) return false;
+		
+		switch(stage) {
+			case Stage::Wait:
+				//send to slideshow
+				if(GetKey(olc::Key::SPACE).bHeld) stage=Stage::Slideshow;
+				break;
+			case Stage::Slideshow:
+				timer-=dt;
+				if(timer<0) {
+					timer+=slideshow_time;
 
-					leader_slideshow_ix++;
+					slideshow_ix++;
 
 					//send to countdown...
-					if(leader_slideshow_ix==leader_slideshow.size()) {
-						leader_stage=LeaderStage::Countdown;
-						leader_timer=leader_count_time;
-						leader_count=5;
+					if(slideshow_ix==slideshow_num) {
+						stage=Stage::Countdown;
+						timer=countdown_time;
+						countdown=7;
 					}
 				}
 				break;
-			case LeaderStage::Countdown:
-				if(leader_timer<0) {
-					leader_timer+=leader_count_time;
+			case Stage::Countdown:
+				timer-=dt;
+				if(timer<0) {
+					timer+=countdown_time;
 
-					leader_count--;
+					countdown--;
 
-					if(leader_count>1) sound_engine.PlayWaveform(&leader_low_beep);
-					else if(leader_count==1) sound_engine.PlayWaveform(&leader_high_beep);
-					//send to burnout...
-					else {
-						leader_stage=LeaderStage::Burnout;
-					}
+					if(countdown>1) sound_engine.PlayWaveform(&low_beep);
+					else if(countdown==1) sound_engine.PlayWaveform(&high_beep);
+					//send to finished...
+					else stage=Stage::Finished;
 				}
 				break;
-			case LeaderStage::Burnout:
+			case Stage::Finished:
 				break;
 		}
+
+		//every now and then...
+		effect_timer-=dt;
+		if(effect_timer<0) {
+			//increment timer by random amount
+			effect_timer+=.25f+.25f*cmn::randFloat();
+			
+			//choose new random shader
+			effect_index=cmn::randInt(0, effects.size()-1);
+		}
+			
+		total_dt+=dt;
 
 		return true;
 	}
 
 #pragma region RENDER HELPERS
-	void DrawThickLineDecal(const vf2d& a, const vf2d& b, float w, olc::Pixel col) {
-		vf2d sub=b-a;
-		float len=sub.mag();
-		vf2d tang=(sub/len).perp();
+	void DrawThickLine(const vf2d& st, const vf2d& en, float w, olc::Pixel col) {
+		vf2d norm=(en-st).norm(), tang(-norm.y, norm.x);
+		
+		//position the vertexes
+		vf2d a=st+w/2*tang, b=st-w/2*tang;
+		vf2d c=en+w/2*tang, d=en-w/2*tang;
 
-		float angle=std::atan2(sub.y, sub.x);
-		DrawRotatedDecal(a-w*tang, prim_rect_dec, angle, {0, 0}, {len, 2*w}, col);
+		//draw the triangles
+		FillTriangle(a, b, c, col);
+		FillTriangle(b, d, c, col);
 	}
 
-	void FillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
-		vf2d offset(rad, rad);
-		vf2d scale{2*rad/prim_circ_spr->width, 2*rad/prim_circ_spr->width};
-		DrawDecal(pos-offset, prim_circ_dec, scale, col);
-	}
+	void DrawThickCircle(const vf2d& pos, float rad, float w, const olc::Pixel& col) {
+		static const int num=32;
+		vf2d verts[2*num];
 
-	void DrawThickCircleDecal(const vf2d& pos, float rad, float w, const olc::Pixel& col) {
-		const int num=32;
-		vf2d first, prev;
+		//position the vertexes
 		for(int i=0; i<num; i++) {
-			float angle=2*Pi*i/num;
-			vf2d curr(pos.x+rad*std::cos(angle), pos.y+rad*std::sin(angle));
-			FillCircleDecal(curr, w, col);
-			if(i==0) first=curr;
-			else DrawThickLineDecal(prev, curr, w, col);
-			prev=curr;
+			float angle=2*cmn::Pi*i/num;
+			vf2d dir(std::cos(angle), std::sin(angle));
+			verts[2*i]=pos+(rad-w/2)*dir;
+			verts[1+2*i]=pos+(rad+w/2)*dir;
 		}
-		DrawThickLineDecal(first, prev, w, col);
+
+		//draw the triangles
+		for(int i=0; i<num; i++) {
+			int a=2*i, b=1+a;
+			int c=2*((1+i)%num), d=1+c;
+			FillTriangle(verts[a], verts[b], verts[c], col);
+			FillTriangle(verts[b], verts[d], verts[c], col);
+		}
 	}
 
-	void FillPieDecal(const vf2d& pos, float rad, float st, float len, const olc::Pixel& col) {
-		const int num=24;
+	void FillPie(const vf2d& pos, float rad, float st, float len, const olc::Pixel& col) {
+		const int num=32;
 		vf2d prev;
 		for(int i=0; i<=num; i++) {
 			float angle=st+len*i/num;
 			vf2d curr=pos+rad*vf2d(std::cos(angle), std::sin(angle));
-			if(i!=0) DrawWarpedDecal(prim_rect_dec, {curr, prev, pos, pos}, col);
+			if(i!=0) FillTriangle(pos, prev, curr, col);
 			prev=curr;
 		}
 	}
@@ -166,51 +263,105 @@ public:
 
 	bool render() {
 		const vf2d screen_size=GetScreenSize();
+		const vf2d ctr=screen_size/2;
+		const vf2d mouse_pos=GetMousePos();
 
-		switch(leader_stage) {
-			case LeaderStage::Slideshow: {
-				const auto& f=leader_slideshow[leader_slideshow_ix];
-				vf2d scl=screen_size/vf2d(f.Sprite()->width, f.Sprite()->height);
-				DrawDecal({0, 0}, f.Decal(), scl);
+		SetDrawTarget(source.Sprite());
+		Clear(olc::BLACK);
+
+		switch(stage) {
+			case Stage::Wait: {
+				//draw grid
+				const float size=32;
+				const int num_x=1+ScreenWidth()/size;
+				const int num_y=1+ScreenHeight()/size;
+				for(int i=0; i<=num_x; i++) {
+					float x=size*i;
+					vf2d top(x, 0), btm(x, ScreenHeight());
+					DrawLine(top, btm, olc::GREY);
+				}
+				for(int j=0; j<=num_y; j++) {
+					float y=size*j;
+					vf2d lft(0, y), rgt(ScreenWidth(), y);
+					DrawLine(lft, rgt, olc::GREY);
+				}
+
+				const int scl=3;
+				std::string str="[Press Space]";
+				DrawString(ctr.x-4*scl*str.length(), ctr.y-4*scl, str, olc::WHITE, scl);
 				break;
 			}
-			case LeaderStage::Countdown: {
-				FillRectDecal({0, 0}, screen_size, olc::Pixel(230, 230, 230));
+			case Stage::Slideshow: {
+				const auto& f=slideshow[slideshow_ix];
+				DrawSprite(0, 0, f.Sprite());
+				break;
+			}
+			case Stage::Countdown: {
+				FillRect({0, 0}, screen_size, olc::Pixel(230, 230, 230));
 				//not efficient...
-				const vf2d ctr=screen_size/2;
-				const float rad=10+ctr.mag();
-				const float st=-.5f*Pi;
-				const float len=2*Pi*(1-leader_timer/leader_count_time);
-				FillPieDecal(ctr, rad, st, len, olc::GREY);
+				const float pie_rad=10+ctr.mag();
+				const float pie_st=-.5f*cmn::Pi;
+				const float pie_len=2*cmn::Pi*(1-timer/countdown_time);
+				FillPie(ctr, pie_rad, pie_st, pie_len, olc::GREY);
 
 				//draw centerlines
-				const float line_rad=2.5f;
 				const vf2d left(0, ctr.y), right(screen_size.x, ctr.y);
 				const vf2d top(ctr.x, 0), bottom(ctr.x, screen_size.y);
-				DrawThickLineDecal(left, right, .5f*line_rad, olc::BLACK);
-				DrawThickLineDecal(top, bottom, .5f*line_rad, olc::BLACK);
+				DrawThickLine(left, right, 2, olc::BLACK);
+				DrawThickLine(top, bottom, 2, olc::BLACK);
 
 				//center to top
-				DrawThickLineDecal(ctr, top, line_rad, olc::BLACK);
+				DrawThickLine(ctr, top, 4, olc::BLACK);
 				//center to arc
 				{
-					float angle=st+len;
-					vf2d arc=ctr+rad*vf2d(std::cos(angle), std::sin(angle));
-					DrawThickLineDecal(ctr, arc, line_rad, olc::BLACK);
+					float angle=pie_st+pie_len;
+					vf2d arc=ctr+pie_rad*vf2d(std::cos(angle), std::sin(angle));
+					DrawThickLine(ctr, arc, 4, olc::BLACK);
 				}
 				//circle to cover jagged edge
-				FillCircleDecal(ctr, line_rad, olc::BLACK);
+				FillCircle(ctr, 4, olc::BLACK);
 
 				//draw two centered circles
-				DrawThickCircleDecal(ctr, 90, line_rad, olc::WHITE);
-				DrawThickCircleDecal(ctr, 120, line_rad, olc::WHITE);
+				DrawThickCircle(ctr, 60, 4, olc::WHITE);
+				DrawThickCircle(ctr, 90, 4, olc::WHITE);
 
 				//draw count
-				const float scl=10;
-				const vf2d offset(4*scl, 4*scl);
-				DrawStringDecal(ctr-offset, std::to_string(leader_count), olc::BLACK, {scl, scl});
+				const int scl=6;
+				auto str=std::to_string(countdown);
+				DrawString(ctr.x-4*scl*str.length(), ctr.y-4*scl, str, olc::BLACK, scl);
 				break;
 			}
+		}
+
+		//update frame info
+		{
+			int ms_count=1000*total_dt;
+			Draw(0, 0, olc::Pixel(
+				0xFF&ms_count,
+				0xFF&(ms_count>>8),
+				0xFF&(ms_count>>16),
+				0xFF&(ms_count>>24)
+			));
+		}
+
+		SetDrawTarget(nullptr);
+		source.Decal()->Update();
+
+		//apply random shader...
+		shader.SetTargetDecal(target.Decal());
+		shader.Start(&effects[effect_index]);
+		shader.SetSourceDecal(source.Decal());
+		shader.DrawQuad({-1, -1}, {2, 2});
+		shader.End();
+
+		//display it
+		DrawDecal({0,0}, target.Decal());
+
+		//show exit controls
+		{
+			std::string str="ESC to exit";
+			vf2d offset(str.size(), 1);
+			DrawStringDecal(GetScreenSize()-8*offset, str, olc::RED);
 		}
 
 		return true;

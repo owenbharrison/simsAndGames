@@ -144,21 +144,33 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Media Include="assets\leader\high.wav" />
-    <Media Include="assets\leader\low.wav" />
+    <Media Include="assets\sound\leader_high.wav" />
+    <Media Include="assets\sound\leader_low.wav" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\leader\1.png" />
-    <Image Include="assets\leader\10.png" />
-    <Image Include="assets\leader\11.png" />
-    <Image Include="assets\leader\2.png" />
-    <Image Include="assets\leader\3.png" />
-    <Image Include="assets\leader\4.png" />
-    <Image Include="assets\leader\5.png" />
-    <Image Include="assets\leader\6.png" />
-    <Image Include="assets\leader\7.png" />
-    <Image Include="assets\leader\8.png" />
-    <Image Include="assets\leader\9.png" />
+    <Image Include="assets\img\leader1.png" />
+    <Image Include="assets\img\leader10.png" />
+    <Image Include="assets\img\leader11.png" />
+    <Image Include="assets\img\leader2.png" />
+    <Image Include="assets\img\leader3.png" />
+    <Image Include="assets\img\leader4.png" />
+    <Image Include="assets\img\leader5.png" />
+    <Image Include="assets\img\leader6.png" />
+    <Image Include="assets\img\leader7.png" />
+    <Image Include="assets\img\leader8.png" />
+    <Image Include="assets\img\leader9.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\fx\ascii.glsl" />
+    <None Include="assets\fx\cmyk_ht.glsl" />
+    <None Include="assets\fx\crosshatch.glsl" />
+    <None Include="assets\fx\crt.glsl" />
+    <None Include="assets\fx\mlv.glsl" />
+    <None Include="assets\fx\glitch.glsl" />
+    <None Include="assets\fx\identity.glsl" />
+    <None Include="assets\fx\rainbow_sobel.glsl" />
+    <None Include="assets\fx\rgb_ht.glsl" />
+    <None Include="assets\fx\uv.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
