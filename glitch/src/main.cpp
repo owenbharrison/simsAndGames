@@ -28,6 +28,38 @@ olc::EffectConfig loadEffect(const std::string& filename) {
 
 #include "common/utils.h"
 
+struct Shape {
+	vf2d pos, vel;
+	float rad=0;
+	int num=0;
+
+	float rot=0, rot_vel=0;
+	
+	olc::Pixel col=olc::WHITE;
+	bool to_fill=false;
+
+	Shape() {}
+
+	Shape(const olc::vf2d& p, float ra, int n, float ro, const olc::Pixel& c) {
+		pos=p;
+		rad=ra;
+		num=n;
+		rot=ro;
+		col=c;
+	}
+
+	void update(float dt) {
+		pos+=vel*dt;
+
+		rot+=rot_vel*dt;
+	}
+};
+
+#include "common/aabb.h"
+namespace cmn {
+	using AABB=AABB_generic<vf2d>;
+}
+
 class Example : public olc::PixelGameEngine {
 	//"primitive" render helpers
 	olc::Renderable prim_rect, prim_circ;
@@ -47,6 +79,10 @@ class Example : public olc::PixelGameEngine {
 	int countdown=0;
 	const float countdown_time=.75f;
 
+	std::vector<Shape> shapes;
+	const vf2d gravity{0, 100};
+	cmn::AABB screen_bounds;
+
 	//some delay for things to load??
 	float timer=.5f;
 
@@ -62,6 +98,8 @@ class Example : public olc::PixelGameEngine {
 	std::vector<olc::Effect> effects;
 	float effect_timer=0;
 	int effect_index=0;
+
+	bool paused=false;
 
 public:
 	Example() {
@@ -156,6 +194,9 @@ public:
 			return false;
 		}
 
+		//initialize screen_bounds
+		screen_bounds={vf2d(0, 0), GetScreenSize()};
+
 		return true;
 	}
 
@@ -163,59 +204,119 @@ public:
 		//exit on escape
 		if(GetKey(olc::Key::ESCAPE).bPressed) return false;
 		
-		switch(stage) {
-			case Stage::Wait:
-				//send to slideshow
-				if(GetKey(olc::Key::SPACE).bHeld) stage=Stage::Slideshow;
-				break;
-			case Stage::Slideshow:
-				timer-=dt;
-				if(timer<0) {
-					timer+=slideshow_time;
+		//pause on p
+		if(GetKey(olc::Key::P).bPressed) paused^=true;
 
-					slideshow_ix++;
+		//pause EVERYTHING
+		if(!paused) {
+			switch(stage) {
+				case Stage::Wait:
+					//send to slideshow
+					if(GetKey(olc::Key::SPACE).bHeld) stage=Stage::Slideshow;
 
-					//send to countdown...
-					if(slideshow_ix==slideshow_num) {
-						stage=Stage::Countdown;
-						timer=countdown_time;
-						countdown=7;
+					break;
+				case Stage::Slideshow:
+					timer-=dt;
+					if(timer<0) {
+						timer+=slideshow_time;
+
+						slideshow_ix++;
+
+						//send to countdown...
+						if(slideshow_ix==slideshow_num) {
+							stage=Stage::Countdown;
+							timer=countdown_time;
+							countdown=7;
+						}
 					}
-				}
-				break;
-			case Stage::Countdown:
-				timer-=dt;
-				if(timer<0) {
-					timer+=countdown_time;
+					break;
+				case Stage::Countdown:
+					timer-=dt;
+					if(timer<0) {
+						timer+=countdown_time;
 
-					countdown--;
+						countdown--;
 
-					if(countdown>1) sound_engine.PlayWaveform(&low_beep);
-					else if(countdown==1) sound_engine.PlayWaveform(&high_beep);
-					//send to finished...
-					else stage=Stage::Finished;
-				}
-				break;
-			case Stage::Finished:
-				break;
-		}
+						if(countdown>1) sound_engine.PlayWaveform(&low_beep);
+						else if(countdown==1) sound_engine.PlayWaveform(&high_beep);
+						//send to finished...
+						else stage=Stage::Finished;
+					}
+					break;
+				case Stage::Finished:
+					//every now and then...
+					timer-=dt;
+					if(timer<0) {
+						//increment timer by random amount
+						timer+=cmn::randFloat(.5f, 1.5f);
 
-		//every now and then...
-		effect_timer-=dt;
-		if(effect_timer<0) {
-			//increment timer by random amount
-			effect_timer+=.25f+.25f*cmn::randFloat();
+						//make new shape w/ random pos, size, orientation, color
+						vf2d pos(cmn::randFloat(ScreenWidth()), cmn::randFloat(ScreenHeight()));
+						float rad=cmn::randFloat(20, 100);
+						int num=cmn::randInt(3, 8);
+						float rot=cmn::randFloat(2*cmn::Pi);
+						olc::Pixel col(cmn::randInt(0, 255), cmn::randInt(0, 255), cmn::randInt(0, 255));
+						Shape s(pos, rad, num, rot, col);
+					
+						//random velocities
+						float speed=cmn::randFloat(30, 60);
+						float angle=cmn::randFloat(2*cmn::Pi);
+						s.vel=cmn::polar<vf2d>(speed, angle);
+						s.rot_vel=cmn::randFloat(-2, 2);
+					
+						//add it
+						shapes.push_back(s);
+
+						//randomize each shapes fill
+						for(auto& s:shapes) s.to_fill=cmn::randFloat()>.5f;
+					}
+
+					//update & "sanitize" shapes
+					for(auto it=shapes.begin(); it!=shapes.end();) {
+						auto& s=*it;
+						s.update(dt);
+					
+						//remove if offscreen
+						if(!screen_bounds.overlaps({s.pos-s.rad, s.pos+s.rad})) {
+							it=shapes.erase(it);
+						} else it++;
+					}
+
+					break;
+			}
+
+			//every now and then...
+			effect_timer-=dt;
+			if(effect_timer<0) {
+				//increment timer by random amount
+				effect_timer+=cmn::randFloat(.25f, .5f);
 			
-			//choose new random shader
-			effect_index=cmn::randInt(0, effects.size()-1);
-		}
+				//choose new random shader
+				effect_index=cmn::randInt(0, effects.size()-1);
+			}
 			
-		total_dt+=dt;
+			total_dt+=dt;
+		}
 
 		return true;
 	}
 
 #pragma region RENDER HELPERS
+	void DrawGrid(float size, const olc::Pixel& col) {
+		const int num_x=1+ScreenWidth()/size;
+		const int num_y=1+ScreenHeight()/size;
+		for(int i=0; i<=num_x; i++) {
+			float x=size*i;
+			vf2d top(x, 0), btm(x, ScreenHeight());
+			DrawLine(top, btm, col);
+		}
+		for(int j=0; j<=num_y; j++) {
+			float y=size*j;
+			vf2d lft(0, y), rgt(ScreenWidth(), y);
+			DrawLine(lft, rgt, col);
+		}
+	}
+	
 	void DrawThickLine(const vf2d& st, const vf2d& en, float w, olc::Pixel col) {
 		vf2d norm=(en-st).norm(), tang(-norm.y, norm.x);
 		
@@ -235,7 +336,7 @@ public:
 		//position the vertexes
 		for(int i=0; i<num; i++) {
 			float angle=2*cmn::Pi*i/num;
-			vf2d dir(std::cos(angle), std::sin(angle));
+			vf2d dir=cmn::polar<vf2d>(1, angle);
 			verts[2*i]=pos+(rad-w/2)*dir;
 			verts[1+2*i]=pos+(rad+w/2)*dir;
 		}
@@ -254,7 +355,7 @@ public:
 		vf2d prev;
 		for(int i=0; i<=num; i++) {
 			float angle=st+len*i/num;
-			vf2d curr=pos+rad*vf2d(std::cos(angle), std::sin(angle));
+			vf2d curr=pos+cmn::polar<vf2d>(rad, angle);
 			if(i!=0) FillTriangle(pos, prev, curr, col);
 			prev=curr;
 		}
@@ -271,20 +372,7 @@ public:
 
 		switch(stage) {
 			case Stage::Wait: {
-				//draw grid
-				const float size=32;
-				const int num_x=1+ScreenWidth()/size;
-				const int num_y=1+ScreenHeight()/size;
-				for(int i=0; i<=num_x; i++) {
-					float x=size*i;
-					vf2d top(x, 0), btm(x, ScreenHeight());
-					DrawLine(top, btm, olc::GREY);
-				}
-				for(int j=0; j<=num_y; j++) {
-					float y=size*j;
-					vf2d lft(0, y), rgt(ScreenWidth(), y);
-					DrawLine(lft, rgt, olc::GREY);
-				}
+				DrawGrid(48, olc::GREY);
 
 				const int scl=3;
 				std::string str="[Press Space]";
@@ -315,7 +403,7 @@ public:
 				//center to arc
 				{
 					float angle=pie_st+pie_len;
-					vf2d arc=ctr+pie_rad*vf2d(std::cos(angle), std::sin(angle));
+					vf2d arc=ctr+cmn::polar<vf2d>(pie_rad, angle);
 					DrawThickLine(ctr, arc, 4, olc::BLACK);
 				}
 				//circle to cover jagged edge
@@ -331,6 +419,28 @@ public:
 				DrawString(ctr.x-4*scl*str.length(), ctr.y-4*scl, str, olc::BLACK, scl);
 				break;
 			}
+			case Stage::Finished:
+				//background
+				Clear(olc::GREY);
+				DrawGrid(32, olc::WHITE);
+				
+				//render shapes
+				for(const auto& s:shapes) {
+					vf2d first, prev;
+					for(int i=0; i<s.num; i++) {
+						float angle=s.rot+2*cmn::Pi*i/s.num;
+						vf2d curr=s.pos+cmn::polar<vf2d>(s.rad, angle);
+						if(i==0) first=curr;
+						else {
+							if(!s.to_fill) DrawThickLine(prev, curr, 3, s.col);
+							else FillTriangle(s.pos, prev, curr, s.col);
+						}
+						prev=curr;
+					}
+					if(!s.to_fill) DrawThickLine(prev, first, 3, s.col);
+					else FillTriangle(s.pos, prev, first, s.col);
+				}
+				break;
 		}
 
 		//update frame info
@@ -362,6 +472,14 @@ public:
 			std::string str="ESC to exit";
 			vf2d offset(str.size(), 1);
 			DrawStringDecal(GetScreenSize()-8*offset, str, olc::RED);
+		}
+
+		//show pause controls
+		{
+			std::string str="P to ";
+			if(paused) str+="unpause";
+			else str+="pause";
+			DrawStringDecal(vf2d(0, ScreenHeight()-8), str, olc::BLUE);
 		}
 
 		return true;
