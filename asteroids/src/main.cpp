@@ -12,6 +12,8 @@ using olc::vi2d;
 #include "common/aabb.h"
 namespace cmn { using AABB=AABB_generic<vf2d>; }
 
+#include "common/stopwatch.h"
+
 #include "particle.h"
 
 #include "bullet.h"
@@ -22,6 +24,7 @@ namespace cmn { using AABB=AABB_generic<vf2d>; }
 
 class AsteroidsUI : public olc::PixelGameEngine {
 	olc::Renderable console_texture;
+	olc::Decal* font_dec=nullptr;
 
 	float particle_timer=0, bullet_timer=0, score_timer=0, warning_timer=0, end_timer=0;
 
@@ -48,6 +51,8 @@ public:
 	bool OnUserCreate() override {
 		console_texture.Create(ScreenWidth(), ScreenHeight());
 
+		font_dec=new olc::Decal(GetFontSprite());
+
 		//extend screen bounds past edges
 		{
 			int margin=4;
@@ -56,7 +61,13 @@ public:
 		}
 
 		//ship in center of screen
-		ship=Ship(GetScreenSize()/2, 4);
+		ship=Ship(GetScreenSize()/2, 3);
+
+		return true;
+	}
+
+	bool OnUserDestroy() override {
+		delete[] font_dec;
 
 		return true;
 	}
@@ -285,19 +296,9 @@ public:
 			ConsoleDraw({pos.x+i, pos.y}, ch, col);
 		}
 	}
-
-	void ConsoleRender() {
-		for(int i=0; i<ScreenWidth(); i++) {
-			for(int j=0; j<ScreenHeight(); j++) {
-				olc::Pixel col=console_texture.Sprite()->GetPixel(i, j);
-				std::string str(1, col.a); col.a=255;
-				DrawStringDecal(vf2d(i, j), str, col, vf2d(.125f, .125f));
-			}
-		}
-	}
 #pragma endregion
 
-	void render() {
+	void render(float dt) {
 		//draw to console texture
 		SetDrawTarget(console_texture.Sprite());
 		
@@ -376,14 +377,14 @@ public:
 
 		//show warning sign
 		if(warning_ct%2) {
-			ConsoleFillRect(ctr-vi2d(11, 2), {23, 5}, ' ', olc::BLACK);
-			ConsoleDrawRect(ctr-vi2d(11, 2), {23, 5}, '#', olc::CYAN);
-			ConsoleDrawString(ctr-vi2d(9, 0), "ASTEROIDS IMMINENT", olc::WHITE);
+			ConsoleFillRect(ctr-vi2d(11, 2), {22, 5}, ' ', olc::BLACK);
+			ConsoleDrawRect(ctr-vi2d(11, 2), {21, 4}, '#', olc::CYAN);
+			ConsoleDrawString(ctr-vi2d(9, 0), "ASTEROIDS IMMINENT", olc::CYAN);
 		}
 
 		//show end sign
 		if(end_ct%2) {
-			ConsoleFillRect(ctr-vi2d(11, 2), {23, 5}, ' ', olc::BLACK);
+			ConsoleFillRect(ctr-vi2d(11, 2), {21, 4}, ' ', olc::BLACK);
 			if(stage==Won) {
 				ConsoleDrawString(ctr-vi2d(4, 1), "You Win!", olc::GREEN);
 				std::string str="Score: "+std::to_string(score);
@@ -393,12 +394,15 @@ public:
 				ConsoleDrawString(ctr-vi2d(5, 1), "GAME OVER!", olc::RED);
 				ConsoleDrawString(ctr+vi2d(-10, 1), "You hit an asteroid.", olc::RED);
 			}
-			ConsoleDrawRect(ctr-vi2d(11, 2), {23, 5}, '#', olc::RED);
+			ConsoleDrawRect(ctr-vi2d(11, 2), {21, 4}, '#', olc::RED);
 		}
 
 		//show stats
-		ConsoleDrawString({0, 0}, "Score: "+std::to_string(score), olc::WHITE);
-		ConsoleDrawString({0, 1}, "Level: "+std::to_string(level), olc::WHITE);
+		{
+			ConsoleDrawString({0, 0}, "Score: "+std::to_string(score), olc::CYAN);
+			std::string level_str="Level: "+std::to_string(level);
+			ConsoleDrawString(vi2d(ScreenWidth()-level_str.length(), 0), level_str, olc::CYAN);
+		}
 
 		//only when debugging
 		if(debug_mode) {
@@ -416,13 +420,29 @@ public:
 		SetDrawTarget(nullptr);
 
 		//render characters as string decals
-		ConsoleRender();
+		{
+			const vf2d source_size(8, 8);
+			const vf2d scale(.125f, .125f);
+			for(int j=0; j<ScreenHeight(); j++) {
+				for(int i=0; i<ScreenWidth(); i++) {
+					olc::Pixel col=console_texture.Sprite()->GetPixel(i, j);
+					char c=col.a;
+					col.a=255;
+					int32_t ox=(c-32)%16;
+					int32_t oy=(c-32)/16;
+					DrawPartialDecal(vf2d(i, j), font_dec, vf2d(8*ox, 8*oy), source_size, scale, col);
+				}
+			}
+		}
 	}
 
 	bool OnUserUpdate(float dt) override {
+		//quit on escape
+		if(GetKey(olc::Key::ESCAPE).bPressed) return false;
+		
 		update(dt);
 
-		render();
+		render(dt);
 
 		return true;
 	}
@@ -431,8 +451,8 @@ public:
 int main() {
 	AsteroidsUI aui;
 	bool fullscreen=false;
-	bool vsync=true;
-	if(aui.Construct(128, 72, 6, 6, fullscreen, vsync)) aui.Start();
+	bool vsync=false;
+	if(aui.Construct(128, 72, 8, 8, fullscreen, vsync)) aui.Start();
 
 	return 0;
 }
