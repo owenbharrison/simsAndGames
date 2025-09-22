@@ -33,4 +33,8 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\fx\crt.glsl" />
+    <None Include="assets\fx\identity.glsl" />
+  </ItemGroup>
 </Project>

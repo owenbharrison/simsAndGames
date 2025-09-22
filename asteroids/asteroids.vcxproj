@@ -153,6 +153,10 @@
     <ClInclude Include="src\particle.h" />
     <ClInclude Include="src\ship.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\fx\crt.glsl" />
+    <None Include="assets\fx\identity.glsl" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

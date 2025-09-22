@@ -6,9 +6,15 @@ struct Particle {
 	vf2d pos, vel;
 	float lifespan=0, age=0;
 
-	void update(float dt) {
-		pos+=vel*dt;
-		age+=dt;
+	olc::Pixel col=olc::WHITE;
+
+	Particle() {}
+
+	Particle(const vf2d& p, const vf2d& v, float l, const olc::Pixel& c) {
+		pos=p;
+		vel=v;
+		lifespan=l;
+		col=c;
 	}
 
 	//is too old?
@@ -16,12 +22,18 @@ struct Particle {
 		return age>lifespan;
 	}
 
-	static Particle makeRandom(const vf2d& p) {
+	void update(float dt) {
+		pos+=vel*dt;
+
+		age+=dt;
+	}
+
+	static Particle makeRandom(const vf2d& p, const olc::Pixel& col) {
 		float speed=cmn::randFloat(1, 6);
 		float angle=2*cmn::Pi*cmn::randFloat();
 		float lifespan=cmn::randFloat(1.6f, 3.8f);
 		vf2d vel=cmn::polar<vf2d>(speed, angle);
-		return {p, vel, lifespan};
+		return Particle(p, vel, lifespan, col);
 	}
 };
 #endif

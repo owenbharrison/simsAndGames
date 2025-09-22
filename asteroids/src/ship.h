@@ -58,10 +58,10 @@ struct Ship {
 	//random particle at end of ship
 	Particle emitParticle() const {
 		float speed=cmn::randFloat(3, 6);
-		float rand_angle=cmn::Pi*cmn::randFloat(-.33f, .33f);
-		vf2d vel=cmn::polar<vf2d>(speed, cmn::Pi+rot+rand_angle);
+		float angle=cmn::Pi*cmn::randFloat(-.33f, .33f);
+		vf2d vel=cmn::polar<vf2d>(speed, cmn::Pi+rot+angle);
 		float lifespan=cmn::randFloat(1.6f, 3.8f);
-		return {pos-cmn::polar<vf2d>(rad, rot+rand_angle/2), vel, lifespan};
+		return Particle(pos-cmn::polar<vf2d>(rad, rot+angle/2), vel, lifespan, olc::Pixel(255, 130, 0));
 	}
 
 	void getOutline(vf2d& a, vf2d& b, vf2d& c) const {

@@ -25,17 +25,18 @@ public:
 	float base_rad=0;
 	int num_pts=0;
 	vf2d* model=nullptr;
-	vf2d* points=nullptr;
+	
+	float rot=0, rot_vel=0;
+	vf2d cossin{1, 0};
 
 	Asteroid() {}
 
-	Asteroid(const vf2d& p, const vf2d& v, float r, int n) {
+	Asteroid(const vf2d& p, float ra, float ro, int n) {
 		pos=p;
-		vel=v;
-		base_rad=r;
+		base_rad=ra;
+		rot=ro;
 		num_pts=n;
 		model=new vf2d[num_pts];
-		points=new vf2d[num_pts];
 		for(int i=0; i<num_pts; i++) {
 			float rad=base_rad*cmn::randFloat(.67f, 1);
 			float angle=2*cmn::Pi*i/num_pts;
@@ -65,12 +66,64 @@ public:
 		return *this;
 	}
 
+	//rotation matrix + translation
+	vf2d localToWorld(const vf2d& v) const {
+		vf2d rotated(
+			cossin.x*v.x-cossin.y*v.y,
+			cossin.y*v.x+cossin.x*v.y
+		);
+		return pos+rotated;
+	}
+
+	//inverse of rotation matrix = transpose
+	vf2d worldToLocal(const vf2d& v) const {
+		vf2d rotated=v-pos;
+		return {
+			cossin.x*rotated.x+cossin.y*rotated.y,
+			-cossin.y*rotated.x+cossin.x*rotated.y
+		};
+	}
+
+	cmn::AABB getAABB() const {
+		cmn::AABB a;
+		for(int i=0; i<num_pts; i++) {
+			a.fitToEnclose(localToWorld(model[i]));
+		}
+		return a;
+	}
+
+	//is pt inside asteroid?
+	bool contains(const vf2d& pt) const {
+		//aabb optimization
+		if(!getAABB().contains(pt)) return false;
+
+		//localize point
+		vf2d a=worldToLocal(pt);
+
+		//random direction
+		float angle=2*cmn::Pi*cmn::randFloat();
+		vf2d b=a+cmn::polar<vf2d>(1, angle);
+
+		//count ray-segment intersections
+		int num=0;
+		for(int i=0; i<num_pts; i++) {
+			vf2d c=model[i];
+			vf2d d=model[(i+1)%num_pts];
+			vf2d tu=cmn::lineLineIntersection(a, b, c, d);
+			if(tu.x>0&&tu.y>0&&tu.y<1) num++;
+		}
+
+		//odd? inside!
+		return num%2;
+	}
+
 	void update(float dt) {
 		pos+=vel*dt;
 
-		for(int i=0; i<num_pts; i++) {
-			points[i]=pos+model[i];
-		}
+		rot+=rot_vel*dt;
+
+		//precompute rotation matrix
+		cossin=cmn::polar<vf2d>(1, rot);
 	}
 
 	//toroidal space
@@ -82,55 +135,37 @@ public:
 	}
 
 	//can or should this be split more?
-	bool split(Asteroid& a, Asteroid& b) const {
+	bool split(Asteroid& a0, Asteroid& a1) const {
 		//if asteroid is too small or not enough pts, dont bother splitting it
-		if(base_rad<4||num_pts<5) return false;
+		if(base_rad<4||num_pts<7) return false;
 
-		float spd_a=cmn::randFloat(0.75f, 1), spd_b=cmn::randFloat(0.75f, 1);
-		float rad_a=cmn::randFloat(0.5f, 0.8f), rad_b=cmn::randFloat(0.5f, 0.8f);
-		a=Asteroid(pos, spd_a*vf2d(-vel.y, vel.x), base_rad*rad_a, num_pts-2);
-		b=Asteroid(pos, spd_b*vf2d(vel.y, -vel.x), base_rad*rad_b, num_pts-2);
+		vf2d perp_vel(-vel.y, vel.x);
+
+		//make 2 smaller, faster asteroids
+		Asteroid* ast[2]{&a0, &a1};
+		for(int i=0; i<2; i++) {
+			float vel_scl=cmn::randFloat(1, 1.2f);
+			float rad_scl=cmn::randFloat(.6f, .8f);
+			float rot_scl=cmn::randFloat(.8f, 1.2f);
+			auto& a=*ast[i];
+			a=Asteroid(pos, base_rad*rad_scl, rot, num_pts-4);
+			int sign=1-2*i;
+			a.vel=sign*vel_scl*perp_vel;
+			a.rot_vel=sign*rot_scl*rot_vel;
+		}
 		return true;
 	}
 
-	cmn::AABB getAABB() const {
-		cmn::AABB a;
-		for(int i=0; i<num_pts; i++) {
-			a.fitToEnclose(points[i]);
-		}
-		return a;
-	}
-
-	//is pt inside asteroid?
-	bool contains(const vf2d& pt) const {
-		//aabb optimization
-		if(!getAABB().contains(pt)) return false;
-
-		//random direction
-		vf2d a=pt;
-		float angle=2*cmn::Pi*cmn::randFloat();
-		vf2d dir=cmn::polar<vf2d>(1, angle);
-		vf2d b=a+dir;
-
-		//count ray-segment intersections
-		int num=0;
-		for(int i=0; i<num_pts; i++) {
-			vf2d c=points[i];
-			vf2d d=points[(i+1)%num_pts];
-			vf2d tu=cmn::lineLineIntersection(a, b, c, d);
-			if(tu.x>0&&tu.y>0&&tu.y<1) num++;
-		}
-
-		//odd? inside!
-		return num%2;
-	}
-
-	static Asteroid makeRandom(const cmn::AABB& a) {
-		float speed=cmn::randFloat(15, 27);
-		float angle=2*cmn::Pi*cmn::randFloat();
+	static Asteroid makeRandom(const cmn::AABB& box) {
 		float rad=cmn::randFloat(5, 8);
-		int num_pts=cmn::randFloat(20, 28);
-		return Asteroid(randomPtOnEdge(a), cmn::polar<vf2d>(speed, angle), rad, num_pts);
+		float rot=2*cmn::Pi*cmn::Pi*cmn::randFloat();
+		int num_pts=cmn::randInt(20, 28);
+		Asteroid a(randomPtOnEdge(box), rad, rot, num_pts);
+		float speed=cmn::randFloat(9, 23);
+		float angle=2*cmn::Pi*cmn::randFloat();
+		a.vel=cmn::polar<vf2d>(speed, angle);
+		a.rot_vel=cmn::randFloat(-1, 1);
+		return a;
 	}
 };
 
@@ -141,12 +176,12 @@ void Asteroid::copyFrom(const Asteroid& a) {
 	num_pts=a.num_pts;
 	model=new vf2d[num_pts];
 	std::memcpy(model, a.model, sizeof(vf2d)*num_pts);
-	points=new vf2d[num_pts];
-	std::memcpy(points, a.points, sizeof(vf2d)*num_pts);
+	rot=a.rot;
+	cossin=a.cossin;
+	rot_vel=a.rot_vel;
 }
 
 void Asteroid::clear() {
 	delete[] model;
-	delete[] points;
 }
 #endif
