@@ -161,7 +161,7 @@
     <Image Include="assets\img\leader9.png" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\fx\ascii.glsl" />
+    <None Include="assets\fx\ascii6.glsl" />
     <None Include="assets\fx\cmyk_ht.glsl" />
     <None Include="assets\fx\crosshatch.glsl" />
     <None Include="assets\fx\crt.glsl" />

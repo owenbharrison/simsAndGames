@@ -67,11 +67,11 @@
     <None Include="assets\fx\identity.glsl" />
     <None Include="assets\fx\uv.glsl" />
     <None Include="assets\fx\rgb_ht.glsl" />
-    <None Include="assets\fx\ascii.glsl" />
     <None Include="assets\fx\cmyk_ht.glsl" />
     <None Include="assets\fx\crt.glsl" />
     <None Include="assets\fx\rainbow_sobel.glsl" />
     <None Include="assets\fx\mlv.glsl" />
     <None Include="assets\fx\crosshatch.glsl" />
+    <None Include="assets\fx\ascii6.glsl" />
   </ItemGroup>
 </Project>

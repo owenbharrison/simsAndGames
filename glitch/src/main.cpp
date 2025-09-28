@@ -175,7 +175,7 @@ public:
 				"assets/fx/glitch.glsl",
 				"assets/fx/crosshatch.glsl",
 				"assets/fx/rgb_ht.glsl",
-				"assets/fx/ascii.glsl",
+				"assets/fx/ascii6.glsl",
 				"assets/fx/rainbow_sobel.glsl",
 				"assets/fx/crt.glsl",
 				"assets/fx/cmyk_ht.glsl",
@@ -497,7 +497,7 @@ public:
 int main() {
 	Example demo;
 	bool fullscreen=false;
-	bool vsync=true;
+	bool vsync=false;
 	if(demo.Construct(640, 480, 1, 1, fullscreen, vsync)) demo.Start();
 
 	return 0;
