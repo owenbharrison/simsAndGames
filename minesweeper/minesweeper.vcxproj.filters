@@ -59,4 +59,23 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\fx\crt.glsl" />
+    <None Include="assets\fx\blur.glsl" />
+    <None Include="assets\fx\identity.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="assets\sound\pop3.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\sound\pop2.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\sound\pop1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="assets\sound\explode.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+  </ItemGroup>
 </Project>

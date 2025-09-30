@@ -24,13 +24,11 @@ class Minesweeper {
 	int num_cells=0;
 
 	int num_bombs=0;
-	
-	void copyFrom(const Minesweeper&), clear();
-	
-	bool floodsweep(int i, int j, int k);
-	void autosweep(int i, int j, int k);
 
-	void checkWin(), checkLose();
+	void copyFrom(const Minesweeper&), clear();
+
+	bool floodsweep(int i, int j, int k);
+	int autosweep(int i, int j, int k);
 
 public:
 	Cell* cells=nullptr;
@@ -48,15 +46,20 @@ public:
 
 	Minesweeper() {}
 
-	Minesweeper(int w, int h, int d, int nb) :
-		width(w), height(h), depth(d),
-		num_cells(width* height* depth),
-		num_bombs(nb) {
+	Minesweeper(int w, int h, int d, int n) {
+		width=w;
+		height=h;
+		depth=d;
 		if(width<1||height<1||depth<1) throw std::runtime_error("game dims must be >=1");
 		if(width>32||height>32||depth>32) throw std::runtime_error("game dims must be <=32");
+
+		num_cells=width*height*depth;
+		num_bombs=n;
 		if(num_bombs>=num_cells) throw std::runtime_error("too many bombs");
+
 		cells=new Cell[num_cells];
 		prev_cells=new Cell[num_cells];
+
 		reset();
 	}
 
@@ -72,11 +75,11 @@ public:
 
 	//ro3 3
 	Minesweeper& operator=(const Minesweeper& m) {
-		if(&m==this) return *this;
-
-		clear();
-
-		copyFrom(m);
+		if(&m!=this) {
+			clear();
+   	
+			copyFrom(m);
+		}
 
 		return *this;
 	}
@@ -148,21 +151,23 @@ public:
 		updatePrev();
 	}
 
-	void updatePrev() {
-		for(int i=0; i<num_cells; i++) {
-			prev_cells[i]=cells[i];
-		}
-	}
-
 	void flag(int i, int j, int k) {
 		if(!(state==START||state==PLAYING)) return;
 
+		if(!inRange(i, j, k)) return;
+
 		cells[ix(i, j, k)].flagged^=true;
+
 		if(state==START) state=PLAYING;
 	}
 
-	void sweep(int i, int j, int k) {
-		if(!(state==START||state==PLAYING)) return;
+	//returns how many penalties?
+	int sweep(int i, int j, int k) {
+		if(!(state==START||state==PLAYING)) return 0;
+
+		if(!inRange(i, j, k)) return 0;
+
+		int pen=0;
 
 		//unflag before sweeping.
 		Cell& c=cells[ix(i, j, k)];
@@ -178,12 +183,48 @@ public:
 				if(c.bomb) c.swept=true, state=LOST;
 				else if(c.swept) {
 					//clicked on number
-					if(c.num_bombs) autosweep(i, j, k);
+					if(c.num_bombs) pen=autosweep(i, j, k);
 				} else floodsweep(i, j, k);
 			}
+		}
 
-			checkWin();
-			checkLose();
+		return pen;
+	}
+
+	//toggle between paused/playing...
+	void pause() {
+		if(state==PAUSED) state=PLAYING;
+		else if(state==PLAYING) state=PAUSED;
+	}
+
+	void updatePrev() {
+		std::memcpy(prev_cells, cells, sizeof(Cell)*num_cells);
+	}
+	
+	void checkState() {
+		//any bomb is swept
+		for(int i=0; i<num_cells; i++) {
+			Cell& c=cells[i];
+			if(c.bomb&&c.swept) {
+				state=LOST;
+				return;
+			}
+		}
+
+		//all nonbombs are swept
+		for(int i=0; i<num_cells; i++) {
+			Cell& c=cells[i];
+			if(!c.bomb&&!c.swept) return;
+		}
+
+		state=WON;
+	}
+
+	//maybe put all of these into a update/sanitize function?
+	void unflagSwept() {
+		for(int i=0; i<num_cells; i++) {
+			auto& c=cells[i];
+			if(c.flagged&&c.swept) c.flagged=false;
 		}
 	}
 
@@ -191,7 +232,7 @@ public:
 	void triangulateUnswept(int tile_ix, int flag_ix) {
 		unswept_tris.clear();
 
-		auto ijk2pos=[this](int i, int j, int k) {
+		auto ijk2pos=[this] (int i, int j, int k) {
 			return vf3d(i-.5f*width, j-.5f*height, k-.5f*depth);
 		};
 		const cmn::v2d vt[4]{
@@ -200,9 +241,9 @@ public:
 			{0, 1},
 			{1, 1}
 		};
-		auto tessellate=[&](
+		auto tessellate=[&] (
 			int i, int j, int k, bool tf, vf3d* v, int a, int b, int c, int d
-		) {
+			) {
 			int ix=tf?tile_ix:flag_ix;
 			//pack coordinates into bottom 15 bits of id
 			int id=(CELL_TRIANGLE<<24)|(ix<<16)|(i<<10)|(j<<5)|k;
@@ -210,12 +251,12 @@ public:
 				v[a], v[c], v[b],
 				vt[2], vt[1], vt[0],
 				olc::WHITE, id
-			});
+				});
 			unswept_tris.push_back({
 				v[a], v[d], v[c],
 				vt[2], vt[3], vt[1],
 				olc::WHITE, id
-			});
+				});
 		};
 
 		//for each cell
@@ -305,12 +346,12 @@ public:
 		for(int i=0; i<m.num_cells; i++) {
 			std::getline(file, line);
 			line_str.str(line), line_str.clear();
-			
+
 			auto& c=m.cells[i];
 			line_str>>
 				c.num_bombs>>
 				c.bomb>>
-				c.swept>> 
+				c.swept>>
 				c.flagged;
 		}
 
@@ -380,55 +421,53 @@ bool Minesweeper::floodsweep(int i, int j, int k) {
 	return flood;
 }
 
-//all nonbombs are swept
-void Minesweeper::checkWin() {
-	for(int i=0; i<num_cells; i++) {
-		Cell& c=cells[i];
-		if(!c.bomb&&!c.swept) return;
-	}
-	state=WON;
-}
+//returns number of penalties
+int Minesweeper::autosweep(int i, int j, int k) {
+	using vi3d=cmn::v3d_generic<int>;
 
-//any bomb is swept
-void Minesweeper::checkLose() {
-	for(int i=0; i<num_cells; i++) {
-		Cell& c=cells[i];
-		if(c.bomb&&c.swept) {
-			state=LOST;
-			return;
-		}
-	}
-}
-
-void Minesweeper::autosweep(int i, int j, int k) {
-	Cell& c=cells[ix(i, j, k)];
-
-	int num_flags=0;
+	//count flagged, unswept cells
+	std::vector<vi3d> flags;
 	for(int di=-1; di<=1; di++) {
 		for(int dj=-1; dj<=1; dj++) {
 			for(int dk=-1; dk<=1; dk++) {
 				int ni=i+di, nj=j+dj, nk=k+dk;
 				if(!inRange(ni, nj, nk)) continue;
 
-				//only count unswept flagged cells
-				Cell& c=cells[ix(ni, nj, nk)];
-				if(!c.swept&&c.flagged) num_flags++;
+				auto& n=cells[ix(ni, nj, nk)];
+				if(n.flagged&&!n.swept) flags.push_back({ni, nj, nk});
 			}
 		}
 	}
 
-	if(num_flags!=c.num_bombs) return;
+	//are there enough flags?
+	auto& c=cells[ix(i, j, k)];
+	if(flags.size()<c.num_bombs) return 0;
 
-	//sweep all non flagged cells
-	for(int di=-1; di<=1; di++) {
-		for(int dj=-1; dj<=1; dj++) {
-			for(int dk=-1; dk<=1; dk++) {
-				int ni=i+di, nj=j+dj, nk=k+dk;
-				if(!inRange(ni, nj, nk)) continue;
+	//count erroneous flags
+	int penalties=0;
+	for(const auto& fl:flags) {
+		auto& f=cells[ix(fl.x, fl.y, fl.z)];
+		if(!f.bomb) {
+			f.swept=true;
+			penalties++;
+		}
+	}
 
-				if(!cells[ix(ni, nj, nk)].flagged) floodsweep(ni, nj, nk);
+	//if there are none,
+	if(penalties==0) {
+		//sweep all non flagged cells
+		for(int di=-1; di<=1; di++) {
+			for(int dj=-1; dj<=1; dj++) {
+				for(int dk=-1; dk<=1; dk++) {
+					int ni=i+di, nj=j+dj, nk=k+dk;
+					if(!inRange(ni, nj, nk)) continue;
+
+					if(!cells[ix(ni, nj, nk)].flagged) floodsweep(ni, nj, nk);
+				}
 			}
 		}
 	}
+
+	return penalties;
 }
 #endif

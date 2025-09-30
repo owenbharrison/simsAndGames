@@ -106,6 +106,8 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -120,7 +122,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
@@ -152,6 +154,17 @@
     <ClInclude Include="src\packing.h" />
     <ClInclude Include="src\particle.h" />
     <ClInclude Include="src\thread_pool.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\fx\blur.glsl" />
+    <None Include="assets\fx\crt.glsl" />
+    <None Include="assets\fx\identity.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="assets\sound\explode.wav" />
+    <Media Include="assets\sound\pop1.wav" />
+    <Media Include="assets\sound\pop2.wav" />
+    <Media Include="assets\sound\pop3.wav" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
