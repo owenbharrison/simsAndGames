@@ -568,6 +568,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		game.checkState();
 		game.updatePrev();
+		game.unflagSwept();
 
 		if(game.state==Minesweeper::PLAYING) game_timer+=dt;
 
@@ -1287,7 +1288,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 int main() {
 	Minesweeper3DUI* m3dui=new Minesweeper3DUI();
-	bool vsync=false;
+	bool vsync=true;
 	if(m3dui->Construct(800, 600, 1, 1, false, vsync)) m3dui->Start();
 
 	return 0;
