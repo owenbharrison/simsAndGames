@@ -71,7 +71,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	olc::vf2d* orbit_start=nullptr;
 	float temp_yaw=0, temp_pitch=0;
 
-	//user input stuff
+	//input stuff
 	int cursor_i=0, cursor_j=0, cursor_k=0;
 
 	//geometry stuff
@@ -111,13 +111,16 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	Minesweeper game;
 	float game_timer=0;
 
+	//ui things
+	olc::Renderable win_spr, lose_spr, pause_spr;
+
 	//post processing
 	olc::Renderable source, target;
 	olc::Shade shader;
 	olc::Effect crt_effect;
 
 	bool user_create() override {
-		std::srand(std::time(0));
+		std::srand(0);//std::time(0));
 
 		light_pos={10, 20, 30};
 
@@ -211,10 +214,71 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		game_updateMesh();
 #pragma endregion
 
+#pragma region UI SETUP
+		{
+			const int thickness=2, margin=1;
+			auto getStrSize=[] (const std::string& str, int& w, int& h) {
+				w=0, h=0;
+				int ox=0, oy=0;
+				for(const auto& c:str) {
+					if(c==' ') ox++;
+					else if(c=='\n') ox=0, oy++;
+					else if(c>='!'&&c<='~') {
+						ox++;
+						w=std::max(w, ox);
+						h=std::max(h, 1+oy);
+					}
+				}
+			};
+
+			//make win/lose/pause sprites
+			for(int s=0; s<3; s++) {
+				//choose msg, spr and col
+				std::string msg;
+				olc::Renderable* spr;
+				olc::Pixel col;
+				switch(s) {
+					default:
+						msg="YOU WIN!";
+						spr=&win_spr;
+						col=olc::Pixel(34, 214, 82);
+						break;
+					case 1:
+						msg="YOU LOSE!";
+						spr=&lose_spr;
+						col=olc::Pixel(194, 14, 14);
+						break;
+					case 2:
+						msg="PAUSED\nPAUSED\nPAUSED\nPAUSED";
+						spr=&pause_spr;
+						col=olc::Pixel(81, 167, 232);
+						break;
+				}
+
+				//make spr
+				int str_w, str_h;
+				getStrSize(msg, str_w, str_h);
+				int width=2*(thickness+margin)+8*str_w;
+				int height=2*(thickness+margin)+8*str_h;
+				spr->Create(width, height);
+
+				//dark msg w/ thick border rectangle
+				SetDrawTarget(spr->Sprite());
+				Clear(olc::BLANK);
+				DrawString(thickness+margin, thickness+margin, msg, col);
+				for(int i=0; i<thickness; i++) {
+					DrawRect(i, i, width-1-2*i, height-1-2*i, col);
+				}
+				SetDrawTarget(nullptr);
+				spr->Decal()->Update();
+			}
+		}
+#pragma endregion
+
 		//init buffers
 		source.Create(ScreenWidth(), ScreenHeight());
 		target.Create(ScreenWidth(), ScreenHeight());
-		
+
 		//load shaders
 		try {
 			crt_effect=shader.MakeEffect(loadEffect("assets/fx/crt.glsl"));
@@ -373,11 +437,11 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		temp_yaw=cam_yaw;
 		if(orbit_start) {
 			olc::vf2d diff=GetMousePos()-*orbit_start;
-			temp_pitch-=.0067f*diff.y;
+			temp_pitch-=.005f*diff.y;
 			//clamp new pitch
 			if(temp_pitch<-cmn::Pi/2) temp_pitch=.001f-cmn::Pi/2;
 			if(temp_pitch>cmn::Pi/2) temp_pitch=cmn::Pi/2-.001f;
-			temp_yaw+=.01f*diff.x;
+			temp_yaw+=.0067f*diff.x;
 		}
 
 		//end orbit
@@ -480,8 +544,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 
 		//set cursor to object under mouse
-		if(GetMouse(olc::Mouse::LEFT).bPressed) {
-			//previous frame's id buffer, but its no big deal
+		{
+			//previous frame's id buffer, but it's no big deal.
 			int mx=GetMouseX(), my=GetMouseY();
 			if(inRangeX(mx)&&inRangeY(my)) {
 				int id=id_buffer[bufferIX(mx, my)];
@@ -494,7 +558,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 						break;
 					case BILLBOARD_TRIANGLE: {//cursor to billboard
 						int bb_ix=0xffff&id;
-						//previous frame's billboard list, but its no big deal
+						//previous frame's billboard list, but it's no big deal.
 						const auto& b=billboards[bb_ix];
 						if(b.i==-1||b.j==-1||b.k==-1) break;
 
@@ -667,11 +731,12 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			lights.push_back({light_pos+rad*dir_b, olc::BLUE});
 		}
 
-		//show unswept
+		//show unswept cells
 		tris_to_project.insert(tris_to_project.end(),
 			game.unswept_tris.begin(), game.unswept_tris.end()
 		);
 
+#pragma region BILLBOARDS
 		billboards.clear();
 
 		//add particles as billboards
@@ -766,6 +831,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			tris_to_project.push_back(t1);
 			tris_to_project.push_back(t2);
 		}
+#pragma endregion
 
 		//add bounds
 		addAABB({-game_size/2, game_size/2}, olc::BLACK);
@@ -1195,36 +1261,51 @@ struct Minesweeper3DUI : cmn::Engine3D {
 					//dark background
 					SetPixelMode(olc::Pixel::ALPHA);
 					FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, 150));
+					const int scl=9;
+					DrawSprite(
+						cx-scl*win_spr.Sprite()->width/2,
+						cy-scl*win_spr.Sprite()->height/2,
+						win_spr.Sprite(),
+						scl
+					);
 					SetPixelMode(olc::Pixel::NORMAL);
-					//green win msg
-					const int scl=8;
-					olc::Pixel dark_green(0, 180, 0);
-					DrawString(cx-4*scl*8, cy-4*scl, "YOU WIN!", dark_green, scl);
-					DrawString(cx-8*22, ScreenHeight()-24, "Press R to play again!", dark_green, 2);
+
+					//play again msg
+					DrawString(cx-8*22, ScreenHeight()-24, "Press R to play again!", olc::WHITE, 2);
 					break;
 				}
 				case Minesweeper::LOST: {
 					//dark background
 					SetPixelMode(olc::Pixel::ALPHA);
 					FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, 100));
+					const int scl=9;
+					DrawSprite(
+						cx-scl*lose_spr.Sprite()->width/2,
+						cy-scl*lose_spr.Sprite()->height/2,
+						lose_spr.Sprite(),
+						scl
+					);
 					SetPixelMode(olc::Pixel::NORMAL);
-					
-					//red lost msg
-					const int scl=8;
-					DrawString(cx-4*scl*9, cy-4*scl, "YOU LOSE.", olc::RED, scl);
-					DrawString(cx-8*17, ScreenHeight()-24, "Press R to reset.", olc::RED, 2);
+
+					//play again msg
+					DrawString(cx-8*22, ScreenHeight()-24, "Press R to play again.", olc::WHITE, 2);
 					break;
 				}
 				case Minesweeper::PAUSED: {
 					//dark background
 					SetPixelMode(olc::Pixel::ALPHA);
-					FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, 200));
+					FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, 150));
+					const int scl=11;
+					DrawSprite(
+						cx-scl*pause_spr.Sprite()->width/2,
+						cy-scl*pause_spr.Sprite()->height/2,
+						pause_spr.Sprite(),
+						scl
+					);
 					SetPixelMode(olc::Pixel::NORMAL);
 
-					//blue pause msg
-					const int scl=15;
-					DrawString(cx-4*scl*6, cy-12*scl, "PAUSED\nPAUSED\nPAUSED", olc::BLUE, scl);
-					DrawString(cx-8*19, ScreenHeight()-24, "Press P to unpause.", olc::BLUE, 2);
+					//unpause msg
+					DrawString(cx-8*19, ScreenHeight()-24, "Press P to unpause.", olc::WHITE, 2);
 					break;
 				}
 			}
@@ -1233,27 +1314,27 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		//show timer
 		{
 			//divvy time into hours, then minutes
-			int seconds=game_timer;
-			int hours=seconds/3600;
-			seconds-=3600*hours;
-			int minutes=seconds/60;
-			seconds-=60*minutes;
+			int total=game_timer;
+			int hours=total/3600;
+			int minutes=(total/60)%60;
+			int seconds=total%60;
 
 			//format time
-			char time_str[8]{
-				'0'+hours/10,
-				'0'+hours%10,
+			char time_str[9]{
+				char('0'+hours/10),
+				char('0'+hours%10),
 				':',
-				'0'+minutes/10,
-				'0'+minutes%10,
+				char('0'+minutes/10),
+				char('0'+minutes%10),
 				':',
-				'0'+seconds/10,
-				'0'+seconds%10
+				char('0'+seconds/10),
+				char('0'+seconds%10),
+				'\0'
 			};
 
-			//omit hours if none
+			//skip "HH:" if 0
 			const int scl=4;
-			std::string str(time_str+(hours?0:3), time_str+8);
+			std::string str(time_str+(hours?0:3));
 			DrawString(4*scl, ScreenHeight()-12*scl, str, olc::WHITE, scl);
 		}
 
@@ -1288,8 +1369,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 int main() {
 	Minesweeper3DUI* m3dui=new Minesweeper3DUI();
+	bool fullscreen=false;
 	bool vsync=true;
-	if(m3dui->Construct(800, 600, 1, 1, false, vsync)) m3dui->Start();
+	if(m3dui->Construct(800, 600, 1, 1, fullscreen, vsync)) m3dui->Start();
 
 	return 0;
 }
