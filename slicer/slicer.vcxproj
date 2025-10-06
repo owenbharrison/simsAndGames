@@ -151,6 +151,7 @@
   <ItemGroup>
     <ClInclude Include="src\conversions.h" />
     <ClInclude Include="src\mesh.h" />
+    <ClInclude Include="src\thread_pool.h" />
     <ClInclude Include="src\voxel_set.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

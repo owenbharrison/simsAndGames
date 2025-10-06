@@ -18,6 +18,11 @@ instructions
 using cmn::vf3d;
 using olc::vf2d;
 
+#define MULTITHREADING
+#ifdef __EMSCRIPTEN__
+#undef MULTITHREADING
+#endif
+
 #define OLC_PGEX_DEAR_IMGUI_IMPLEMENTATION
 #include "olcPGEX_ImGui.h"
 
@@ -47,6 +52,10 @@ struct Prism {
 	int w=0, d=0;
 };
 
+#ifdef MULTITHREADING
+#include "thread_pool.h"
+#endif
+
 class SlicerUI : public cmn::Engine3D {
 	//camera direction
 	float cam_yaw=1.07f;
@@ -75,6 +84,17 @@ class SlicerUI : public cmn::Engine3D {
 	int min_layer=0;
 	int max_layer=0;
 	bool show_edges=true;
+
+	//multithreaded rendering
+#ifdef MULTITHREADING
+	const int mtr_tile_size=64;
+	int mtr_num_x=0, mtr_num_y=0;
+	std::vector<cmn::Triangle>* mtr_bins=nullptr;
+
+	std::vector<olc::vi2d> mtr_jobs;
+
+	ThreadPool* mtr_pool=nullptr;
+#endif
 
 public:
 	SlicerUI() : pge_imgui(true) {
@@ -119,9 +139,27 @@ public:
 		game_layer=CreateLayer();
 		EnableLayer(game_layer, true);
 
+#ifdef MULTITHREADING
+		//allocate tiles
+		mtr_num_x=1+ScreenWidth()/mtr_tile_size;
+		mtr_num_y=1+ScreenHeight()/mtr_tile_size;
+		mtr_bins=new std::vector<cmn::Triangle>[mtr_num_x*mtr_num_y];
+
+		//allocate jobs
+		for(int i=0; i<mtr_num_x; i++) {
+			for(int j=0; j<mtr_num_y; j++) {
+				mtr_jobs.push_back({i, j});
+			}
+		}
+
+		//make thread pool
+		mtr_pool=new ThreadPool(std::thread::hardware_concurrency());
+#endif
+
 		return true;
 	}
-
+	
+#pragma region UPDATE HELPERS
 	void handleCameraMovement(float dt) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
@@ -283,6 +321,7 @@ public:
 
 		delete[] meshed;
 	}
+#pragma endregion
 
 	bool user_update(float dt) override {
 		const vf2d mouse_pos=GetMousePos();
@@ -369,11 +408,6 @@ public:
 		//add main light
 		lights.push_back({light_pos, olc::WHITE});
 
-		//add model
-		//tris_to_project.insert(tris_to_project.end(),
-			//model.tris.begin(), model.tris.end()
-		//);
-
 		//add prisms
 		for(const auto& p:prisms) {
 			//skip in not in layer range
@@ -412,14 +446,171 @@ public:
 		return true;
 	}
 
+#pragma region RENDER HELPERS
+	void FillDepthTriangleWithin(
+		int x1, int y1, float w1,
+		int x2, int y2, float w2,
+		int x3, int y3, float w3,
+		olc::Pixel col, int id,
+		int nx, int ny, int mx, int my
+	) {
+		//sort by y
+		if(y2<y1) {
+			std::swap(x1, x2);
+			std::swap(y1, y2);
+			std::swap(w1, w2);
+		}
+		if(y3<y1) {
+			std::swap(x1, x3);
+			std::swap(y1, y3);
+			std::swap(w1, w3);
+		}
+		if(y3<y2) {
+			std::swap(x2, x3);
+			std::swap(y2, y3);
+			std::swap(w2, w3);
+		}
+
+		//calculate slopes
+		int dx1=x2-x1;
+		int dy1=y2-y1;
+		float dw1=w2-w1;
+
+		int dx2=x3-x1;
+		int dy2=y3-y1;
+		float dw2=w3-w1;
+
+		float t;
+
+		float tex_w;
+
+		float dax_step=0, dbx_step=0,
+			dw1_step=0, dw2_step=0;
+
+		if(dy1) dax_step=dx1/std::fabsf(dy1);
+		if(dy2) dbx_step=dx2/std::fabsf(dy2);
+
+		if(dy1) dw1_step=dw1/std::fabsf(dy1);
+		if(dy2) dw2_step=dw2/std::fabsf(dy2);
+
+		if(dy1) for(int j=y1; j<=y2; j++) {
+			if(j<ny||j>=my) continue;
+			int ax=x1+dax_step*(j-y1);
+			int bx=x1+dbx_step*(j-y1);
+			float tex_sw=w1+dw1_step*(j-y1);
+			float tex_ew=w1+dw2_step*(j-y1);
+			//sort along x
+			if(ax>bx) {
+				std::swap(ax, bx);
+				std::swap(tex_sw, tex_ew);
+			}
+			float t_step=1.f/(bx-ax);
+			for(int i=ax; i<bx; i++) {
+				if(i<nx||i>=mx) continue;
+				t=t_step*(i-ax);
+				tex_w=tex_sw+t*(tex_ew-tex_sw);
+				float& depth=depth_buffer[bufferIX(i, j)];
+				if(tex_w>depth) {
+					Draw(i, j, col);
+					depth=tex_w;
+					id_buffer[bufferIX(i, j)]=id;
+				}
+			}
+		}
+
+		//recalculate slopes
+		dx1=x3-x2;
+		dy1=y3-y2;
+		dw1=w3-w2;
+
+		if(dy1) dax_step=dx1/std::fabsf(dy1);
+
+		if(dy1) dw1_step=dw1/std::fabsf(dy1);
+
+		for(int j=y2; j<=y3; j++) {
+			if(j<ny||j>=my) continue;
+			int ax=x2+dax_step*(j-y2);
+			int bx=x1+dbx_step*(j-y1);
+			float tex_sw=w2+dw1_step*(j-y2);
+			float tex_ew=w1+dw2_step*(j-y1);
+			//sort along x
+			if(ax>bx) {
+				std::swap(ax, bx);
+				std::swap(tex_sw, tex_ew);
+			}
+			float t_step=1.f/(bx-ax);
+			for(int i=ax; i<bx; i++) {
+				if(i<nx||i>=mx) continue;
+				t=t_step*(i-ax);
+				tex_w=tex_sw+t*(tex_ew-tex_sw);
+				float& depth=depth_buffer[bufferIX(i, j)];
+				if(tex_w>depth) {
+					Draw(i, j, col);
+					depth=tex_w;
+					id_buffer[bufferIX(i, j)]=id;
+				}
+			}
+		}
+	}
+#pragma endregion
+
 	bool user_render() override {
 		SetDrawTarget(game_layer);
 		
 		Clear(olc::GREY);
 
-		//render 3d stuff
 		resetBuffers();
+#ifdef MULTITHREADING
+		//clear tile bins
+		for(int i=0; i<mtr_num_x*mtr_num_y; i++) mtr_bins[i].clear();
 
+		//bin triangles
+		for(const auto& tri:tris_to_draw) {
+			//compute screen space bounds
+			float min_x=std::min(tri.p[0].x, std::min(tri.p[1].x, tri.p[2].x));
+			float min_y=std::min(tri.p[0].y, std::min(tri.p[1].y, tri.p[2].y));
+			float max_x=std::max(tri.p[0].x, std::max(tri.p[1].x, tri.p[2].x));
+			float max_y=std::max(tri.p[0].y, std::max(tri.p[1].y, tri.p[2].y));
+
+			//which tiles does it overlap
+			int sx=std::clamp(int(min_x/mtr_tile_size), 0, mtr_num_x-1);
+			int sy=std::clamp(int(min_y/mtr_tile_size), 0, mtr_num_y-1);
+			int ex=std::clamp(int(max_x/mtr_tile_size), 0, mtr_num_x-1);
+			int ey=std::clamp(int(max_y/mtr_tile_size), 0, mtr_num_y-1);
+
+			//add tris to corresponding bins
+			for(int tx=sx; tx<=ex; tx++) {
+				for(int ty=sy; ty<=ey; ty++) {
+					mtr_bins[tx+mtr_num_x*ty].push_back(tri);
+				}
+			}
+		}
+
+		//queue work
+		std::atomic<int> tiles_remaining=mtr_jobs.size();
+		for(const auto& j:mtr_jobs) {
+			mtr_pool->enqueue([&] {
+				int nx=std::clamp(mtr_tile_size*j.x, 0, ScreenWidth());
+				int ny=std::clamp(mtr_tile_size*j.y, 0, ScreenHeight());
+				int mx=std::clamp(mtr_tile_size+nx, 0, ScreenWidth());
+				int my=std::clamp(mtr_tile_size+ny, 0, ScreenHeight());
+				const auto& bin=mtr_bins[j.x+mtr_num_x*j.y];
+				for(const auto& t:bin) {
+					FillDepthTriangleWithin(
+						t.p[0].x, t.p[0].y, t.t[0].w,
+						t.p[1].x, t.p[1].y, t.t[1].w,
+						t.p[2].x, t.p[2].y, t.t[2].w,
+						t.col, t.id,
+						nx, ny, mx, my
+					);
+				}
+				tiles_remaining--;
+			});
+		}
+
+		//wait for raster to finish
+		while(tiles_remaining);
+#else
 		for(const auto& t:tris_to_draw) {
 			FillDepthTriangle(
 				t.p[0].x, t.p[0].y, t.t[0].w,
@@ -428,6 +619,7 @@ public:
 				t.col, t.id
 			);
 		}
+#endif
 
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
