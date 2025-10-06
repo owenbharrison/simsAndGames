@@ -2,8 +2,6 @@
 #ifndef MESH_CLASS_H
 #define MESH_CLASS_H
 
-#include "quat.h"
-
 struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
@@ -11,7 +9,7 @@ struct IndexTriangle {
 struct Mesh {
 	std::vector<vf3d> vertices;
 	std::vector<IndexTriangle> index_tris;
-	Quat rotation;
+	vf3d rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
 	Mat4 mat_world;//local->world
@@ -20,7 +18,10 @@ struct Mesh {
 
 	void updateTransforms() {
 		//combine all transforms
-		Mat4 mat_rot=Quat::toMat4(rotation);
+		Mat4 mat_rot_x=Mat4::makeRotX(rotation.x);
+		Mat4 mat_rot_y=Mat4::makeRotY(rotation.y);
+		Mat4 mat_rot_z=Mat4::makeRotZ(rotation.z);
+		Mat4 mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
 		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
 		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
 		mat_world=mat_scale*mat_rot*mat_trans;

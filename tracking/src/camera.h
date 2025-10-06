@@ -1,8 +1,13 @@
 #pragma once
 #ifndef CAMERA_STRUCT_H
 #define CAMERA_STRUCT_H
-struct Camera {
+
+class Camera {
 	int width=0, height=0;
+
+	void copyFrom(const Camera&), clear();
+
+public:
 	olc::Sprite* curr_spr=nullptr, * prev_spr=nullptr;
 	vf3d pos, dir;
 	vf2d focal_length{1, 1};
@@ -18,7 +23,31 @@ struct Camera {
 		dir=d;
 	}
 
-	void updateSpr(olc::Sprite* spr) {
+	//ro3 1
+	Camera(const Camera& c) {
+		copyFrom(c);
+	}
+
+	//ro3 2
+	~Camera() {
+		clear();
+	}
+
+	//ro3 3
+	Camera& operator=(const Camera& c) {
+		if(&c!=this) {
+			clear();
+
+			copyFrom(c);
+		}
+
+		return *this;
+	}
+
+	int getWidth() const { return width; }
+	int getHeight() const { return height; }
+
+	void copyFrom(olc::Sprite* spr) {
 		for(int i=0; i<width; i++) {
 			for(int j=0; j<height; j++) {
 				float u=float(i)/width;
@@ -46,4 +75,21 @@ struct Camera {
 		return n.x*rgt+n.y*up+n.z*dir;
 	}
 };
+
+void Camera::copyFrom(const Camera& c) {
+	width=c.width;
+	height=c.height;
+	curr_spr=new olc::Sprite(width, height);
+	std::memcpy(curr_spr->GetData(), c.curr_spr->GetData(), sizeof(olc::Pixel)*width*height);
+	prev_spr=new olc::Sprite(width, height);
+	std::memcpy(curr_spr->GetData(), c.curr_spr->GetData(), sizeof(olc::Pixel)*width*height);
+	pos=c.pos;
+	dir=c.dir;
+	focal_length=c.focal_length;
+}
+
+void Camera::clear() {
+	delete curr_spr;
+	delete prev_spr;
+}
 #endif

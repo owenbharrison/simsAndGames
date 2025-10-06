@@ -40,46 +40,6 @@ struct TrackingUI : cmn::Engine3D {
 	bool object_moving=false;
 	vf3d object_pos;
 
-	void updateCam(Camera& c, const std::vector<cmn::Triangle> tris) {
-		//target tex & save pos
-		vf3d old_cam_pos=cam_pos;
-		vf3d old_cam_dir=cam_dir;
-		SetDrawTarget(render_spr);
-
-		//clip
-		cam_pos=c.pos;
-		cam_dir=c.dir;
-		tris_to_project=tris;
-		projectAndClip();
-
-		//reset
-		resetBuffers();
-		for(int i=0; i<render_spr->width*render_spr->height; i++) {
-			render_spr->pColData[i]=olc::BLACK;
-		}
-
-		//rasterize
-		for(const auto& t:tris_to_draw) {
-			FillDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
-				t.col, t.id
-			);
-		}
-
-		//store current in previous
-		std::swap(c.curr_spr, c.prev_spr);
-
-		//update texture
-		c.updateSpr(render_spr);
-
-		//reset target & pos
-		cam_pos=old_cam_pos;
-		cam_dir=old_cam_dir;
-		SetDrawTarget(nullptr);
-	}
-
 	bool user_create() override {
 		cam_pos={2.95f, 2.55f, 10.73f};
 		light_pos={0, 10, 0};
@@ -134,13 +94,13 @@ struct TrackingUI : cmn::Engine3D {
 			vf3d bl=ctr-c_w/2*rgt+c_h/2*up;
 			vf3d tr=ctr+c_w/2*rgt-c_h/2*up;
 			vf3d br=ctr-c_w/2*rgt-c_h/2*up;
-			updateCam(c, {{tl, br, tr}, {tl, bl, br}});
+			renderCam(c, {{tl, br, tr}, {tl, bl, br}});
 
 			//find rendered size
 			int min_x=-1, min_y=-1;
 			int max_x=-1, max_y=-1;
-			for(int x=0; x<c.width; x++) {
-				for(int y=0; y<c.height; y++) {
+			for(int x=0; x<c.getWidth(); x++) {
+				for(int y=0; y<c.getHeight(); y++) {
 					olc::Pixel curr=c.curr_spr->GetPixel(x, y);
 					float lum=(curr.r+curr.g+curr.b)/765.f;
 					if(lum>.1f) {
@@ -171,37 +131,82 @@ struct TrackingUI : cmn::Engine3D {
 		return true;
 	}
 
-	bool user_update(float dt) override {
-		//look up, down
-		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
-		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
+#pragma region UPDATE HELPERS
+	void renderCam(Camera& c, const std::vector<cmn::Triangle> tris) {
+		//target tex & save pos
+		vf3d old_cam_pos=cam_pos;
+		vf3d old_cam_dir=cam_dir;
+		SetDrawTarget(render_spr);
 
-		//look left, right
-		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
-		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+		//clip
+		cam_pos=c.pos;
+		cam_dir=c.dir;
+		tris_to_project=tris;
+		projectAndClip();
 
-		//polar to cartesian
-		cam_dir=vf3d(
-			std::cos(cam_yaw)*std::cos(cam_pitch),
-			std::sin(cam_pitch),
-			std::sin(cam_yaw)*std::cos(cam_pitch)
-		);
+		//reset
+		resetBuffers();
+		Clear(olc::BLACK);
 
-		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+		//rasterize
+		for(const auto& t:tris_to_draw) {
+			FillDepthTriangle(
+				t.p[0].x, t.p[0].y, t.t[0].w,
+				t.p[1].x, t.p[1].y, t.t[1].w,
+				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.col, t.id
+			);
+		}
 
-		//move forward, backward
-		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+		//store current in previous
+		std::swap(c.curr_spr, c.prev_spr);
 
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+		//update texture
+		c.copyFrom(render_spr);
+
+		//reset target & pos
+		cam_pos=old_cam_pos;
+		cam_dir=old_cam_dir;
+		SetDrawTarget(nullptr);
+	}
+
+	void handleUserInput(float dt) {
+		{
+			//speed multiplier
+			float speed=dt;
+			if(GetKey(olc::Key::CTRL).bHeld) speed*=2.5f;
+
+			//look up, down
+			if(GetKey(olc::Key::UP).bHeld) cam_pitch+=speed;
+			if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
+			if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=speed;
+			if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
+
+			//look left, right
+			if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=speed;
+			if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=speed;
+
+			//polar to cartesian
+			cam_dir=vf3d(
+				std::cos(cam_yaw)*std::cos(cam_pitch),
+				std::sin(cam_pitch),
+				std::sin(cam_yaw)*std::cos(cam_pitch)
+			);
+
+			//move up, down
+			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*speed;
+			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*speed;
+
+			//move forward, backward
+			vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
+			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*speed*fb_dir;
+			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*speed*fb_dir;
+
+			//move left, right
+			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*speed*lr_dir;
+			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*speed*lr_dir;
+		}
 
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
@@ -217,9 +222,14 @@ struct TrackingUI : cmn::Engine3D {
 			if(GetKey(olc::Key::Y).bHeld) model.translation.y+=2*dir*dt;
 			if(GetKey(olc::Key::Z).bHeld) model.translation.z+=2*dir*dt;
 		}
-		
+	}
+#pragma endregion
+
+	bool user_update(float dt) override {
+		handleUserInput(dt);
+
 		//spin mesh about y axis
-		if(to_spin) model.rotation=Quat::fromAxisAngle(vf3d(0, 1, 0), dt)*model.rotation;
+		if(to_spin) model.rotation.y+=dt;
 		
 		//update model
 		model.updateTransforms();
@@ -232,7 +242,7 @@ struct TrackingUI : cmn::Engine3D {
 
 			//update cameras
 			for(auto& c:cams) {
-				updateCam(c, model.tris);
+				renderCam(c, model.tris);
 			}
 
 			//where in image are most pixels moving
@@ -244,8 +254,8 @@ struct TrackingUI : cmn::Engine3D {
 				//luminance weighted average
 				float x_sum=0, y_sum=0;
 				float w_sum=0;
-				for(int x=0; x<c.width; x++) {
-					for(int y=0; y<c.height; y++) {
+				for(int x=0; x<c.getWidth(); x++) {
+					for(int y=0; y<c.getHeight(); y++) {
 						olc::Pixel curr=c.curr_spr->GetPixel(x, y);
 						vf3d curr01(curr.r/255.f, curr.r/255.f, curr.r/255.f);
 						float curr_lum=curr01.dot(rgb_weights);
@@ -318,7 +328,7 @@ struct TrackingUI : cmn::Engine3D {
 		//show camera frustums?
 		for(const auto& c:cams) {
 			//camera sizing
-			float w=.75f, h=w*c.height/c.width;
+			float w=.75f, h=w*c.getHeight()/c.getWidth();
 			float cam_fov_rad=cam_fov_deg/180*cmn::Pi;
 			float d=w/2/std::tan(cam_fov_rad/2);
 
@@ -355,6 +365,11 @@ struct TrackingUI : cmn::Engine3D {
 
 		//show camera renders as billboards
 		if(show_cams) {
+			//texture coords
+			cmn::v2d tl_t{1, 0};
+			cmn::v2d tr_t{1, 1};
+			cmn::v2d bl_t{0, 0};
+			cmn::v2d br_t{0, 1};
 			for(int i=0; i<cams.size(); i++) {
 				const auto& c=cams[i];
 
@@ -365,19 +380,13 @@ struct TrackingUI : cmn::Engine3D {
 				up=rgt.cross(norm);
 
 				//vertex positioning
-				float w=1, h=w*c.height/c.width;
+				float w=1, h=w*c.getHeight()/c.getWidth();
 				float d=1;
 				vf3d ctr=c.pos-d*c.dir;
 				vf3d tl=ctr+w/2*rgt+h/2*up;
 				vf3d tr=ctr+w/2*rgt-h/2*up;
 				vf3d bl=ctr-w/2*rgt+h/2*up;
 				vf3d br=ctr-w/2*rgt-h/2*up;
-
-				//texture coords
-				cmn::v2d tl_t{1, 0};
-				cmn::v2d tr_t{1, 1};
-				cmn::v2d bl_t{0, 0};
-				cmn::v2d br_t{0, 1};
 
 				//tessellation
 				cmn::Triangle f1{tl, br, tr, tl_t, br_t, tr_t};
@@ -419,7 +428,7 @@ struct TrackingUI : cmn::Engine3D {
 	}
 
 	bool user_render() override {
-		Clear(olc::Pixel(51, 51, 51));
+		Clear(olc::Pixel(190, 190, 190));
 
 		resetBuffers();
 

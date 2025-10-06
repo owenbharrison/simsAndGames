@@ -150,7 +150,6 @@
   <ItemGroup>
     <ClInclude Include="src\camera.h" />
     <ClInclude Include="src\mesh.h" />
-    <ClInclude Include="src\quat.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\car.txt" />
