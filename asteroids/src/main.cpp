@@ -89,7 +89,7 @@ public:
 		}
 
 		//ship in center of screen
-		ship=Ship(GetScreenSize()/2, 3);
+		ship=Ship(GetScreenSize()/2, 2.5f);
 
 		console_tex.Create(ScreenWidth(), ScreenHeight());
 		
@@ -476,16 +476,14 @@ public:
 		shader.SetTargetDecal(identity_tex.Decal());
 		shader.Start(&identity_effect);
 		shader.Clear(olc::Pixel(41, 41, 41));
-		{
+		for(int i=0; i<ScreenWidth(); i++) {
 			for(int j=0; j<ScreenHeight(); j++) {
-				for(int i=0; i<ScreenWidth(); i++) {
-					olc::Pixel col=console_tex.Sprite()->GetPixel(i, j);
-					char c=col.a;
-					col.a=255;
-					int32_t ox=(c-32)%16;
-					int32_t oy=(c-32)/16;
-					shader.DrawPartialDecal(8*vf2d(i, j), font_dec, 8*vf2d(ox, oy), {8, 8}, {1, 1}, col);
-				}
+				olc::Pixel col=console_tex.Sprite()->GetPixel(i, j);
+				char c=col.a;
+				col.a=255;
+				int32_t ox=(c-32)%16;
+				int32_t oy=(c-32)/16;
+				shader.DrawPartialDecal(8*vf2d(i, j), font_dec, 8*vf2d(ox, oy), {8, 8}, {1, 1}, col);
 			}
 		}
 		shader.End();
@@ -516,9 +514,9 @@ public:
 int main() {
 	AsteroidsUI aui;
 	bool fullscreen=false;
-	bool vsync=false;
+	bool vsync=true;
 	//keep pixel size at 8, 8.
-	if(aui.Construct(128, 72, 8, 8, fullscreen, vsync)) aui.Start();
+	if(aui.Construct(96, 54, 8, 8, fullscreen, vsync)) aui.Start();
 
 	return 0;
 }
