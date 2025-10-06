@@ -19,8 +19,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "procedural_audio", "procedu
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "raycasting", "raycasting\raycasting.vcxproj", "{9108DB91-7166-4A96-92ED-195B87A9C28C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "shaders", "shaders\shaders.vcxproj", "{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "clock", "clock\clock.vcxproj", "{568956BF-94D6-4842-9402-9CF4D487FAB4}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jelly_car_clone", "jelly_car_clone\jelly_car_clone.vcxproj", "{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}"
@@ -143,14 +141,6 @@ Global
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Release|x64.Build.0 = Release|x64
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Release|x86.ActiveCfg = Release|Win32
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Release|x86.Build.0 = Release|Win32
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Debug|x64.ActiveCfg = Debug|x64
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Debug|x64.Build.0 = Debug|x64
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Debug|x86.ActiveCfg = Debug|Win32
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Debug|x86.Build.0 = Debug|Win32
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Release|x64.ActiveCfg = Release|x64
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Release|x64.Build.0 = Release|x64
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Release|x86.ActiveCfg = Release|Win32
-		{9A2AE462-9A36-4DA9-AF16-0A29D279CE39}.Release|x86.Build.0 = Release|Win32
 		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x64.ActiveCfg = Debug|x64
 		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x64.Build.0 = Debug|x64
 		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x86.ActiveCfg = Debug|Win32
