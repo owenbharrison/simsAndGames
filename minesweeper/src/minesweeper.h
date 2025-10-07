@@ -202,7 +202,7 @@ public:
 	}
 	
 	void checkState() {
-		//any bomb is swept
+		//are any bombs swept?
 		for(int i=0; i<num_cells; i++) {
 			Cell& c=cells[i];
 			if(c.bomb&&c.swept) {
@@ -211,7 +211,7 @@ public:
 			}
 		}
 
-		//all nonbombs are swept
+		//are all nonbombs swept?
 		for(int i=0; i<num_cells; i++) {
 			Cell& c=cells[i];
 			if(!c.bomb&&!c.swept) return;

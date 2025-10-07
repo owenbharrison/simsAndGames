@@ -1,6 +1,6 @@
 const float Curvature=3.9;
 const float Blur=.017;
-const float ChromaticAbberation=1.011;
+const float ChromaticAbberation=1.009;
 
 void main() {
 	//curving

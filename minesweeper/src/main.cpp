@@ -3,16 +3,13 @@ add difficulty modes
 add penalty effect
 add sound?
 add menus
+encapsulation
+triangle render generalization/simplification
 */
 #define OLC_GFX_OPENGL33
 #include "common/3d/engine_3d.h"
 using cmn::vf3d;
 using cmn::Mat4;
-
-#define MULTITHREADING
-#ifdef __EMSCRIPTEN__
-#undef MULTITHREADING
-#endif
 
 static vf3d polar3D(float yaw, float pitch) {
 	return {
@@ -31,12 +28,23 @@ static vf3d polar3D(float yaw, float pitch) {
 #define BILLBOARD_TRIANGLE 2
 #include "billboard.h"
 
-#ifdef MULTITHREADING
+#define USE_MULTITHREADING
+#ifdef __EMSCRIPTEN__
+#undef USE_MULTITHREADING
+#endif
+
+#ifdef USE_MULTITHREADING
 #include "thread_pool.h"
 #endif
 
 #include "minesweeper.h"
 
+#define USE_SHADERS
+#ifdef __EMSCRIPTEN__
+#undef USE_SHADERS
+#endif
+
+#ifdef USE_SHADERS
 #define OLC_PGEX_SHADERS
 #include "olcPGEX_Shaders.h"
 
@@ -56,6 +64,7 @@ olc::EffectConfig loadEffect(const std::string& filename) {
 		1
 	};
 }
+#endif
 
 struct Minesweeper3DUI : cmn::Engine3D {
 	Minesweeper3DUI() {
@@ -97,7 +106,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	int ta_circ_ix=0;
 
 	//multithreaded rendering
-#ifdef MULTITHREADING
+#ifdef USE_MULTITHREADING
 	const int mtr_tile_size=64;
 	int mtr_num_x=0, mtr_num_y=0;
 	std::vector<cmn::Triangle>* mtr_bins=nullptr;
@@ -112,33 +121,19 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	float game_timer=0;
 
 	//ui things
-	olc::Renderable win_spr, lose_spr, pause_spr;
+	olc::Sprite* win_spr=nullptr;
+	olc::Sprite* lose_spr=nullptr;
+	olc::Sprite* pause_spr=nullptr;
 
 	//post processing
 	olc::Renderable source, target;
+#ifdef USE_SHADERS
 	olc::Shade shader;
 	olc::Effect crt_effect;
+#endif
 
-	bool user_create() override {
-		std::srand(0);//std::time(0));
-
-		light_pos={10, 20, 30};
-
-		//load fire gradient
-		fire_gradient=new olc::Sprite("assets/img/fire_gradient.png");
-
-		//load number gradient
-		number_gradient=new olc::Sprite("assets/img/number_gradient.png");
-
-		//load cursor model
-		try {
-			cursor_mesh=Mesh::loadFromOBJ("assets/models/cursor.txt");
-		} catch(const std::exception& e) {
-			std::cout<<e.what()<<'\n';
-			return false;
-		}
-
-#pragma region TEXTURE ATLAS SETUP
+#pragma region SETUP_HELPERS
+	void setupTextureAtlas() {
 		//add letters to texture atlas
 		ta_letter_ix=texture_atlas.size();
 		for(char c='A'; c<='Z'; c++) {
@@ -182,10 +177,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			SetDrawTarget(nullptr);
 			texture_atlas.push_back(circ_spr);
 		}
-#pragma endregion
+	}
 
-#pragma region MULTI THREADING RENDERING SETUP
-#ifdef MULTITHREADING
+	void setupMultithreadedRendering() {
+#ifdef USE_MULTITHREADING
 		//allocate tiles
 		mtr_num_x=1+ScreenWidth()/mtr_tile_size;
 		mtr_num_y=1+ScreenHeight()/mtr_tile_size;
@@ -201,7 +196,87 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		//make thread pool
 		mtr_pool=new ThreadPool(std::thread::hardware_concurrency());
 #endif
+	}
+
+	//make win/lose/pause sprites
+	void setupUIOverlay() {
+		const int thickness=2, margin=1;
+		auto getStrSize=[] (const std::string& str, int& w, int& h) {
+			w=0, h=0;
+			int ox=0, oy=0;
+			for(const auto& c:str) {
+				if(c==' ') ox++;
+				else if(c=='\n') ox=0, oy++;
+				else if(c>='!'&&c<='~') {
+					ox++;
+					w=std::max(w, ox);
+					h=std::max(h, 1+oy);
+				}
+			}
+		};
+
+		for(int s=0; s<3; s++) {
+			//choose msg, spr and col
+			std::string msg;
+			olc::Sprite** spr=nullptr;
+			olc::Pixel col;
+			switch(s) {
+				default:
+					msg="YOU WIN!";
+					spr=&win_spr;
+					col=olc::Pixel(34, 214, 82);
+					break;
+				case 1:
+					msg="YOU LOSE!";
+					spr=&lose_spr;
+					col=olc::Pixel(194, 14, 14);
+					break;
+				case 2:
+					msg="PAUSED\nPAUSED\nPAUSED\nPAUSED";
+					spr=&pause_spr;
+					col=olc::Pixel(81, 167, 232);
+					break;
+			}
+
+			//make spr
+			int str_w, str_h;
+			getStrSize(msg, str_w, str_h);
+			int width=2*(thickness+margin)+8*str_w;
+			int height=2*(thickness+margin)+8*str_h;
+			*spr=new olc::Sprite(width, height);
+
+			//dark msg w/ thick border rectangle
+			SetDrawTarget(*spr);
+			Clear(olc::BLANK);
+			DrawString(thickness+margin, thickness+margin, msg, col);
+			for(int i=0; i<thickness; i++) {
+				DrawRect(i, i, width-1-2*i, height-1-2*i, col);
+			}
+			SetDrawTarget(nullptr);
+		}
+	}
 #pragma endregion
+
+	bool user_create() override {
+		std::srand(std::time(0));
+
+		//load fire gradient
+		fire_gradient=new olc::Sprite("assets/img/fire_gradient.png");
+
+		//load number gradient
+		number_gradient=new olc::Sprite("assets/img/number_gradient.png");
+
+		//load cursor model
+		try {
+			cursor_mesh=Mesh::loadFromOBJ("assets/models/cursor.txt");
+		} catch(const std::exception& e) {
+			std::cerr<<e.what()<<'\n';
+			return false;
+		}
+
+		setupTextureAtlas();
+
+		setupMultithreadedRendering();
 
 #pragma region GAME SETUP
 		//init game
@@ -211,74 +286,16 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			std::cout<<e.what()<<'\n';
 			return false;
 		}
-		game_updateMesh();
+		updateGameMesh();
 #pragma endregion
 
-#pragma region UI SETUP
-		{
-			const int thickness=2, margin=1;
-			auto getStrSize=[] (const std::string& str, int& w, int& h) {
-				w=0, h=0;
-				int ox=0, oy=0;
-				for(const auto& c:str) {
-					if(c==' ') ox++;
-					else if(c=='\n') ox=0, oy++;
-					else if(c>='!'&&c<='~') {
-						ox++;
-						w=std::max(w, ox);
-						h=std::max(h, 1+oy);
-					}
-				}
-			};
-
-			//make win/lose/pause sprites
-			for(int s=0; s<3; s++) {
-				//choose msg, spr and col
-				std::string msg;
-				olc::Renderable* spr;
-				olc::Pixel col;
-				switch(s) {
-					default:
-						msg="YOU WIN!";
-						spr=&win_spr;
-						col=olc::Pixel(34, 214, 82);
-						break;
-					case 1:
-						msg="YOU LOSE!";
-						spr=&lose_spr;
-						col=olc::Pixel(194, 14, 14);
-						break;
-					case 2:
-						msg="PAUSED\nPAUSED\nPAUSED\nPAUSED";
-						spr=&pause_spr;
-						col=olc::Pixel(81, 167, 232);
-						break;
-				}
-
-				//make spr
-				int str_w, str_h;
-				getStrSize(msg, str_w, str_h);
-				int width=2*(thickness+margin)+8*str_w;
-				int height=2*(thickness+margin)+8*str_h;
-				spr->Create(width, height);
-
-				//dark msg w/ thick border rectangle
-				SetDrawTarget(spr->Sprite());
-				Clear(olc::BLANK);
-				DrawString(thickness+margin, thickness+margin, msg, col);
-				for(int i=0; i<thickness; i++) {
-					DrawRect(i, i, width-1-2*i, height-1-2*i, col);
-				}
-				SetDrawTarget(nullptr);
-				spr->Decal()->Update();
-			}
-		}
-#pragma endregion
+		setupUIOverlay();
 
 		//init buffers
 		source.Create(ScreenWidth(), ScreenHeight());
 		target.Create(ScreenWidth(), ScreenHeight());
 
+#ifdef USE_SHADERS
 		//load shaders
 		try {
 			crt_effect=shader.MakeEffect(loadEffect("assets/fx/crt.glsl"));
@@ -290,6 +307,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
 		}
+#endif
 
 		//capture std cout to integrated console
 		ConsoleCaptureStdOut(true);
@@ -302,10 +320,14 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		delete number_gradient;
 		for(auto& t:texture_atlas) delete t;
 
-#ifdef MULTITHREADING
+#ifdef USE_MULTITHREADING
 		delete[] mtr_bins;
 		delete mtr_pool;
 #endif
+
+		delete win_spr;
+		delete lose_spr;
+		delete pause_spr;
 
 		return true;
 	}
@@ -358,7 +380,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				std::cout<<"  successfully imported from: "<<filename<<'\n';
 
 				game=m;
-				game_updateMesh();
+				updateGameMesh();
 
 				return true;
 			} catch(const std::exception& e) {
@@ -381,16 +403,16 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		if(cmd=="keybinds") {
 			std::cout<<
+				"  F      flag cell\n"
+				"  SPACE  sweep cell\n"
+				"  P      pause game\n"
+				"  R      reset game\n"
+				"  B      toggle bomb zone display\n"
 				"  C      toggle cursor control display\n"
 				"  A/D    move cursor +/- in X axis\n"
 				"  W/S    move cursor +/- in Y axis\n"
 				"  Q/E    move cursor +/- in Z axis\n"
-				"  B      toggle bomb zone display\n"
-				"  F      flag cell\n"
-				"  ENTER  sweep cell\n"
-				"  R      reset game\n"
-				"  ESC    toggle integrated console\n"
-				"  HOME   reset zoom and pan\n";
+				"  ESC    toggle integrated console\n";
 
 			return true;
 		}
@@ -398,9 +420,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		if(cmd=="mousebinds") {
 			std::cout<<
 				"  LEFT     drag to orbit game\n"
-				"  LEFT     drag to select cell/number\n"
-				"  RIGHT    apply spring force to pixelset\n"
-				"  MIDDLE   scroll to zoom, drag to pan\n";
+				"  LEFT     hover to select cell/number\n";
 
 			std::cout<<"  unknown command. type help for list of commands.\n";
 
@@ -408,14 +428,12 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 	}
 
-#pragma region UPDATE HELPERS
-	void game_updateMesh() {
+#pragma region UPDATE_HELPERS
+	void updateGameMesh() {
 		game.triangulateUnswept(ta_tile_ix, ta_flag_ix);
 	}
 
-	void handleCameraMovement(float dt) {
-		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
-
+	void handleCameraMovement(float dt, const vf3d& game_size) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch+=dt;
@@ -520,10 +538,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 	}
 
-	void handleUserInput(float dt) {
-		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
-
-		handleCameraMovement(dt);
+	void handleUserInput(float dt, const vf3d& game_size) {
+		handleCameraMovement(dt, game_size);
 
 		//move cursor with keyboard
 		{
@@ -574,20 +590,20 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		//flag at cursor
 		if(GetKey(olc::Key::F).bPressed) {
 			game.flag(cursor_i, cursor_j, cursor_k);
-			game_updateMesh();
+			updateGameMesh();
 		}
 
 		//sweep at cursor
 		if(GetKey(olc::Key::SPACE).bPressed) {
 			//15 seconds per penalty
 			game_timer+=15*game.sweep(cursor_i, cursor_j, cursor_k);
-			game_updateMesh();
+			updateGameMesh();
 		}
 
 		//reset game
 		if(GetKey(olc::Key::R).bPressed) {
 			game.reset();
-			game_updateMesh();
+			updateGameMesh();
 			game_timer=0;
 		}
 
@@ -607,7 +623,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
 
 		//only allow input when console NOT open
-		if(!IsConsoleShowing()) handleUserInput(dt);
+		if(!IsConsoleShowing()) handleUserInput(dt, game_size);
 
 		//find changes from prev->curr
 		for(int i=0; i<game.getWidth(); i++) {
@@ -649,7 +665,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		return true;
 	}
 
-#pragma region GEOMETRY HELPERS
+#pragma region GEOMETRY_HELPERS
 	void makeQuad(const vf3d& pos, float sz, float ax, float ay, cmn::Triangle& a, cmn::Triangle& b) const {
 		//billboarded to point at camera
 		vf3d norm=(pos-cam_pos).norm();
@@ -675,7 +691,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	}
 
 	//this looks nice :D
-	void addArrow(const vf3d& a, const vf3d& b, float sz, const olc::Pixel& col) {
+	void realizeArrow(const vf3d& a, const vf3d& b, float sz, const olc::Pixel& col) {
 		vf3d ba=b-a;
 		float mag=ba.mag();
 		vf3d ca=cam_pos-a;
@@ -691,7 +707,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		cmn::Line l4{r, b}; l4.col=col;
 		lines_to_project.push_back(l4);
 	}
-
+	
 	olc::Pixel getCellColor(int num_bombs) const {
 		olc::Pixel col;
 		switch(num_bombs) {
@@ -709,37 +725,26 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 		return col;
 	}
-#pragma endregion
 
-	bool user_geometry() override {
-		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
+	//fancy lights?
+	void realizeLights() {
+		//local coordinate system pointed to ctr
+		vf3d up(0, 1, 0);
+		vf3d rgt=cam_dir.cross(up).norm();
+		up=rgt.cross(cam_dir);
 
-		//fancy lights?
-		{
-			//local coordinate system pointed to ctr
-			vf3d up(0, 1, 0);
-			vf3d rgt=cam_dir.cross(up).norm();
-			up=rgt.cross(cam_dir);
+		//triangle of lights on plane w/ norm=cam_dir
+		const float rad=.45f;
+		vf3d dir_r=std::cos(light_spin)*rgt+std::sin(light_spin)*up;
+		lights.push_back({light_pos+rad*dir_r, olc::RED});
+		vf3d dir_g=std::cos(2*cmn::Pi/3+light_spin)*rgt+std::sin(2*cmn::Pi/3+light_spin)*up;
+		lights.push_back({light_pos+rad*dir_g, olc::GREEN});
+		vf3d dir_b=std::cos(4*cmn::Pi/3+light_spin)*rgt+std::sin(4*cmn::Pi/3+light_spin)*up;
+		lights.push_back({light_pos+rad*dir_b, olc::BLUE});
+	}
 
-			//triangle of lights on plane w/ norm=cam_dir
-			const float rad=.45f;
-			vf3d dir_r=std::cos(light_spin)*rgt+std::sin(light_spin)*up;
-			lights.push_back({light_pos+rad*dir_r, olc::RED});
-			vf3d dir_g=std::cos(2*cmn::Pi/3+light_spin)*rgt+std::sin(2*cmn::Pi/3+light_spin)*up;
-			lights.push_back({light_pos+rad*dir_g, olc::GREEN});
-			vf3d dir_b=std::cos(4*cmn::Pi/3+light_spin)*rgt+std::sin(4*cmn::Pi/3+light_spin)*up;
-			lights.push_back({light_pos+rad*dir_b, olc::BLUE});
-		}
-
-		//show unswept cells
-		tris_to_project.insert(tris_to_project.end(),
-			game.unswept_tris.begin(), game.unswept_tris.end()
-		);
-
-#pragma region BILLBOARDS
-		billboards.clear();
-
-		//add particles as billboards
+	//add particles as billboards
+	void realizeParticles() {
 		for(const auto& p:particles) {
 			olc::Pixel col=olc::WHITE;
 			float life=1-p.age/p.lifespan;
@@ -749,8 +754,11 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			col.a=255*life;
 			billboards.push_back({p.pos, p.size, .5f, .5f, ta_circ_ix, col});
 		}
+	}
 
-		//add neighbor counts as billboards
+	//add neighbor counts as billboards
+	void realizeHints(const vf3d& game_size) {
+		//for each cell
 		for(int i=0; i<game.getWidth(); i++) {
 			for(int j=0; j<game.getHeight(); j++) {
 				for(int k=0; k<game.getDepth(); k++) {
@@ -791,31 +799,32 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				}
 			}
 		}
+	}
 
-		//add cursor controls as arrows and billboards
-		if(show_cursor_controls) {
-			//a & d on x axis
-			float edge_x=.5f*game.getWidth();
-			billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'A'-'A', olc::YELLOW});
-			addArrow(vf3d(.5f+edge_x, 0, 0), vf3d(1.5f+edge_x, 0, 0), .15f, olc::YELLOW);
-			billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'D'-'A', olc::YELLOW});
-			addArrow(vf3d(-.5f-edge_x, 0, 0), vf3d(-1.5f-edge_x, 0, 0), .15f, olc::YELLOW);
+	void realizeCursorControls(const vf3d& game_size) {
+		//a & d on x axis
+		float edge_x=.5f*game_size.x;
+		billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'A'-'A', olc::YELLOW});
+		realizeArrow(vf3d(.5f+edge_x, 0, 0), vf3d(1.5f+edge_x, 0, 0), .15f, olc::YELLOW);
+		billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'D'-'A', olc::YELLOW});
+		realizeArrow(vf3d(-.5f-edge_x, 0, 0), vf3d(-1.5f-edge_x, 0, 0), .15f, olc::YELLOW);
 
-			//w & s on y axis
-			float edge_y=.5f*game.getHeight();
-			billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'W'-'A', olc::MAGENTA});
-			addArrow(vf3d(0, .5f+edge_y, 0), vf3d(0, 1.5f+edge_y, 0), .15f, olc::MAGENTA);
-			billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'S'-'A', olc::MAGENTA});
-			addArrow(vf3d(0, -.5f-edge_y, 0), vf3d(0, -1.5f-edge_y, 0), .15f, olc::MAGENTA);
+		//w & s on y axis
+		float edge_y=.5f*game_size.y;
+		billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'W'-'A', olc::MAGENTA});
+		realizeArrow(vf3d(0, .5f+edge_y, 0), vf3d(0, 1.5f+edge_y, 0), .15f, olc::MAGENTA);
+		billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'S'-'A', olc::MAGENTA});
+		realizeArrow(vf3d(0, -.5f-edge_y, 0), vf3d(0, -1.5f-edge_y, 0), .15f, olc::MAGENTA);
 
-			//q & e on z axis
-			float edge_z=.5f*game.getDepth();
-			billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, ta_letter_ix+'Q'-'A', olc::GREEN});
-			addArrow(vf3d(0, 0, .5f+edge_z), vf3d(0, 0, 1.5f+edge_z), .15f, olc::GREEN);
-			billboards.push_back({vf3d(0, 0, -2-edge_z), .5f, .5f, .5f, ta_letter_ix+'E'-'A', olc::GREEN});
-			addArrow(vf3d(0, 0, -.5f-edge_z), vf3d(0, 0, -1.5f-edge_z), .15f, olc::GREEN);
-		}
+		//q & e on z axis
+		float edge_z=.5f*game_size.z;
+		billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, ta_letter_ix+'Q'-'A', olc::GREEN});
+		realizeArrow(vf3d(0, 0, .5f+edge_z), vf3d(0, 0, 1.5f+edge_z), .15f, olc::GREEN);
+		billboards.push_back({vf3d(0, 0, -2-edge_z), .5f, .5f, .5f, ta_letter_ix+'E'-'A', olc::GREEN});
+		realizeArrow(vf3d(0, 0, -.5f-edge_z), vf3d(0, 0, -1.5f-edge_z), .15f, olc::GREEN);
+	}
 
+	void realizeBillboards() {
 		//sort billboards back to front for transparency
 		std::sort(billboards.begin(), billboards.end(), [&] (const Billboard& a, const Billboard& b) {
 			return (a.pos-cam_pos).mag2()>(b.pos-cam_pos).mag2();
@@ -831,299 +840,164 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			tris_to_project.push_back(t1);
 			tris_to_project.push_back(t2);
 		}
+	}
+
+	//add cursor mesh
+	void realizeCursor(const vf3d& game_size) {
+		//color based on cell
+		const auto& cell=game.cells[game.ix(cursor_i, cursor_j, cursor_k)];
+		olc::Pixel col=olc::RED;
+		if(cell.swept) {
+			if(cell.num_bombs==0) col=olc::WHITE;
+			else col=getCellColor(cell.num_bombs);
+		}
+
+		//translate & tessellate
+		vf3d ijk(cursor_i, cursor_j, cursor_k);
+		cursor_mesh.translation=.5f+ijk-game_size/2;
+		cursor_mesh.updateTransforms();
+		cursor_mesh.updateTriangles(col);
+		tris_to_project.insert(tris_to_project.end(),
+			cursor_mesh.tris.begin(), cursor_mesh.tris.end()
+		);
+	}
+
+	//show clamped 3x3 bomb influence zone
+	void realizeBombZone(const vf3d& game_size) {
+		int min_i=cursor_i-1; if(min_i<0) min_i=0;
+		int min_j=cursor_j-1; if(min_j<0) min_j=0;
+		int min_k=cursor_k-1; if(min_k<0) min_k=0;
+		int max_i=cursor_i+2; if(max_i>=game.getWidth()) max_i=game.getWidth();
+		int max_j=cursor_j+2; if(max_j>=game.getHeight()) max_j=game.getHeight();
+		int max_k=cursor_k+2; if(max_k>=game.getDepth()) max_k=game.getDepth();
+		vf3d min_ijk(min_i, min_j, min_k);
+		vf3d max_ijk(max_i, max_j, max_k);
+		addAABB({min_ijk-game_size/2-.05f, max_ijk-game_size/2+.05f}, olc::Pixel(255, 120, 0));
+	}
 #pragma endregion
 
-		//add bounds
+	//add all scene geometry each frame
+	bool user_geometry() override {
+		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
+
+		realizeLights();
+
+		//show unswept cells
+		tris_to_project.insert(tris_to_project.end(),
+			game.unswept_tris.begin(), game.unswept_tris.end()
+		);
+
+		realizeCursor(game_size);
+
+		//i love billboards!!
+		billboards.clear();
+		realizeParticles();
+		realizeHints(game_size);
+		if(show_cursor_controls) realizeCursorControls(game_size);
+		realizeBillboards();
+
+		//add game bounds with black edges
 		addAABB({-game_size/2, game_size/2}, olc::BLACK);
 
-		//add cursor mesh
-		{
-			//color based on cell
-			const auto& cell=game.cells[game.ix(cursor_i, cursor_j, cursor_k)];
-			olc::Pixel col=olc::RED;
-			if(cell.swept) {
-				if(cell.num_bombs==0) col=olc::WHITE;
-				else col=getCellColor(cell.num_bombs);
-			}
-
-			//add mesh
-			vf3d ijk(cursor_i, cursor_j, cursor_k);
-			cursor_mesh.translation=.5f+ijk-game_size/2;
-			cursor_mesh.updateTransforms();
-			cursor_mesh.updateTriangles(col);
-			tris_to_project.insert(tris_to_project.end(),
-				cursor_mesh.tris.begin(), cursor_mesh.tris.end()
-			);
-		}
-
-		if(show_bomb_zone) {
-			//show clamped 3x3 bomb influence zone
-			int min_i=cursor_i-1; if(min_i<0) min_i=0;
-			int min_j=cursor_j-1; if(min_j<0) min_j=0;
-			int min_k=cursor_k-1; if(min_k<0) min_k=0;
-			int max_i=cursor_i+2; if(max_i>=game.getWidth()) max_i=game.getWidth();
-			int max_j=cursor_j+2; if(max_j>=game.getHeight()) max_j=game.getHeight();
-			int max_k=cursor_k+2; if(max_k>=game.getDepth()) max_k=game.getDepth();
-			vf3d min_ijk(min_i, min_j, min_k);
-			vf3d max_ijk(max_i, max_j, max_k);
-			addAABB({min_ijk-game_size/2-.05f, max_ijk-game_size/2+.05f}, olc::Pixel(255, 120, 0));
-		}
+		if(show_bomb_zone) realizeBombZone(game_size);
 
 		return true;
 	}
 
-#pragma region RENDER HELPERS
-	void FillDepthTriangleWithin(
-		int x1, int y1, float w1,
-		int x2, int y2, float w2,
-		int x3, int y3, float w3,
-		olc::Pixel col, int id,
-		int nx, int ny, int mx, int my
-	) {
-		//sort by y
-		if(y2<y1) {
-			std::swap(x1, x2);
-			std::swap(y1, y2);
-			std::swap(w1, w2);
-		}
-		if(y3<y1) {
-			std::swap(x1, x3);
-			std::swap(y1, y3);
-			std::swap(w1, w3);
-		}
-		if(y3<y2) {
-			std::swap(x2, x3);
-			std::swap(y2, y3);
-			std::swap(w2, w3);
-		}
+	#pragma region RENDER_HELPERS
+	//win/lose/pause state overlays
+	void renderStateOverlay() {
+		const int cx=GetDrawTargetWidth()/2, cy=GetDrawTargetHeight()/2;
 
-		//calculate slopes
-		int dx1=x2-x1;
-		int dy1=y2-y1;
-		float dw1=w2-w1;
-
-		int dx2=x3-x1;
-		int dy2=y3-y1;
-		float dw2=w3-w1;
-
-		float t;
-
-		float tex_w;
-
-		float dax_step=0, dbx_step=0,
-			dw1_step=0, dw2_step=0;
-
-		if(dy1) dax_step=dx1/std::fabsf(dy1);
-		if(dy2) dbx_step=dx2/std::fabsf(dy2);
-
-		if(dy1) dw1_step=dw1/std::fabsf(dy1);
-		if(dy2) dw2_step=dw2/std::fabsf(dy2);
-
-		if(dy1) for(int j=y1; j<=y2; j++) {
-			if(j<ny||j>=my) continue;
-			int ax=x1+dax_step*(j-y1);
-			int bx=x1+dbx_step*(j-y1);
-			float tex_sw=w1+dw1_step*(j-y1);
-			float tex_ew=w1+dw2_step*(j-y1);
-			//sort along x
-			if(ax>bx) {
-				std::swap(ax, bx);
-				std::swap(tex_sw, tex_ew);
+		//generalized state overlay
+		int alpha=0;
+		int scl=1;
+		olc::Sprite* spr=nullptr;
+		std::string msg;
+		switch(game.state) {
+			default: return;
+			case Minesweeper::WON: {
+				alpha=100;
+				scl=9;
+				spr=win_spr;
+				msg="Press R to play again!";
+				break;
 			}
-			float t_step=1.f/(bx-ax);
-			for(int i=ax; i<bx; i++) {
-				if(i<nx||i>=mx) continue;
-				t=t_step*(i-ax);
-				tex_w=tex_sw+t*(tex_ew-tex_sw);
-				float& depth=depth_buffer[bufferIX(i, j)];
-				if(tex_w>depth) {
-					Draw(i, j, col);
-					depth=tex_w;
-					id_buffer[bufferIX(i, j)]=id;
-				}
+			case Minesweeper::LOST: {
+				alpha=100;
+				scl=9;
+				spr=lose_spr;
+				msg="Press R to play again.";
+				break;
+			}
+			case Minesweeper::PAUSED: {
+				alpha=200;
+				scl=11;
+				spr=pause_spr;
+				msg="Press P to unpause.";
+				break;
 			}
 		}
 
-		//recalculate slopes
-		dx1=x3-x2;
-		dy1=y3-y2;
-		dw1=w3-w2;
+		SetPixelMode(olc::Pixel::ALPHA);
+		
+		//dark background
+		FillRect(0, 0, GetDrawTargetWidth(), GetDrawTargetHeight(), olc::Pixel(0, 0, 0, alpha));
 
-		if(dy1) dax_step=dx1/std::fabsf(dy1);
+		//show ui sprite in center
+		DrawSprite(
+			cx-scl*spr->width/2,
+			cy-scl*spr->height/2,
+			spr,
+			scl
+		);
+		SetPixelMode(olc::Pixel::NORMAL);
 
-		if(dy1) dw1_step=dw1/std::fabsf(dy1);
-
-		for(int j=y2; j<=y3; j++) {
-			if(j<ny||j>=my) continue;
-			int ax=x2+dax_step*(j-y2);
-			int bx=x1+dbx_step*(j-y1);
-			float tex_sw=w2+dw1_step*(j-y2);
-			float tex_ew=w1+dw2_step*(j-y1);
-			//sort along x
-			if(ax>bx) {
-				std::swap(ax, bx);
-				std::swap(tex_sw, tex_ew);
-			}
-			float t_step=1.f/(bx-ax);
-			for(int i=ax; i<bx; i++) {
-				if(i<nx||i>=mx) continue;
-				t=t_step*(i-ax);
-				tex_w=tex_sw+t*(tex_ew-tex_sw);
-				float& depth=depth_buffer[bufferIX(i, j)];
-				if(tex_w>depth) {
-					Draw(i, j, col);
-					depth=tex_w;
-					id_buffer[bufferIX(i, j)]=id;
-				}
-			}
-		}
+		//show msg at bottom center
+		DrawString(cx-8*msg.length(), GetDrawTargetHeight()-24, msg, olc::WHITE, 2);
 	}
 
-	void FillTexturedDepthTriangleWithin(
-		int x1, int y1, float u1, float v1, float w1,
-		int x2, int y2, float u2, float v2, float w2,
-		int x3, int y3, float u3, float v3, float w3,
-		olc::Sprite* spr, olc::Pixel tint, int id,
-		int nx, int ny, int mx, int my
-	) {
-		//sort by y
-		if(y2<y1) {
-			std::swap(x1, x2), std::swap(y1, y2);
-			std::swap(u1, u2), std::swap(v1, v2);
-			std::swap(w1, w2);
+	//draw HH:MM:SS display
+	void renderTimer() {
+		//divvy time into hours, then minutes
+		int total=game_timer;
+		int hours=total/3600;
+		int minutes=(total/60)%60;
+		int seconds=total%60;
+
+		//format time
+		char time_str[9]{
+			char('0'+hours/10),
+			char('0'+hours%10),
+			':',
+			char('0'+minutes/10),
+			char('0'+minutes%10),
+			':',
+			char('0'+seconds/10),
+			char('0'+seconds%10),
+			'\0'
+		};
+
+		//skip "HH:" if 0
+		const int scl=4;
+		std::string str(time_str+(hours?0:3));
+		DrawString(4*scl, GetDrawTargetHeight()-12*scl, str, olc::WHITE, scl);
+	}
+
+	//show bomb count
+	void renderBombCount() {
+		int remaining=game.getNumBombs();
+		for(int i=0; i<game.getNumCells(); i++) {
+			if(game.cells[i].flagged) remaining--;
 		}
-		if(y3<y1) {
-			std::swap(x1, x3), std::swap(y1, y3);
-			std::swap(u1, u3), std::swap(v1, v3);
-			std::swap(w1, w3);
-		}
-		if(y3<y2) {
-			std::swap(x2, x3), std::swap(y2, y3);
-			std::swap(u2, u3), std::swap(v2, v3);
-			std::swap(w2, w3);
-		}
-
-		//calculate slopes
-		int dx1=x2-x1, dy1=y2-y1;
-		float du1=u2-u1, dv1=v2-v1;
-		float dw1=w2-w1;
-
-		int dx2=x3-x1, dy2=y3-y1;
-		float du2=u3-u1, dv2=v3-v1;
-		float dw2=w3-w1;
-
-		float t_step, t;
-
-		float tex_u, tex_v, tex_w;
-
-		float dax_step=0, dbx_step=0,
-			du1_step=0, dv1_step=0,
-			du2_step=0, dv2_step=0,
-			dw1_step=0, dw2_step=0;
-
-		if(dy1) dax_step=dx1/std::fabsf(dy1);
-		if(dy2) dbx_step=dx2/std::fabsf(dy2);
-
-		if(dy1) du1_step=du1/std::fabsf(dy1);
-		if(dy1) dv1_step=dv1/std::fabsf(dy1);
-		if(dy1) dw1_step=dw1/std::fabsf(dy1);
-		if(dy2) du2_step=du2/std::fabsf(dy2);
-		if(dy2) dv2_step=dv2/std::fabsf(dy2);
-		if(dy2) dw2_step=dw2/std::fabsf(dy2);
-
-		//start scanline filling triangles
-		if(dy1) {
-			for(int j=y1; j<=y2; j++) {
-				if(j<ny||j>=my) continue;
-				int ax=x1+dax_step*(j-y1);
-				int bx=x1+dbx_step*(j-y1);
-				float tex_su=u1+du1_step*(j-y1);
-				float tex_sv=v1+dv1_step*(j-y1);
-				float tex_sw=w1+dw1_step*(j-y1);
-				float tex_eu=u1+du2_step*(j-y1);
-				float tex_ev=v1+dv2_step*(j-y1);
-				float tex_ew=w1+dw2_step*(j-y1);
-				//sort along x
-				if(ax>bx) {
-					std::swap(ax, bx);
-					std::swap(tex_su, tex_eu);
-					std::swap(tex_sv, tex_ev);
-					std::swap(tex_sw, tex_ew);
-				}
-				t_step=1.f/(bx-ax);
-				for(int i=ax; i<bx; i++) {
-					if(i<nx||i>=mx) continue;
-					t=t_step*(i-ax);
-					tex_u=tex_su+t*(tex_eu-tex_su);
-					tex_v=tex_sv+t*(tex_ev-tex_sv);
-					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					float& depth=depth_buffer[bufferIX(i, j)];
-					if(tex_w>depth) {
-						olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
-						if(col.a!=0) {
-							Draw(i, j, tint*col);
-							depth=tex_w;
-							id_buffer[bufferIX(i, j)]=id;
-						}
-					}
-				}
-			}
-		}
-
-		//recalculate slopes
-		dx1=x3-x2;
-		dy1=y3-y2;
-		du1=u3-u2;
-		dv1=v3-v2;
-		dw1=w3-w2;
-
-		if(dy1) dax_step=dx1/std::fabsf(dy1);
-
-		du1_step=0, dv1_step=0;
-		if(dy1) du1_step=du1/std::fabsf(dy1);
-		if(dy1) dv1_step=dv1/std::fabsf(dy1);
-		if(dy1) dw1_step=dw1/std::fabsf(dy1);
-
-		for(int j=y2; j<=y3; j++) {
-			if(j<ny||j>=my) continue;
-			int ax=x2+dax_step*(j-y2);
-			int bx=x1+dbx_step*(j-y1);
-			float tex_su=u2+du1_step*(j-y2);
-			float tex_sv=v2+dv1_step*(j-y2);
-			float tex_sw=w2+dw1_step*(j-y2);
-			float tex_eu=u1+du2_step*(j-y1);
-			float tex_ev=v1+dv2_step*(j-y1);
-			float tex_ew=w1+dw2_step*(j-y1);
-			//sort along x
-			if(ax>bx) {
-				std::swap(ax, bx);
-				std::swap(tex_su, tex_eu);
-				std::swap(tex_sv, tex_ev);
-				std::swap(tex_sw, tex_ew);
-			}
-			float t_step=1.f/(bx-ax);
-			for(int i=ax; i<bx; i++) {
-				if(i<nx||i>=mx) continue;
-				t=t_step*(i-ax);
-				tex_u=tex_su+t*(tex_eu-tex_su);
-				tex_v=tex_sv+t*(tex_ev-tex_sv);
-				tex_w=tex_sw+t*(tex_ew-tex_sw);
-				float& depth=depth_buffer[bufferIX(i, j)];
-				if(tex_w>depth) {
-					olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
-					if(col.a!=0) {
-						Draw(i, j, tint*col);
-						depth=tex_w;
-						id_buffer[bufferIX(i, j)]=id;
-					}
-				}
-			}
-		}
+		const int scl=4;
+		auto str=std::to_string(remaining);
+		DrawString(GetDrawTargetWidth()-4*scl*(1+2*str.length()), GetDrawTargetHeight()-12*scl, str, olc::WHITE, scl);
 	}
 #pragma endregion
 
 	bool user_render() override {
-		//draw to render
+		//draw to source
 		SetDrawTarget(source.Sprite());
 
 		Clear(olc::Pixel(150, 150, 150));
@@ -1132,7 +1006,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		resetBuffers();
 
 		SetPixelMode(olc::Pixel::ALPHA);
-#ifdef MULTITHREADING
+#ifdef USE_MULTITHREADING
 		//clear tile bins
 		for(int i=0; i<mtr_num_x*mtr_num_y; i++) mtr_bins[i].clear();
 
@@ -1162,10 +1036,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		std::atomic<int> tiles_remaining=mtr_jobs.size();
 		for(const auto& j:mtr_jobs) {
 			mtr_pool->enqueue([&] {
-				int nx=std::clamp(mtr_tile_size*j.x, 0, ScreenWidth());
-				int ny=std::clamp(mtr_tile_size*j.y, 0, ScreenHeight());
-				int mx=std::clamp(mtr_tile_size+nx, 0, ScreenWidth());
-				int my=std::clamp(mtr_tile_size+ny, 0, ScreenHeight());
+				int nx=std::clamp(mtr_tile_size*j.x, 0, GetDrawTargetWidth());
+				int ny=std::clamp(mtr_tile_size*j.y, 0, GetDrawTargetHeight());
+				int mx=std::clamp(mtr_tile_size+nx, 0, GetDrawTargetWidth());
+				int my=std::clamp(mtr_tile_size+ny, 0, GetDrawTargetHeight());
 				const auto& bin=mtr_bins[j.x+mtr_num_x*j.y];
 				for(const auto& t:bin) {
 					int type=0xff&(t.id>>24);
@@ -1246,6 +1120,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #endif
 		SetPixelMode(olc::Pixel::NORMAL);
 
+		//draw depth lines
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
 				l.p[0].x, l.p[0].y, l.t[0].w,
@@ -1254,105 +1129,16 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			);
 		}
 
-		{//win/lose/pause screen overlays
-			const int cx=ScreenWidth()/2, cy=ScreenHeight()/2;
-			switch(game.state) {
-				case Minesweeper::WON: {
-					//dark background
-					SetPixelMode(olc::Pixel::ALPHA);
-					FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, 150));
-					const int scl=9;
-					DrawSprite(
-						cx-scl*win_spr.Sprite()->width/2,
-						cy-scl*win_spr.Sprite()->height/2,
-						win_spr.Sprite(),
-						scl
-					);
-					SetPixelMode(olc::Pixel::NORMAL);
-
-					//play again msg
-					DrawString(cx-8*22, ScreenHeight()-24, "Press R to play again!", olc::WHITE, 2);
-					break;
-				}
-				case Minesweeper::LOST: {
-					//dark background
-					SetPixelMode(olc::Pixel::ALPHA);
-					FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, 100));
-					const int scl=9;
-					DrawSprite(
-						cx-scl*lose_spr.Sprite()->width/2,
-						cy-scl*lose_spr.Sprite()->height/2,
-						lose_spr.Sprite(),
-						scl
-					);
-					SetPixelMode(olc::Pixel::NORMAL);
-
-					//play again msg
-					DrawString(cx-8*22, ScreenHeight()-24, "Press R to play again.", olc::WHITE, 2);
-					break;
-				}
-				case Minesweeper::PAUSED: {
-					//dark background
-					SetPixelMode(olc::Pixel::ALPHA);
-					FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, 150));
-					const int scl=11;
-					DrawSprite(
-						cx-scl*pause_spr.Sprite()->width/2,
-						cy-scl*pause_spr.Sprite()->height/2,
-						pause_spr.Sprite(),
-						scl
-					);
-					SetPixelMode(olc::Pixel::NORMAL);
-
-					//unpause msg
-					DrawString(cx-8*19, ScreenHeight()-24, "Press P to unpause.", olc::WHITE, 2);
-					break;
-				}
-			}
-		}
-
-		//show timer
-		{
-			//divvy time into hours, then minutes
-			int total=game_timer;
-			int hours=total/3600;
-			int minutes=(total/60)%60;
-			int seconds=total%60;
-
-			//format time
-			char time_str[9]{
-				char('0'+hours/10),
-				char('0'+hours%10),
-				':',
-				char('0'+minutes/10),
-				char('0'+minutes%10),
-				':',
-				char('0'+seconds/10),
-				char('0'+seconds%10),
-				'\0'
-			};
-
-			//skip "HH:" if 0
-			const int scl=4;
-			std::string str(time_str+(hours?0:3));
-			DrawString(4*scl, ScreenHeight()-12*scl, str, olc::WHITE, scl);
-		}
-
-		//show bomb count
-		{
-			int remaining=game.getNumBombs();
-			for(int i=0; i<game.getNumCells(); i++) {
-				if(game.cells[i].flagged) remaining--;
-			}
-			const int scl=4;
-			auto str=std::to_string(remaining);
-			DrawString(ScreenWidth()-4*scl*(1+2*str.length()), ScreenHeight()-12*scl, str, olc::WHITE, scl);
-		}
+		//ui stuff
+		renderStateOverlay();
+		renderTimer();
+		renderBombCount();
 
 		SetDrawTarget(nullptr);
 
 		source.Decal()->Update();
 
+#ifdef USE_SHADERS
 		//apply crt shader
 		shader.SetTargetDecal(target.Decal());
 		shader.Start(&crt_effect);
@@ -1362,6 +1148,9 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		//display it
 		DrawDecal({0, 0}, target.Decal());
+#else
+		DrawDecal({0, 0}, source.Decal());
+#endif
 
 		return true;
 	}
@@ -1370,8 +1159,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 int main() {
 	Minesweeper3DUI* m3dui=new Minesweeper3DUI();
 	bool fullscreen=false;
-	bool vsync=true;
-	if(m3dui->Construct(800, 600, 1, 1, fullscreen, vsync)) m3dui->Start();
+	bool vsync=false;
+	if(m3dui->Construct(1024, 768, 1, 1, fullscreen, vsync)) m3dui->Start();
 
 	return 0;
 }
