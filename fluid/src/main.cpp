@@ -4,38 +4,27 @@ using olc::vf2d;
 
 #include "common/utils.h"
 
+#include "fluid.h"
+
 struct Example : olc::PixelGameEngine {
 	Example() {
 		sAppName="Fluid Testing";
 	}
 
-	int width=0, height=0;
-	float* u=nullptr;
-	float* v=nullptr;
-
-	int uIX(int i, int j) const {
-		return i+(width-1)*j;
-	}
-
-	int vIX(int i, int j) const {
-		return i+width*j;
-	}
+	Fluid fluid;
 
 	float div_amt=20;
 
 	olc::Sprite* gradient=nullptr;
 	bool show_div=true;
+	bool show_grid=true;
 
 	bool OnUserCreate() override {
 		std::srand(std::time(0));
 		
 		//detemine sizing
-		width=20;
-		height=15;
-		
-		//allocate grid
-		u=new float[(width-1)*height];
-		v=new float[width*(height-1)];
+		float cell_sz=30;
+		fluid=Fluid(1+ScreenWidth()/cell_sz, 1+ScreenHeight()/cell_sz);
 		
 		randomizeComponents();
 
@@ -44,106 +33,120 @@ struct Example : olc::PixelGameEngine {
 		return true;
 	}
 
-	bool OnUserDestroy() override {
-		delete[] u;
-		delete[] v;
-
-		return true;
-	}
-
+#pragma region UPDATE HELPERS
 	void randomizeComponents() {
-		for(int i=0; i<(width-1)*height; i++) {
-			u[i]=cmn::randFloat(-div_amt, div_amt);
+		for(int i=0; i<fluid.getSizeU(); i++) {
+			fluid.u[i]=cmn::randFloat(-div_amt, div_amt);
 		}
-		for(int i=0; i<width*(height-1); i++) {
-			v[i]=cmn::randFloat(-div_amt, div_amt);
+		for(int i=0; i<fluid.getSizeV(); i++) {
+			fluid.v[i]=cmn::randFloat(-div_amt, div_amt);
 		}
 	}
+#pragma endregion
 
-	void DrawArrow(const vf2d& a, const vf2d& b, float sz, const olc::Pixel& col) {
+	void update(float dt) {
+		if(GetKey(olc::Key::D).bPressed) show_div^=true;
+
+		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
+
+		if(GetKey(olc::Key::R).bPressed) randomizeComponents();
+
+		if(GetKey(olc::Key::SPACE).bHeld) fluid.solveIncompressibility();
+	}
+
+#pragma region RENDER HELPERS
+	void DrawArrowDecal(const vf2d& a, const vf2d& b, float sz, const olc::Pixel& col) {
 		//main arm
 		vf2d sub=b-a;
 		vf2d c=b-sz*sub;
-		DrawLine(a, c, col);
+		DrawLineDecal(a, c, col);
 		//arrow triangle
 		vf2d d=.5f*sz*sub.perp();
 		vf2d l=c-d, r=c+d;
-		DrawLine(l, r, col);
-		DrawLine(l, b, col);
-		DrawLine(r, b, col);
+		DrawLineDecal(l, r, col);
+		DrawLineDecal(l, b, col);
+		DrawLineDecal(r, b, col);
+	}
+
+	void renderComponents(const vf2d& cell_sz, const olc::Pixel& col) {
+		//horizontal
+		for(int i=0; i<fluid.getWidth()-1; i++) {
+			for(int j=0; j<fluid.getHeight(); j++) {
+				vf2d lft=cell_sz*vf2d(1+i, .5f+j);
+				vf2d rgt=lft+vf2d(fluid.u[fluid.uIX(i, j)], 0);
+				DrawArrowDecal(lft, rgt, .4f, col);
+			}
+		}
+
+		//vertical
+		for(int i=0; i<fluid.getWidth(); i++) {
+			for(int j=0; j<fluid.getHeight()-1; j++) {
+				vf2d top=cell_sz*vf2d(.5f+i, 1+j);
+				vf2d btm=top+vf2d(0, fluid.v[fluid.vIX(i, j)]);
+				DrawArrowDecal(top, btm, .4f, col);
+			}
+		}
+	}
+
+	void renderGrid(const vf2d& cell_sz, const olc::Pixel& col) {
+		//vertical lines
+		for(int i=0; i<=fluid.getWidth(); i++) {
+			float x=cell_sz.x*i;
+			vf2d top(x, 0), btm(x, ScreenHeight());
+			DrawLineDecal(top, btm, col);
+		}
+
+		//horizontal lines
+		for(int j=0; j<=fluid.getHeight(); j++) {
+			float y=cell_sz.y*j;
+			vf2d lft(0, y), rgt(ScreenWidth(), y);
+			DrawLineDecal(lft, rgt, col);
+		}
+	}
+
+	//show divergence as grid of numbers
+	void renderDivergence(const vf2d& cell_sz) {
+		for(int i=0; i<fluid.getWidth(); i++) {
+			for(int j=0; j<fluid.getHeight(); j++) {
+				float div=0;
+				if(i!=fluid.getWidth()-1) div+=fluid.u[fluid.uIX(i, j)];//NOT rgt
+				if(i!=0) div-=fluid.u[fluid.uIX(i-1, j)];//NOT left
+				if(j!=fluid.getHeight()-1) div+=fluid.v[fluid.vIX(i, j)];//NOT BTM
+				if(j!=0) div-=fluid.v[fluid.vIX(i, j-1)];//NOT top
+
+				auto div_str=std::to_string(int(div));
+
+				vf2d xy=cell_sz*olc::vi2d(i, j);
+
+				float tex_u=.5f+.5f*std::tanh(div/div_amt);
+				olc::Pixel col=gradient->Sample(tex_u, 0);
+				FillRectDecal(xy, xy+cell_sz, col);
+
+				vf2d ctr=.5f*cell_sz+xy;
+				DrawStringDecal(vf2d(ctr.x-4*div_str.length(), ctr.y-4), div_str, olc::BLACK);
+			}
+		}
+	}
+#pragma endregion
+
+	void render() {
+		const vf2d screen_sz=GetScreenSize();
+		const vf2d cell_sz=screen_sz/vf2d(fluid.getWidth(), fluid.getHeight());
+
+		//black background
+		FillRectDecal({0, 0}, screen_sz, olc::WHITE);
+
+		if(show_div) renderDivergence(cell_sz);
+
+		if(show_grid) renderGrid(cell_sz, olc::GREY);
+
+		renderComponents(cell_sz, olc::BLACK);
 	}
 
 	bool OnUserUpdate(float dt) override {
-		if(GetKey(olc::Key::R).bPressed) randomizeComponents();
+		update(dt);
 
-		if(GetKey(olc::Key::D).bPressed) show_div^=true;
-		
-		const float sz_x=float(ScreenWidth())/width;
-		const float sz_y=float(ScreenHeight())/height;
-		
-		//black background
-		Clear(olc::BLACK);
-
-		//show components
-		{
-			//horizontal
-			for(int i=0; i<width-1; i++) {
-				for(int j=0; j<height; j++) {
-					float x=sz_x*(1+i), y=sz_y*(.5f+j);
-					vf2d lft(x, y), rgt=lft+vf2d(u[uIX(i, j)], 0);
-					DrawArrow(lft, rgt, .4f, olc::RED);
-				}
-			}
-
-			//vertical
-			for(int i=0; i<width; i++) {
-				for(int j=0; j<height-1; j++) {
-					float x=sz_x*(.5f+i), y=sz_y*(1+j);
-					vf2d top(x, y), btm=top+vf2d(0, v[vIX(i, j)]);
-					DrawArrow(top, btm, .4f, olc::BLUE);
-				}
-			}
-		}
-
-		//show grid
-		{
-			//vertical lines
-			for(int i=1; i<width; i++) {
-				float x=sz_x*i;
-				vf2d top(x, 0), btm(x, ScreenHeight());
-				DrawLine(top, btm, olc::WHITE);
-			}
-
-			//horizontal lines
-			for(int j=1; j<height; j++) {
-				float y=sz_y*j;
-				vf2d lft(0, y), rgt(ScreenWidth(), y);
-				DrawLine(lft, rgt, olc::WHITE);
-			}
-		}
-
-		//show divergence as grid of numbers
-		if(show_div) {
-			for(int i=0; i<width; i++) {
-				for(int j=0; j<height; j++) {
-					float x=sz_x*(.5f+i);
-					float y=sz_y*(.5f+j);
-
-					float div=0;
-					if(i!=width-1) div+=u[uIX(i, j)];//NOT rgt
-					if(i!=0) div-=u[uIX(i-1, j)];//NOT left
-					if(j!=height-1) div+=v[vIX(i, j)];//NOT BTM
-					if(j!=0) div-=v[vIX(i, j-1)];//NOT top
-
-					auto str=std::to_string(int(div));
-				
-					float tex_u=.5f+.5f*std::tanh(div/div_amt);
-					olc::Pixel col=gradient->Sample(tex_u, 0);
-				
-					DrawStringDecal(vf2d(x-4*str.length(), y-4), str, col);
-				}
-			}
-		}
+		render();
 
 		return true;
 	}

@@ -146,6 +146,9 @@
   <ItemGroup>
     <Image Include="assets\gradient.png" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\fluid.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
