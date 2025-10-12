@@ -146,6 +146,7 @@
     <Image Include="assets\bubble.png" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\minesweeper.h" />
     <ClInclude Include="src\perlin_noise.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
