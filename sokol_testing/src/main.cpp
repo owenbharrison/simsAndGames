@@ -8,11 +8,6 @@
 //for memset, memcpy
 #include <string>
 
-//for sin, cos
-#include <cmath>
-
-#include <iostream>
-
 #include "mat4.h"
 
 static struct {
@@ -59,16 +54,15 @@ static void create() {
 	};
 
 	//rgb cube
-	float sz=.5f;
 	const Vertex vertexes[]{
-		-sz, -sz, -sz, 0, 0, 0, 1,
-		-sz, -sz, sz, 0, 0, 1, 1,
-		-sz, sz, -sz, 0, 1, 0, 1,
-		-sz, sz, sz, 0, 1, 1, 1,
-		sz, -sz, -sz, 1, 0, 0, 1,
-		sz, -sz, sz, 1, 0, 1, 1,
-		sz, sz, -sz, 1, 1, 0, 1,
-		sz, sz, sz, 1, 1, 1, 1
+		-1, -1, -1, 0, 0, 0, 1,
+		-1, -1, 1, 0, 0, 1, 1,
+		-1, 1, -1, 0, 1, 0, 1,
+		-1, 1, 1, 0, 1, 1, 1,
+		1, -1, -1, 1, 0, 0, 1,
+		1, -1, 1, 1, 0, 1, 1,
+		1, 1, -1, 1, 1, 0, 1,
+		1, 1, 1, 1, 1, 1, 1
 	};
 	sg_buffer_desc vbuf_desc; zeroMem(vbuf_desc);
 	vbuf_desc.usage.vertex_buffer=true;
@@ -108,32 +102,33 @@ void update() {
 	sg_apply_pipeline(state.pip);
 	sg_apply_bindings(state.bind);
 
-	//mat4 trans=mat4::makeIdentity();
-	float x01=state.mouse_x/sapp_widthf();
-	float y01=state.mouse_y/sapp_heightf();
-	//mat4 trans=mat4::makeTranslation({4*x01-2, 4*y01-2, -2});
-	mat4 trans=mat4::makeIdentity();
+	mat4 scale=mat4::makeScale({.5f, .5f, .5f});
 
-	//make sure rotations dont match
-	mat4 rot_x=mat4::makeRotX(state.rotation/3);
-	mat4 rot_y=mat4::makeRotY(state.rotation/5);
-	mat4 rot_z=mat4::makeRotZ(state.rotation/7);
+	//xyz rotation
+	mat4 rot_x=mat4::makeRotX(0);
+	mat4 rot_y=mat4::makeRotY(0);
+	mat4 rot_z=mat4::makeRotZ(state.rotation);
 	mat4 rot=mul(rot_z, mul(rot_y, rot_x));
+	
+	mat4 trans=mat4::makeTranslation({0, 0, 0});
 
-	mat4 model=mul(trans, rot);
+	mat4 model=mul(trans, mul(rot, scale));
 
 	//eye on z=4 plane at origin with y up
-	mat4 look_at=mat4::makeLookAt({4*x01-2, 2-4*y01, 4}, {0, 0, 0}, {0, 1, 0});
+	float x01=state.mouse_x/sapp_widthf();
+	float y01=state.mouse_y/sapp_heightf();
+	mat4 look_at=mat4::makeLookAt({4*x01-2, 2-4*y01, 2}, {0, 0, 0}, {0, 1, 0});
 	mat4 view=inverse(look_at);
 
 	//perspective
 	mat4 proj=mat4::makeProjection(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000.f);
 
-	//send matrixes to shader
+	//premultiply transform
+	mat4 mvp=mul(proj, mul(view, model));
+
+	//send transform matrix to shader
 	vs_params_t vs_params; zeroMem(vs_params);
-	std::memcpy(vs_params.model, model.m, sizeof(vs_params.model));
-	std::memcpy(vs_params.view, view.m, sizeof(vs_params.view));
-	std::memcpy(vs_params.proj, proj.m, sizeof(vs_params.proj));
+	std::memcpy(vs_params.mvp, mvp.m, sizeof(vs_params.mvp));
 	sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
 
 	//draw 36 verts=12 tris

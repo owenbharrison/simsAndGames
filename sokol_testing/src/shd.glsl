@@ -3,18 +3,15 @@
 layout(location=0) in vec3 pos;
 layout(location=1) in vec4 col;
 
-//combine these eventually
 layout(binding=0) uniform vs_params{
-	mat4 model;
-	mat4 view;
-	mat4 proj;
+	mat4 mvp;
 };
 
 out vec4 vert_col;
 
 void main() {
 	//read this right to left
-	gl_Position=proj*view*model*vec4(pos, 1.);
+	gl_Position=mvp*vec4(pos, 1.);
 	vert_col=col;
 }
 @end
