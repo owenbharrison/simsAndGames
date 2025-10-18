@@ -15,25 +15,28 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\sokol_gfx.h">
+    <ClInclude Include="src\sokol\sokol_gfx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\sokol_glue.h">
+    <ClInclude Include="src\sokol\sokol_glue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\sokol_app.h">
+    <ClInclude Include="src\sokol\sokol_app.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\sokol_log.h">
+    <ClInclude Include="src\sokol\sokol_log.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\math\mat4.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\math\v3d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\shd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\mat4.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\v3d.h">
+    <ClInclude Include="src\demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
