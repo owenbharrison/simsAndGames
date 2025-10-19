@@ -19,8 +19,6 @@ namespace cmn {
 
 #include "graph.h"
 
-#include "anim/animated_mesh.h"
-
 float fract(float x) {
 	return x-std::floor(x);
 }
@@ -52,14 +50,6 @@ struct Example : cmn::Engine3D {
 	//route fanciness
 	std::vector<olc::Sprite*> texture_atlas;
 	float anim_timer=0;
-
-	bool walking=false;
-	const float time_per_seg=1.3f;
-	float seg_timer=0;
-	int seg_ix=0;
-
-	//super fancy stuff!
-	AnimatedMesh knight;
 
 	bool user_create() override {
 		cam_pos={0, 7, 0};
@@ -98,9 +88,6 @@ struct Example : cmn::Engine3D {
 				house_model.updateTriangles(h.col);
 				obstacles.push_back(house_model);
 			}
-
-			//load animated knight
-			knight=AnimatedMesh::load("assets/models/knight", 1, 20);
 		} catch(const std::exception& e) {
 			std::cout<<"  "<<e.what()<<'\n';
 			return false;
@@ -244,7 +231,6 @@ struct Example : cmn::Engine3D {
 				from_node=close_node;
 
 				route.clear();
-				walking=false;
 
 				if(GetKey(olc::Key::CTRL).bHeld) route=graph.route(from_node, to_node);
 			}
@@ -254,7 +240,6 @@ struct Example : cmn::Engine3D {
 				to_node=close_node;
 
 				route.clear();
-				walking=false;
 
 				if(GetKey(olc::Key::CTRL).bHeld) route=graph.route(from_node, to_node);
 			}
@@ -265,7 +250,6 @@ struct Example : cmn::Engine3D {
 			std::swap(to_node, from_node);
 
 			route.clear();
-			walking=false;
 		}
 
 		//remove waypoints
@@ -273,42 +257,14 @@ struct Example : cmn::Engine3D {
 			from_node=nullptr, to_node=nullptr;
 
 			route.clear();
-			walking=false;
 		}
 
 		//route
 		if(GetKey(olc::Key::ENTER).bPressed) {
 			route=graph.route(from_node, to_node);
-
-			walking=false;
 		}
 
 		anim_timer+=dt;
-
-		//walk
-		if(GetKey(olc::Key::R).bPressed) {
-			walking=false;
-
-			//only if walkable
-			if(route.size()>=2) {
-				walking=true;
-
-				seg_ix=0;
-				seg_timer=0;
-			}
-		}
-
-		//walk update
-		if(walking) {
-			seg_timer+=dt;
-
-			if(seg_timer>time_per_seg) {
-				seg_timer=0;
-
-				seg_ix++;
-				if(seg_ix==route.size()-1) walking=false;
-			}
-		}
 
 		return true;
 	}
@@ -406,24 +362,6 @@ struct Example : cmn::Engine3D {
 				}
 				prev=curr;
 			}
-		}
-
-		//add walk point
-		if(walking) {
-			//interpolate between route pts
-			vf3d a=route[seg_ix]->pos, b=route[1+seg_ix]->pos;
-			vf3d ba=b-a;
-			float t=seg_timer/time_per_seg;
-			vf3d pt=a+t*ba;
-
-			//place knight at pt
-			knight.translation=pt;
-			//rotate based on segment xz plane projection
-			knight.rotation.y=std::atan2(ba.z, ba.x)-Pi/2;
-			knight.updateTransforms();
-			knight.applyAnimation(t);
-			//add animated geometry
-			tris_to_project.insert(tris_to_project.end(), knight.tris.begin(), knight.tris.end());
 		}
 
 		return true;
