@@ -157,13 +157,9 @@
     <Image Include="assets\img\start.png" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\anim\animated_mesh.h" />
-    <ClInclude Include="src\anim\armature.h" />
     <ClInclude Include="src\graph.h" />
-    <ClInclude Include="src\anim\bone.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\node.h" />
-    <ClInclude Include="src\anim\pose.h" />
     <ClInclude Include="src\poisson_disc.h" />
     <ClInclude Include="src\triangulate.h" />
   </ItemGroup>

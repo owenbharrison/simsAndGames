@@ -38,18 +38,6 @@
     <ClInclude Include="src\node.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\anim\armature.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\anim\animated_mesh.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\anim\pose.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\anim\bone.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\poisson_disc.h">
       <Filter>Header Files</Filter>
     </ClInclude>
