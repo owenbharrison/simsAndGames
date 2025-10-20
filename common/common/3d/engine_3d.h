@@ -37,6 +37,7 @@ namespace cmn {
 	public:
 		//camera positioning
 		vf3d cam_pos, cam_dir{0, 0, 1};
+		vf3d cam_up{0, 1, 0};
 		float cam_fov_deg=90;
 
 		//camera matrices
@@ -113,9 +114,8 @@ namespace cmn {
 		void projectAndClip() {
 			//recalculate matrices
 			{
-				const vf3d up(0, 1, 0);
 				vf3d target=cam_pos+cam_dir;
-				Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, up);
+				Mat4 mat_cam=Mat4::makePointAt(cam_pos, target, cam_up);
 				mat_view=Mat4::quickInverse(mat_cam);
 			}
 
