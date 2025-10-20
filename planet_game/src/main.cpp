@@ -18,6 +18,8 @@ struct PlanetGame : cmn::Engine3D {
 
 	Mesh planet, player;
 
+	bool show_info=false;
+
 	bool user_create() override {
 		cam_pos={2, 2, 2};
 
@@ -58,7 +60,7 @@ struct PlanetGame : cmn::Engine3D {
 			bool walk_back=GetKey(olc::Key::S).bHeld;
 			if(walk_fwd^walk_back) {
 				//slow backwards
-				float fb_modifier=walk_fwd?1:-.7f;
+				float fb_modifier=walk_fwd?1:-.5f;
 				float walk_amt=walk_speed*fb_modifier*dt;
 
 				//move by forward dir
@@ -77,7 +79,7 @@ struct PlanetGame : cmn::Engine3D {
 
 		//strafing left & right
 		{
-			const float strafe_speed=.85f*walk_speed;
+			const float strafe_speed=.6f*walk_speed;
 			bool strafe_left=GetKey(olc::Key::A).bHeld;
 			bool strafe_right=GetKey(olc::Key::D).bHeld;
 			if(strafe_left^strafe_right) {
@@ -121,7 +123,11 @@ struct PlanetGame : cmn::Engine3D {
 		handleCameraMovement(dt);
 
 		handlePlayerMovement(dt);
+
+		if(GetKey(olc::Key::L).bPressed) light_pos=cam_pos;
 		
+		if(GetKey(olc::Key::I).bPressed) show_info^=true;
+
 		return true;
 	}
 
@@ -168,16 +174,16 @@ struct PlanetGame : cmn::Engine3D {
 
 	//add unit coordinate system
 	void realizeAxes(const vf3d& pos, float sz) {
-		realizeArrow(pos, pos+vf3d(sz, 0, 0), .2f, olc::RED);
-		realizeArrow(pos, pos+vf3d(0, sz, 0), .2f, olc::BLUE);
-		realizeArrow(pos, pos+vf3d(0, 0, sz), .2f, olc::GREEN);
+		realizeArrow(pos, pos+vf3d(sz, 0, 0), .1f, olc::RED);
+		realizeArrow(pos, pos+vf3d(0, sz, 0), .1f, olc::BLUE);
+		realizeArrow(pos, pos+vf3d(0, 0, sz), .1f, olc::GREEN);
 	}
 
 	//show player directions with arrows
 	void realizePlayerCoordinateSystem(float sz) {
-		realizeArrow(player_pos, player_pos+player_fwd, .2f, olc::YELLOW);//~z
-		realizeArrow(player_pos, player_pos+player_up, .2f, olc::CYAN);//~y
-		realizeArrow(player_pos, player_pos+player_rgt, .2f, olc::MAGENTA);//~x
+		realizeArrow(player_pos, player_pos+sz*player_fwd, .2f, olc::YELLOW);//~z
+		realizeArrow(player_pos, player_pos+sz*player_up, .2f, olc::CYAN);//~y
+		realizeArrow(player_pos, player_pos+sz*player_rgt, .2f, olc::MAGENTA);//~x
 	}
 #pragma endregion
 
@@ -187,13 +193,36 @@ struct PlanetGame : cmn::Engine3D {
 
 		realizePlanet(olc::WHITE);
 
-		realizePlayer(.1f, olc::BLACK);
+		realizePlayer(.075f, olc::BLACK);
 
 		realizeAxes({0, 0, 0}, 2);
 
-		realizePlayerCoordinateSystem(.5f);
+		realizePlayerCoordinateSystem(.33f);
 
 		return true;
+	}
+
+	//helpful strings in corners of screen
+	void renderInfo() {
+		//player controls
+		DrawString(0, 0, "W/S: walk player", olc::YELLOW, 2);
+		DrawString(0, 16, "A/D: strafe player", olc::MAGENTA, 2);
+		DrawString(0, 32, "Q/E: turn player", olc::CYAN, 2);
+
+		//camera controls
+		DrawString(0, ScreenHeight()-24, "UP/DOWN: move camera in z", olc::GREEN);
+		DrawString(0, ScreenHeight()-16, "LEFT/RIGHT: move camera in x", olc::RED);
+		DrawString(0, ScreenHeight()-8, "SHIFT/SPACE: move camera in y", olc::BLUE);
+
+		//player info
+		DrawString(ScreenWidth()-8*14, 0, "player rgt(~x)", olc::MAGENTA);
+		DrawString(ScreenWidth()-8*13, 8, "player up(~y)", olc::CYAN);
+		DrawString(ScreenWidth()-8*14, 16, "player fwd(~z)", olc::YELLOW);
+
+		//camera info
+		DrawString(ScreenWidth()-8*12, ScreenHeight()-24, "world rgt(x)", olc::RED);
+		DrawString(ScreenWidth()-8*11, ScreenHeight()-16, "world up(y)", olc::BLUE);
+		DrawString(ScreenWidth()-8*12, ScreenHeight()-8, "world fwd(z)", olc::GREEN);
 	}
 
 	bool user_render() override {
@@ -218,13 +247,16 @@ struct PlanetGame : cmn::Engine3D {
 			);
 		}
 
+		if(show_info) renderInfo();
+		else DrawString(ScreenWidth()/2-4*19, ScreenHeight()-8, "[press I for info]");
+
 		return true;
 	}
 };
 
 int main() {
 	PlanetGame pg;
-	if(pg.Construct(400, 400, 1, 1, false, true)) pg.Start();
+	if(pg.Construct(640, 480, 1, 1, false, true)) pg.Start();
 
 	return 0;
 }
