@@ -54,6 +54,7 @@ struct PlanetGame : cmn::Engine3D {
 	}
 
 #pragma region UPDATE HELPERS
+	//unintuitive
 	void handleCameraMovement(float dt) {
 		float speed=3*dt;
 		if(GetKey(olc::Key::F).bHeld) camera_pos.x-=speed;
@@ -161,6 +162,7 @@ struct PlanetGame : cmn::Engine3D {
 
 		handlePlayerMovement(dt);
 
+		//graphics toggles
 		if(GetKey(olc::Key::I).bPressed) show_info^=true;
 		if(GetKey(olc::Key::P).bPressed) player_perspective^=true;
 		if(GetKey(olc::Key::L).bPressed) light_pos=camera_pos;
@@ -228,10 +230,10 @@ struct PlanetGame : cmn::Engine3D {
 
 	//show player directions with arrows
 	void realizePlayerCoordinateSystem(float sz) {
+		realizeArrow(player_pos, player_pos+sz*player_look, .2f, olc::BLACK);
 		realizeArrow(player_pos, player_pos+sz*player_rgt, .2f, olc::MAGENTA);//~x
 		realizeArrow(player_pos, player_pos+sz*player_up, .2f, olc::CYAN);//~y
 		realizeArrow(player_pos, player_pos+sz*player_fwd, .2f, olc::YELLOW);//~z
-		realizeArrow(player_pos, player_pos+sz*player_look, .2f, olc::BLACK);
 	}
 #pragma endregion
 
@@ -273,11 +275,25 @@ struct PlanetGame : cmn::Engine3D {
 		DrawString(0, ScreenHeight()-16, "up(~y)", olc::CYAN);
 		DrawString(0, ScreenHeight()-8, "fwd(~z)", olc::YELLOW);
 
-		//world axes
 		DrawString(ScreenWidth()-8*10, ScreenHeight()-32, "world axes");
 		DrawString(ScreenWidth()-8*6, ScreenHeight()-24, "rgt(x)", olc::RED);
 		DrawString(ScreenWidth()-8*5, ScreenHeight()-16, "up(y)", olc::BLUE);
 		DrawString(ScreenWidth()-8*6, ScreenHeight()-8, "fwd(z)", olc::GREEN);
+	}
+
+	//"which keys can i press?"
+	void renderHints() {
+		int y=ScreenHeight();
+		if(!player_perspective) {
+			y-=8;
+			DrawString(ScreenWidth()/2-4*33, y, "[press P for player perspective]");
+		}
+
+		if(show_info) renderInfo();
+		else {
+			y-=8;
+			DrawString(ScreenWidth()/2-4*18, y, "[press I for info]");
+		}
 	}
 
 	bool user_render() override {
@@ -302,20 +318,7 @@ struct PlanetGame : cmn::Engine3D {
 			);
 		}
 
-		//show key hints
-		{
-			int y=ScreenHeight();
-			if(!player_perspective) {
-				y-=8;
-				DrawString(ScreenWidth()/2-4*33, y, "[press P for player perspective]");
-			}
-			
-			if(show_info) renderInfo();
-			else {
-				y-=8;
-				DrawString(ScreenWidth()/2-4*18, y, "[press I for info]");
-			}
-		}
+		renderHints();
 
 		return true;
 	}
