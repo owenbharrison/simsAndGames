@@ -1,4 +1,7 @@
 #include "common/3d/engine_3d.h"
+namespace olc {
+	static const Pixel PURPLE(144, 0, 255);
+}
 using cmn::vf3d;
 
 #include "mesh.h"
@@ -10,17 +13,17 @@ struct PlanetGame : cmn::Engine3D {
 		sAppName="Planet Game";
 	}
 
-	vf3d light_pos{0, 3, 3};
+	vf3d light_pos;
 
 	//ambiguous
 	vf3d camera_pos;
 	vf3d camera_dir;
 
 	vf3d planet_pos;
-	float planet_rad=2;
+	const float planet_rad=2;
 
-	vf3d player_pos{0, planet_rad, 0};
-	vf3d player_fwd{1, 0, 0};
+	vf3d player_pos;
+	vf3d player_fwd;
 	vf3d player_up, player_rgt;
 	float player_pitch=0;
 	vf3d player_look;
@@ -32,7 +35,11 @@ struct PlanetGame : cmn::Engine3D {
 	bool player_perspective=false;
 
 	bool user_create() override {
+		light_pos=(1+planet_rad)*vf3d(0, 1, 1);
 		camera_pos=(1+planet_rad)*vf3d(1, 1, 1);
+
+		player_pos={0, planet_rad, 0};
+		player_fwd={1, 0, 0};
 
 		//try load meshes
 		try {
@@ -237,7 +244,7 @@ struct PlanetGame : cmn::Engine3D {
 		realizePlanet(olc::WHITE);
 
 		if(!player_perspective) {
-			realizePlayer(.075f, olc::BLACK);
+			realizePlayer(.075f, olc::PURPLE);
 			realizePlayerCoordinateSystem(.33f);
 		} else {
 			//show axes right in front of player
