@@ -28,8 +28,5 @@
     <ClInclude Include="src\perlin_noise.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\minesweeper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>
