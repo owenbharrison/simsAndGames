@@ -40,6 +40,10 @@ namespace cmn {
 		vf3d cam_up{0, 1, 0};
 		float cam_fov_deg=90;
 
+		//frustum info
+		const float near_plane=0.0001f;
+		const float far_plane=1000.f;
+
 		//camera matrices
 		Mat4 mat_proj, mat_view;
 
@@ -148,7 +152,7 @@ namespace cmn {
 
 					//clip
 					Triangle clipped[2];
-					int num=tri_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped[0], clipped[1]);
+					int num=tri_view.clipAgainstPlane(vf3d(0, 0, near_plane), vf3d(0, 0, 1), clipped[0], clipped[1]);
 					for(int i=0; i<num; i++) {
 						Triangle tri_proj;
 						//for each vert
@@ -199,7 +203,7 @@ namespace cmn {
 
 				//clip
 				Line clipped;
-				if(line_view.clipAgainstPlane(vf3d(0, 0, .1f), vf3d(0, 0, 1), clipped)) {
+				if(line_view.clipAgainstPlane(vf3d(0, 0, near_plane), vf3d(0, 0, 1), clipped)) {
 					Line line_proj;
 					//for each vert
 					for(int j=0; j<2; j++) {
@@ -234,7 +238,7 @@ namespace cmn {
 				}
 			}
 
-			//left,right,top,bottom
+			//left, right, top, bottom
 			const vf3d ctrs[4]{
 				vf3d(0, 0, 0),
 				vf3d(ScreenWidth(), 0, 0),
@@ -875,7 +879,7 @@ namespace cmn {
 	bool Engine3D::OnUserCreate() {
 		//create projection matrix
 		float asp=float(ScreenHeight())/ScreenWidth();
-		mat_proj=Mat4::makeProj(cam_fov_deg, asp, .001f, 1000.f);
+		mat_proj=Mat4::makeProj(cam_fov_deg, asp, near_plane, far_plane);
 
 		//z buffering
 		depth_buffer=new float[ScreenWidth()*ScreenHeight()];
