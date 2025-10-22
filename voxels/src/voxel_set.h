@@ -31,7 +31,7 @@ public:
 
 	VoxelSet(int _w, int _h, int _d) : w(_w), h(_h), d(_d) {
 		grid=new byte[w*h*d];
-		memset(grid, false, sizeof(byte)*w*h*d);
+		std::memset(grid, false, sizeof(byte)*w*h*d);
 	}
 
 	//1
@@ -171,7 +171,7 @@ public:
 void VoxelSet::copyFrom(const VoxelSet& v) {
 	w=v.w, h=v.h, d=v.d;
 	grid=new byte[w*h*d];
-	memcpy(grid, v.grid, sizeof(byte)*w*h*d);
+	std::memcpy(grid, v.grid, sizeof(byte)*w*h*d);
 }
 
 void VoxelSet::clear() {

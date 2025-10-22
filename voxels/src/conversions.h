@@ -9,7 +9,7 @@
 
 float random(float b=1, float a=0) {
 	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
+	float t=std::rand()/rand_max;
 	return a+t*(b-a);
 }
 
@@ -116,7 +116,7 @@ float random(float b=1, float a=0) {
 
 	for(int i=0; i<w; i++) {
 		//which faces should we consider?
-		memset(to_mesh, false, sizeof(bool)*h*d);
+		std::memset(to_mesh, false, sizeof(bool)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				//dont mesh air
@@ -128,7 +128,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*h*d);
+		std::memset(meshed, false, sizeof(bool)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				if(!to_mesh[jk_ix(j, k)]) continue;
@@ -176,7 +176,7 @@ float random(float b=1, float a=0) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, false, sizeof(bool)*h*d);
+		std::memset(to_mesh, false, sizeof(bool)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				//dont mesh air
@@ -188,7 +188,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*h*d);
+		std::memset(meshed, false, sizeof(bool)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				if(!to_mesh[jk_ix(j, k)]) continue;
@@ -245,7 +245,7 @@ float random(float b=1, float a=0) {
 
 	for(int j=0; j<h; j++) {
 		//which faces should we consider?
-		memset(to_mesh, false, sizeof(bool)*d*w);
+		std::memset(to_mesh, false, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				//dont mesh air
@@ -257,7 +257,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*d*w);
+		std::memset(meshed, false, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				if(!to_mesh[ki_ix(k, i)]) continue;
@@ -305,7 +305,7 @@ float random(float b=1, float a=0) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, false, sizeof(bool)*d*w);
+		std::memset(to_mesh, false, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				//dont mesh air
@@ -317,7 +317,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*d*w);
+		std::memset(meshed, false, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				if(!to_mesh[ki_ix(k, i)]) continue;
@@ -374,7 +374,7 @@ float random(float b=1, float a=0) {
 
 	for(int k=0; k<d; k++) {
 		//which faces should we consider?
-		memset(to_mesh, false, sizeof(bool)*w*h);
+		std::memset(to_mesh, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont mesh air
@@ -386,7 +386,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*w*h);
+		std::memset(meshed, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				if(!to_mesh[ij_ix(i, j)]) continue;
@@ -434,7 +434,7 @@ float random(float b=1, float a=0) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, false, sizeof(bool)*w*h);
+		std::memset(to_mesh, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				//dont mesh air
@@ -446,7 +446,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*w*h);
+		std::memset(meshed, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				if(!to_mesh[ij_ix(i, j)]) continue;
@@ -523,7 +523,7 @@ float random(float b=1, float a=0) {
 
 	for(int i=0; i<w; i++) {
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(byte)*h*d);
+		std::memset(to_mesh, VoxelSet::Empty, sizeof(byte)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				const auto& curr=v(i, j, k);
@@ -536,7 +536,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*h*d);
+		std::memset(meshed, false, sizeof(bool)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				const auto& curr=to_mesh[jk_ix(j, k)];
@@ -594,7 +594,7 @@ float random(float b=1, float a=0) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(byte)*h*d);
+		std::memset(to_mesh, VoxelSet::Empty, sizeof(byte)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				const auto& curr=v(i, j, k);
@@ -607,7 +607,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*h*d);
+		std::memset(meshed, false, sizeof(bool)*h*d);
 		for(int j=0; j<h; j++) {
 			for(int k=0; k<d; k++) {
 				const auto& curr=to_mesh[jk_ix(j, k)];
@@ -674,7 +674,7 @@ float random(float b=1, float a=0) {
 
 	for(int j=0; j<h; j++) {
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(byte)*d*w);
+		std::memset(to_mesh, VoxelSet::Empty, sizeof(byte)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				const auto& curr=v(i, j, k);
@@ -687,7 +687,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*d*w);
+		std::memset(meshed, false, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				const auto& curr=to_mesh[ki_ix(k, i)];
@@ -745,7 +745,7 @@ float random(float b=1, float a=0) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(bool)*d*w);
+		std::memset(to_mesh, VoxelSet::Empty, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				const auto& curr=v(i, j, k);
@@ -758,7 +758,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*d*w);
+		std::memset(meshed, false, sizeof(bool)*d*w);
 		for(int k=0; k<d; k++) {
 			for(int i=0; i<w; i++) {
 				const auto& curr=to_mesh[ki_ix(k, i)];
@@ -825,7 +825,7 @@ float random(float b=1, float a=0) {
 
 	for(int k=0; k<d; k++) {
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(byte)*w*h);
+		std::memset(to_mesh, VoxelSet::Empty, sizeof(byte)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				const auto& curr=v(i, j, k);
@@ -838,7 +838,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*w*h);
+		std::memset(meshed, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				const auto& curr=to_mesh[ij_ix(i, j)];
@@ -896,7 +896,7 @@ float random(float b=1, float a=0) {
 		//other side
 
 		//which faces should we consider?
-		memset(to_mesh, VoxelSet::Empty, sizeof(byte)*w*h);
+		std::memset(to_mesh, VoxelSet::Empty, sizeof(byte)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				const auto& curr=v(i, j, k);
@@ -909,7 +909,7 @@ float random(float b=1, float a=0) {
 		}
 
 		//greedy meshing
-		memset(meshed, false, sizeof(bool)*w*h);
+		std::memset(meshed, false, sizeof(bool)*w*h);
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				const auto& curr=to_mesh[ij_ix(i, j)];

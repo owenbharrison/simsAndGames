@@ -14,7 +14,7 @@ using cmn::Mat4;
 #include "particle.h"
 
 vf3d reflect(const vf3d& in, const vf3d& norm) {
-	return in-2*norm.dot(in)*norm;
+	return in-2*in.dot(norm)*norm;
 }
 
 struct VoxelGame : cmn::Engine3D {
@@ -61,7 +61,7 @@ struct VoxelGame : cmn::Engine3D {
 	float player_airtime=0;
 
 	bool user_create() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
@@ -90,7 +90,7 @@ struct VoxelGame : cmn::Engine3D {
 
 	bool user_destroy() override {
 		delete render_tex;
-		
+
 		return true;
 	}
 
@@ -153,7 +153,7 @@ struct VoxelGame : cmn::Engine3D {
 			//update positioning
 			render_pos=cam_pos;
 			render_dir=cam_dir;
-			
+
 			//turn off render view for render
 			bool old_show_render=show_render;
 			show_render=false;
@@ -246,9 +246,9 @@ struct VoxelGame : cmn::Engine3D {
 
 		//polar to cartesian
 		cam_dir=vf3d(
-			std::cosf(cam_yaw)*std::cosf(cam_pitch),
-			std::sinf(cam_pitch),
-			std::sinf(cam_yaw)*std::cosf(cam_pitch)
+			std::cos(cam_yaw)*std::cos(cam_pitch),
+			std::sin(cam_pitch),
+			std::sin(cam_yaw)*std::cos(cam_pitch)
 		);
 
 		if(player_camera) {
@@ -256,7 +256,7 @@ struct VoxelGame : cmn::Engine3D {
 			vf3d movement;
 
 			//move forward, backward
-			vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+			vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
 			if(GetKey(olc::Key::W).bHeld) movement+=.5f*dt*fb_dir;
 			if(GetKey(olc::Key::S).bHeld) movement-=.3f*dt*fb_dir;
 
@@ -309,7 +309,7 @@ struct VoxelGame : cmn::Engine3D {
 			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 			//move forward, backward
-			vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+			vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
 			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -347,39 +347,34 @@ struct VoxelGame : cmn::Engine3D {
 
 		//mouse painting?
 		if(GetMouse(olc::Mouse::LEFT).bHeld) {
-			//matrix could be singular.
-			try {
-				//screen -> world with inverse matrix
-				Mat4 invPV=Mat4::inverse(mat_view*mat_proj);
-				float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
-				float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
-				vf3d clip(ndc_x, ndc_y, 1);
-				vf3d world=clip*invPV;
-				world/=world.w;
+			//screen -> world with inverse matrix
+			Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
+			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+			vf3d clip(ndc_x, ndc_y, 1);
+			vf3d world=clip*inv_vp;
+			world/=world.w;
 
-				//check every tri against segment
-				vf3d start=cam_pos;
-				float record=INFINITY;
-				cmn::Triangle* closest=nullptr;
-				for(auto& t:model.triangles) {
-					float dist=t.intersectSeg(start, world);
-					if(dist>0&&dist<record) {
-						record=dist;
-						closest=&t;
-					}
+			//check every tri against segment
+			vf3d start=cam_pos;
+			float record=INFINITY;
+			cmn::Triangle* closest=nullptr;
+			for(auto& t:model.triangles) {
+				float dist=t.intersectSeg(start, world);
+				if(dist>0&&dist<record) {
+					record=dist;
+					closest=&t;
 				}
-
-				//if found, paint
-				if(closest) closest->col=olc::WHITE;
-			} catch(const std::exception& e) {
-				std::cout<<"  "<<e.what()<<'\n';
 			}
+
+			//if found, paint
+			if(closest) closest->col=olc::WHITE;
 		}
 	}
 
 	bool user_update(float dt) override {
 		update_watch.start();
-		
+
 		//open and close the integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
 
@@ -403,7 +398,7 @@ struct VoxelGame : cmn::Engine3D {
 				vf3d sub=player_pos-close_pt;
 				float dist2=sub.mag2();
 				if(dist2<player_rad*player_rad) {
-					float fix=player_rad-std::sqrtf(dist2);
+					float fix=player_rad-std::sqrt(dist2);
 					player_pos+=fix*t.getNorm();
 					player_vel={0, 0, 0};
 					player_on_ground=true;
@@ -431,7 +426,7 @@ struct VoxelGame : cmn::Engine3D {
 				vf3d sub=p.pos-close_pt;
 				float dist2=sub.mag2();
 				if(dist2<p.rad*p.rad) {
-					float fix=p.rad-std::sqrtf(dist2);
+					float fix=p.rad-std::sqrt(dist2);
 					vf3d norm=t.getNorm();
 					p.pos+=fix*norm;
 					vf3d vel=p.pos-p.oldpos;
@@ -448,7 +443,7 @@ struct VoxelGame : cmn::Engine3D {
 
 	bool user_geometry() override {
 		geom_watch.start();
-		
+
 		//add main light
 		lights.push_back({light_pos, olc::WHITE});
 
@@ -504,7 +499,7 @@ struct VoxelGame : cmn::Engine3D {
 			//camera sizing
 			float w=.75f, h=w*ScreenHeight()/ScreenWidth();
 			float cam_fov_rad=cam_fov_deg/180*cmn::Pi;
-			float d=w/2/std::tanf(cam_fov_rad/2);
+			float d=w/2/std::tan(cam_fov_rad/2);
 
 			//camera positioning
 			vf3d pos=render_pos;
@@ -602,9 +597,9 @@ struct VoxelGame : cmn::Engine3D {
 
 	bool user_render() override {
 		pc_watch.stop();
-		
+
 		render_watch.start();
-		
+
 		//grey background
 		Clear(olc::Pixel(180, 180, 180));
 
