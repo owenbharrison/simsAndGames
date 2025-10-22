@@ -1,6 +1,6 @@
-#pragma once
+#pragma once 
 #ifndef NOISE_CLASS_H
-#define NOISE_CLAS_H
+#define NOISE_CLASS_H
 
 #include <random>
 #include <algorithm>

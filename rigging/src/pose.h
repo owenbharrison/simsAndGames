@@ -23,7 +23,7 @@ struct Pose {
 
 			//parse bone matrix
 			Mat4 m;
-			for(int i=0; i<16; i++) line_str>>m.v[i%4][i/4];
+			for(int i=0; i<16; i++) line_str>>m(i%4, i/4);
 
 			pose.mat_pose.push_back(m);
 		}

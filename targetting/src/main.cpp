@@ -105,9 +105,9 @@ struct Example : cmn::Engine3D {
 
 			//polar to cartesian
 			cam_dir=vf3d(
-				std::cosf(cam_yaw)*std::cosf(cam_pitch),
-				std::sinf(cam_pitch),
-				std::sinf(cam_yaw)*std::cosf(cam_pitch)
+				std::cos(cam_yaw)*std::cos(cam_pitch),
+				std::sin(cam_pitch),
+				std::sin(cam_yaw)*std::cos(cam_pitch)
 			);
 
 			//move up, down
@@ -115,7 +115,7 @@ struct Example : cmn::Engine3D {
 			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 			//move forward, backward
-			vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+			vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
 			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -229,7 +229,7 @@ struct Example : cmn::Engine3D {
 				vf2d a=prev_mouse_pos-rot_start;
 				float dot=a.x*b.x+a.y*b.y;
 				float cross=a.x*b.y-a.y*b.x;
-				float angle=-std::atan2f(cross, dot);
+				float angle=-std::atan2(cross, dot);
 				//apply rotation delta and update
 				rot_mesh->rotation=Quat::fromAxisAngle(cam_dir, angle)*rot_mesh->rotation;
 				rot_mesh->updateTransforms();
@@ -334,7 +334,7 @@ struct Example : cmn::Engine3D {
 			vf2d sub=mouse_pos-rot_start;
 			float dist=sub.mag();
 			float rad=std::max(20.f, dist);
-			float angle=std::atan2f(sub.y, sub.x);
+			float angle=std::atan2(sub.y, sub.x);
 			vf2d a=rot_start+cmn::polar<vf2d>(rad, angle);
 			vf2d b=rot_start+cmn::polar<vf2d>(rad, angle+.667f*cmn::Pi);
 			vf2d c=rot_start+cmn::polar<vf2d>(rad, angle+1.33f*cmn::Pi);

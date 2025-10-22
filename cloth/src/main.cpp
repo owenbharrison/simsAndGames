@@ -58,14 +58,14 @@ struct Cloth3DUI : cmn::Engine3D {
 	int flag_idx=0;
 
 	bool user_create() override {
-		srand(time(0));
+		std::srand(std::time(0));
 
 		cam_pos={2.5f, 1, 2.83f};
 		light_pos=cam_pos;
 
 		//allocate grid
-		length=40+rand()%11;
-		height=30+rand()%11;
+		length=40+std::rand()%11;
+		height=30+std::rand()%11;
 		grid=new Particle[length*height];
 
 		//start cloth on on xy plane
@@ -136,22 +136,14 @@ struct Cloth3DUI : cmn::Engine3D {
 
 	//mostly just camera controls!
 	void handleUserInput(float dt) {
-		//matrix could be singular...
-		Mat4 invVP;
-		bool invVP_avail=true;
-		try {
-			invVP=Mat4::inverse(mat_view*mat_proj);
-		} catch(const std::exception& e) {
-			invVP_avail=false;
-		}
-
 		//update mouse ray
 		//screen -> world with inverse matrix
-		if(invVP_avail) {
+		{
+			Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
 			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
 			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*invVP;
+			vf3d world=clip*inv_vp;
 			world/=world.w;
 
 			mouse_dir=(world-cam_pos).norm();

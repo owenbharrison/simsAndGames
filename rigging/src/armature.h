@@ -46,8 +46,8 @@ struct Armature {
 
 			Bone b;
 			line_str>>b.parent;
-			for(int i=0; i<16; i++) line_str>>b.mat_local.v[i%4][i/4];
-			for(int i=0; i<16; i++) line_str>>b.mat_inv_model.v[i%4][i/4];
+			for(int i=0; i<16; i++) line_str>>b.mat_local(i%4, i/4);
+			for(int i=0; i<16; i++) line_str>>b.mat_inv_model(i%4, i/4);
 			arm.bones.push_back(b);
 		}
 
