@@ -879,7 +879,7 @@ namespace cmn {
 	bool Engine3D::OnUserCreate() {
 		//create projection matrix
 		float asp=float(ScreenHeight())/ScreenWidth();
-		mat_proj=Mat4::makeProj(cam_fov_deg, asp, near_plane, far_plane);
+		mat_proj=Mat4::makeProjection(cam_fov_deg, asp, near_plane, far_plane);
 
 		//z buffering
 		depth_buffer=new float[ScreenWidth()*ScreenHeight()];
