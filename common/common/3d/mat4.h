@@ -88,7 +88,7 @@ namespace cmn {
 		}
 
 		//translation matrix helper
-		static Mat4 makeTranslation(float x, float y, float z) {
+		static Mat4 makeTrans(float x, float y, float z) {
 			Mat4 m;
 			m(0, 0)=1;
 			m(1, 1)=1;
