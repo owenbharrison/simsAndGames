@@ -195,8 +195,8 @@ struct Example : cmn::Engine3D {
 		//graphics toggles
 		if(GetKey(olc::Key::G).bPressed) show_graph^=true;
 
-		//update mouse ray(matrix could be singular)
-		try {
+		//update mouse ray
+		{
 			//unprojection matrix
 			cmn::Mat4 inv_vp=cmn::Mat4::inverse(mat_view*mat_proj);
 
@@ -207,7 +207,7 @@ struct Example : cmn::Engine3D {
 			vf3d world=clip*inv_vp;
 			world/=world.w;
 			mouse_dir=(world-cam_pos).norm();
-		} catch(const std::exception& e) {}
+		}
 
 		//find node "under" mouse
 		float record=-1;

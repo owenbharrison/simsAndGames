@@ -66,6 +66,7 @@ struct Physics3DUI : cmn::Engine3D {
 
 	bool show_bounds=false;
 	bool show_vertexes=false;
+	bool show_springs=false;
 	bool show_edges=false;
 	bool show_joints=false;
 
@@ -237,6 +238,7 @@ struct Physics3DUI : cmn::Engine3D {
 				"  L        set light pos\n"
 				"  ENTER    toggle physics update\n"
 				"  B        toggle bounds\n"
+				"  P        toggle spring view\n"
 				"  V        toggle vertex view\n"
 				"  E        toggle edge view\n"
 				"  J        toggle joint view\n"
@@ -316,23 +318,24 @@ struct Physics3DUI : cmn::Engine3D {
 		//debug toggles
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 		if(GetKey(olc::Key::V).bPressed) show_vertexes^=true;
+		if(GetKey(olc::Key::P).bPressed) show_springs^=true;
 		if(GetKey(olc::Key::E).bPressed) show_edges^=true;
 		if(GetKey(olc::Key::J).bPressed) show_joints^=true;
 		if(GetKey(olc::Key::ENTER).bPressed) update_phys^=true;
 
-		//update mouse ray (matrix could be singular)
-		try {
+		//update mouse ray
+		{
 			//unprojection matrix
-			Mat4 invVP=Mat4::inverse(mat_view*mat_proj);
+			Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
 
 			//get ray thru screen mouse pos
 			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
 			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*invVP;
+			vf3d world=clip*inv_vp;
 			world/=world.w;
 			mouse_dir=(world-cam_pos).norm();
-		} catch(const std::exception& e) {}
+		}
 
 		//shape grabbing
 		const auto grab_action=GetMouse(olc::Mouse::LEFT);
@@ -394,7 +397,7 @@ struct Physics3DUI : cmn::Engine3D {
 			if(dist>menu_min_sz&&dist<menu_sz) {
 				//find angle
 				float angle=std::atan2(sub.y, sub.x);
-				//normalize
+				//normalize and offset
 				float a01=(1.5f*Pi+angle)/2/Pi;
 				//truncate to nearest section
 				int reg=int(std::round(shaders.size()*a01))%shaders.size();
@@ -440,6 +443,66 @@ struct Physics3DUI : cmn::Engine3D {
 		return true;
 	}
 
+	void realizeShape(const Shape& shp) {
+		//either show edges or tris
+		if(show_edges) {
+			for(const auto& ie:shp.edges) {
+				cmn::Line l{
+					shp.particles[ie.a].pos,
+					shp.particles[ie.b].pos
+				}; l.col=shp.fill, l.id=shp.id;
+				lines_to_project.push_back(l);
+			}
+		} else {
+			for(const auto& it:shp.tris) {
+				cmn::Triangle t{
+					shp.particles[it.a].pos,
+					shp.particles[it.b].pos,
+					shp.particles[it.c].pos
+				}; t.col=shp.fill, t.id=shp.id;
+				tris_to_project.push_back(t);
+			}
+		}
+
+		if(show_springs) {
+			for(const auto& s:shp.springs) {
+				cmn::Line l{s.a->pos, s.b->pos};
+				l.col=shp.fill, l.id=shp.id;
+				lines_to_project.push_back(l);
+			}
+		}
+	}
+
+	void realizeJoint(const Joint& j) {
+		//for each shape in joint...
+		for(int i=0; i<2; i++) {
+			//draw lines between joint indexes
+			const auto& shp=i?j.shp_a:j.shp_b;
+			const auto& ixs=i?j.ix_a:j.ix_b;
+			olc::Pixel col=i?j.shp_b->fill:j.shp_a->fill;
+			for(const auto& j:ixs) {
+				vertex.translation=shp->particles[j].pos;
+				vertex.updateTransforms();
+				vertex.updateTriangles(col);
+				tris_to_project.insert(tris_to_project.end(),
+					vertex.tris.begin(), vertex.tris.end()
+				);
+			}
+		}
+	}
+
+	void addAxes(const vf3d& pos, float sz) {
+		cmn::Line lx{pos-vf3d(sz, 0, 0), pos+vf3d(sz, 0, 0)};
+		lx.col=olc::RED;
+		lines_to_project.push_back(lx);
+		cmn::Line ly{pos-vf3d(0, sz, 0), pos+vf3d(0, sz, 0)};
+		ly.col=olc::BLUE;
+		lines_to_project.push_back(ly);
+		cmn::Line lz{pos-vf3d(0, 0, sz), pos+vf3d(0, 0, sz)};
+		lz.col=olc::GREEN;
+		lines_to_project.push_back(lz);
+	}
+
 	//combine all scene geometry
 	bool user_geometry() override {
 		if(to_time) geom_watch.start();
@@ -448,28 +511,7 @@ struct Physics3DUI : cmn::Engine3D {
 		lights.push_back({light_pos, olc::WHITE});
 
 		//realize shape geometry
-		if(show_edges) {
-			for(const auto& s:scene.shapes) {
-				for(const auto& ie:s.edges) {
-					cmn::Line l{
-						s.particles[ie.a].pos,
-						s.particles[ie.b].pos
-					}; l.col=s.fill, l.id=s.id;
-					lines_to_project.push_back(l);
-				}
-			}
-		} else {
-			for(const auto& s:scene.shapes) {
-				for(const auto& it:s.tris) {
-					cmn::Triangle t{
-						s.particles[it.a].pos,
-						s.particles[it.b].pos,
-						s.particles[it.c].pos
-					}; t.col=s.fill, t.id=s.id;
-					tris_to_project.push_back(t);
-				}
-			}
-		}
+		for(const auto& s:scene.shapes) realizeShape(s);
 
 		//add all shapes bounds and scene bounds
 		if(show_bounds) {
@@ -480,35 +522,11 @@ struct Physics3DUI : cmn::Engine3D {
 		}
 
 		if(show_joints) {
-			for(const auto& j:scene.joints) {
-				//for each shape in joint...
-				for(int i=0; i<2; i++) {
-					//draw lines between joint indexes
-					const auto& shp=i?j.shp_a:j.shp_b;
-					const auto& ixs=i?j.ix_a:j.ix_b;
-					olc::Pixel col=i?j.shp_b->fill:j.shp_a->fill;
-					for(const auto& j:ixs) {
-						vertex.translation=shp->particles[j].pos;
-						vertex.updateTransforms();
-						vertex.updateTriangles(col);
-						tris_to_project.insert(tris_to_project.end(),
-							vertex.tris.begin(), vertex.tris.end()
-						);
-					}
-				}
-			}
+			for(const auto& j:scene.joints) realizeJoint(j);
 		}
 
-		//show axis at mouse particle
-		if(grab_shape) {
-			const float sz=.3f;
-			cmn::Line l6{mouse_particle.pos-vf3d(sz, 0, 0), mouse_particle.pos+vf3d(sz, 0, 0)}; l6.col=olc::RED;
-			lines_to_project.push_back(l6);
-			cmn::Line l7{mouse_particle.pos-vf3d(0, sz, 0), mouse_particle.pos+vf3d(0, sz, 0)}; l7.col=olc::BLUE;
-			lines_to_project.push_back(l7);
-			cmn::Line l8{mouse_particle.pos-vf3d(0, 0, sz), mouse_particle.pos+vf3d(0, 0, sz)}; l8.col=olc::GREEN;
-			lines_to_project.push_back(l8);
-		}
+		//show axes at mouse particle
+		if(grab_shape) addAxes(mouse_particle.pos, .3f);
 
 		if(to_time) geom_watch.stop();
 

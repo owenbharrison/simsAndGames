@@ -144,8 +144,8 @@ struct FXUI : cmn::Engine3D {
 		//debug toggle
 		if(GetKey(olc::Key::ENTER).bPressed) update_physics^=true;
 
-		//update mouse ray(matrix could be singular)
-		try {
+		//update mouse ray
+		{
 			//unprojection matrix
 			cmn::Mat4 inv_vp=cmn::Mat4::inverse(mat_view*mat_proj);
 
@@ -156,7 +156,7 @@ struct FXUI : cmn::Engine3D {
 			vf3d world=clip*inv_vp;
 			world/=world.w;
 			mouse_dir=(world-cam_pos).norm();
-		} catch(const std::exception& e) {}
+		}
 
 		//add particles at mouse
 		if(smoke_timer<0) {

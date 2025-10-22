@@ -41,19 +41,11 @@ struct Mesh {
 		cmn::Mat4 mat_rot_y=cmn::Mat4::makeRotY(rotation.y);
 		cmn::Mat4 mat_rot_z=cmn::Mat4::makeRotZ(rotation.z);
 		mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
-		try {//try find inverse of rotation matrix
-			mat_inv_rot=cmn::Mat4::inverse(mat_rot);
-		} catch(const std::exception& e) {
-			mat_inv_rot=cmn::Mat4::makeIdentity();
-		}
+		mat_inv_rot=cmn::Mat4::inverse(mat_rot);
 		cmn::Mat4 mat_scale=cmn::Mat4::makeScale(scale.x, scale.y, scale.z);
 		cmn::Mat4 mat_trans=cmn::Mat4::makeTrans(offset.x, offset.y, offset.z);
 		mat_total=mat_scale*mat_rot*mat_trans;
-		try {//try find inverse of total matrix
-			mat_inv_total=cmn::Mat4::inverse(mat_total);
-		} catch(const std::exception& e) {
-			mat_inv_total=cmn::Mat4::makeIdentity();
-		}
+		mat_inv_total=cmn::Mat4::inverse(mat_total);
 	}
 
 	void updateTriangles(const olc::Pixel& col=olc::WHITE) {

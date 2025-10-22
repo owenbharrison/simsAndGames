@@ -136,20 +136,14 @@ struct Example : cmn::Engine3D {
 		mouse_pos=GetMousePos();
 
 		//unprojection matrix
-		Mat4 invVP;
-		bool invVP_avail=true;
-		try {
-			invVP=Mat4::inverse(mat_view*mat_proj);
-		} catch(const std::exception& e) {
-			invVP_avail=false;
-		}
+		Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
 
 		//update world mouse ray
-		if(invVP_avail) {
+		{
 			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
 			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*invVP;
+			vf3d world=clip*inv_vp;
 			world/=world.w;
 
 			mouse_dir=(world-cam_pos).norm();
@@ -200,18 +194,18 @@ struct Example : cmn::Engine3D {
 		if(scale_action.bReleased) scale_mesh=nullptr;
 
 		//update translated mesh
-		if(trans_mesh&&invVP_avail) {
+		if(trans_mesh) {
 			//project screen ray onto translation plane
 			float prev_ndc_x=1-2*prev_mouse_pos.x/ScreenWidth();
 			float prev_ndc_y=1-2*prev_mouse_pos.y/ScreenHeight();
 			vf3d prev_clip(prev_ndc_x, prev_ndc_y, 1);
-			vf3d prev_world=prev_clip*invVP;
+			vf3d prev_world=prev_clip*inv_vp;
 			prev_world/=prev_world.w;
 			vf3d prev_pt=segIntersectPlane(cam_pos, prev_world, trans_plane, cam_dir);
 			float curr_ndc_x=1-2*mouse_pos.x/ScreenWidth();
 			float curr_ndc_y=1-2*mouse_pos.y/ScreenHeight();
 			vf3d curr_clip(curr_ndc_x, curr_ndc_y, 1);
-			vf3d curr_world=curr_clip*invVP;
+			vf3d curr_world=curr_clip*inv_vp;
 			curr_world/=curr_world.w;
 			vf3d curr_pt=segIntersectPlane(cam_pos, curr_world, trans_plane, cam_dir);
 

@@ -25,14 +25,7 @@ struct Mesh {
 		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
 		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
 		mat_world=mat_scale*mat_rot*mat_trans;
-		//matrix could be singular
-		mat_local=Mat4::makeIdentity();
-		try {
-			Mat4 local=Mat4::inverse(mat_world);
-			mat_local=local;
-		} catch(const std::exception& e) {
-			std::cout<<"  "<<e.what()<<'\n';
-		}
+		mat_local=Mat4::inverse(mat_world);
 	}
 
 	void applyTransforms() {

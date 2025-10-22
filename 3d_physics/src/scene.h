@@ -63,7 +63,7 @@ public:
 	}
 
 	//particle-triangle collisions
-	//keep a particles out of b tris
+	//keep a's particles out of b's tris
 	void triCollide(Shape& shp_a, Shape& shp_b) {
 		//find joint conflicts
 		const std::list<int>* skip_ix=nullptr;
@@ -99,9 +99,11 @@ public:
 				auto& bp0=shp_b.particles[bit.a];
 				auto& bp1=shp_b.particles[bit.b];
 				auto& bp2=shp_b.particles[bit.c];
+
 				//find close point on triangle
 				cmn::Triangle bt{bp0.pos, bp1.pos, bp2.pos};
 				vf3d close_pt=bt.getClosePt(ap.pos);
+
 				//is it too close to surface?
 				float mag2=(ap.pos-close_pt).mag2();
 				if(mag2<Particle::rad*Particle::rad) {
@@ -109,12 +111,14 @@ public:
 					vf3d norm=bt.getNorm();
 					vf3d new_pt=close_pt+Particle::rad*norm;
 					vf3d delta=new_pt-ap.pos;
+
 					//find contributions
 					float m1a=1/ap.mass;
 					float m1b0=1/bp0.mass;
 					float m1b1=1/bp1.mass;
 					float m1b2=1/bp2.mass;
 					float m1t=m1a+m1b0+m1b1+m1b2;
+
 					//push apart
 					if(!ap.locked) ap.pos+=m1a/m1t*delta;
 					//barycentric weights next?
@@ -195,21 +199,24 @@ public:
 				};
 				vf3d close_a=a1.pos+s*u;
 				vf3d close_b=b1.pos+t*v;
-				vf3d sub=close_a-close_b;
-				float mag2=sub.mag2();
+
 				//are they too close to eachother?
-				if(mag2<Particle::rad*Particle::rad) {
-					//calculate resolution
-					float mag=std::sqrt(mag2);
-					vf3d norm=sub/mag;
-					float delta=Particle::rad-mag;
-					vf3d correct=delta*norm;
-					//find contributions
+				vf3d sub=close_a-close_b;
+				float mag_sq=sub.mag2();
+				if(mag_sq<Particle::rad*Particle::rad) {
+					//find contributions based on inverse mass
 					float m1a1=1/a1.mass;
 					float m1a2=1/a2.mass;
 					float m1b1=1/b1.mass;
 					float m1b2=1/b2.mass;
 					float m1t=m1a1+m1a2+m1b1+m1b2;
+
+					//calculate resolution
+					float mag=std::sqrt(mag_sq);
+					vf3d norm=sub/mag;
+					float delta=Particle::rad-mag;
+					vf3d correct=delta*norm;
+
 					//push apart
 					if(!a1.locked) a1.pos+=(1-s)*m1a1/m1t*correct;
 					if(!a2.locked) a2.pos+=s*m1a2/m1t*correct;
@@ -664,9 +671,9 @@ public:
 
 			shape.initMass();
 
-			shape.fill.r=rand()%256;
-			shape.fill.g=rand()%256;
-			shape.fill.b=rand()%256;
+			shape.fill.r=std::rand()%256;
+			shape.fill.g=std::rand()%256;
+			shape.fill.b=std::rand()%256;
 			shape.id=id++;
 
 			scene.shapes.push_back(shape);
