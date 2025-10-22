@@ -1,9 +1,7 @@
 /*TODO
 add difficulty modes
-add penalty effect
 add sound?
 add menus
-encapsulation
 triangle render generalization/simplification
 */
 #define OLC_GFX_OPENGL33
@@ -47,23 +45,6 @@ static vf3d polar3D(float yaw, float pitch) {
 #ifdef USE_SHADERS
 #define OLC_PGEX_SHADERS
 #include "olcPGEX_Shaders.h"
-
-olc::EffectConfig loadEffect(const std::string& filename) {
-	//get file
-	std::ifstream file(filename);
-	if(file.fail()) throw std::runtime_error("invalid filename: "+filename);
-
-	//dump contents into str stream
-	std::stringstream mid;
-	mid<<file.rdbuf();
-
-	return {
-		DEFAULT_VS,
-		mid.str(),
-		1,
-		1
-	};
-}
 #endif
 
 struct Minesweeper3DUI : cmn::Engine3D {
@@ -255,6 +236,25 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			SetDrawTarget(nullptr);
 		}
 	}
+
+#ifdef USE_SHADERS
+	bool createEffect(olc::Effect& e, const std::string& filename) {
+		//get file
+		std::ifstream file(filename);
+		if(file.fail()) return false;
+
+		//dump contents into str stream
+		std::stringstream mid;
+		mid<<file.rdbuf();
+
+		e=shader.MakeEffect({
+			DEFAULT_VS,
+			mid.str(),
+			1,
+			1
+			});
+	}
+#endif
 #pragma endregion
 
 	bool user_create() override {
@@ -267,10 +267,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		number_gradient=new olc::Sprite("assets/img/number_gradient.png");
 
 		//load cursor model
-		try {
-			cursor_mesh=Mesh::loadFromOBJ("assets/models/cursor.txt");
-		} catch(const std::exception& e) {
-			std::cerr<<e.what()<<'\n';
+		if(!Mesh::loadFromOBJ(cursor_mesh, "assets/models/cursor.txt")) {
+			std::cerr<<"unable to load cursor mesh.\n";
 			return false;
 		}
 
@@ -280,10 +278,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 #pragma region GAME SETUP
 		//init game
-		try {
-			game=Minesweeper(7, 5, 8, 21);
-		} catch(const std::exception& e) {
-			std::cout<<e.what()<<'\n';
+		if(!Minesweeper::create(game, 7, 5, 8, 21)) {
+			std::cerr<<"unable to create game.\n";
 			return false;
 		}
 		updateGameMesh();
@@ -297,14 +293,12 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 #ifdef USE_SHADERS
 		//load shaders
-		try {
-			crt_effect=shader.MakeEffect(loadEffect("assets/fx/crt.glsl"));
-			if(!crt_effect.IsOK()) {
-				std::cerr<<"  crt_effect err: "<<crt_effect.GetStatus()<<'\n';
-				return false;
-			}
-		} catch(const std::exception& e) {
-			std::cout<<"  "<<e.what()<<'\n';
+		if(!createEffect(crt_effect, "assets/fx/crt.glsl")) {
+			std::cerr<<"  unable to create effect.\n";
+			return false;
+		}
+		if(!crt_effect.IsOK()) {
+			std::cerr<<"  "<<crt_effect.GetStatus()<<'\n';
 			return false;
 		}
 #endif
@@ -351,14 +345,12 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				return false;
 			}
 
-			try {
-				game.save(filename);
-
+			if(game.save(filename)) {
 				std::cout<<"  successfully exported to: "<<filename<<'\n';
 
 				return true;
-			} catch(const std::exception& e) {
-				std::cout<<"  "<<e.what()<<'\n';
+			} else {
+				std::cout<<"  unable to save game.\n";
 
 				return false;
 			}
@@ -373,18 +365,17 @@ struct Minesweeper3DUI : cmn::Engine3D {
 				return false;
 			}
 
-			try {
-				//load game, set this to that, update tris
-				Minesweeper m=Minesweeper::load(filename);
-
+			//load game, set this to that, update tris
+			Minesweeper m;
+			if(Minesweeper::load(m, filename)) {
 				std::cout<<"  successfully imported from: "<<filename<<'\n';
 
 				game=m;
 				updateGameMesh();
 
 				return true;
-			} catch(const std::exception& e) {
-				std::cout<<"  "<<e.what()<<'\n';
+			} else {
+				std::cout<<"  unable to load game.\n";
 
 				return false;
 			}
@@ -707,14 +698,14 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		cmn::Line l4{r, b}; l4.col=col;
 		lines_to_project.push_back(l4);
 	}
-	
+
 	olc::Pixel getCellColor(int num_bombs) const {
 		olc::Pixel col;
 		switch(num_bombs) {
 			case 1: col=olc::Pixel(0, 100, 255); break;//light blue
 			case 2: col=olc::Pixel(0, 200, 0); break;//dark green
-			case 3: col=olc::Pixel(220, 220, 0); break;//dark yellow
-			case 4: col=olc::RED; break;
+			case 3: col=olc::RED; break;
+			case 4: col=olc::Pixel(220, 220, 0); break;//dark yellow
 			case 5: col=olc::DARK_RED; break;
 			default:
 			{//6-26
@@ -904,7 +895,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		return true;
 	}
 
-	#pragma region RENDER_HELPERS
+#pragma region RENDER_HELPERS
 	//win/lose/pause state overlays
 	void renderStateOverlay() {
 		const int cx=GetDrawTargetWidth()/2, cy=GetDrawTargetHeight()/2;
@@ -940,7 +931,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 
 		SetPixelMode(olc::Pixel::ALPHA);
-		
+
 		//dark background
 		FillRect(0, 0, GetDrawTargetWidth(), GetDrawTargetHeight(), olc::Pixel(0, 0, 0, alpha));
 
@@ -1159,8 +1150,8 @@ struct Minesweeper3DUI : cmn::Engine3D {
 int main() {
 	Minesweeper3DUI* m3dui=new Minesweeper3DUI();
 	bool fullscreen=false;
-	bool vsync=false;
-	if(m3dui->Construct(1024, 768, 1, 1, fullscreen, vsync)) m3dui->Start();
+	bool vsync=true;
+	if(m3dui->Construct(800, 600, 1, 1, fullscreen, vsync)) m3dui->Start();
 
 	return 0;
 }

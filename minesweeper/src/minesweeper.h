@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-#include <exception>
-
 #include <fstream>
 #include <sstream>
 
@@ -46,21 +44,24 @@ public:
 
 	Minesweeper() {}
 
-	Minesweeper(int w, int h, int d, int n) {
-		width=w;
-		height=h;
-		depth=d;
-		if(width<1||height<1||depth<1) throw std::runtime_error("game dims must be >=1");
-		if(width>32||height>32||depth>32) throw std::runtime_error("game dims must be <=32");
+	static bool create(Minesweeper& m, int w, int h, int d, int n) {
+		//invalid game dimensions
+		if(w<1||h<1||d<1) return false;
+		if(w>32||h>32||d>32) return false;
 
-		num_cells=width*height*depth;
-		num_bombs=n;
-		if(num_bombs>=num_cells) throw std::runtime_error("too many bombs");
+		m.width=w;
+		m.height=h;
+		m.depth=d;
+		m.num_cells=m.width*m.height*m.depth;
 
-		cells=new Cell[num_cells];
-		prev_cells=new Cell[num_cells];
+		//too many bombs
+		if(n>=m.num_cells) return false;
+		m.num_bombs=n;
 
-		reset();
+		m.cells=new Cell[m.num_cells];
+		m.prev_cells=new Cell[m.num_cells];
+
+		m.reset();
 	}
 
 	//ro3 1
@@ -302,9 +303,9 @@ public:
 		}
 	}
 
-	void save(const std::string& filename) const {
+	bool save(const std::string& filename) const {
 		std::ofstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
+		if(file.fail()) return false;
 
 		file<<width<<' '<<height<<' '<<depth<<'\n';
 		file<<num_bombs<<' '<<state<<'\n';
@@ -320,9 +321,9 @@ public:
 		file.close();
 	}
 
-	static Minesweeper load(const std::string& filename) {
+	static bool load(Minesweeper& m, const std::string& filename) {
 		std::ifstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
+		if(file.fail()) return false;
 
 		std::string line;
 		std::stringstream line_str;
@@ -339,7 +340,7 @@ public:
 		line_str<<num_bombs<<state;
 
 		//initialize game
-		Minesweeper m(width, height, depth, num_bombs);
+		if(!Minesweeper::create(m, width, height, depth, num_bombs)) return false;
 		m.state=state;
 
 		//read cells
@@ -359,8 +360,7 @@ public:
 		m.updatePrev();
 
 		file.close();
-
-		return m;
+		return true;
 	}
 };
 

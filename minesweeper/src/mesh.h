@@ -6,8 +6,6 @@
 #include <fstream>
 #include <sstream>
 
-#include <exception>
-
 struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
@@ -44,11 +42,9 @@ struct Mesh {
 		}
 	}
 
-	static Mesh loadFromOBJ(const std::string& filename) {
-		Mesh m;
-
+	static bool loadFromOBJ(Mesh& mesh, const std::string& filename) {
 		std::ifstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
+		if(file.fail()) return false;
 
 		std::string line;
 		while(std::getline(file, line)) {
@@ -57,7 +53,7 @@ struct Mesh {
 			if(type=="v") {
 				vf3d v;
 				line_str>>v.x>>v.y>>v.z;
-				m.vertexes.push_back(v);
+				mesh.vertexes.push_back(v);
 			} else if(type=="f") {
 				std::vector<int> v_ixs;
 
@@ -70,7 +66,7 @@ struct Mesh {
 
 				//triangulate
 				for(int i=2; i<v_ixs.size(); i++) {
-					m.index_tris.push_back({
+					mesh.index_tris.push_back({
 						v_ixs[0],
 						v_ixs[i-1],
 						v_ixs[i]
@@ -79,11 +75,11 @@ struct Mesh {
 			}
 		}
 
-		m.updateTransforms();
-		m.updateTriangles(olc::WHITE);
+		mesh.updateTransforms();
+		mesh.updateTriangles(olc::WHITE);
 
 		file.close();
-		return m;
+		return true;
 	}
 };
 #endif//MESH_STRUCT_H
