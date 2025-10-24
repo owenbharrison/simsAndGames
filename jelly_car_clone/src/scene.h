@@ -43,6 +43,16 @@ public:
 		shapes.clear();
 	}
 
+	void removeShapeAt(const vf2d& pos) {
+		for(auto sit=shapes.begin(); sit!=shapes.end();) {
+			const auto& s=*sit;
+			if(s->contains(pos)) {
+				delete s;
+				sit=shapes.erase(sit);
+			} else sit++;
+		}
+	}
+
 	void update(float dt) {
 		//sanitize?
 		for(auto it=shapes.begin(); it!=shapes.end();) {
@@ -69,7 +79,7 @@ public:
 		}
 	}
 
-	void save(std::string& filename) const {
+	void save(const std::string& filename) const {
 		if(filename.empty()) {
 			throw std::runtime_error("no filename");
 		}
@@ -117,7 +127,7 @@ public:
 				file_out<<"  c "<<
 					indexes[c.a]<<' '<<
 					indexes[c.b]<<' '<<
-					c.rest_len<<'\n';
+					c.len_rest<<'\n';
 			}
 
 			//print springs
@@ -126,7 +136,7 @@ public:
 				file_out<<"  s "<<
 					indexes[s.a]<<' '<<
 					indexes[s.b]<<' '<<
-					s.rest_len<<' '<<
+					s.len_rest<<' '<<
 					s.stiffness<<' '<<
 					s.damping<<'\n';
 			}
@@ -247,7 +257,7 @@ public:
 					Constraint c;
 					c.a=&shp.points[a];
 					c.b=&shp.points[b];
-					c.rest_len=l;
+					c.len_rest=l;
 					shp.shell.push_back(c);
 				}
 
@@ -274,7 +284,7 @@ public:
 					Spring s;
 					s.a=&shp.points[a];
 					s.b=&shp.points[b];
-					s.rest_len=l;
+					s.len_rest=l;
 					s.stiffness=k;
 					s.damping=d;
 					shp.springs.push_back(s);

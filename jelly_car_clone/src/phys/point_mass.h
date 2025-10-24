@@ -34,13 +34,17 @@ struct PointMass {
 	}
 
 	void update(float dt) {
-		//update pos store
 		vf2d vel=pos-oldpos;
+
+		//update pos store
 		oldpos=pos;
 
-		//verlet integration
-		vf2d acc=force/mass;
-		if(!locked) pos+=vel+acc*dt*dt;
+		if(!locked) {
+			vf2d acc=force/mass;
+
+			//verlet integration
+			pos+=vel+acc*dt*dt;
+		}
 
 		//reset forces
 		force={0, 0};

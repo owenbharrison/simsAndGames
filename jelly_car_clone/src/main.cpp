@@ -1,3 +1,4 @@
+//dont use exceptions? std::string& msg
 #define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
 using olc::vf2d;
@@ -14,7 +15,7 @@ using olc::vf2d;
 #include <deque>
 
 //https://www.rapidtables.com/convert/color/hsv-to-rgb.html
-olc::Pixel hsv2rgb(int h, float s, float v) {
+static olc::Pixel hsv2rgb(int h, float s, float v) {
 	float c=v*s;
 	float x=c*(1-std::abs(1-std::fmod(h/60.f, 2)));
 	float m=v-c;
@@ -30,7 +31,7 @@ olc::Pixel hsv2rgb(int h, float s, float v) {
 	return olc::PixelF(m+r, m+g, m+b);
 }
 
-olc::Pixel randomPastel() {
+static olc::Pixel randomPastel() {
 	//hue=pure color
 	int h=std::rand()%360;
 	//saturation=intensity
@@ -40,16 +41,10 @@ olc::Pixel randomPastel() {
 	return hsv2rgb(h, s, v);
 }
 
-struct JellyCarGame : olc::PixelGameEngine {
-	JellyCarGame() {
-		sAppName="Jelly Car Clone";
-	}
-
+class JellyCarGame : public olc::PixelGameEngine {
 	//rendering "primitives"
-	olc::Sprite* prim_rect_spr=nullptr;
-	olc::Decal* prim_rect_dec=nullptr;
-	olc::Sprite* prim_circ_spr=nullptr;
-	olc::Decal* prim_circ_dec=nullptr;
+	olc::Renderable prim_rect;
+	olc::Renderable prim_circ;
 
 	//user input stuff
 	olc::TransformedView tv;
@@ -60,7 +55,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 	int drag_section=-1;
 
-	std::list<Constraint> mouse_constraint;
+	std::list<Spring> mouse_springs;
 	PointMass mouse_point;
 
 	std::deque<vf2d> cut;
@@ -70,6 +65,10 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 	//simulation stuff
 	Scene scene;
+	const int num_sub_steps=4;
+	const float time_step=1/60.f;
+	const float sub_time_step=time_step/num_sub_steps;
+	float update_timer=0;
 
 	//graphics toggles
 	bool show_grid=true;
@@ -82,51 +81,53 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 	//cut animation
 	float smooth_dx=0, smooth_dy=0;
-	olc::Sprite* cut_spr=nullptr;
-	olc::Decal* cut_dec=nullptr;
+	olc::Renderable cut_tex;
 
 	bool OnUserCreate() override {
 		std::srand(std::time(0));
 
-		//setup some primitives to draw with
-		prim_rect_spr=new olc::Sprite(1, 1);
-		prim_rect_spr->SetPixel(0, 0, olc::WHITE);
-		prim_rect_dec=new olc::Decal(prim_rect_spr);
+		//init render "primitives"
+		prim_rect.Create(1, 1);
+		prim_rect.Sprite()->SetPixel(0, 0, olc::WHITE);
+		prim_rect.Decal()->Update();
 		{
 			const unsigned int sz=1024;
-			prim_circ_spr=new olc::Sprite(sz, sz);
-			SetDrawTarget(prim_circ_spr);
+			prim_circ.Create(sz, sz);
+			SetDrawTarget(prim_circ.Sprite());
 			Clear(olc::BLANK);
-			FillCircle(sz/2, sz/2, sz/2);
+			FillCircle(sz/2, sz/2, sz/2, olc::WHITE);
 			SetDrawTarget(nullptr);
-			prim_circ_dec=new olc::Decal(prim_circ_spr);
+			prim_circ.Decal()->Update();
 		}
 
-		//initialize transformed view
+		//init transformed view
 		tv.Initialise(GetScreenSize(), {1, 1});
 		tv.SetScaleExtents({5, 5}, {1000, 1000});
 		tv.EnableScaleClamp(true);
 
-		//initialize physics stuff
+		//init physics stuff
 		mouse_point.locked=true;
 
-		//zoom to phys_bounds
+		//init& zoom to phys_bounds
 		scene.phys_bounds={{-14, -10}, {14, 10}};
 		zoomToFit();
 
+		if(!cut_tex.Load("assets/scissor.png")) {
+			std::cout<<"  unable to load cut tex\n";
+			return false;
+		}
+		
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
-		//std::cout diverted to console
-		ConsoleCaptureStdOut(true);
 
-		cut_spr=new olc::Sprite("assets/scissor.png");
-		cut_dec=new olc::Decal(cut_spr);
+		//divert std::cout to console
+		//ConsoleCaptureStdOut(true);
 
 		return true;
 	}
 
 	void reset() {
-		mouse_constraint.clear();
+		handleGrabActionEnd();
 
 		scene.clear();
 	}
@@ -167,16 +168,65 @@ struct JellyCarGame : olc::PixelGameEngine {
 	bool OnUserDestroy() override {
 		reset();
 
-		delete cut_dec;
-		delete cut_spr;
-
-		delete prim_rect_dec;
-		delete prim_rect_spr;
-		delete prim_circ_dec;
-		delete prim_circ_spr;
+		return true;
+	}
+	
+#pragma region COMMAND HELPERS
+	bool callResetCommand() {
+		//english+logic=grammar :D
+		int num=scene.shapes.size();
+		std::cout<<"  removed "<<num<<" shape";
+		if(num!=1) std::cout<<'s';
+		std::cout<<'\n';
+		reset();
 
 		return true;
 	}
+
+	bool callCountCommand() {
+		//english + logic = grammar :D
+		int num=scene.shapes.size();
+		std::cout<<"  there ";
+		std::cout<<(num==1?"is":"are");
+		std::cout<<' '<<num<<" shape";
+		if(num!=1) std::cout<<'s';
+		std::cout<<'\n';
+
+		return true;
+	}
+
+	bool callExportCommand(std::stringstream& args) {
+		std::string filename;
+		args>>filename;
+		try {
+			scene.save(filename);
+
+			std::cout<<"  successfully exported to: "<<filename<<'\n';
+
+			return true;
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
+		}
+	}
+
+	bool callImportCommand(std::stringstream& args) {
+		std::string filename;
+		args>>filename;
+		try {
+			scene=Scene::load(filename);
+
+			zoomToFit(false);
+
+			std::cout<<"  successfully imported from: "<<filename<<'\n';
+
+			return true;
+		} catch(const std::exception& e) {
+			std::cout<<"  "<<e.what()<<'\n';
+			return false;
+		}
+	}
+#pragma endregion
 
 	bool OnConsoleCommand(const std::string& line) override {
 		std::stringstream line_str(line);
@@ -189,26 +239,11 @@ struct JellyCarGame : olc::PixelGameEngine {
 		}
 
 		if(cmd=="reset") {
-			//english+logic=grammar :D
-			int num=scene.shapes.size();
-			std::cout<<"  removed "<<num<<" shape";
-			if(num!=1) std::cout<<'s';
-			std::cout<<'\n';
-			reset();
-
-			return true;
+			return callResetCommand();
 		}
 
 		if(cmd=="count") {
-			//english + logic = grammar :D
-			int num=scene.shapes.size();
-			std::cout<<"  there ";
-			std::cout<<(num==1?"is":"are");
-			std::cout<<' '<<num<<" shape";
-			if(num!=1) std::cout<<'s';
-			std::cout<<'\n';
-
-			return true;
+			return callCountCommand();
 		}
 
 		if(cmd=="time") {
@@ -218,35 +253,11 @@ struct JellyCarGame : olc::PixelGameEngine {
 		}
 
 		if(cmd=="export") {
-			std::string filename;
-			line_str>>filename;
-			try {
-				scene.save(filename);
-
-				std::cout<<"  successfully exported to: "<<filename<<'\n';
-
-				return true;
-			} catch(const std::exception& e) {
-				std::cout<<"  "<<e.what()<<'\n';
-				return false;
-			}
+			return callExportCommand(line_str);
 		}
 
 		if(cmd=="import") {
-			std::string filename;
-			line_str>>filename;
-			try {
-				scene=Scene::load(filename);
-
-				zoomToFit(false);
-
-				std::cout<<"  successfully imported from: "<<filename<<'\n';
-
-				return true;
-			} catch(const std::exception& e) {
-				std::cout<<"  "<<e.what()<<'\n';
-				return false;
-			}
+			return callImportCommand(line_str);
 		}
 
 		if(cmd=="keybinds") {
@@ -296,10 +307,124 @@ struct JellyCarGame : olc::PixelGameEngine {
 	}
 
 #pragma region UPDATE HELPERS
-	void handleUserInput(float dt) {
+	void handleResizeActionBegin() {
+		//which edge of phys bounds is mouse on?
+		vf2d tl=tv.WorldToScreen(scene.phys_bounds.min);
+		vf2d br=tv.WorldToScreen(scene.phys_bounds.max);
+		vf2d tr(br.x, tl.y);
+		vf2d bl(tl.x, br.y);
+		for(int i=0; i<4; i++) {
+			vf2d a, b;
+			switch(i) {
+				case 0: a=tl, b=tr; break;
+				case 1: a=tr, b=br; break;
+				case 2: a=br; b=bl; break;
+				case 3: a=bl, b=tl; break;
+			}
+
+			//get close pt on segment
+			vf2d pa=scr_mouse_pos-a, ba=b-a;
+			float t=pa.dot(ba)/ba.dot(ba);
+
+			//corner index logic
+			int s=1+2*i;
+			if(t<0) t=0, s--;
+			if(t>1) t=1, s++;
+			vf2d close_pt=a+t*ba;
+
+			//if mouse close enough, select section
+			if((scr_mouse_pos-close_pt).mag()<15) {
+				drag_section=s;
+				break;
+			}
+		}
+	}
+
+	void handleResizeActionUpdate() {
+		vf2d& tl=scene.phys_bounds.min;
+		vf2d& br=scene.phys_bounds.max;
+		//corner/edge update logic
+		switch(drag_section) {
+			case 0: tl=wld_mouse_pos; break;
+			case 1: tl.y=wld_mouse_pos.y; break;
+			case 2: tl.y=wld_mouse_pos.y, br.x=wld_mouse_pos.x; break;
+			case 3: br.x=wld_mouse_pos.x; break;
+			case 4: br=wld_mouse_pos; break;
+			case 5: br.y=wld_mouse_pos.y; break;
+			case 6: tl.x=wld_mouse_pos.x, br.y=wld_mouse_pos.y; break;
+			case 7: tl.x=wld_mouse_pos.x; break;
+		}
+	}
+
+	void handleResizeActionEnd() {
+		drag_section=-1;
+	}
+
+	//make sure points are far enough away
+	void handleCutActionUpdate() {
+		bool unique=true;
+		for(const auto& c:cut) {
+			if((c-wld_mouse_pos).mag()<.75f) {
+				unique=false;
+				break;
+			}
+		}
+		if(unique) cut.push_back(wld_mouse_pos);
+	}
+
+	void handleCutActionEnd() {
+		cut.clear();
+	}
+
+	void handleGrabActionEnd() {
+		mouse_springs.clear();
+	}
+
+	bool handleGrabActionBegin() {
+		handleGrabActionEnd();
+
+		//update for len_rest calculation
+		mouse_point.pos=wld_mouse_pos;
+
+		//for every shape under mouse
+		bool added=false;
+		for(const auto& shp:scene.shapes) {
+			if(!shp->contains(wld_mouse_pos)) continue;
+
+			//add all of its points to the list
+			for(int i=0; i<shp->getNum(); i++) {
+				Spring s(&mouse_point, &shp->points[i]);
+				mouse_springs.push_back(s);
+				added=true;
+			}
+		}
+
+		return added;
+	}
+
+	void handleRectActionBegin() {
+		rect_start=new vf2d(wld_mouse_pos);
+	}
+
+	void handleRectActionEnd() {
+		//get bounds
+		cmn::AABB box;
+		box.fitToEnclose(*rect_start);
+		box.fitToEnclose(wld_mouse_pos);
+
+		//add
+		float res=cmn::randFloat(.75f, 2);
+		scene.shapes.push_back(new Shape(box, res));
+
+		//reset
+		delete rect_start;
+		rect_start=nullptr;
+	}
+
+	void handleUserInput() {
 		//adding ngons
 		if(GetMouse(olc::Mouse::RIGHT).bPressed) {
-			int num=3+std::rand()%9;
+			int num=cmn::randInt(4, 15);
 			float rad=cmn::randFloat(1, 3);
 			Shape* s=new Shape(wld_mouse_pos, rad, num);
 			s->col=randomPastel();
@@ -308,137 +433,32 @@ struct JellyCarGame : olc::PixelGameEngine {
 
 		//adding rectangles
 		const auto rect_action=GetKey(olc::Key::R);
-		if(rect_action.bPressed) {
-			rect_start=new vf2d(wld_mouse_pos);
-		}
-		if(rect_action.bReleased) {
-			//get bounds
-			cmn::AABB box;
-			box.fitToEnclose(*rect_start);
-			box.fitToEnclose(wld_mouse_pos);
-
-			//add
-			float res=cmn::randFloat(.75f, 2);
-			scene.shapes.push_back(new Shape(box, res));
-
-			//reset
-			delete rect_start;
-			rect_start=nullptr;
-		}
+		if(rect_action.bPressed) handleRectActionBegin();
+		if(rect_action.bReleased) handleRectActionEnd();
 
 		//every now and then, add cut point
 		const auto cut_action=GetKey(olc::Key::C);
-		if(cut_action.bHeld) {
-			//make sure points are far enough away
-			bool unique=true;
-			for(const auto& c:cut) {
-				if((c-wld_mouse_pos).mag()<.75f) {
-					unique=false;
-					break;
-				}
-			}
-			if(unique) cut.push_back(wld_mouse_pos);
-		}
-		if(cut_action.bReleased) {
-			cut.clear();
-		}
-
-		//sanitize cut
-		{
-			float length=0;
-			for(int i=1; i<cut.size(); i++) {
-				length+=(cut[i]-cut[i-1]).mag();
-			}
-			if(length>20) cut.pop_front();
-		}
-
-		//cut animation
-		if(cut_timer<0) {
-			cut_timer+=.5f;
-
-			cut_anim^=true;
-		}
-		cut_timer-=dt;
+		if(cut_action.bHeld) handleCutActionUpdate();
+		if(cut_action.bReleased) handleCutActionEnd();
 
 		//removing stuff
 		if(GetKey(olc::Key::X).bHeld) {
-			mouse_constraint.clear();
-			for(auto sit=scene.shapes.begin(); sit!=scene.shapes.end();) {
-				const auto& s=*sit;
-				if(s->contains(wld_mouse_pos)) {
-					delete s;
-					sit=scene.shapes.erase(sit);
-				} else sit++;
-			}
+			handleGrabActionEnd();
+
+			scene.removeShapeAt(wld_mouse_pos);
 		}
 
-		//mouse constraint
+		//mouse springs
 		const auto grab_action=GetMouse(olc::Mouse::LEFT);
 		if(grab_action.bPressed) {
-			//reset
-			mouse_constraint.clear();
-
-			//for every shape under mouse
-			mouse_point.pos=wld_mouse_pos;
-			for(const auto& s:scene.shapes) {
-				if(!s->contains(wld_mouse_pos)) continue;
-
-				//add all of its points to the list
-				for(int i=0; i<s->getNum(); i++) {
-					mouse_constraint.emplace_back(&mouse_point, &s->points[i]);
-				}
-			}
-
-			//otherwise,
-			if(mouse_constraint.empty()) {
-				//which edge of phys bounds is mouse on?
-				vf2d tl=tv.WorldToScreen(scene.phys_bounds.min);
-				vf2d br=tv.WorldToScreen(scene.phys_bounds.max);
-				vf2d tr(br.x, tl.y);
-				vf2d bl(tl.x, br.y);
-				for(int i=0; i<4; i++) {
-					vf2d a, b;
-					switch(i) {
-						case 0: a=tl, b=tr; break;
-						case 1: a=tr, b=br; break;
-						case 2: a=br; b=bl; break;
-						case 3: a=bl, b=tl; break;
-					}
-					//get close pt on segment
-					vf2d pa=scr_mouse_pos-a, ba=b-a;
-					float t=pa.dot(ba)/ba.dot(ba);
-					//corner index logic
-					int s=1+2*i;
-					if(t<0) t=0, s--;
-					if(t>1) t=1, s++;
-					vf2d close_pt=a+t*ba;
-					//if mouse close enough, select section
-					if((scr_mouse_pos-close_pt).mag()<15) {
-						drag_section=s;
-						break;
-					}
-				}
+			if(!handleGrabActionBegin()) {
+				handleResizeActionBegin();
 			}
 		}
-		if(grab_action.bHeld) {
-			//corner/edge update logic
-			vf2d& tl=scene.phys_bounds.min;
-			vf2d& br=scene.phys_bounds.max;
-			switch(drag_section) {
-				case 0: tl=wld_mouse_pos; break;
-				case 1: tl.y=wld_mouse_pos.y; break;
-				case 2: tl.y=wld_mouse_pos.y, br.x=wld_mouse_pos.x; break;
-				case 3: br.x=wld_mouse_pos.x; break;
-				case 4: br=wld_mouse_pos; break;
-				case 5: br.y=wld_mouse_pos.y; break;
-				case 6: tl.x=wld_mouse_pos.x, br.y=wld_mouse_pos.y; break;
-				case 7: tl.x=wld_mouse_pos.x; break;
-			}
-		}
+		if(grab_action.bHeld) handleResizeActionUpdate();
 		if(grab_action.bReleased) {
-			//reset
-			mouse_constraint.clear();
-			drag_section=-1;
+			handleGrabActionEnd();
+			handleResizeActionEnd();
 		}
 
 		//anchoring
@@ -474,24 +494,45 @@ struct JellyCarGame : olc::PixelGameEngine {
 	}
 
 	void handlePhysics(float dt) {
-		//update mouse constraint
+		//update mouse point
 		mouse_point.pos=wld_mouse_pos;
-		for(auto& m:mouse_constraint) {
-			m.update();
+
+		//sanitize cut
+		{
+			float length=0;
+			for(int i=1; i<cut.size(); i++) {
+				length+=(cut[i]-cut[i-1]).mag();
+			}
+			if(length>20) cut.pop_front();
 		}
 
-		const int sub_steps=4;
-		float sub_dt=dt/sub_steps;
-		for(int i=0; i<sub_steps; i++) {
-			scene.update(sub_dt);
+		//cut animation
+		if(cut_timer<0) {
+			cut_timer+=.5f;
+
+			cut_anim^=true;
+		}
+		cut_timer-=dt;
+
+		//ensure similar update across multiple framerates
+		update_timer+=dt; 
+		while(update_timer>time_step) {
+			for(int i=0; i<num_sub_steps; i++) {
+				//update mouse springs
+				for(auto& s:mouse_springs) {
+					s.update();
+					std::cout<<s.len_rest<<'\n';
+				}
+
+				scene.update(sub_time_step);
+			}
+
+			update_timer-=time_step;
 		}
 	}
 #pragma endregion
 
 	void update(float dt) {
-		//make sure simulation doesnt blow up?
-		dt=cmn::clamp(dt, 1/165.f, 1/30.f);
-
 		{//smooth mouse derivatives
 			vf2d new_scr_mouse_pos=GetMousePos();
 
@@ -507,7 +548,7 @@ struct JellyCarGame : olc::PixelGameEngine {
 		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
 		
 		//only allow input when console closed
-		if(!IsConsoleShowing()) handleUserInput(dt);
+		if(!IsConsoleShowing()) handleUserInput();
 
 		//open integrated console
 		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
@@ -517,31 +558,188 @@ struct JellyCarGame : olc::PixelGameEngine {
 	}
 
 #pragma region RENDER HELPERS
-	void tvDrawThickLine(const vf2d& a, const vf2d& b, float rad, const olc::Pixel& col=olc::WHITE) {
+	void tvDrawThickLine(const vf2d& a, const vf2d& b, float rad, const olc::Pixel& col) {
 		vf2d sub=b-a;
 		float len=sub.mag();
 		vf2d tang=sub.perp()/len;
 
 		float angle=std::atan2(sub.y, sub.x);
-		tv.DrawRotatedDecal(a-rad*tang, prim_rect_dec, angle, {0, 0}, {len, 2*rad}, col);
+		tv.DrawRotatedDecal(a-rad*tang, prim_rect.Decal(), angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void tvFillCircle(const vf2d& pos, float rad, const olc::Pixel& col=olc::WHITE) {
-		vf2d offset(rad, rad);
-		tv.DrawDecal(pos-offset, prim_circ_dec, {2*rad/prim_circ_dec->sprite->width, 2*rad/prim_circ_dec->sprite->height}, col);
-	}
-
-	void tvDrawString(const vf2d& pos, const std::string& str, const olc::Pixel& col=olc::WHITE, float scale=1) {
-		vf2d offset(4*str.length(), 4);
-		tv.DrawStringDecal(pos-scale*offset, str, col, {scale, scale});
-	}
-
-	void tvDrawAABB(const cmn::AABB& aabb, float rad, const olc::Pixel& col=olc::WHITE) {
+	void tvDrawAABB(const cmn::AABB& aabb, float rad, const olc::Pixel& col) {
 		vf2d tr(aabb.max.x, aabb.min.y), bl(aabb.min.x, aabb.max.y);
 		tvDrawThickLine(aabb.min, tr, rad, col), tvFillCircle(aabb.min, rad, col);
 		tvDrawThickLine(tr, aabb.max, rad, col), tvFillCircle(tr, rad, col);
 		tvDrawThickLine(aabb.max, bl, rad, col), tvFillCircle(aabb.max, rad, col);
 		tvDrawThickLine(bl, aabb.min, rad, col), tvFillCircle(bl, rad, col);
+	}
+
+	void tvFillCircle(const vf2d& pos, float rad, const olc::Pixel& col) {
+		vf2d offset(rad, rad);
+		tv.DrawDecal(pos-offset, prim_circ.Decal(), {2*rad/prim_circ.Sprite()->width, 2*rad/prim_circ.Sprite()->height}, col);
+	}
+	
+	void tvDrawString(const vf2d& pos, const std::string& str, const olc::Pixel& col, float scale=1) {
+		vf2d offset(4*str.length(), 4);
+		tv.DrawStringDecal(pos-scale*offset, str, col, {scale, scale});
+	}
+
+	void renderGrid(float spacing, const olc::Pixel& col) {
+		//screen bounds in world space, snap to nearest	
+		vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
+		int i_s=std::floor(tl.x/spacing), j_s=std::floor(tl.y/spacing);
+		int i_e=std::ceil(br.x/spacing), j_e=std::ceil(br.y/spacing);
+
+		//vert
+		for(int i=i_s; i<=i_e; i++) {
+			float x=spacing*i;
+			vf2d top{x, tl.y}, btm{x, br.y};
+			if(i%10==0) tvDrawThickLine(top, btm, .1f, col);
+			else tv.DrawLineDecal(top, btm, col);
+		}
+
+		//horiz
+		for(int j=j_s; j<=j_e; j++) {
+			float y=spacing*j;
+			vf2d lft{tl.x, y}, rgt{br.x, y};
+			if(j%10==0) tvDrawThickLine(lft, rgt, .1f, col);
+			else tv.DrawLineDecal(lft, rgt, col);
+		}
+	}
+
+	//color based on if overlapping
+	void renderShapeBounds(const Shape& shp) {
+		cmn::AABB box=shp.getAABB();
+
+		bool overlaps=false;
+		for(const auto& s:scene.shapes) {
+			if(s==&shp) continue;
+
+			if(box.overlaps(s->getAABB())) {
+				overlaps=true;
+				break;
+			}
+		}
+
+		olc::Pixel col=overlaps?olc::RED:olc::GREEN;
+		tvDrawAABB(box, .075f, col);
+	}
+
+	void renderShapeAnchors(const Shape& shp) {
+		//rotation matrix
+		vf2d cosin=cmn::polar<vf2d>(1, shp.anchor_rot);
+		auto rotate=[cosin] (const vf2d& p) {
+			return vf2d(
+				p.x*cosin.x-p.y*cosin.y,
+				p.x*cosin.y+p.y*cosin.x
+			);
+		};
+
+		//outlines
+		for(int i=0; i<shp.getNum(); i++) {
+			vf2d a=shp.anchor_pos+rotate(shp.anchors[i]);
+			vf2d b=shp.anchor_pos+rotate(shp.anchors[(i+1)%shp.getNum()]);
+			tvDrawThickLine(a, b, .05f, olc::GREY);
+			tvFillCircle(a, .05f, olc::GREY);
+		}
+	}
+
+	void renderShapeFill(const Shape& shp) {
+		//initialize indexes
+		std::unordered_map<PointMass*, int> idx;
+		for(int i=0; i<shp.getNum(); i++) {
+			idx[&shp.points[i]]=i;
+		}
+		std::list<int> indexes;
+		for(const auto& c:shp.shell) {
+			indexes.push_back(idx[c.a]);
+		}
+
+		//ear clipping triangulation
+		for(auto curr=indexes.begin(); curr!=indexes.end();) {
+			//get previous and next points
+			auto prev=std::prev(curr==indexes.begin()?indexes.end():curr);
+			auto next=std::next(curr); if(next==indexes.end()) next=indexes.begin();
+			const auto& pt_p=shp.points[*prev].pos;
+			const auto& pt_c=shp.points[*curr].pos;
+			const auto& pt_n=shp.points[*next].pos;
+
+			//make sure this is a convex angle
+			if((pt_p-pt_c).cross(pt_n-pt_c)>0) {
+				curr++;
+				continue;
+			}
+
+			//make sure this triangle doesnt contain any pts
+			bool contains=false;
+			for(auto other=std::next(curr); other!=indexes.end(); other++) {
+				//dont check self
+				if(other==next) continue;
+
+				//is this point to the left/right of all trilines
+				const auto& pt_o=shp.points[*other].pos;
+				bool side1=(pt_c-pt_p).cross(pt_o-pt_p)>0;
+				bool side2=(pt_n-pt_c).cross(pt_o-pt_c)>0;
+				bool side3=(pt_p-pt_n).cross(pt_o-pt_n)>0;
+				if(side1==side2&&side2==side3) {
+					contains=true;
+					break;
+				}
+			}
+
+			//this is an ear!
+			if(!contains) {
+				tv.DrawWarpedDecal(prim_rect.Decal(), {pt_p, pt_c, pt_n, pt_n}, shp.col);
+
+				//remove this index and start over
+				indexes.erase(curr);
+				curr=indexes.begin();
+			} else curr++;
+		}
+	}
+
+	//show mass as string at centroid
+	void renderShapeMass(const Shape& shp) {
+		float mass=0;
+		vf2d ctr=shp.getCOM();
+		float r_sum=0;
+		for(int i=0; i<shp.getNum(); i++) {
+			r_sum+=(shp.points[i].pos-ctr).mag();
+			mass+=shp.points[i].mass;
+		}
+		float rad=r_sum/shp.getNum(), scale=rad/8;
+		std::string mass_str=std::to_string(int(mass));
+		tvDrawString(ctr, mass_str, olc::DARK_GREY, scale/mass_str.length());
+	}
+
+	//show vertex as index string
+	void renderShapeVertexes(const Shape& shp) {
+		for(int i=0; i<shp.getNum(); i++) {
+			vf2d pos=tv.WorldToScreen(shp.points[i].pos);
+			auto str=std::to_string(i);
+			vf2d size(2+8*str.size(), 10);
+			FillRectDecal(pos-size/2, size, olc::WHITE);
+			DrawStringDecal(pos-size/2+1, str, olc::BLACK);
+		}
+	}
+
+	void renderCut() {
+		//show cut path
+		for(int i=1; i<cut.size(); i++) {
+			tvDrawThickLine(cut[i-1], cut[i], .05f, olc::RED);
+		}
+
+		//show scissors
+		if(cut.size()) {
+			float angle=cmn::Pi+std::atan2(smooth_dy, smooth_dx);
+			float diff=cut_anim?.017f:.352f;
+			vf2d sz(cut_tex.Sprite()->width, cut_tex.Sprite()->height);
+			vf2d ctr(.5047f, .1917f);
+			float scl=40;
+			DrawRotatedDecal(scr_mouse_pos, cut_tex.Decal(), angle-diff, ctr*sz, {scl/sz.x, -scl/sz.x}, olc::BLACK);
+			DrawRotatedDecal(scr_mouse_pos, cut_tex.Decal(), angle+diff, ctr*sz, {scl/sz.x, scl/sz.x}, olc::BLACK);
+		}
 	}
 #pragma endregion
 
@@ -549,125 +747,18 @@ struct JellyCarGame : olc::PixelGameEngine {
 		Clear(olc::Pixel(255, 254, 235));
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
 
-		if(show_grid) {
-			const auto grid_spacing=1;
-			const olc::Pixel grid_col(140, 222, 255);
-
-			//screen bounds in world space, snap to nearest
-			vf2d tl=tv.GetWorldTL(), br=tv.GetWorldBR();
-			int i_s=std::floor(tl.x/grid_spacing), j_s=std::floor(tl.y/grid_spacing);
-			int i_e=std::ceil(br.x/grid_spacing), j_e=std::ceil(br.y/grid_spacing);
-
-			//vert
-			for(int i=i_s; i<=i_e; i++) {
-				float x=grid_spacing*i;
-				vf2d top{x, tl.y}, btm{x, br.y};
-				if(i%10==0) tvDrawThickLine(top, btm, .1f, grid_col);
-				else tv.DrawLineDecal(top, btm, grid_col);
-			}
-
-			//horiz
-			for(int j=j_s; j<=j_e; j++) {
-				float y=grid_spacing*j;
-				vf2d lft{tl.x, y}, rgt{br.x, y};
-				if(j%10==0) tvDrawThickLine(lft, rgt, .1f, grid_col);
-				else tv.DrawLineDecal(lft, rgt, grid_col);
-			}
-		}
+		if(show_grid) renderGrid(1, olc::Pixel(140, 222,255));
 
 		//show phys bounds
 		tvDrawAABB(scene.phys_bounds, .1f, olc::Pixel(255, 33, 122));
 
 		//draw shapes
 		for(const auto& shp:scene.shapes) {
-			//draw bounds
-			if(show_bounds) {
-				cmn::AABB box=shp->getAABB();
-				bool overlaps=false;
-				for(const auto& s:scene.shapes) {
-					if(s==shp) continue;
-					if(box.overlaps(s->getAABB())) {
-						overlaps=true;
-						break;
-					}
-				}
-				tvDrawAABB(box, .075f, overlaps?olc::RED:olc::GREEN);
-			}
+			if(show_bounds) renderShapeBounds(*shp);
 
-			//show anchors
-			if(shp->anchored) {
-				//rotation matrix
-				vf2d cosin=cmn::polar<vf2d>(1, shp->anchor_rot);
-				auto rotate=[cosin] (const vf2d& p) {
-					return vf2d(
-						p.x*cosin.x-p.y*cosin.y,
-						p.x*cosin.y+p.y*cosin.x
-					);
-				};
+			if(shp->anchored) renderShapeAnchors(*shp);
 
-				//outlines
-				for(int i=0; i<shp->getNum(); i++) {
-					vf2d a=shp->anchor_pos+rotate(shp->anchors[i]);
-					vf2d b=shp->anchor_pos+rotate(shp->anchors[(i+1)%shp->getNum()]);
-					tvDrawThickLine(a, b, .05f, olc::GREY);
-					tvFillCircle(a, .05f, olc::GREY);
-				}
-			}
-
-			//fill
-			{
-				//initialize indexes
-				std::unordered_map<PointMass*, int> idx;
-				for(int i=0; i<shp->getNum(); i++) {
-					idx[&shp->points[i]]=i;
-				}
-				std::list<int> indexes;
-				for(const auto& c:shp->shell) {
-					indexes.push_back(idx[c.a]);
-				}
-
-				//ear clipping triangulation
-				for(auto curr=indexes.begin(); curr!=indexes.end();) {
-					//get previous and next points
-					auto prev=std::prev(curr==indexes.begin()?indexes.end():curr);
-					auto next=std::next(curr); if(next==indexes.end()) next=indexes.begin();
-					const auto& pt_p=shp->points[*prev].pos;
-					const auto& pt_c=shp->points[*curr].pos;
-					const auto& pt_n=shp->points[*next].pos;
-
-					//make sure this is a convex angle
-					if((pt_p-pt_c).cross(pt_n-pt_c)>0) {
-						curr++;
-						continue;
-					}
-
-					//make sure this triangle doesnt contain any pts
-					bool contains=false;
-					for(auto other=std::next(curr); other!=indexes.end(); other++) {
-						//dont check self
-						if(other==next) continue;
-
-						//is this point to the left/right of all trilines
-						const auto& pt_o=shp->points[*other].pos;
-						bool side1=(pt_c-pt_p).cross(pt_o-pt_p)>0;
-						bool side2=(pt_n-pt_c).cross(pt_o-pt_c)>0;
-						bool side3=(pt_p-pt_n).cross(pt_o-pt_n)>0;
-						if(side1==side2&&side2==side3) {
-							contains=true;
-							break;
-						}
-					}
-
-					//this is an ear!
-					if(!contains) {
-						tv.DrawWarpedDecal(prim_rect_dec, {pt_p, pt_c, pt_n, pt_n}, shp->col);
-
-						//remove this index and start over
-						indexes.erase(curr);
-						curr=indexes.begin();
-					} else curr++;
-				}
-			}
+			renderShapeFill(*shp);
 
 			//constraint outlines
 			for(const auto& c:shp->shell) {
@@ -681,32 +772,13 @@ struct JellyCarGame : olc::PixelGameEngine {
 				}
 			}
 
-			if(show_mass) {
-				float mass=0;
-				vf2d ctr=shp->getCOM();
-				float r_sum=0;
-				for(int i=0; i<shp->getNum(); i++) {
-					r_sum+=(shp->points[i].pos-ctr).mag();
-					mass+=shp->points[i].mass;
-				}
-				float rad=r_sum/shp->getNum(), scale=rad/8;
-				std::string mass_str=std::to_string(int(mass));
-				tvDrawString(ctr, mass_str, olc::DARK_GREY, scale/mass_str.length());
-			}
+			if(show_mass) renderShapeMass(*shp);
 
-			if(show_vertexes) {
-				for(int i=0; i<shp->getNum(); i++) {
-					vf2d pos=tv.WorldToScreen(shp->points[i].pos);
-					auto str=std::to_string(i);
-					vf2d size(2+8*str.size(), 10);
-					FillRectDecal(pos-size/2, size, olc::WHITE);
-					DrawStringDecal(pos-size/2+1, str, olc::BLACK);
-				}
-			}
+			if(show_vertexes) renderShapeVertexes(*shp);
 		}
 
-		//show mouse constriant
-		for(const auto& m:mouse_constraint) {
+		//show mouse springs
+		for(const auto& m:mouse_springs) {
 			tv.DrawLineDecal(m.a->pos, m.b->pos, olc::MAGENTA);
 		}
 
@@ -718,45 +790,35 @@ struct JellyCarGame : olc::PixelGameEngine {
 			tvDrawAABB(box, .05f, olc::DARK_GREY);
 		}
 
-		//show cut
-		for(int i=1; i<cut.size(); i++) {
-			tvDrawThickLine(cut[i-1], cut[i], .05f, olc::RED);
-		}
-
-		//this was super finicky
-		if(cut.size()) {
-			float angle=cmn::Pi+std::atan2(smooth_dy, smooth_dx);
-			float diff=cut_anim?.017f:.352f;
-			vf2d sz(cut_spr->width, cut_spr->height);
-			vf2d ctr(.5047f, .1917f);
-			float scl=40;
-			DrawRotatedDecal(scr_mouse_pos, cut_dec, angle-diff, ctr*sz, {scl/sz.x, -scl/sz.x}, olc::BLACK);
-			DrawRotatedDecal(scr_mouse_pos, cut_dec, angle+diff, ctr*sz, {scl/sz.x, scl/sz.x}, olc::BLACK);
-		}
+		renderCut();
 	}
 
 	bool OnUserUpdate(float dt) override {
 		cmn::Stopwatch update_watch;
 		update_watch.start();
 		update(dt);
-		if(to_time) {
-			update_watch.stop();
-			auto us=update_watch.getMicros();
-			std::cout<<"  update: "<<us<<"us ("<<(us/1000.f)<<"ms)\n";
-		}
+		update_watch.stop();
 
 		cmn::Stopwatch render_watch;
 		render_watch.start();
 		render();
+		render_watch.stop();
+		
 		if(to_time) {
-			render_watch.stop();
-			auto us=render_watch.getMicros();
-			std::cout<<"  render: "<<us<<"us ("<<(us/1000.f)<<"ms)\n";
+			auto update_dur=update_watch.getMicros();
+			auto render_dur=render_watch.getMicros();
+			std::cout<<"  update: "<<update_dur<<"us ("<<(update_dur/1000.f)<<"ms)\n";
+			std::cout<<"  render: "<<render_dur<<"us ("<<(render_dur/1000.f)<<"ms)\n";
 
 			to_time=false;
 		}
 
 		return true;
+	}
+
+public:
+	JellyCarGame() {
+		sAppName="Jelly Car Clone";
 	}
 };
 

@@ -6,20 +6,20 @@
 
 struct Constraint {
 	PointMass* a=nullptr, * b=nullptr;
-	float rest_len=0;
+	float len_rest=0;
 
 	Constraint() {}
 
 	Constraint(PointMass* _a, PointMass* _b) :
 		a(_a), b(_b) {
-		rest_len=(a->pos-b->pos).mag();
+		len_rest=(a->pos-b->pos).mag();
 	}
 
 	vf2d getCorrection() const {
 		vf2d axis=a->pos-b->pos;
 		float dist=axis.mag();
 		vf2d norm=axis/dist;
-		float delta=rest_len-dist;
+		float delta=len_rest-dist;
 		return .5f*delta*norm;
 	}
 

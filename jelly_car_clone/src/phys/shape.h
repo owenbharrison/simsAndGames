@@ -5,6 +5,14 @@
 #include "constraint.h"
 #include "spring.h"
 
+#include <list>
+
+//for reverse
+#include <algorithm>
+
+//for memcpy
+#include <string>
+
 #include "common/utils.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
@@ -19,6 +27,8 @@ class Shape {
 
 	//construction helpers
 	void windShell(), connectSprings();
+
+	void initMass(), initAnchors();
 
 	//copy helpers
 	void copyFrom(const Shape&), clear();
@@ -69,11 +79,12 @@ public:
 		//determine sizing
 		const int w=1+(box.max.x-box.min.x)/res;
 		const int h=1+(box.max.y-box.min.y)/res;
-		auto ix=[&w] (int i, int j) {
-			return i+w*j;
-		};
 		num_pts=w*h;
+		
+		//allocate
 		points=new PointMass[num_pts];
+		
+		auto ix=[&w] (int i, int j) { return i+w*j; };
 
 		//fill point grid
 		for(int i=0; i<w; i++) {
@@ -85,16 +96,16 @@ public:
 
 		//wind shell
 		for(int i=1; i<w; i++) {
-			shell.emplace_back(&points[ix(i-1, 0)], &points[ix(i, 0)]);
+			shell.push_back(Constraint(&points[ix(i-1, 0)], &points[ix(i, 0)]));
 		}
 		for(int j=1; j<h; j++) {
-			shell.emplace_back(&points[ix(w-1, j-1)], &points[ix(w-1, j)]);
+			shell.push_back(Constraint(&points[ix(w-1, j-1)], &points[ix(w-1, j)]));
 		}
 		for(int i=w-1; i>=1; i--) {
-			shell.emplace_back(&points[ix(i, h-1)], &points[ix(i-1, h-1)]);
+			shell.push_back(Constraint(&points[ix(i, h-1)], &points[ix(i-1, h-1)]));
 		}
 		for(int j=h-1; j>=1; j--) {
-			shell.emplace_back(&points[ix(0, j)], &points[ix(0, j-1)]);
+			shell.push_back(Constraint(&points[ix(0, j)], &points[ix(0, j-1)]));
 		}
 
 		initMass();
@@ -102,13 +113,13 @@ public:
 		//attach springs
 		for(int i=1; i<w; i++) {
 			for(int j=1; j<h; j++) {
-				//rows
-				if(j<h-1) springs.emplace_back(&points[ix(i-1, j)], &points[ix(i, j)]);
-				//columns
-				if(i<w-1) springs.emplace_back(&points[ix(i, j-1)], &points[ix(i, j)]);
-				//boxes
-				springs.emplace_back(&points[ix(i-1, j-1)], &points[ix(i, j)]);
-				springs.emplace_back(&points[ix(i-1, j)], &points[ix(i, j-1)]);
+				//horizontal
+				if(j<h-1) springs.push_back(Spring(&points[ix(i-1, j)], &points[ix(i, j)]));
+				//vertical
+				if(i<w-1) springs.push_back(Spring(&points[ix(i, j-1)], &points[ix(i, j)]));
+				//diagonals
+				springs.push_back(Spring(&points[ix(i-1, j-1)], &points[ix(i, j)]));
+				springs.push_back(Spring(&points[ix(i-1, j)], &points[ix(i, j-1)]));
 			}
 		}
 
@@ -123,17 +134,17 @@ public:
 		initAnchors();
 	}
 
-	//1
+	//ro3: 1
 	~Shape() {
 		clear();
 	}
 
-	//2
+	//ro3: 2
 	Shape(const Shape& s) {
 		copyFrom(s);
 	}
 
-	//3
+	//ro3: 3
 	Shape& operator=(const Shape& s) {
 		if(&s==this) return *this;
 
@@ -142,34 +153,6 @@ public:
 		copyFrom(s);
 
 		return *this;
-	}
-
-	void initMass() {
-		//ensure winding
-		float area=getArea();
-		if(area<0) {
-			area*=-1;
-			//reverse each constraint
-			for(auto& c:shell) {
-				std::swap(c.a, c.b);
-			}
-			//reverse shell
-			std::reverse(shell.begin(), shell.end());
-		}
-
-		//distribute mass evenly
-		float ind_mass=area/num_pts;
-		for(int i=0; i<num_pts; i++) {
-			points[i].mass=ind_mass;
-		}
-	}
-
-	//localize anchors
-	void initAnchors() {
-		vf2d ctr=getCOM();
-		for(int i=0; i<num_pts; i++) {
-			anchors[i]=points[i].pos-ctr;
-		}
 	}
 #pragma endregion
 
@@ -214,10 +197,12 @@ public:
 		for(int i=0; i<num_pts; i++) {
 			const auto& anc=anchors[i];
 			vf2d sub=points[i].pos-pos;
+
 			//accumulate direction
 			dot+=anc.x*sub.x+anc.y*sub.y;
 			cross+=anc.x*sub.y-anc.y*sub.x;
 		}
+
 		//signed angle
 		rot=std::atan2(cross, dot);
 	}
@@ -246,30 +231,30 @@ public:
 		}
 	}
 
-	void update(float dt) {
-		if(anchored) {
-			//rotation matrix
-			vf2d cosin=cmn::polar<vf2d>(1, anchor_rot);
-			auto rotate=[cosin] (const vf2d& p) {
-				return vf2d(
-					p.x*cosin.x-p.y*cosin.y,
-					p.x*cosin.y+p.y*cosin.x
-				);
-			};
+	void updateAnchors(float dt) {
+		//rotation matrix
+		vf2d cosin=cmn::polar<vf2d>(1, anchor_rot);
+		auto rotate=[cosin] (const vf2d& p) {
+			return vf2d(
+				p.x*cosin.x-p.y*cosin.y,
+				p.x*cosin.y+p.y*cosin.x
+			);
+		};
 
-			//spring toward anchors
-			for(int i=0; i<num_pts; i++) {
-				const auto& p=points[i];
-				//bring anchor from local->world
-				PointMass p_temp(anchor_pos+rotate(anchors[i]), p.mass);
-				Spring s_temp(&points[i], &p_temp);
-				s_temp.rest_len=0;
-				s_temp.update();
-			}
-		} else {
-			//store when NOT anchored
-			getOrientation(anchor_pos, anchor_rot);
+		//spring toward anchors
+		for(int i=0; i<num_pts; i++) {
+			const auto& p=points[i];
+			//bring anchor from local->world
+			PointMass p_temp(anchor_pos+rotate(anchors[i]), p.mass);
+			Spring s_temp(&points[i], &p_temp);
+			s_temp.len_rest=0;
+			s_temp.update();
 		}
+	}
+
+	void update(float dt) {
+		if(!anchored) getOrientation(anchor_pos, anchor_rot);
+		else updateAnchors(dt);
 
 		//update all constraints
 		for(auto& c:shell) {
@@ -355,8 +340,6 @@ public:
 			collide(s.points[i]);
 		}
 	}
-
-	bool cut(const std::vector<vf2d>& cut_ref, Shape& left, Shape& right);
 };
 
 void Shape::windShell() {
@@ -375,51 +358,68 @@ void Shape::connectSprings() {
 	}
 }
 
+void Shape::initMass() {
+	//ensure winding
+	float area=getArea();
+	if(area<0) {
+		area*=-1;
+		//reverse each constraint
+		for(auto& c:shell) std::swap(c.a, c.b);
+		//reverse shell
+		std::reverse(shell.begin(), shell.end());
+	}
+
+	//distribute mass evenly
+	float ind_mass=area/num_pts;
+	for(int i=0; i<num_pts; i++) {
+		points[i].mass=ind_mass;
+	}
+}
+
+//localize anchors
+void Shape::initAnchors() {
+	vf2d ctr=getCOM();
+	for(int i=0; i<num_pts; i++) {
+		anchors[i]=points[i].pos-ctr;
+	}
+}
+
 void Shape::copyFrom(const Shape& shp) {
 	num_pts=shp.num_pts;
 
 	//copy points
 	points=new PointMass[num_pts];
-	for(int i=0; i<num_pts; i++) {
-		points[i]=shp.points[i];
-	}
+	std::memcpy(points, shp.points, sizeof(PointMass)*num_pts);
 
 	//copy anchors
 	anchors=new vf2d[num_pts];
-	for(int i=0; i<num_pts; i++) {
-		anchors[i]=shp.anchors[i];
-	}
+	std::memcpy(anchors, shp.anchors, sizeof(vf2d)*num_pts);
 	anchor_pos=shp.anchor_pos;
 	anchor_rot=shp.anchor_rot;
 	anchored=shp.anchored;
 
-	//copy colors
+	//copy color
 	col=shp.col;
 
-	//pointer lookup to copy over constraints and springs
-	std::unordered_map<PointMass*, PointMass*> shp_to_me;
-	for(int i=0; i<num_pts; i++) {
-		//shp_to_me[shp]=me
-		shp_to_me[&shp.points[i]]=&points[i];
-	}
-
 	//copy over shell
-	for(const auto& cst:shp.shell) {
+	for(const auto& shp_c:shp.shell) {
 		Constraint c;
-		c.a=shp_to_me[cst.a];
-		c.b=shp_to_me[cst.b];
-		c.rest_len=cst.rest_len;
+		//relative pointer arithmetic
+		c.a=points+(shp_c.a-shp.points);
+		c.b=points+(shp_c.b-shp.points);
+		c.len_rest=shp_c.len_rest;
 		shell.push_back(c);
 	}
 
 	//copy over springs
-	for(const auto& spr:shp.springs) {
+	for(const auto& shp_s:shp.springs) {
 		Spring s;
-		s.a=shp_to_me[spr.a];
-		s.b=shp_to_me[spr.b];
-		s.rest_len=spr.rest_len;
-		s.stiffness=spr.stiffness;
-		s.damping=spr.damping;
+		//relative pointer arithmetic
+		s.a=points+(shp_s.a-shp.points);
+		s.b=points+(shp_s.b-shp.points);
+		s.len_rest=shp_s.len_rest;
+		s.stiffness=shp_s.stiffness;
+		s.damping=shp_s.damping;
 		springs.push_back(s);
 	}
 }

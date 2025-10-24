@@ -6,7 +6,7 @@
 
 struct Spring {
 	PointMass* a=nullptr, * b=nullptr;
-	float rest_len=0;
+	float len_rest=0;
 	float stiffness=0;
 	float damping=0;
 	
@@ -14,14 +14,14 @@ struct Spring {
 
 	Spring(PointMass* _a, PointMass* _b, float k, float d) {
 		a=_a, b=_b;
-		rest_len=(a->pos-b->pos).mag();
+		len_rest=(a->pos-b->pos).mag();
 		stiffness=k;
 		damping=d;
 	}
 
 	Spring(PointMass* _a, PointMass* _b) {
 		a=_a, b=_b;
-		rest_len=(a->pos-b->pos).mag();
+		len_rest=(a->pos-b->pos).mag();
 		
 		//coefficients proportional to avg mass
 		float m=(a->mass+b->mass)/2;
@@ -31,22 +31,22 @@ struct Spring {
 
 	vf2d getForce() const {
 		vf2d sub=b->pos-a->pos;
-		float curr_len=sub.mag();
-		float spring_force=stiffness*(curr_len-rest_len);
+		float len_curr=sub.mag();
+		float force_spring=stiffness*(len_curr-len_rest);
 
 		//thanks gonkee
-		vf2d a_vel=a->pos-a->oldpos;
-		vf2d b_vel=b->pos-b->oldpos;
-		vf2d norm=sub/curr_len;
-		float damp_force=damping*norm.dot(b_vel-a_vel);
+		vf2d vel_a=a->pos-a->oldpos;
+		vf2d vel_b=b->pos-b->oldpos;
+		vf2d norm=sub/len_curr;
+		float force_damp=damping*norm.dot(vel_b-vel_a);
 
-		return (spring_force+damp_force)*norm;
+		return (force_spring+force_damp)*norm;
 	}
 
 	void update() {
 		vf2d force=getForce();
-		a->applyForce(force);
-		b->applyForce(-force);
+		if(!a->locked) a->applyForce(force);
+		if(!b->locked) b->applyForce(-force);
 	}
 };
 #endif//SPRING_STRUCT_H
