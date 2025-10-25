@@ -121,7 +121,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 			"  then type help for help.\n";
 
 		//divert std::cout to console
-		//ConsoleCaptureStdOut(true);
+		ConsoleCaptureStdOut(true);
 
 		return true;
 	}
@@ -394,6 +394,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 			//add all of its points to the list
 			for(int i=0; i<shp->getNum(); i++) {
 				Spring s(&mouse_point, &shp->points[i]);
+				s.damping=0;
 				mouse_springs.push_back(s);
 				added=true;
 			}
@@ -521,7 +522,6 @@ class JellyCarGame : public olc::PixelGameEngine {
 				//update mouse springs
 				for(auto& s:mouse_springs) {
 					s.update();
-					std::cout<<s.len_rest<<'\n';
 				}
 
 				scene.update(sub_time_step);
