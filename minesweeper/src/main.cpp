@@ -472,24 +472,24 @@ class Minesweeper3DUI : public cmn::Engine3D {
 				"  LEFT     drag to orbit game\n"
 				"  LEFT     hover to select cell/number\n";
 
-			std::cout<<"  unknown command. type help for list of commands.\n";
-
-			return false;
+			return true;
 		}
+
+		std::cout<<"  unknown command. type help for list of commands.\n";
+
+		return false;
 	}
 
 #pragma region UPDATE_HELPERS
 	void updateGameMesh() {
 		game.triangulateUnswept(ta_tile_ix, ta_flag_ix);
 	}
-
+	
+	//check for discontinuous mouse movement
 	void handleMobileControls() {
-		//check for discontinuous mouse movement
-		if(GetMouse(olc::Key::LEFT).bPressed) {
-			if(!mobile_controls) {
-				if((mouse_pos-mouse_pos_prev).mag()>50) {
-					mobile_controls=true;
-				} else return;
+		if(GetMouse(olc::Mouse::LEFT).bPressed) {
+			if((mouse_pos-mouse_pos_prev).mag()>50) {
+				mobile_controls=true;
 			}
 		}
 	}
@@ -655,6 +655,8 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		mouse_pos_prev=mouse_pos;
 		mouse_pos=GetMousePos();
 
+		handleMobileControls();
+
 		handleCameraMovement(dt, game_size);
 
 		//angles to direction
@@ -665,8 +667,6 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		//move cursor with keyboard
 		handleCursorMovement();
 
-		handleCursorSelection();
-
 		handleFlagging();
 
 		handleSweeping();
@@ -674,6 +674,8 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		handlePausing();
 
 		handleResetting();
+
+		handleCursorSelection();
 
 		//display toggles
 		if(GetKey(olc::Key::C).bPressed) show_cursor_controls^=true;

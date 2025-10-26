@@ -62,6 +62,8 @@ public:
 		m.prev_cells=new Cell[m.num_cells];
 
 		m.reset();
+
+		return true;
 	}
 
 	//ro3 1
@@ -319,6 +321,8 @@ public:
 		}
 
 		file.close();
+
+		return true;
 	}
 
 	static bool load(Minesweeper& m, const std::string& filename) {
@@ -360,6 +364,7 @@ public:
 		m.updatePrev();
 
 		file.close();
+
 		return true;
 	}
 };
