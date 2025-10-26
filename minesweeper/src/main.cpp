@@ -371,7 +371,7 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		return true;
 	}
 
-#pragma region 
+#pragma region COMMAND HELPERS
 	bool callExportCommand(std::stringstream& args) {
 		std::string filename;
 		args>>filename;
@@ -681,7 +681,7 @@ class Minesweeper3DUI : public cmn::Engine3D {
 	}
 
 	void spawnCellParticles(const vf3d& ctr) {
-		int num=cmn::randInt(5, 10);
+		int num=cmn::randInt(7, 15);
 		for(int i=0; i<num; i++) {
 			//pos offset in any direction
 			float pos_yaw=cmn::randFloat(2*cmn::Pi);
@@ -697,7 +697,7 @@ class Minesweeper3DUI : public cmn::Engine3D {
 
 			//random size, lifespan
 			float size=cmn::randFloat(.03f, .07f);
-			float lifespan=cmn::randFloat(.6f, .9f);
+			float lifespan=cmn::randFloat(.9f, 1.3f);
 			Particle p(Particle::Debris, pos, vel, size, lifespan);
 			particles.push_back(p);
 		}
@@ -720,7 +720,7 @@ class Minesweeper3DUI : public cmn::Engine3D {
 
 			//random size, lifespan
 			float size=cmn::randFloat(.08f, .15f);
-			float lifespan=cmn::randFloat(1.1f, 1.7f);
+			float lifespan=cmn::randFloat(1.3f, 1.9f);
 			Particle p(Particle::Explode, pos, vel, size, lifespan);
 			particles.push_back(p);
 		}
@@ -1252,7 +1252,7 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		renderStateOverlay();
 		renderTimer();
 		renderBombCount();
-		renderButtons();
+		if(mobile_controls) renderButtons();
 
 		SetDrawTarget(nullptr);
 
