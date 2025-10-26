@@ -6,6 +6,7 @@ triangle render generalization/simplification
 */
 #define OLC_GFX_OPENGL33
 #include "common/3d/engine_3d.h"
+using olc::vi2d;
 using cmn::vf3d;
 using cmn::Mat4;
 
@@ -47,40 +48,55 @@ static vf3d polar3D(float yaw, float pitch) {
 #include "olcPGEX_Shaders.h"
 #endif
 
-struct Minesweeper3DUI : cmn::Engine3D {
-	Minesweeper3DUI() {
-		sAppName="3D Minesweeper";
-	}
+struct Button {
+	static const int scl=3;
 
+	vi2d pos;
+	olc::Sprite* spr=nullptr;
+
+	~Button() { delete spr; }
+
+	bool contains(vi2d p) const {
+		p-=pos;
+		if(p.x<0||p.y<0) return false;
+		if(p.x>scl*spr->width||p.y>scl*spr->height) return false;
+		return true;
+	}
+};
+
+class Minesweeper3DUI : public cmn::Engine3D {
 	//camera direction
-	float cam_yaw=1.07f;
-	float cam_pitch=-.56f;
+	float cam_yaw=0;
+	float cam_pitch=0;
 	vf3d light_pos;
 
+	vi2d mouse_pos;
+	vi2d mouse_pos_prev;
+
 	//orbit controls
-	olc::vf2d* orbit_start=nullptr;
-	float temp_yaw=0, temp_pitch=0;
+	vi2d* orbit_start=nullptr;
+	float orbit_yaw=1.07f;
+	float orbit_pitch=-.56f;
 
-	//input stuff
+	//input
 	int cursor_i=0, cursor_j=0, cursor_k=0;
-
-	//geometry stuff
-	float light_spin=0;
-
-	Mesh cursor_mesh;
-
-	std::vector<Billboard> billboards;
-
-	const vf3d gravity{0, -9.8f, 0};
-	std::list<Particle> particles;
-
-	olc::Sprite* fire_gradient=nullptr;
-	olc::Sprite* number_gradient=nullptr;
-
+	bool mobile_controls=false;
+	Button flag_btn, sweep_btn, pause_btn, reset_btn;
 	bool show_cursor_controls=false;
 	bool show_bomb_zone=false;
 
-	//graphics things
+	//geometry stuff
+	float light_spin=0;
+	Mesh cursor_mesh;
+
+	//billboards
+	std::vector<Billboard> billboards;
+	const vf3d gravity{0, -9.8f, 0};
+	std::list<Particle> particles;
+	olc::Sprite* fire_gradient=nullptr;
+	olc::Sprite* number_gradient=nullptr;
+
+	//texture atlas
 	std::vector<olc::Sprite*> texture_atlas;
 	int ta_letter_ix=0, ta_number_ix=0;
 	int ta_bomb_ix=0, ta_tile_ix=0, ta_flag_ix=0;
@@ -92,7 +108,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	int mtr_num_x=0, mtr_num_y=0;
 	std::vector<cmn::Triangle>* mtr_bins=nullptr;
 
-	std::vector<olc::vi2d> mtr_jobs;
+	std::vector<vi2d> mtr_jobs;
 
 	ThreadPool* mtr_pool=nullptr;
 #endif
@@ -101,7 +117,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	Minesweeper game;
 	float game_timer=0;
 
-	//ui things
+	//user interface things
 	olc::Sprite* win_spr=nullptr;
 	olc::Sprite* lose_spr=nullptr;
 	olc::Sprite* pause_spr=nullptr;
@@ -142,7 +158,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		texture_atlas.push_back(new olc::Sprite("assets/img/tile.png"));
 
 		ta_flag_ix=texture_atlas.size();
-		texture_atlas.push_back(new olc::Sprite("assets/img/flag_tile.png"));
+		texture_atlas.push_back(new olc::Sprite("assets/img/flag.png"));
 
 		ta_bomb_ix=texture_atlas.size();
 		texture_atlas.push_back(new olc::Sprite("assets/img/bomb.png"));
@@ -255,6 +271,43 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			});
 	}
 #endif
+
+	bool setupShaders() {
+#ifdef USE_SHADERS
+		if(!createEffect(crt_effect, "assets/fx/crt.glsl")) {
+			std::cerr<<"  unable to create effect.\n";
+			return false;
+		}
+
+		if(!crt_effect.IsOK()) {
+			std::cerr<<"  "<<crt_effect.GetStatus()<<'\n';
+			return false;
+		}
+#endif
+		return true;
+	}
+
+	void setupButtons() {
+		//load button sprites
+		flag_btn.spr=new olc::Sprite("assets/img/flag.png");
+		sweep_btn.spr=new olc::Sprite("assets/img/sweep.png");
+		pause_btn.spr=new olc::Sprite("assets/img/pause.png");
+		reset_btn.spr=new olc::Sprite("assets/img/reset.png");
+
+		const int cx=ScreenWidth()/2;
+		const int y=24;
+
+		//place them
+		int sw=Button::scl*sweep_btn.spr->width;
+		flag_btn.pos.x=cx-sw-Button::scl*flag_btn.spr->width;
+		flag_btn.pos.y=y;
+		sweep_btn.pos.x=cx-sw;
+		sweep_btn.pos.y=y;
+		pause_btn.pos.x=cx;
+		pause_btn.pos.y=y;
+		reset_btn.pos.x=cx+Button::scl*pause_btn.spr->width;
+		reset_btn.pos.y=y;
+	}
 #pragma endregion
 
 	bool user_create() override {
@@ -276,14 +329,12 @@ struct Minesweeper3DUI : cmn::Engine3D {
 
 		setupMultithreadedRendering();
 
-#pragma region GAME SETUP
 		//init game
 		if(!Minesweeper::create(game, 7, 5, 8, 21)) {
 			std::cerr<<"unable to create game.\n";
 			return false;
 		}
 		updateGameMesh();
-#pragma endregion
 
 		setupUIOverlay();
 
@@ -291,17 +342,11 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		source.Create(ScreenWidth(), ScreenHeight());
 		target.Create(ScreenWidth(), ScreenHeight());
 
-#ifdef USE_SHADERS
-		//load shaders
-		if(!createEffect(crt_effect, "assets/fx/crt.glsl")) {
-			std::cerr<<"  unable to create effect.\n";
-			return false;
-		}
-		if(!crt_effect.IsOK()) {
-			std::cerr<<"  "<<crt_effect.GetStatus()<<'\n';
-			return false;
-		}
-#endif
+		setupShaders();
+
+		handleOrbitActionEnd();
+
+		setupButtons();
 
 		//capture std cout to integrated console
 		ConsoleCaptureStdOut(true);
@@ -326,6 +371,57 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		return true;
 	}
 
+#pragma region 
+	bool callExportCommand(std::stringstream& args) {
+		std::string filename;
+		args>>filename;
+		if(filename.empty()) {
+			std::cout<<"  no filename. try using:\n  export <filename>\n";
+
+			return false;
+		}
+
+		if(!game.save(filename)) {
+			std::cout<<"  unable to save game.\n";
+
+			return false;
+		}
+
+		std::cout<<"  successfully exported to: "<<filename<<'\n';
+
+		return true;
+	}
+
+	bool callImportCommand(std::stringstream& args) {
+		std::string filename;
+		args>>filename;
+
+		if(filename.empty()) {
+			std::cout<<"  no filename. try using:\n  import <filename>\n";
+
+			return false;
+		}
+
+		//load game
+		Minesweeper m;
+		if(!Minesweeper::load(m, filename)) {
+			std::cout<<"  unable to load game.\n";
+
+			return false;
+		}
+
+		//set this to that
+		game=m;
+
+		//update tris
+		updateGameMesh();
+
+		std::cout<<"  successfully imported from: "<<filename<<'\n';
+
+		return true;
+	}
+#pragma endregion
+
 	bool OnConsoleCommand(const std::string& line) override {
 		std::stringstream line_str(line);
 		std::string cmd; line_str>>cmd;
@@ -337,48 +433,11 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 
 		if(cmd=="export") {
-			std::string filename;
-			line_str>>filename;
-			if(filename.empty()) {
-				std::cout<<"  no filename. try using:\n  export <filename>\n";
-
-				return false;
-			}
-
-			if(game.save(filename)) {
-				std::cout<<"  successfully exported to: "<<filename<<'\n';
-
-				return true;
-			} else {
-				std::cout<<"  unable to save game.\n";
-
-				return false;
-			}
+			return callExportCommand(line_str);
 		}
 
 		if(cmd=="import") {
-			std::string filename;
-			line_str>>filename;
-			if(filename.empty()) {
-				std::cout<<"  no filename. try using:\n  import <filename>\n";
-
-				return false;
-			}
-
-			//load game, set this to that, update tris
-			Minesweeper m;
-			if(Minesweeper::load(m, filename)) {
-				std::cout<<"  successfully imported from: "<<filename<<'\n';
-
-				game=m;
-				updateGameMesh();
-
-				return true;
-			} else {
-				std::cout<<"  unable to load game.\n";
-
-				return false;
-			}
+			return callImportCommand(line_str);
 		}
 
 		if(cmd=="help") {
@@ -424,6 +483,45 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		game.triangulateUnswept(ta_tile_ix, ta_flag_ix);
 	}
 
+	void handleMobileControls() {
+		//check for discontinuous mouse movement
+		if(GetMouse(olc::Key::LEFT).bPressed) {
+			if(!mobile_controls) {
+				if((mouse_pos-mouse_pos_prev).mag()>50) {
+					mobile_controls=true;
+				} else return;
+			}
+		}
+	}
+
+	void handleOrbitActionBegin() {
+		orbit_start=new vi2d(mouse_pos);
+	}
+
+	void handleOrbitActionUpdate() {
+		orbit_pitch=cam_pitch;
+		orbit_yaw=cam_yaw;
+		if(orbit_start) {
+			olc::vf2d diff=GetMousePos()-*orbit_start;
+			orbit_pitch-=.005f*diff.y;
+
+			//clamp new pitch
+			if(orbit_pitch<-cmn::Pi/2) orbit_pitch=.001f-cmn::Pi/2;
+			if(orbit_pitch>cmn::Pi/2) orbit_pitch=cmn::Pi/2-.001f;
+			orbit_yaw+=.0067f*diff.x;
+		}
+	}
+
+	void handleOrbitActionEnd() {
+		//set actual direction to orbit direction
+		cam_yaw=orbit_yaw;
+		cam_pitch=orbit_pitch;
+
+		//clear orbit states
+		delete orbit_start;
+		orbit_start=nullptr;
+	}
+
 	void handleCameraMovement(float dt, const vf3d& game_size) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch-=dt;
@@ -436,51 +534,150 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
 		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
 
-		//start orbit
-		if(GetMouse(olc::Mouse::LEFT).bPressed) {
-			orbit_start=new olc::vf2d(GetMousePos());
-		}
+		//orbit controls
+		const auto orbit_action=GetMouse(olc::Mouse::LEFT);
+		if(orbit_action.bPressed) handleOrbitActionBegin();
+		if(orbit_action.bHeld) handleOrbitActionUpdate();
+		if(orbit_action.bReleased) handleOrbitActionEnd();
+	}
 
-		//temporary orbit direction
-		temp_pitch=cam_pitch;
-		temp_yaw=cam_yaw;
-		if(orbit_start) {
-			olc::vf2d diff=GetMousePos()-*orbit_start;
-			temp_pitch-=.005f*diff.y;
-			//clamp new pitch
-			if(temp_pitch<-cmn::Pi/2) temp_pitch=.001f-cmn::Pi/2;
-			if(temp_pitch>cmn::Pi/2) temp_pitch=cmn::Pi/2-.001f;
-			temp_yaw+=.0067f*diff.x;
-		}
+	//dynamic camera system :D
+	void handleCameraPlacement(const vf3d& game_size) {
+		//find sphere to envelope bounds
+		float st_dist=1+game_size.mag()/2;
+		//step backwards along cam ray
+		vf3d st=-st_dist*cam_dir;
+		//snap pt to bounds & make relative to origin
+		cmn::AABB3 box{-game_size/2, game_size/2};
+		float rad=st_dist-box.intersectRay(st, cam_dir);
+		//push cam back by some some margin
+		cam_pos=-(3+rad)*cam_dir;
+		//light always at cam
+		light_pos=cam_pos;
+	}
 
-		//end orbit
-		if(GetMouse(olc::Mouse::LEFT).bReleased) {
-			//set actual direction to temp direction
-			cam_yaw=temp_yaw;
-			cam_pitch=temp_pitch;
+	//move cursor with keyboard
+	void handleCursorMovement() {
+		if(GetKey(olc::Key::A).bPressed) cursor_i++;
+		if(GetKey(olc::Key::D).bPressed) cursor_i--;
+		if(GetKey(olc::Key::W).bPressed) cursor_j++;
+		if(GetKey(olc::Key::S).bPressed) cursor_j--;
+		if(GetKey(olc::Key::Q).bPressed) cursor_k++;
+		if(GetKey(olc::Key::E).bPressed) cursor_k--;
 
-			//clear pointer flags
-			delete orbit_start;
-			orbit_start=nullptr;
+		//clamp cursor to bounds
+		if(cursor_i<0) cursor_i=0;
+		if(cursor_j<0) cursor_j=0;
+		if(cursor_k<0) cursor_k=0;
+		if(cursor_i>=game.getWidth()) cursor_i=game.getWidth()-1;
+		if(cursor_j>=game.getHeight()) cursor_j=game.getHeight()-1;
+		if(cursor_k>=game.getDepth()) cursor_k=game.getDepth()-1;
+	}
+
+	//set cursor to object under mouse
+	void handleCursorSelection() {
+		//previous frame's id buffer, but it's no big deal.
+		int mx=GetMouseX(), my=GetMouseY();
+		if(inRangeX(mx)&&inRangeY(my)) {
+			int id=id_buffer[bufferIX(mx, my)];
+			int type=0xff&(id>>24);
+			switch(type) {
+				case CELL_TRIANGLE://cursor to cell
+					cursor_i=0b11111&(id>>10);
+					cursor_j=0b11111&(id>>5);
+					cursor_k=0b11111&id;
+					break;
+				case BILLBOARD_TRIANGLE: {//cursor to billboard
+					int bb_ix=0xffff&id;
+					//previous frame's billboard list, but it's no big deal.
+					const auto& b=billboards[bb_ix];
+					if(b.i==-1||b.j==-1||b.k==-1) break;
+
+					cursor_i=b.i;
+					cursor_j=b.j;
+					cursor_k=b.k;
+					break;
+				}
+			}
 		}
+	}
+
+	void handleFlagging() {
+		bool key=GetKey(olc::Key::F).bPressed;
+		bool btn=mobile_controls&&
+			GetMouse(olc::Mouse::LEFT).bPressed&&
+			flag_btn.contains(mouse_pos);
+
+		if(key||btn) {
+			game.flag(cursor_i, cursor_j, cursor_k);
+			updateGameMesh();
+		}
+	}
+
+	void handleSweeping() {
+		bool key=GetKey(olc::Key::SPACE).bPressed;
+		bool btn=mobile_controls&&
+			GetMouse(olc::Mouse::LEFT).bPressed&&
+			sweep_btn.contains(mouse_pos);
+
+		if(key||btn) {
+			//15 seconds per penalty
+			game_timer+=15*game.sweep(cursor_i, cursor_j, cursor_k);
+			updateGameMesh();
+		}
+	}
+
+	void handlePausing() {
+		bool key=GetKey(olc::Key::P).bPressed;
+		bool btn=mobile_controls&&
+			GetMouse(olc::Mouse::LEFT).bPressed&&
+			pause_btn.contains(mouse_pos);
+
+		if(key||btn) {
+			game.pause();
+		}
+	}
+
+	void handleResetting() {
+		bool key=GetKey(olc::Key::R).bPressed;
+		bool btn=mobile_controls&&
+			GetMouse(olc::Mouse::LEFT).bPressed&&
+			reset_btn.contains(mouse_pos);
+
+		if(key||btn) {
+			game.reset();
+			updateGameMesh();
+			game_timer=0;
+		}
+	}
+
+	void handleUserInput(float dt, const vf3d& game_size) {
+		mouse_pos_prev=mouse_pos;
+		mouse_pos=GetMousePos();
+
+		handleCameraMovement(dt, game_size);
 
 		//angles to direction
-		cam_dir=polar3D(temp_yaw, temp_pitch);
+		cam_dir=polar3D(orbit_yaw, orbit_pitch);
 
-		//dynamic camera system :D
-		{
-			//find sphere to envelope bounds
-			float st_dist=1+game_size.mag()/2;
-			//step backwards along cam ray
-			vf3d st=-st_dist*cam_dir;
-			//snap pt to bounds & make relative to origin
-			cmn::AABB3 box{-game_size/2, game_size/2};
-			float rad=st_dist-box.intersectRay(st, cam_dir);
-			//push cam back by some some margin
-			cam_pos=-(3+rad)*cam_dir;
-			//light always at cam
-			light_pos=cam_pos;
-		}
+		handleCameraPlacement(game_size);
+
+		//move cursor with keyboard
+		handleCursorMovement();
+
+		handleCursorSelection();
+
+		handleFlagging();
+
+		handleSweeping();
+
+		handlePausing();
+
+		handleResetting();
+
+		//display toggles
+		if(GetKey(olc::Key::C).bPressed) show_cursor_controls^=true;
+		if(GetKey(olc::Key::B).bPressed) show_bomb_zone^=true;
 	}
 
 	void spawnCellParticles(const vf3d& ctr) {
@@ -527,83 +724,6 @@ struct Minesweeper3DUI : cmn::Engine3D {
 			Particle p(Particle::Explode, pos, vel, size, lifespan);
 			particles.push_back(p);
 		}
-	}
-
-	void handleUserInput(float dt, const vf3d& game_size) {
-		handleCameraMovement(dt, game_size);
-
-		//move cursor with keyboard
-		{
-			if(GetKey(olc::Key::A).bPressed) cursor_i++;
-			if(GetKey(olc::Key::D).bPressed) cursor_i--;
-			if(GetKey(olc::Key::W).bPressed) cursor_j++;
-			if(GetKey(olc::Key::S).bPressed) cursor_j--;
-			if(GetKey(olc::Key::Q).bPressed) cursor_k++;
-			if(GetKey(olc::Key::E).bPressed) cursor_k--;
-
-			//cursor bounds
-			if(cursor_i<0) cursor_i=0;
-			if(cursor_j<0) cursor_j=0;
-			if(cursor_k<0) cursor_k=0;
-			if(cursor_i>=game.getWidth()) cursor_i=game.getWidth()-1;
-			if(cursor_j>=game.getHeight()) cursor_j=game.getHeight()-1;
-			if(cursor_k>=game.getDepth()) cursor_k=game.getDepth()-1;
-		}
-
-		//set cursor to object under mouse
-		{
-			//previous frame's id buffer, but it's no big deal.
-			int mx=GetMouseX(), my=GetMouseY();
-			if(inRangeX(mx)&&inRangeY(my)) {
-				int id=id_buffer[bufferIX(mx, my)];
-				int type=0xff&(id>>24);
-				switch(type) {
-					case CELL_TRIANGLE://cursor to cell
-						cursor_i=0b11111&(id>>10);
-						cursor_j=0b11111&(id>>5);
-						cursor_k=0b11111&id;
-						break;
-					case BILLBOARD_TRIANGLE: {//cursor to billboard
-						int bb_ix=0xffff&id;
-						//previous frame's billboard list, but it's no big deal.
-						const auto& b=billboards[bb_ix];
-						if(b.i==-1||b.j==-1||b.k==-1) break;
-
-						cursor_i=b.i;
-						cursor_j=b.j;
-						cursor_k=b.k;
-						break;
-					}
-				}
-			}
-		}
-
-		//flag at cursor
-		if(GetKey(olc::Key::F).bPressed) {
-			game.flag(cursor_i, cursor_j, cursor_k);
-			updateGameMesh();
-		}
-
-		//sweep at cursor
-		if(GetKey(olc::Key::SPACE).bPressed) {
-			//15 seconds per penalty
-			game_timer+=15*game.sweep(cursor_i, cursor_j, cursor_k);
-			updateGameMesh();
-		}
-
-		//reset game
-		if(GetKey(olc::Key::R).bPressed) {
-			game.reset();
-			updateGameMesh();
-			game_timer=0;
-		}
-
-		//reset game
-		if(GetKey(olc::Key::P).bPressed) game.pause();
-
-		//display toggles
-		if(GetKey(olc::Key::C).bPressed) show_cursor_controls^=true;
-		if(GetKey(olc::Key::B).bPressed) show_bomb_zone^=true;
 	}
 #pragma endregion
 
@@ -795,23 +915,23 @@ struct Minesweeper3DUI : cmn::Engine3D {
 	void realizeCursorControls(const vf3d& game_size) {
 		//a & d on x axis
 		float edge_x=.5f*game_size.x;
-		billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'A'-'A', olc::YELLOW});
+		billboards.push_back({vf3d(2+edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+('a'-'a'), olc::YELLOW});
 		realizeArrow(vf3d(.5f+edge_x, 0, 0), vf3d(1.5f+edge_x, 0, 0), .15f, olc::YELLOW);
-		billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+'D'-'A', olc::YELLOW});
+		billboards.push_back({vf3d(-2-edge_x, 0, 0), .5f, .5f, .5f, ta_letter_ix+('d'-'a'), olc::YELLOW});
 		realizeArrow(vf3d(-.5f-edge_x, 0, 0), vf3d(-1.5f-edge_x, 0, 0), .15f, olc::YELLOW);
 
 		//w & s on y axis
 		float edge_y=.5f*game_size.y;
-		billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'W'-'A', olc::MAGENTA});
+		billboards.push_back({vf3d(0, 2+edge_y, 0), .5f, .5f, .5f, ta_letter_ix+('w'-'a'), olc::MAGENTA});
 		realizeArrow(vf3d(0, .5f+edge_y, 0), vf3d(0, 1.5f+edge_y, 0), .15f, olc::MAGENTA);
-		billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, ta_letter_ix+'S'-'A', olc::MAGENTA});
+		billboards.push_back({vf3d(0, -2-edge_y, 0), .5f, .5f, .5f, ta_letter_ix+('s'-'a'), olc::MAGENTA});
 		realizeArrow(vf3d(0, -.5f-edge_y, 0), vf3d(0, -1.5f-edge_y, 0), .15f, olc::MAGENTA);
 
 		//q & e on z axis
 		float edge_z=.5f*game_size.z;
-		billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, ta_letter_ix+'Q'-'A', olc::GREEN});
+		billboards.push_back({vf3d(0, 0, 2+edge_z), .5f, .5f, .5f, ta_letter_ix+('q'-'a'), olc::GREEN});
 		realizeArrow(vf3d(0, 0, .5f+edge_z), vf3d(0, 0, 1.5f+edge_z), .15f, olc::GREEN);
-		billboards.push_back({vf3d(0, 0, -2-edge_z), .5f, .5f, .5f, ta_letter_ix+'E'-'A', olc::GREEN});
+		billboards.push_back({vf3d(0, 0, -2-edge_z), .5f, .5f, .5f, ta_letter_ix+('e'-'a'), olc::GREEN});
 		realizeArrow(vf3d(0, 0, -.5f-edge_z), vf3d(0, 0, -1.5f-edge_z), .15f, olc::GREEN);
 	}
 
@@ -826,6 +946,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		for(int i=0; i<billboards.size(); i++) {
 			const auto& b=billboards[i];
 			makeQuad(b.pos, b.size, b.ax, b.ay, t1, t2);
+
 			//pack type=2, spr_ix, and billboard index
 			t1.id=t2.id=(BILLBOARD_TRIANGLE<<24)|(b.spr_ix<<16)|i;
 			tris_to_project.push_back(t1);
@@ -898,7 +1019,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #pragma region RENDER_HELPERS
 	//win/lose/pause state overlays
 	void renderStateOverlay() {
-		const int cx=GetDrawTargetWidth()/2, cy=GetDrawTargetHeight()/2;
+		const int cx=ScreenWidth()/2, cy=ScreenHeight()/2;
 
 		//generalized state overlay
 		int alpha=0;
@@ -933,7 +1054,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		SetPixelMode(olc::Pixel::ALPHA);
 
 		//dark background
-		FillRect(0, 0, GetDrawTargetWidth(), GetDrawTargetHeight(), olc::Pixel(0, 0, 0, alpha));
+		FillRect(0, 0, ScreenWidth(), ScreenHeight(), olc::Pixel(0, 0, 0, alpha));
 
 		//show ui sprite in center
 		DrawSprite(
@@ -945,7 +1066,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		SetPixelMode(olc::Pixel::NORMAL);
 
 		//show msg at bottom center
-		DrawString(cx-8*msg.length(), GetDrawTargetHeight()-24, msg, olc::WHITE, 2);
+		DrawString(cx-8*msg.length(), ScreenHeight()-24, msg, olc::WHITE, 2);
 	}
 
 	//draw HH:MM:SS display
@@ -972,7 +1093,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		//skip "HH:" if 0
 		const int scl=4;
 		std::string str(time_str+(hours?0:3));
-		DrawString(4*scl, GetDrawTargetHeight()-12*scl, str, olc::WHITE, scl);
+		DrawString(4*scl, ScreenHeight()-12*scl, str, olc::WHITE, scl);
 	}
 
 	//show bomb count
@@ -983,7 +1104,14 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		}
 		const int scl=4;
 		auto str=std::to_string(remaining);
-		DrawString(GetDrawTargetWidth()-4*scl*(1+2*str.length()), GetDrawTargetHeight()-12*scl, str, olc::WHITE, scl);
+		DrawString(ScreenWidth()-4*scl*(1+2*str.length()), ScreenHeight()-12*scl, str, olc::WHITE, scl);
+	}
+
+	void renderButtons() {
+		DrawSprite(flag_btn.pos, flag_btn.spr, Button::scl);
+		DrawSprite(sweep_btn.pos, sweep_btn.spr, Button::scl);
+		DrawSprite(pause_btn.pos, pause_btn.spr, Button::scl);
+		DrawSprite(reset_btn.pos, reset_btn.spr, Button::scl);
 	}
 #pragma endregion
 
@@ -1027,10 +1155,10 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		std::atomic<int> tiles_remaining=mtr_jobs.size();
 		for(const auto& j:mtr_jobs) {
 			mtr_pool->enqueue([&] {
-				int nx=std::clamp(mtr_tile_size*j.x, 0, GetDrawTargetWidth());
-				int ny=std::clamp(mtr_tile_size*j.y, 0, GetDrawTargetHeight());
-				int mx=std::clamp(mtr_tile_size+nx, 0, GetDrawTargetWidth());
-				int my=std::clamp(mtr_tile_size+ny, 0, GetDrawTargetHeight());
+				int nx=std::clamp(mtr_tile_size*j.x, 0, ScreenWidth());
+				int ny=std::clamp(mtr_tile_size*j.y, 0, ScreenHeight());
+				int mx=std::clamp(mtr_tile_size+nx, 0, ScreenWidth());
+				int my=std::clamp(mtr_tile_size+ny, 0, ScreenHeight());
 				const auto& bin=mtr_bins[j.x+mtr_num_x*j.y];
 				for(const auto& t:bin) {
 					int type=0xff&(t.id>>24);
@@ -1124,6 +1252,7 @@ struct Minesweeper3DUI : cmn::Engine3D {
 		renderStateOverlay();
 		renderTimer();
 		renderBombCount();
+		renderButtons();
 
 		SetDrawTarget(nullptr);
 
@@ -1144,6 +1273,11 @@ struct Minesweeper3DUI : cmn::Engine3D {
 #endif
 
 		return true;
+	}
+
+public:
+	Minesweeper3DUI() {
+		sAppName="3D Minesweeper";
 	}
 };
 

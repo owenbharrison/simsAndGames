@@ -30,6 +30,18 @@
     <Image Include="assets\img\fire_gradient.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\img\flag.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\pause.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\reset.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\sweep.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\models\cursor.txt" />

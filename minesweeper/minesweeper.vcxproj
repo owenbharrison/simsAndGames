@@ -137,8 +137,12 @@
   <ItemGroup>
     <Image Include="assets\img\bomb.png" />
     <Image Include="assets\img\fire_gradient.png" />
+    <Image Include="assets\img\flag.png" />
     <Image Include="assets\img\flag_tile.png" />
     <Image Include="assets\img\number_gradient.png" />
+    <Image Include="assets\img\pause.png" />
+    <Image Include="assets\img\reset.png" />
+    <Image Include="assets\img\sweep.png" />
     <Image Include="assets\img\tile.png" />
   </ItemGroup>
   <ItemGroup>
