@@ -38,9 +38,11 @@ struct TriangleShape : ShapePrimitive {
 
 	void randomizeGeometry(const vf2d& res) override {
 		//vertex positioning
-		a={cmn::randFloat(res.x), cmn::randFloat(res.y)};
-		b={cmn::randFloat(res.x), cmn::randFloat(res.y)};
-		c={cmn::randFloat(res.x), cmn::randFloat(res.y)};
+		float cx=cmn::randFloat(res.x);
+		float cy=cmn::randFloat(res.y);
+		a={cx+cmn::randFloat(-30, 30), cy+cmn::randFloat(-30, 30)};
+		b={cx+cmn::randFloat(-30, 30), cy+cmn::randFloat(-30, 30)};
+		c={cx+cmn::randFloat(-30, 30), cy+cmn::randFloat(-30, 30)};
 	}
 
 	olc::Pixel getAvgColor(olc::Sprite* spr) override {

@@ -10,6 +10,9 @@ using olc::vf2d;
 #include "shapes/triangle.h"
 #include "shapes/rectangle.h"
 
+//for memset
+#include <string>
+
 class GeometrizeUI : public olc::PixelGameEngine {
 	int image_width=0;
 	int image_height=0;
@@ -34,7 +37,7 @@ public:
 		
 		//load input & use uvs to resample
 		{
-			const olc::Sprite image("assets/img/tom_and_jerry.png");
+			const olc::Sprite image("assets/tom_and_jerry.png");
 			const float u_step=1.f/image_width;
 			const float v_step=1.f/image_height;
 			for(int i=0; i<image_width; i++) {
