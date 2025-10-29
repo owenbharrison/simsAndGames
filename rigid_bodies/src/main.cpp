@@ -357,7 +357,81 @@ struct RigidBodyUI : olc::PixelGameEngine {
 		tv.DrawLineDecal(r, b, col);
 	}
 
-	void showOutlines(const Shape& s, float w, const olc::Pixel& col) {
+	void renderShapeBounds(const Shape& shp) {
+		//color based on overlapping
+		auto box=shp.getAABB();
+		bool overlaps=false;
+		for(const auto& o:shapes) {
+			if(o==&shp) continue;
+
+			if(box.overlaps(o->getAABB())) {
+				overlaps=true;
+				break;
+			}
+		}
+
+		vf2d tr(box.max.x, box.min.y), bl(box.min.x, box.max.y);
+		olc::Pixel col=overlaps?olc::RED:olc::GREEN;
+		tv.DrawLineDecal(box.min, tr, col);
+		tv.DrawLineDecal(tr, box.max, col);
+		tv.DrawLineDecal(box.max, bl, col);
+		tv.DrawLineDecal(bl, box.min, col);
+	}
+
+	void renderShapeFill(const Shape& shp) {
+		//initialize indexes
+		std::list<int> indexes;
+		for(int i=0; i<shp.getNum(); i++) indexes.push_back(i);
+
+		//ear clipping triangulation
+		for(auto curr=indexes.begin(); curr!=indexes.end();) {
+			//get previous and next points
+			auto prev=std::prev(curr==indexes.begin()?indexes.end():curr);
+			auto next=std::next(curr); if(next==indexes.end()) next=indexes.begin();
+			const auto& pt_p=shp.points[*prev];
+			const auto& pt_c=shp.points[*curr];
+			const auto& pt_n=shp.points[*next];
+
+			//make sure this is a convex angle
+			if((pt_p-pt_c).cross(pt_n-pt_c)>0) {
+				curr++;
+				continue;
+			}
+
+			//make sure this triangle doesnt contain any pts
+			bool contains=false;
+			for(auto other=std::next(curr); other!=indexes.end(); other++) {
+				//dont check self
+				if(other==next) continue;
+
+				//is this point to the left/right of all trilines
+				const auto& pt_o=shp.points[*other];
+				bool side1=(pt_c-pt_p).cross(pt_o-pt_p)>0;
+				bool side2=(pt_n-pt_c).cross(pt_o-pt_c)>0;
+				bool side3=(pt_p-pt_n).cross(pt_o-pt_n)>0;
+				if(side1==side2&&side2==side3) {
+					contains=true;
+					break;
+				}
+			}
+
+			//this is an ear!
+			if(!contains) {
+				FillTriangleDecal(
+					tv.WorldToScreen(shp.localToWorld(pt_p)),
+					tv.WorldToScreen(shp.localToWorld(pt_c)),
+					tv.WorldToScreen(shp.localToWorld(pt_n)),
+					shp.col
+				);
+
+				//remove this index and start over
+				indexes.erase(curr);
+				curr=indexes.begin();
+			} else curr++;
+		}
+	}
+
+	void renderShapeOutline(const Shape& s, float w, const olc::Pixel& col) {
 		for(int i=0; i<s.getNum(); i++) {
 			const auto& a=s.localToWorld(s.points[i]);
 			const auto& b=s.localToWorld(s.points[(i+1)%s.getNum()]);
@@ -366,7 +440,7 @@ struct RigidBodyUI : olc::PixelGameEngine {
 		}
 	}
 
-	void showVerts(const Shape& s, float scl, const olc::Pixel& col) {
+	void renderShapeVerts(const Shape& s, float scl, const olc::Pixel& col) {
 		for(int i=0; i<s.getNum(); i++) {
 			const auto& a=s.points[i];
 			auto str=std::to_string(i);
@@ -380,7 +454,7 @@ struct RigidBodyUI : olc::PixelGameEngine {
 		}
 	}
 
-	void showNorms(const Shape& s, float h, const olc::Pixel& col) {
+	void renderShapeNorms(const Shape& s, float h, const olc::Pixel& col) {
 		for(int i=0; i<s.getNum(); i++) {
 			vf2d a=s.localToWorld(s.points[i]);
 			vf2d b=s.localToWorld(s.points[(1+i)%s.getNum()]);
@@ -411,84 +485,15 @@ struct RigidBodyUI : olc::PixelGameEngine {
 
 		//show shapes
 		for(const auto& shp:shapes) {
-			if(show_bounds) {
-				cmn::AABB box=shp->getAABB();
-				bool overlaps=false;
-				for(const auto& o:shapes) {
-					if(o==shp) continue;
+			if(show_bounds) renderShapeBounds(*shp);
 
-					if(box.overlaps(o->getAABB())) {
-						overlaps=true;
-						break;
-					}
-				}
+			renderShapeFill(*shp);
 
-				vf2d tr(box.max.x, box.min.y), bl(box.min.x, box.max.y);
-				olc::Pixel col=overlaps?olc::RED:olc::GREEN;
-				tv.DrawLineDecal(box.min, tr, col);
-				tv.DrawLineDecal(tr, box.max, col);
-				tv.DrawLineDecal(box.max, bl, col);
-				tv.DrawLineDecal(bl, box.min, col);
-			}
+			renderShapeOutline(*shp, .025f, shp->locked?olc::WHITE:olc::BLACK);
 
-			//fill
-			{
-				//initialize indexes
-				std::list<int> indexes;
-				for(int i=0; i<shp->getNum(); i++) indexes.push_back(i);
+			if(show_vertexes) renderShapeVerts(*shp, .005f, olc::RED);
 
-				//ear clipping triangulation
-				for(auto curr=indexes.begin(); curr!=indexes.end();) {
-					//get previous and next points
-					auto prev=std::prev(curr==indexes.begin()?indexes.end():curr);
-					auto next=std::next(curr); if(next==indexes.end()) next=indexes.begin();
-					const auto& pt_p=shp->points[*prev];
-					const auto& pt_c=shp->points[*curr];
-					const auto& pt_n=shp->points[*next];
-
-					//make sure this is a convex angle
-					if((pt_p-pt_c).cross(pt_n-pt_c)>0) {
-						curr++;
-						continue;
-					}
-
-					//make sure this triangle doesnt contain any pts
-					bool contains=false;
-					for(auto other=std::next(curr); other!=indexes.end(); other++) {
-						//dont check self
-						if(other==next) continue;
-
-						//is this point to the left/right of all trilines
-						const auto& pt_o=shp->points[*other];
-						bool side1=(pt_c-pt_p).cross(pt_o-pt_p)>0;
-						bool side2=(pt_n-pt_c).cross(pt_o-pt_c)>0;
-						bool side3=(pt_p-pt_n).cross(pt_o-pt_n)>0;
-						if(side1==side2&&side2==side3) {
-							contains=true;
-							break;
-						}
-					}
-
-					//this is an ear!
-					if(!contains) {
-						vf2d p=shp->localToWorld(pt_p);
-						vf2d c=shp->localToWorld(pt_c);
-						vf2d n=shp->localToWorld(pt_n);
-						tv.DrawWarpedDecal(prim_rect_dec, {p, c, n, n}, shp->col);
-
-						//remove this index and start over
-						indexes.erase(curr);
-						curr=indexes.begin();
-					} else curr++;
-				}
-			}
-
-			//outlines
-			showOutlines(*shp, .025f, shp->locked?olc::WHITE:olc::BLACK);
-
-			if(show_vertexes) showVerts(*shp, .005f, olc::RED);
-
-			if(show_norms) showNorms(*shp, .13f, shp->col);
+			if(show_norms) renderShapeNorms(*shp, .13f, shp->col);
 
 			if(show_masses) {
 				tv.DrawLineDecal(vf2d(shp->pos.x-.1f, shp->pos.y), vf2d(shp->pos.x+.1f, shp->pos.y), olc::BLACK);
