@@ -25,7 +25,7 @@ public:
 	float base_rad=0;
 	int num_pts=0;
 	vf2d* model=nullptr;
-	
+
 	float rot=0, rot_vel=0;
 	vf2d cossin{1, 0};
 
@@ -84,6 +84,7 @@ public:
 		};
 	}
 
+	//get bounds
 	cmn::AABB getAABB() const {
 		cmn::AABB a;
 		for(int i=0; i<num_pts; i++) {
@@ -126,7 +127,7 @@ public:
 		cossin=cmn::polar<vf2d>(1, rot);
 	}
 
-	//toroidal space
+	//when hit edge spawn on other side: toroidal space?
 	void checkAABB(const cmn::AABB& a) {
 		if(pos.x<a.min.x) pos.x=a.max.x;
 		if(pos.y<a.min.y) pos.y=a.max.y;
