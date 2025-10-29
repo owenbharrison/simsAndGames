@@ -5,13 +5,13 @@ using cmn::Mat4;
 
 constexpr float Pi=3.1415927f;
 
-#include "mesh.h"
-
 #include "common/aabb.h"
 #include "common/utils.h"
 namespace cmn {
 	using AABB=AABB_generic<olc::vf2d>;
 }
+
+#include "mesh.h"
 
 #include "poisson_disc.h"
 #include "triangulate.h"
@@ -24,11 +24,7 @@ float fract(float x) {
 	return x-std::floor(x);
 }
 
-struct Example : cmn::Engine3D {
-	Example() {
-		sAppName="A* Navigation";
-	}
-
+class AStarNavUI : public cmn::Engine3D {
 	//camera positioning
 	float cam_yaw=Pi/2;
 	float cam_pitch=0;
@@ -52,48 +48,63 @@ struct Example : cmn::Engine3D {
 	std::vector<olc::Sprite*> texture_atlas;
 	float anim_timer=0;
 
-	bool user_create() override {
-		cam_pos={0, 7, 0};
-		light_pos={0, 45, 0};
+#pragma region SETUP HELPERS
+	bool setupTerrain() {
+		//load terrain mesh	
+		if(!Mesh::loadFromOBJ(terrain, "assets/models/terrain.txt")) {
+			std::cout<<"  unable to load terrain\n";
 
-		//load error prone assets
-		try {
-			//color terrain based on slope
-			terrain=Mesh::loadFromOBJ("assets/models/terrain.txt");
-			olc::Sprite* gradient_spr=new olc::Sprite("assets/img/grass_falloff.png");
-			const vf3d up(0, 1, 0);
-			for(auto& t:terrain.tris) {
-				//get steepness
-				float s=up.cross(t.getNorm()).mag();
-				t.col=gradient_spr->Sample(s, 0);
-			}
-			delete gradient_spr;
-
-			//house placement
-			Mesh house_model=Mesh::loadFromOBJ("assets/models/house.txt");
-			house_model.scale={1.5f, 1.5f, 1.5f};
-			struct House { vf3d p; float r; olc::Pixel col; };
-			std::vector<House> homes{
-				{{3.54f, 1.37f, 18.2f}, .8f*Pi, olc::WHITE},
-				{{5.64f, 2.86f, 51.79f}, 1.4f*Pi, olc::BLUE},
-				{{51.31f, 1.67f, 41.95f}, .2f*Pi, olc::WHITE},
-				{{62.04f, 1.67f, -5.12f}, .6f*Pi, olc::RED},
-				{{12.09f, 2.16f, -38.03f}, 1.1f*Pi, olc::WHITE},
-				{{-38.35f, 2.63f, -33.38f}, .3f*Pi, olc::GREEN},
-				{{-52.99f, 1.43f, 16.84f}, 1.8f*Pi, olc::WHITE}
-			};
-			for(const auto& h:homes) {
-				house_model.translation=h.p;
-				house_model.rotation.y=h.r;
-				house_model.updateTransforms();
-				house_model.updateTriangles(h.col);
-				obstacles.push_back(house_model);
-			}
-		} catch(const std::exception& e) {
-			std::cout<<"  "<<e.what()<<'\n';
 			return false;
 		}
 
+		//color terrain based on slope
+		olc::Sprite* gradient_spr=new olc::Sprite("assets/img/grass_falloff.png");
+		const vf3d up(0, 1, 0);
+		for(auto& t:terrain.tris) {
+			//get steepness
+			float s=up.cross(t.getNorm()).mag();
+			t.col=gradient_spr->Sample(s, 0);
+		}
+		delete gradient_spr;
+
+		return true;
+	}
+
+	//house placement
+	bool setupObstacles() {
+		//load home mesh
+		Mesh house_model;
+		if(!Mesh::loadFromOBJ(house_model, "assets/models/house.txt")) {
+			std::cout<<"  unable to load house\n";
+
+			return false;
+		}
+		house_model.scale={1.5f, 1.5f, 1.5f};
+
+		//transform and add homes
+		struct House { vf3d p; float r; olc::Pixel col; };
+		const std::vector<House> homes{
+			{{3.54f, 1.37f, 18.2f}, .8f*Pi, olc::WHITE},
+			{{5.64f, 2.86f, 51.79f}, 1.4f*Pi, olc::BLUE},
+			{{51.31f, 1.67f, 41.95f}, .2f*Pi, olc::WHITE},
+			{{62.04f, 1.67f, -5.12f}, .6f*Pi, olc::RED},
+			{{12.09f, 2.16f, -38.03f}, 1.1f*Pi, olc::WHITE},
+			{{-38.35f, 2.63f, -33.38f}, .3f*Pi, olc::GREEN},
+			{{-52.99f, 1.43f, 16.84f}, 1.8f*Pi, olc::WHITE}
+		};
+
+		for(const auto& h:homes) {
+			house_model.translation=h.p;
+			house_model.rotation.y=h.r;
+			house_model.updateTransforms();
+			house_model.updateTriangles(h.col);
+			obstacles.push_back(house_model);
+		}
+
+		return true;
+	}
+
+	void setupGraph() {
 		//randomly sample points on xz plane
 		cmn::AABB3 bounds=terrain.getAABB();
 		auto xz_pts=poissonDiscSample({{bounds.min.x, bounds.min.z}, {bounds.max.x, bounds.max.z}}, 2);
@@ -140,6 +151,18 @@ struct Example : cmn::Engine3D {
 				it=graph.nodes.erase(it);
 			} else it++;
 		}
+	}
+#pragma endregion
+
+	bool user_create() override {
+		cam_pos={0, 7, 0};
+		light_pos={0, 45, 0};
+
+		if(!setupTerrain()) return false;
+
+		if(!setupObstacles()) return false;
+
+		setupGraph();
 
 		//load route marker textures
 		texture_atlas.push_back(new olc::Sprite("assets/img/start.png"));
@@ -154,7 +177,8 @@ struct Example : cmn::Engine3D {
 		return true;
 	}
 
-	bool user_update(float dt) override {
+#pragma region UPDATE HELPERS
+	void handleCameraMovement(float dt) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
 		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
@@ -189,6 +213,11 @@ struct Example : cmn::Engine3D {
 		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
 		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*speed*lr_dir;
 		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*speed*lr_dir;
+	}
+#pragma endregion
+
+	bool user_update(float dt) override {
+		handleCameraMovement(dt);
 
 		//set light pos
 		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
@@ -270,7 +299,8 @@ struct Example : cmn::Engine3D {
 		return true;
 	}
 
-	void makeQuad(vf3d p, float w, float h, float ax, float ay, cmn::Triangle& a, cmn::Triangle& b) {
+#pragma region GEOMETRY HELPERS
+	void realizeQuad(vf3d p, float w, float h, float ax, float ay, cmn::Triangle& a, cmn::Triangle& b) {
 		//billboarded to point at camera
 		vf3d norm=(p-cam_pos).norm();
 		vf3d up(0, 1, 0);
@@ -294,10 +324,74 @@ struct Example : cmn::Engine3D {
 		b={tl, bl, br, tl_t, bl_t, br_t};
 	}
 
+	void realizeGraph(const olc::Pixel& col) {
+		//add links as lines
+		for(const auto& n:graph.nodes) {
+			for(const auto& o:n->links) {
+				cmn::Line l1{n->pos, o->pos}; l1.col=col;
+				lines_to_project.push_back(l1);
+			}
+		}
+	}
+
+	//add nodes as billboards
+	void realizeNodes(float size, const olc::Pixel& col) {
+		for(const auto& n:graph.nodes) {
+			//default size, anchor, and id values
+			float ay=.5f;
+			int id=-1;
+
+			//change if route marker.
+			float sz=size;
+			if(n==from_node) sz*=3, ay=1, id=0;
+			else if(n==to_node) sz*=3, ay=1, id=1;
+			else if(!show_graph) continue;
+
+			//tessellate
+			cmn::Triangle t1, t2;
+			realizeQuad(n->pos, sz, sz, .5f, ay, t1, t2);
+
+			//add
+			t1.id=id, t2.id=id;
+			t1.col=col, t2.col=col;
+			tris_to_project.push_back(t1);
+			tris_to_project.push_back(t2);
+		}
+	}
+
+	//place billboards along route
+	void realizeRoute(float sz, const olc::Pixel& col) {
+		bool is_first=true;
+		vf3d prev;
+		//silly little walk animation
+		float anim=fract(anim_timer);
+		for(const auto& r:route) {
+			vf3d curr=r->pos;
+			if(is_first) is_first=false;
+			else {
+				const int num=2;
+				vf3d ba=curr-prev;
+				for(int i=0; i<num; i++) {
+					//interpolate between route pts
+					float t=(anim+i)/num;
+					vf3d pt=prev+t*ba;
+
+					cmn::Triangle t1, t2;
+					realizeQuad(pt, sz, sz, .5f, .5f, t1, t2);
+					t1.col=col, t2.col=col;
+					tris_to_project.push_back(t1);
+					tris_to_project.push_back(t2);
+				}
+			}
+			prev=curr;
+		}
+	}
+#pragma endregion
+
 	bool user_geometry() override {
 		//add main light
 		lights.push_back({light_pos, olc::WHITE});
-		
+
 		//add terrain mesh
 		tris_to_project.insert(tris_to_project.end(), terrain.tris.begin(), terrain.tris.end());
 
@@ -306,64 +400,11 @@ struct Example : cmn::Engine3D {
 			tris_to_project.insert(tris_to_project.end(), o.tris.begin(), o.tris.end());
 		}
 
-		if(show_graph) {
-			//add links as black lines
-			for(const auto& n:graph.nodes) {
-				for(const auto& o:n->links) {
-					cmn::Line l1{n->pos, o->pos}; l1.col=olc::BLACK;
-					lines_to_project.push_back(l1);
-				}
-			}
-		}
+		if(show_graph) realizeGraph(olc::BLACK);
 
-		//add nodes as billboards
-		for(const auto& n:graph.nodes) {
-			//default size, anchor, and id values
-			float sz=.4f, ay=.5f;
-			int id=-1;
+		realizeNodes(.5f, olc::WHITE);
 
-			//change if route marker.
-			if(n==from_node) sz*=3, ay=1, id=0;
-			else if(n==to_node) sz*=3, ay=1, id=1;
-			else if(!show_graph) continue;
-
-			//tessellate
-			cmn::Triangle t1, t2;
-			makeQuad(n->pos, sz, sz, .5f, ay, t1, t2);
-
-			//add
-			t1.id=id, t2.id=id;
-			tris_to_project.push_back(t1);
-			tris_to_project.push_back(t2);
-		}
-
-		//place yellow quads along route
-		{
-			bool is_first=true;
-			vf3d prev;
-			//silly little walk animation
-			float anim=fract(anim_timer);
-			for(const auto& r:route) {
-				vf3d curr=r->pos;
-				if(is_first) is_first=false;
-				else {
-					const int num=2;
-					vf3d ba=curr-prev;
-					for(int i=0; i<num; i++) {
-						//interpolate between route pts
-						float t=(anim+i)/num;
-						vf3d pt=prev+t*ba;
-
-						cmn::Triangle t1, t2;
-						makeQuad(pt, .3f, .3f, .5f, .5f, t1, t2);
-						t1.col=olc::YELLOW, t2.col=olc::YELLOW;
-						tris_to_project.push_back(t1);
-						tris_to_project.push_back(t2);
-					}
-				}
-				prev=curr;
-			}
-		}
+		realizeRoute(.3f, olc::YELLOW);
 
 		return true;
 	}
@@ -404,11 +445,16 @@ struct Example : cmn::Engine3D {
 
 		return true;
 	}
+
+public:
+	AStarNavUI() {
+		sAppName="A* Navigation";
+	}
 };
 
 int main() {
-	Example e;
-	if(e.Construct(640, 320, 1, 1, false, true)) e.Start();
+	AStarNavUI asnui;
+	if(asnui.Construct(640, 320, 1, 1, false, true)) asnui.Start();
 
 	return 0;
 }

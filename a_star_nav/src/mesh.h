@@ -6,16 +6,9 @@
 #include <fstream>
 #include <sstream>
 
-#include <exception>
-
 struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
-
-float random() {
-	static const float rand_max=RAND_MAX;
-	return std::rand()/rand_max;
-}
 
 struct Mesh {
 	std::vector<vf3d> vertexes;
@@ -79,9 +72,9 @@ struct Mesh {
 
 	bool contains(const vf3d& pt) const {
 		vf3d dir=vf3d(
-			.5f-random(),
-			.5f-random(),
-			.5f-random()
+			.5f-cmn::randFloat(),
+			.5f-cmn::randFloat(),
+			.5f-cmn::randFloat()
 		).norm();
 		int num=0;
 		for(const auto& t:tris) {
@@ -91,11 +84,9 @@ struct Mesh {
 		return num%2;
 	}
 
-	static Mesh loadFromOBJ(const std::string& filename) {
-		Mesh m;
-
+	static bool loadFromOBJ(Mesh& m, const std::string& filename) {
 		std::ifstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
+		if(file.fail()) return false;
 
 		std::string line;
 		while(std::getline(file, line)) {
@@ -130,7 +121,8 @@ struct Mesh {
 		m.updateTriangles(olc::WHITE);
 
 		file.close();
-		return m;
+
+		return true;
 	}
 };
 #endif//MESH_STRUCT_H
