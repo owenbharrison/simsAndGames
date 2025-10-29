@@ -10,7 +10,6 @@
 #ifndef ENGINE_3D_CLASS_H
 #define ENGINE_3D_CLASS_H
 
-#define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
 
 #include "v3d.h"

@@ -1,3 +1,4 @@
+#define OLC_PGE_APPLICATION
 #include "common/3d/engine_3d.h"
 
 #define MULTITHREADING

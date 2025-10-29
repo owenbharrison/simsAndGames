@@ -5,6 +5,7 @@ add menus
 triangle render generalization/simplification
 */
 #define OLC_GFX_OPENGL33
+#define OLC_PGE_APPLICATION
 #include "common/3d/engine_3d.h"
 using olc::vi2d;
 using cmn::vf3d;

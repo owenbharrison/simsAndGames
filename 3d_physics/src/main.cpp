@@ -1,3 +1,4 @@
+#define OLC_PGE_APPLICATION
 #define OLC_GFX_OPENGL33
 #include "common/3d/engine_3d.h"
 namespace olc {
