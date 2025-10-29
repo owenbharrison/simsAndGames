@@ -157,7 +157,7 @@ struct ParticlesUI : olc::PixelGameEngine {
 				vf2d offset=offset_rad*vf2d(std::cos(offset_angle), std::sin(offset_angle));
 
 				//random size and velocity
-				float rad=cmn::randFloat(3, 6);
+				float rad=cmn::randFloat(3, 11);
 				Particle temp(mouse_pos+offset, rad);
 				float speed=dt*cmn::randFloat(35);
 				float vel_angle=cmn::randFloat(2*cmn::Pi);
