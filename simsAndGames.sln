@@ -13,8 +13,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "terraria_clone", "terraria_
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rigid_bodies", "rigid_bodies\rigid_bodies.vcxproj", "{C657A84B-74FF-4C94-8DE0-9C821A35F46F}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "procedural_audio", "procedural_audio\procedural_audio.vcxproj", "{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "raycasting", "raycasting\raycasting.vcxproj", "{9108DB91-7166-4A96-92ED-195B87A9C28C}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "clock", "clock\clock.vcxproj", "{568956BF-94D6-4842-9402-9CF4D487FAB4}"
@@ -119,14 +117,6 @@ Global
 		{C657A84B-74FF-4C94-8DE0-9C821A35F46F}.Release|x64.Build.0 = Release|x64
 		{C657A84B-74FF-4C94-8DE0-9C821A35F46F}.Release|x86.ActiveCfg = Release|Win32
 		{C657A84B-74FF-4C94-8DE0-9C821A35F46F}.Release|x86.Build.0 = Release|Win32
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Debug|x64.ActiveCfg = Debug|x64
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Debug|x64.Build.0 = Debug|x64
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Debug|x86.ActiveCfg = Debug|Win32
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Debug|x86.Build.0 = Debug|Win32
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Release|x64.ActiveCfg = Release|x64
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Release|x64.Build.0 = Release|x64
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Release|x86.ActiveCfg = Release|Win32
-		{A1694FF2-93CA-4BDE-B6BE-E7292BA816A1}.Release|x86.Build.0 = Release|Win32
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Debug|x64.ActiveCfg = Debug|x64
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Debug|x64.Build.0 = Debug|x64
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Debug|x86.ActiveCfg = Debug|Win32
