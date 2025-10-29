@@ -92,7 +92,7 @@ public:
 					//check proximity to other points
 					bool unique=true;
 					for(const auto& p:letter_points[ix]) {
-						const float rad_thr=9;
+						const float rad_thr=6;
 						if((ij-p).mag2()<rad_thr*rad_thr) {
 							unique=false;
 							break;
@@ -286,7 +286,7 @@ public:
 				1+u*(v.col.g/255.f-1),
 				1+u*(v.col.b/255.f-1)
 			);
-			FillCircleDecal(v.pos, 2.9f, col);
+			FillCircleDecal(v.pos, 2.3f, col);
 		}
 
 		return true;
