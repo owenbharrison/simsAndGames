@@ -116,7 +116,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 			std::cout<<"  unable to load cut tex\n";
 			return false;
 		}
-		
+
 		std::cout<<"Press ESC for integrated console.\n"
 			"  then type help for help.\n";
 
@@ -170,7 +170,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 
 		return true;
 	}
-	
+
 #pragma region COMMAND HELPERS
 	bool callResetCommand() {
 		//english+logic=grammar :D
@@ -516,7 +516,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 		cut_timer-=dt;
 
 		//ensure similar update across multiple framerates
-		update_timer+=dt; 
+		update_timer+=dt;
 		while(update_timer>time_step) {
 			for(int i=0; i<num_sub_steps; i++) {
 				//update mouse springs
@@ -546,7 +546,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 			scr_mouse_pos=GetMousePos();
 		}
 		wld_mouse_pos=tv.ScreenToWorld(scr_mouse_pos);
-		
+
 		//only allow input when console closed
 		if(!IsConsoleShowing()) handleUserInput();
 
@@ -579,7 +579,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 		vf2d offset(rad, rad);
 		tv.DrawDecal(pos-offset, prim_circ.Decal(), {2*rad/prim_circ.Sprite()->width, 2*rad/prim_circ.Sprite()->height}, col);
 	}
-	
+
 	void tvDrawString(const vf2d& pos, const std::string& str, const olc::Pixel& col, float scale=1) {
 		vf2d offset(4*str.length(), 4);
 		tv.DrawStringDecal(pos-scale*offset, str, col, {scale, scale});
@@ -626,7 +626,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 		tvDrawAABB(box, .075f, col);
 	}
 
-	void renderShapeAnchors(const Shape& shp) {
+	void renderShapeAnchors(const Shape& shp, const olc::Pixel& col) {
 		//rotation matrix
 		vf2d cosin=cmn::polar<vf2d>(1, shp.anchor_rot);
 		auto rotate=[cosin] (const vf2d& p) {
@@ -636,12 +636,14 @@ class JellyCarGame : public olc::PixelGameEngine {
 			);
 		};
 
-		//outlines
-		for(int i=0; i<shp.getNum(); i++) {
-			vf2d a=shp.anchor_pos+rotate(shp.anchors[i]);
-			vf2d b=shp.anchor_pos+rotate(shp.anchors[(i+1)%shp.getNum()]);
-			tvDrawThickLine(a, b, .05f, olc::GREY);
-			tvFillCircle(a, .05f, olc::GREY);
+		//constraint outlines
+		for(const auto& c:shp.shell) {
+			int a=c.a-shp.points;
+			int b=c.b-shp.points;
+			vf2d pa=shp.anchor_pos+rotate(shp.anchors[a]);
+			vf2d pb=shp.anchor_pos+rotate(shp.anchors[b]);
+			tvDrawThickLine(pa, pb, .05f, col);
+			tvFillCircle(pa, .05f, col);
 		}
 	}
 
@@ -690,7 +692,12 @@ class JellyCarGame : public olc::PixelGameEngine {
 
 			//this is an ear!
 			if(!contains) {
-				tv.DrawWarpedDecal(prim_rect.Decal(), {pt_p, pt_c, pt_n, pt_n}, shp.col);
+				FillTriangleDecal(
+					tv.WorldToScreen(pt_p),
+					tv.WorldToScreen(pt_c),
+					tv.WorldToScreen(pt_n),
+					shp.col
+				);
 
 				//remove this index and start over
 				indexes.erase(curr);
@@ -747,7 +754,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 		Clear(olc::Pixel(255, 254, 235));
 		SetDecalMode(show_wireframes?olc::DecalMode::WIREFRAME:olc::DecalMode::NORMAL);
 
-		if(show_grid) renderGrid(1, olc::Pixel(140, 222,255));
+		if(show_grid) renderGrid(1, olc::Pixel(140, 222, 255));
 
 		//show phys bounds
 		tvDrawAABB(scene.phys_bounds, .1f, olc::Pixel(255, 33, 122));
@@ -756,7 +763,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 		for(const auto& shp:scene.shapes) {
 			if(show_bounds) renderShapeBounds(*shp);
 
-			if(shp->anchored) renderShapeAnchors(*shp);
+			if(shp->anchored) renderShapeAnchors(*shp, olc::GREY);
 
 			renderShapeFill(*shp);
 
@@ -803,7 +810,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 		render_watch.start();
 		render();
 		render_watch.stop();
-		
+
 		if(to_time) {
 			auto update_dur=update_watch.getMicros();
 			auto render_dur=render_watch.getMicros();
