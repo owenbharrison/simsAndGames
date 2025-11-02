@@ -45,15 +45,19 @@ namespace cmn {
 		//row vectors
 		vf3d f=c.cross(a)/det;
 		float u=f.dot(d);
-		//out of range
-		if(u<0||u>1) return -1;
+		if(uptr) *uptr=u;
 
 		vf3d g=a.cross(b)/det;
 		float v=g.dot(d);
+		if(vptr) *vptr=v;
+
+		//out of range
+		if(u<0||u>1) return -1;
+		
 		//out of range
 		if(v<0||v>1) return -1;
 
-		//barycentric uv coordinates
+		//within unit uv triangle
 		if(u+v>1) return -1;
 
 		vf3d e=bxc/det;
