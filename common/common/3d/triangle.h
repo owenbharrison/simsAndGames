@@ -14,6 +14,52 @@ namespace cmn {
 		return a+t*(b-a);
 	}
 
+	float segIntersectTri(
+		const vf3d& s0, const vf3d& s1,
+		const vf3d& t0, const vf3d& t1, const vf3d& t2,
+		float* uptr=nullptr, float* vptr=nullptr
+	) {
+		/*segment equation
+		s0+t(s1-s0)=p
+		triangle equation
+		t0+u(t1-t0)+v(t2-t0)
+		set equal
+		s0+t(s1-s0)=t0+u(t1-t0)+v(t2-t0)
+		rearrange
+		t(s1-s0)+u(t0-t1)+v(t0-t2)=t0-s0
+		solve like matrix!
+		*/
+
+		static const float epsilon=1e-6f;
+
+		//column vectors
+		vf3d a=s1-s0;
+		vf3d b=t0-t1;
+		vf3d c=t0-t2;
+		vf3d d=t0-s0;
+		vf3d bxc=b.cross(c);
+		float det=a.dot(bxc);
+		//parallel
+		if(std::abs(det)<epsilon) return -1;
+
+		//row vectors
+		vf3d f=c.cross(a)/det;
+		float u=f.dot(d);
+		//out of range
+		if(u<0||u>1) return -1;
+
+		vf3d g=a.cross(b)/det;
+		float v=g.dot(d);
+		//out of range
+		if(v<0||v>1) return -1;
+
+		//barycentric uv coordinates
+		if(u+v>1) return -1;
+
+		vf3d e=bxc/det;
+		return e.dot(d);
+	}
+
 	struct Triangle {
 		vf3d p[3];
 		v2d t[3];
@@ -174,43 +220,7 @@ namespace cmn {
 		}
 
 		float intersectSeg(const vf3d& s0, const vf3d& s1, float* uptr=nullptr, float* vptr=nullptr) const {
-			/*segment equation
-			s0+t(s1-s0)=p
-			triangle equation
-			t0+u(t1-t0)+v(t2-t0)
-			set equal
-			s0+t(s1-s0)=t0+u(t1-t0)+v(t2-t0)
-			rearrange
-			t(s1-s0)+u(t0-t1)+v(t0-t2)=t0-s0
-			solve like matrix!
-			*/
-			static const float epsilon=1e-6f;
-			//column vectors
-			vf3d a=s1-s0;
-			vf3d b=p[0]-p[1];
-			vf3d c=p[0]-p[2];
-			vf3d d=p[0]-s0;
-			vf3d bxc=b.cross(c);
-			float det=a.dot(bxc);
-			//parallel
-			if(std::abs(det)<epsilon) return -1;
-
-			//row vectors
-			vf3d f=c.cross(a)/det;
-			float u=f.dot(d);
-			//out of range
-			if(u<0||u>1) return -1;
-
-			vf3d g=a.cross(b)/det;
-			float v=g.dot(d);
-			//out of range
-			if(v<0||v>1) return -1;
-
-			//barycentric uv coordinates
-			if(u+v>1) return -1;
-
-			vf3d e=bxc/det;
-			return e.dot(d);
+			return segIntersectTri(s0, s1, p[0], p[1], p[2], uptr, vptr);
 		}
 	};
 }
