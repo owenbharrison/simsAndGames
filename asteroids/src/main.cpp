@@ -358,6 +358,7 @@ class AsteroidsUI : public olc::PixelGameEngine {
 	}
 
 #pragma region RENDER HELPERS
+	//pack char into alpha component of color
 	olc::Pixel packGlyph(char c, olc::Pixel col) {
 		col.a=c;
 		return col;
@@ -366,17 +367,17 @@ class AsteroidsUI : public olc::PixelGameEngine {
 	void ConsoleDrawString(const vi2d& pos, const std::string& str, olc::Pixel col) {
 		for(int i=0; i<str.length(); i++) {
 			const auto& ch=str[i];
-			col.a=ch;
 			Draw({pos.x+i, pos.y}, packGlyph(ch, col));
 		}
 	}
 
 	void renderDebug() {
-		//show asteroid pos, vel, & bounds
 		const auto red_glyph=packGlyph('.', olc::RED);
 		const auto blue_glyph=packGlyph('.', olc::BLUE);
 		const auto green_glyph=packGlyph('.', olc::GREEN);
 		const auto grey_glyph=packGlyph('.', olc::GREY);
+
+		//show asteroid pos, vel, & bounds
 		for(const auto& a:asteroids) {
 			DrawLine(a.pos, ship.pos, red_glyph);
 			DrawLine(a.pos, a.pos+a.vel, blue_glyph);
@@ -396,9 +397,10 @@ class AsteroidsUI : public olc::PixelGameEngine {
 		DrawRect(ship_box.min, ship_box.max-ship_box.min, grey_glyph);
 	}
 
+	//show bullets as tiny circles
 	void renderBullets(const olc::Pixel& glyph) {
 		for(const auto& b:bullets) {
-			FillRect(b.pos-1, {3, 3}, glyph);
+			FillCircle(b.pos, 1, glyph);
 		}
 	}
 
