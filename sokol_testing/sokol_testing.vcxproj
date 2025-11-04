@@ -149,12 +149,12 @@
   <ItemGroup>
     <ClInclude Include="src\demo.h" />
     <ClInclude Include="src\math\mat4.h" />
-    <ClInclude Include="src\shd.h" />
     <ClInclude Include="src\sokol\sokol_app.h" />
     <ClInclude Include="src\sokol\sokol_gfx.h" />
     <ClInclude Include="src\sokol\sokol_glue.h" />
     <ClInclude Include="src\sokol\sokol_log.h" />
     <ClInclude Include="src\math\v3d.h" />
+    <ClInclude Include="src\tinker.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />

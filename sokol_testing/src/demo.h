@@ -3,10 +3,15 @@
 #include "sokol/sokol_app.h"
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_glue.h"
-#include "shd.h"
+#include "shd.glsl.h"
 
 #include "math/v3d.h"
 #include "math/mat4.h"
+
+#include <string>
+#include <cmath>
+
+#include "tinker.h"
 
 //generalized struct initializer
 template<typename T>
@@ -14,9 +19,19 @@ void zeroMem(T& t) {
 	std::memset(&t, 0, sizeof(T));
 }
 
+//y p => x y z
+//0 0 => 0 0 1
+static vf3d polar3D(float yaw, float pitch) {
+	return {
+		std::sin(yaw)*std::cos(pitch),
+		std::sin(pitch),
+		std::cos(yaw)*std::cos(pitch)
+	};
+}
+
 float randFloat(float b=1, float a=0) {
 	static const float rand_max=RAND_MAX;
-	float t=rand()/rand_max;
+	float t=std::rand()/rand_max;
 	return a+t*(b-a);
 }
 
@@ -38,6 +53,12 @@ vf3d randDir() {
 	).norm();
 }
 
+struct Vertex {
+	float x, y, z;
+	float nx, ny, nz;
+	std::int16_t u, v;
+};
+
 struct Demo {
 	sg_bindings bindings;
 	sg_pipeline pipeline;
@@ -47,21 +68,16 @@ struct Demo {
 		_keys_curr[NUM_KEYS],
 		_keys_new[NUM_KEYS];
 
-	//scene info as structure of arrays
-	int num_cubes=0;
-	const int max_num_cubes=1000000;
-	vf3d* cube_pos=nullptr;
-	vf3d* cube_rot=nullptr;
-	vf3d* cube_vel=nullptr;
-	vf3d* cube_rot_vel=nullptr;
-	struct inst_data_t { vf3d pos, rot; };
-	inst_data_t* cube_instances=nullptr;
-
 	//cam info
-	vf3d cam_pos;
+	vf3d cam_pos{2, 2, 4};
+	float cam_pos_xyz[3];
 	vf3d cam_dir{1, 0, 0};
-	float cam_yaw=0;
-	float cam_pitch=0;
+	float cam_yaw=-2.6f;
+	float cam_pitch=-.6f;
+
+	//scene info
+	vf3d light_pos{3, 4, -3};
+	float light_pos_xyz[3];
 
 	bool _mouse_moving_new=false;
 	bool mouse_moving=false;
@@ -76,88 +92,100 @@ struct Demo {
 	float mouse_dx=0;
 	float mouse_dy=0;
 
-	bool mouse_locked=false;
+	bool fps_controls=false;
+
+	void userInit() {
+		const Vertex vertexes[]{
+			//back
+			{-1, -1, -1, 0, 0, -1, 32767, 32767},
+			{1, -1, -1, 0, 0, -1, 0, 32767},
+			{-1, 1, -1, 0, 0, -1, 32767, 0},
+			{1, 1, -1, 0, 0, -1, 0, 0},
+			//front
+			{-1, -1, 1, 0, 0, 1, 0, 32767},
+			{1, -1, 1, 0, 0, 1, 32767, 32767},
+			{-1, 1, 1, 0, 0, 1, 0, 0},
+			{1, 1, 1, 0, 0, 1, 32767, 0},
+			//left
+			{-1, -1, -1, -1, 0, 0, 0, 32767},
+			{-1, 1, -1, -1, 0, 0, 0, 0},
+			{-1, -1, 1, -1, 0, 0, 32767, 32767},
+			{-1, 1, 1, -1, 0, 0, 32767, 0},
+			//right
+			{1, -1, -1, 1, 0, 0, 32767, 32767},
+			{1, 1, -1, 1, 0, 0, 32767, 0},
+			{1, -1, 1, 1, 0, 0, 0, 32767},
+			{1, 1, 1, 1, 0, 0, 0, 0},
+			//bottom
+			{-1, -1, -1, 0, -1, 0, 0, 32767},
+			{-1, -1, 1, 0, -1, 0, 0, 0},
+			{1, -1, -1, 0, -1, 0, 32767, 32767},
+			{1, -1, 1, 0, -1, 0, 32767, 0},
+			//top
+			{-1, 1, -1, 0, 1, 0, 0, 0},
+			{-1, 1, 1, 0, 1, 0, 0, 32767},
+			{1, 1, -1, 0, 1, 0, 32767, 0},
+			{1, 1, 1, 0, 1, 0, 32767, 32767}
+		};
+		sg_buffer_desc vert_buf_desc; zeroMem(vert_buf_desc);
+		vert_buf_desc.data=SG_RANGE(vertexes);
+		bindings.vertex_buffers[0]=sg_make_buffer(vert_buf_desc);
+
+		const std::uint16_t indexes[]{
+			0, 1, 2, 1, 3, 2,//back
+			4, 6, 5, 5, 6, 7,//front
+			8, 9, 10, 9, 11, 10,//left
+			12, 14, 13, 13, 14, 15,//right
+			16, 17, 18, 17, 19, 18,//bottom
+			20, 22, 21, 21, 22, 23//top
+		};
+		sg_buffer_desc ibuf_desc; zeroMem(ibuf_desc);
+		ibuf_desc.usage.index_buffer=true;
+		ibuf_desc.data=SG_RANGE(indexes);
+		bindings.index_buffer=sg_make_buffer(ibuf_desc);
+
+		std::uint32_t pixels[4*4]{
+			0xFF000000, 0xFF000055, 0xFF0000AA, 0xFF0000FF,
+			0xFF005500, 0xFF005555, 0xFF0055AA, 0xFF0055FF,
+			0xFF00AA00, 0xFF00AA55, 0xFF00AAAA, 0xFF00AAFF,
+			0xFF00FF00, 0xFF00FF55, 0xFF00FFAA, 0xFF00FFFF,
+		};
+		sg_image_desc image_desc; zeroMem(image_desc);
+		image_desc.width=4;
+		image_desc.height=4;
+		image_desc.data.mip_levels[0]=SG_RANGE(pixels);
+		sg_view_desc view_desc; zeroMem(view_desc);
+		view_desc.texture.image=sg_make_image(image_desc);
+		bindings.views[VIEW_u_tex]=sg_make_view(view_desc);
+
+		sg_sampler_desc sampler_desc; zeroMem(sampler_desc);
+		bindings.samplers[SMP_u_smp]=sg_make_sampler(sampler_desc);
+
+		sg_pipeline_desc pipeline_desc; zeroMem(pipeline_desc);
+		pipeline_desc.shader=sg_make_shader(shd_shader_desc(sg_query_backend()));
+		pipeline_desc.layout.attrs[ATTR_shd_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pipeline_desc.layout.attrs[ATTR_shd_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pipeline_desc.layout.attrs[ATTR_shd_uv].format=SG_VERTEXFORMAT_SHORT2N;
+		pipeline_desc.index_type=SG_INDEXTYPE_UINT16;//use the index buffer
+		pipeline_desc.cull_mode=SG_CULLMODE_BACK;//cull triangles
+		pipeline_desc.depth.write_enabled=true;//use depth buffer
+		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pipeline=sg_make_pipeline(pipeline_desc);
+	}
 
 	void init() {
 		sg_desc desc; zeroMem(desc);
 		desc.environment=sglue_environment();
 		sg_setup(desc);
 
-		struct Vertex {
-			float x, y, z;
-			float r, g, b, a;
-		};
+		userInit();
 
-		//rgb cube
-		float sz=.1f;
-		const Vertex cube_vertexes[]{
-			-sz, -sz, -sz, 0, 0, 0, 1,
-			-sz, -sz, sz, 0, 0, 1, 1,
-			-sz, sz, -sz, 0, 1, 0, 1,
-			-sz, sz, sz, 0, 1, 1, 1,
-			sz, -sz, -sz, 1, 0, 0, 1,
-			sz, -sz, sz, 1, 0, 1, 1,
-			sz, sz, -sz, 1, 1, 0, 1,
-			sz, sz, sz, 1, 1, 1, 1
-		};
-		sg_buffer_desc vert_buf_desc; zeroMem(vert_buf_desc);
-		vert_buf_desc.data=SG_RANGE(cube_vertexes);
-		bindings.vertex_buffers[0]=sg_make_buffer(vert_buf_desc);
-
-		//from blender cube.obj w/ i-1
-		const std::uint16_t cube_indexes[]{
-			0, 2, 3, 0, 3, 1,
-			1, 3, 7, 1, 7, 5,
-			5, 7, 6, 5, 6, 4,
-			4, 6, 2, 4, 2, 0,
-			6, 3, 2, 6, 7, 3,
-			0, 1, 5, 0, 5, 4
-		};
-		sg_buffer_desc ix_buf_desc; zeroMem(ix_buf_desc);
-		ix_buf_desc.usage.index_buffer=true;
-		ix_buf_desc.data=SG_RANGE(cube_indexes);
-		bindings.index_buffer=sg_make_buffer(ix_buf_desc);
-
-		sg_buffer_desc inst_buf_desc; zeroMem(inst_buf_desc);
-		inst_buf_desc.size=sizeof(inst_data_t)*max_num_cubes;
-		inst_buf_desc.usage.stream_update=true;
-		bindings.vertex_buffers[1]=sg_make_buffer(inst_buf_desc);
-
-		sg_pipeline_desc pipeline_desc; zeroMem(pipeline_desc);
-		pipeline_desc.shader=sg_make_shader(shd_shader_desc(sg_query_backend()));
-		pipeline_desc.layout.buffers[1].step_func=SG_VERTEXSTEP_PER_INSTANCE;
-		pipeline_desc.layout.attrs[ATTR_shd_vert_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pipeline_desc.layout.attrs[ATTR_shd_vert_pos].buffer_index=0;
-		pipeline_desc.layout.attrs[ATTR_shd_vert_col0].format=SG_VERTEXFORMAT_FLOAT4;
-		pipeline_desc.layout.attrs[ATTR_shd_vert_col0].buffer_index=0;
-		pipeline_desc.layout.attrs[ATTR_shd_cube_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pipeline_desc.layout.attrs[ATTR_shd_cube_pos].buffer_index=1;
-		pipeline_desc.layout.attrs[ATTR_shd_cube_rot].format=SG_VERTEXFORMAT_FLOAT3;
-		pipeline_desc.layout.attrs[ATTR_shd_cube_rot].buffer_index=1;
-		pipeline_desc.index_type=SG_INDEXTYPE_UINT16;
-		pipeline_desc.cull_mode=SG_CULLMODE_BACK;
-		pipeline_desc.depth.write_enabled=true;
-		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pipeline=sg_make_pipeline(pipeline_desc);
-
-		std::memset(_keys_old, false, sizeof(bool)* NUM_KEYS);
-		std::memset(_keys_curr, false, sizeof(bool)* NUM_KEYS);
-		std::memset(_keys_new, false, sizeof(bool)* NUM_KEYS);
-
-		//allocate heap for these since there are so many
-		cube_pos=new vf3d[max_num_cubes];
-		cube_rot=new vf3d[max_num_cubes];
-		cube_vel=new vf3d[max_num_cubes];
-		cube_rot_vel=new vf3d[max_num_cubes];
-		cube_instances=new inst_data_t[max_num_cubes];
+		std::memset(_keys_old, false, sizeof(bool)*NUM_KEYS);
+		std::memset(_keys_curr, false, sizeof(bool)*NUM_KEYS);
+		std::memset(_keys_new, false, sizeof(bool)*NUM_KEYS);
 	}
 
 	void cleanup() {
-		delete[] cube_pos;
-		delete[] cube_vel;
-		delete[] cube_rot;
-		delete[] cube_rot_vel;
-
 		sg_shutdown();
 	}
 
@@ -194,12 +222,12 @@ struct Demo {
 
 	void handleCameraLooking(float dt) {
 		//lock mouse position
-		if(getKey(SAPP_KEYCODE_L).pressed) {
-			mouse_locked^=true;
-			sapp_lock_mouse(mouse_locked);
+		if(getKey(SAPP_KEYCODE_F).pressed) {
+			fps_controls^=true;
+			sapp_lock_mouse(fps_controls);
 		}
 
-		if(mouse_locked) {
+		if(fps_controls) {
 			//move with mouse
 			const float sensitivity=0.5f*dt;
 
@@ -212,14 +240,14 @@ struct Demo {
 			//move with keys
 
 			//left/right
-			if(getKey(SAPP_KEYCODE_LEFT).held) cam_yaw-=dt;
-			if(getKey(SAPP_KEYCODE_RIGHT).held) cam_yaw+=dt;
-			
+			if(getKey(SAPP_KEYCODE_LEFT).held) cam_yaw+=dt;
+			if(getKey(SAPP_KEYCODE_RIGHT).held) cam_yaw-=dt;
+
 			//up/down
 			if(getKey(SAPP_KEYCODE_UP).held) cam_pitch+=dt;
 			if(getKey(SAPP_KEYCODE_DOWN).held) cam_pitch-=dt;
 		}
-		
+
 		//clamp camera pitch
 		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
 		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
@@ -231,7 +259,7 @@ struct Demo {
 		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam_pos.y-=4.f*dt;
 
 		//move forward, backward
-		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
+		vf3d fb_dir(std::sin(cam_yaw), 0, std::cos(cam_yaw));
 		if(getKey(SAPP_KEYCODE_W).held) cam_pos+=5.f*dt*fb_dir;
 		if(getKey(SAPP_KEYCODE_S).held) cam_pos-=3.f*dt*fb_dir;
 
@@ -241,76 +269,29 @@ struct Demo {
 		if(getKey(SAPP_KEYCODE_D).held) cam_pos-=4.f*dt*lr_dir;
 	}
 
-	void emitCube() {
-		if(num_cubes>max_num_cubes) return;
-		
-		//start at origin
-		cube_pos[num_cubes]={0, 0, 0};
-
-		//random rotation
-		cube_rot[num_cubes]={
-			2*Pi*randFloat(),
-			2*Pi*randFloat(),
-			2*Pi*randFloat()
-		};
-
-		float speed=randFloat(1.3f, 2.7f);
-		//hemispherical direction
-		vf3d dir=randDir();
-		if(dir.dot({0, 1, 0})<0) dir*=-1;
-		cube_vel[num_cubes]=speed*dir;
-
-		//random rotational speed
-		cube_rot_vel[num_cubes]={
-			Pi*randFloat(-.5f, .5f),
-			Pi*randFloat(-.5f, .5f),
-			Pi*randFloat(-.5f, .5f)
-		};
-
-		num_cubes++;
-	}
-
 	void handleUserInput(float dt) {
 		handleCameraLooking(dt);
 		handleCameraMovement(dt);
 
-		//"reset" cubes
-		if(getKey(SAPP_KEYCODE_C).pressed) num_cubes=0;
+		if(getKey(SAPP_KEYCODE_L).pressed) {
+			light_pos=cam_pos;
+		}
 
-		//emit 100 cubes
-		if(getKey(SAPP_KEYCODE_E).held) {
-			for(int i=0; i<100; i++) emitCube();
+		if(getKey(SAPP_KEYCODE_ENTER).pressed) {
+			TINKER_FLOAT(3.f, light_pos.x);
+			TINKER_FLOAT(4.f, light_pos.y);
+			TINKER_FLOAT(-3.f, light_pos.z);
 		}
 
 		//exit
 		if(getKey(SAPP_KEYCODE_ESCAPE).pressed) sapp_request_quit();
 	}
 
-	void update(float dt) {
+	void userUpdate(float dt) {
 		handleUserInput(dt);
 
 		//polar to cartesian
-		cam_dir=vf3d(
-			std::cos(cam_yaw)*std::cos(cam_pitch),
-			std::sin(cam_pitch),
-			std::sin(cam_yaw)*std::cos(cam_pitch)
-		);
-
-		//update particles
-		for(int i=0; i<num_cubes; i++) {
-			//gravity
-			cube_vel[i].y-=dt;
-			cube_pos[i]+=cube_vel[i]*dt;
-
-			//bounce
-			if(cube_pos[i].y<0) {
-				cube_pos[i].y=0;
-				cube_vel[i].y*=-1;
-			}
-
-			//rotations
-			cube_rot[i]+=cube_rot_vel[i]*dt;
-		}
+		cam_dir=polar3D(cam_yaw, cam_pitch);
 
 		//set title to framerate
 		{
@@ -318,52 +299,56 @@ struct Demo {
 			std::snprintf(
 				title,
 				sizeof(title),
-				"%d Instanced Cubes - FPS: %d",
-				num_cubes,
+				"Lighting Demo - FPS: %d",
 				int(1/dt)
 			);
 			sapp_set_window_title(title);
 		}
 	}
 
-	void render() {
-		//update instance data
-		for(int i=0; i<num_cubes; i++) {
-			cube_instances[i].pos=cube_pos[i];
-			cube_instances[i].rot=cube_rot[i];
-		}
-		sg_range inst_range; zeroMem(inst_range);
-		inst_range.ptr=cube_instances;
-		inst_range.size=sizeof(inst_data_t)*num_cubes;
-		sg_update_buffer(bindings.vertex_buffers[1], inst_range);
-
+	void userRender() {
 		//compute transform matrixes
 		mat4 model=mat4::makeIdentity();
 
 		mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
-		mat4 view=inverse(look_at);
+		mat4 view=mat4::inverse(look_at);
 
 		//perspective
 		mat4 proj=mat4::makeProjection(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000.f);
 
 		//premultiply transform
-		mat4 mvp=mul(proj, mul(view, model));
-		
+		mat4 view_proj=mat4::mul(proj, view);
+
 		sg_pass pass; zeroMem(pass);
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
 		pass.action.colors[0].clear_value={.2f, .3f, .4f, 1.f};
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
+
 		sg_apply_pipeline(pipeline);
 		sg_apply_bindings(bindings);
 
-		//send transform matrix to shader
+		//send vertex uniforms
 		vs_params_t vs_params; zeroMem(vs_params);
-		std::memcpy(vs_params.mvp, mvp.m, sizeof(vs_params.mvp));
+		std::memcpy(vs_params.u_model, model.m, sizeof(vs_params.u_model));
+		std::memcpy(vs_params.u_view_proj, view_proj.m, sizeof(vs_params.u_view_proj));
 		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
 
-		//draw 36 verts=12 tris
-		sg_draw(0, 36, num_cubes);
+		//send fragment uniforms
+		fs_params_t fs_params; zeroMem(fs_params);
+		light_pos_xyz[0]=light_pos.x;
+		light_pos_xyz[1]=light_pos.y;
+		light_pos_xyz[2]=light_pos.z;
+		std::memcpy(fs_params.u_light_pos, &light_pos_xyz, sizeof(fs_params.u_light_pos));
+		cam_pos_xyz[0]=cam_pos.x;
+		cam_pos_xyz[1]=cam_pos.y;
+		cam_pos_xyz[2]=cam_pos.z;
+		std::memcpy(fs_params.u_cam_pos, &cam_pos_xyz, sizeof(fs_params.u_cam_pos));
+		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
+
+
+		sg_draw(0, 3*12, 1);
+
 		sg_end_pass();
 		sg_commit();
 	}
@@ -371,7 +356,7 @@ struct Demo {
 	void frame() {
 		//update curr key values
 		std::memcpy(_keys_curr, _keys_new, sizeof(bool)*NUM_KEYS);
-		
+
 		//hmm...
 		if(mouse_moving) {
 			mouse_dx=_mouse_dx_new;
@@ -383,9 +368,9 @@ struct Demo {
 
 		const float dt=sapp_frame_duration();
 
-		update(dt);
+		userUpdate(dt);
 
-		render();
+		userRender();
 
 		mouse_moving=false;
 

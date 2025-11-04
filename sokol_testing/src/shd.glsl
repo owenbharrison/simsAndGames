@@ -1,59 +1,59 @@
 @vs vs
 layout(binding=0) uniform vs_params{
-	mat4 mvp;
+	mat4 u_model;
+	mat4 u_view_proj;
 };
 
-in vec3 vert_pos;
-in vec4 vert_col0;
-in vec3 cube_pos;
-in vec3 cube_rot;
+in vec3 pos;
+in vec3 norm;
+in vec2 uv;
 
-out vec4 vert_col;
-
-mat3 makeRotX(float r) {
-	float c=cos(r), s=sin(r);
-	return mat3(
-		vec3(1,  0, 0),
-		vec3(0,  c, s),
-		vec3(0, -s, c)
-	);
-}
-
-mat3 makeRotY(float r) {
-	float c=cos(r), s=sin(r);
-	return mat3(
-		vec3(c, 0, -s),
-		vec3(0, 1,  0),
-		vec3(s, 0,  c)
-	);
-}
-
-mat3 makeRotZ(float r) {
-	float c=cos(r), s=sin(r);
-	return mat3(
-		vec3( c, s, 0),
-		vec3(-s, c, 0),
-		vec3( 0, 0, 1)
-	);
-}
+out vec3 v_pos;
+out vec3 v_norm;
+out vec2 v_uv;
 
 void main() {
-	mat3 rot_x=makeRotX(cube_rot.x);
-	mat3 rot_y=makeRotY(cube_rot.y);
-	mat3 rot_z=makeRotZ(cube_rot.z);
-	mat3 rot=rot_z*rot_y*rot_x;
-	gl_Position=mvp*vec4(cube_pos+rot*vert_pos, 1);
-	vert_col=vert_col0;
+	vec4 world_pos=u_model*vec4(pos, 1);
+	v_pos=world_pos.xyz;
+	v_norm=mat3(u_model)*norm;
+	gl_Position=u_view_proj*world_pos;
+	v_uv=uv;
 }
 @end
 
 @fs fs
-in vec4 vert_col;
+layout(binding=1) uniform fs_params{
+	vec3 u_light_pos;
+	vec3 u_cam_pos;
+};
+
+in vec3 v_pos;
+in vec3 v_norm;
+in vec2 v_uv;
+
+layout(binding=0) uniform texture2D u_tex;
+layout(binding=0) uniform sampler u_smp;
 
 out vec4 frag_col;
 
 void main() {
-	frag_col=vert_col;
+	vec3 N=normalize(v_norm);
+	vec3 L=normalize(u_light_pos-v_pos);
+	vec3 V=normalize(u_cam_pos-v_pos);
+	vec3 R=reflect(-L, N);
+
+	//diffuse based on tex col?
+	float amb_mag=.1;
+	float diff_mag=.8*max(dot(N, L), 0);
+	vec4 col=texture(sampler2D(u_tex, u_smp), v_uv);
+	vec3 amb=amb_mag*col.rgb;
+	vec3 diff=diff_mag*col.rgb;
+
+	//white specular
+	float spec_mag=.3*pow(max(dot(R, V), 0), 32);
+	vec3 spec=spec_mag*vec3(1, 1, 1);
+
+	frag_col=vec4(amb+diff+spec, 1);
 }
 @end
 

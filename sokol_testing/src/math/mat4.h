@@ -130,75 +130,75 @@ struct mat4 {
 		a(2, 3)=-1;
 		return a;
 	}
+
+	static mat4 mul(const mat4& a, const mat4& b) {
+		mat4 c;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				c(i, j)=
+					a(0, j)*b(i, 0)+
+					a(1, j)*b(i, 1)+
+					a(2, j)*b(i, 2)+
+					a(3, j)*b(i, 3);
+			}
+		}
+		return c;
+	}
+
+	static mat4 transpose(const mat4& a) {
+		mat4 b;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				b(i, j)=a(j, i);
+			}
+		}
+		return b;
+	}
+
+	//compute determinant of sub matrix
+	static float minor(const mat4& a, int row, int col) {
+		float m[9];
+		int subi=0;
+		for(int i=0; i<4; i++) {
+			if(i==row) continue;
+			int subj=0;
+			for(int j=0; j<4; j++) {
+				if(j==col) continue;
+				m[subj+3*subi]=a(i, j);
+				subj++;
+			}
+			subi++;
+		}
+		return
+			m[0+3*0]*(m[1+3*1]*m[2+3*2]-m[1+3*2]*m[2+3*1])-
+			m[0+3*1]*(m[1+3*0]*m[2+3*2]-m[1+3*2]*m[2+3*0])+
+			m[0+3*2]*(m[1+3*0]*m[2+3*1]-m[1+3*1]*m[2+3*0]);
+	}
+
+	static mat4 inverse(const mat4& a) {
+		mat4 cofactors;
+		for(int i=0; i<4; i++) {
+			for(int j=0; j<4; j++) {
+				cofactors(i, j)=((i+j)%2?-1:1)*mat4::minor(a, i, j);
+			}
+		}
+		mat4 adjugate=mat4::transpose(cofactors);
+
+		//get determinant using first row and cofactors
+		float det=0;
+		for(int j=0; j<4; j++) {
+			det+=a(0, j)*cofactors(0, j);
+		}
+
+		//return identity if singular...
+		mat4 inv=mat4::makeIdentity();
+		if(det!=0) {
+			//divide adjugate by determinant
+			float recip=1/det;
+			for(int i=0; i<16; i++) inv.m[i]=recip*adjugate.m[i];
+		}
+
+		return inv;
+	}
 };
-
-mat4 mul(const mat4& a, const mat4& b) {
-	mat4 c;
-	for(int i=0; i<4; i++) {
-		for(int j=0; j<4; j++) {
-			c(i, j)=
-				a(0, j)*b(i, 0)+
-				a(1, j)*b(i, 1)+
-				a(2, j)*b(i, 2)+
-				a(3, j)*b(i, 3);
-		}
-	}
-	return c;
-}
-
-mat4 transpose(const mat4& a) {
-	mat4 b;
-	for(int i=0; i<4; i++) {
-		for(int j=0; j<4; j++) {
-			b(i, j)=a(j, i);
-		}
-	}
-	return b;
-}
-
-//compute determinant of sub matrix
-float minor(const mat4& a, int row, int col) {
-	float m[9];
-	int subi=0;
-	for(int i=0; i<4; i++) {
-		if(i==row) continue;
-		int subj=0;
-		for(int j=0; j<4; j++) {
-			if(j==col) continue;
-			m[subj+3*subi]=a(i, j);
-			subj++;
-		}
-		subi++;
-	}
-	return
-		m[0+3*0]*(m[1+3*1]*m[2+3*2]-m[1+3*2]*m[2+3*1])-
-		m[0+3*1]*(m[1+3*0]*m[2+3*2]-m[1+3*2]*m[2+3*0])+
-		m[0+3*2]*(m[1+3*0]*m[2+3*1]-m[1+3*1]*m[2+3*0]);
-}
-
-mat4 inverse(const mat4& a) {
-	mat4 cofactors;
-	for(int i=0; i<4; i++) {
-		for(int j=0; j<4; j++) {
-			cofactors(i, j)=((i+j)%2?-1:1)*minor(a, i, j);
-		}
-	}
-	mat4 adjugate=transpose(cofactors);
-
-	//get determinant using first row and cofactors
-	float det=0;
-	for(int j=0; j<4; j++) {
-		det+=a(0, j)*cofactors(0, j);
-	}
-
-	//return identity if singular...
-	mat4 inv=mat4::makeIdentity();
-	if(det!=0) {
-		//divide adjugate by determinant
-		float recip=1/det;
-		for(int i=0; i<16; i++) inv.m[i]=recip*adjugate.m[i];
-	}
-
-	return inv;
-}
 #endif

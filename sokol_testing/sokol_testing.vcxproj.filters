@@ -33,10 +33,10 @@
     <ClInclude Include="src\math\v3d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\shd.h">
+    <ClInclude Include="src\demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\demo.h">
+    <ClInclude Include="src\tinker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
