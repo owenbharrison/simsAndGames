@@ -11,8 +11,6 @@
 #include <string>
 #include <cmath>
 
-#include "tinker.h"
-
 //generalized struct initializer
 template<typename T>
 void zeroMem(T& t) {
@@ -53,11 +51,7 @@ vf3d randDir() {
 	).norm();
 }
 
-struct Vertex {
-	float x, y, z;
-	float nx, ny, nz;
-	std::int16_t u, v;
-};
+#include "mesh.h"
 
 struct Demo {
 	sg_bindings bindings;
@@ -94,83 +88,70 @@ struct Demo {
 
 	bool fps_controls=false;
 
-	void userInit() {
-		const Vertex vertexes[]{
-			//back
-			{-1, -1, -1, 0, 0, -1, 32767, 32767},
-			{1, -1, -1, 0, 0, -1, 0, 32767},
-			{-1, 1, -1, 0, 0, -1, 32767, 0},
-			{1, 1, -1, 0, 0, -1, 0, 0},
-			//front
-			{-1, -1, 1, 0, 0, 1, 0, 32767},
-			{1, -1, 1, 0, 0, 1, 32767, 32767},
-			{-1, 1, 1, 0, 0, 1, 0, 0},
-			{1, 1, 1, 0, 0, 1, 32767, 0},
-			//left
-			{-1, -1, -1, -1, 0, 0, 0, 32767},
-			{-1, 1, -1, -1, 0, 0, 0, 0},
-			{-1, -1, 1, -1, 0, 0, 32767, 32767},
-			{-1, 1, 1, -1, 0, 0, 32767, 0},
-			//right
-			{1, -1, -1, 1, 0, 0, 32767, 32767},
-			{1, 1, -1, 1, 0, 0, 32767, 0},
-			{1, -1, 1, 1, 0, 0, 0, 32767},
-			{1, 1, 1, 1, 0, 0, 0, 0},
-			//bottom
-			{-1, -1, -1, 0, -1, 0, 0, 32767},
-			{-1, -1, 1, 0, -1, 0, 0, 0},
-			{1, -1, -1, 0, -1, 0, 32767, 32767},
-			{1, -1, 1, 0, -1, 0, 32767, 0},
-			//top
-			{-1, 1, -1, 0, 1, 0, 0, 0},
-			{-1, 1, 1, 0, 1, 0, 0, 32767},
-			{1, 1, -1, 0, 1, 0, 32767, 0},
-			{1, 1, 1, 0, 1, 0, 32767, 32767}
-		};
-		sg_buffer_desc vert_buf_desc; zeroMem(vert_buf_desc);
-		vert_buf_desc.data=SG_RANGE(vertexes);
-		bindings.vertex_buffers[0]=sg_make_buffer(vert_buf_desc);
+	Mesh mesh;
 
-		const std::uint16_t indexes[]{
-			0, 1, 2, 1, 3, 2,//back
-			4, 6, 5, 5, 6, 7,//front
-			8, 9, 10, 9, 11, 10,//left
-			12, 14, 13, 13, 14, 15,//right
-			16, 17, 18, 17, 19, 18,//bottom
-			20, 22, 21, 21, 22, 23//top
-		};
-		sg_buffer_desc ibuf_desc; zeroMem(ibuf_desc);
-		ibuf_desc.usage.index_buffer=true;
-		ibuf_desc.data=SG_RANGE(indexes);
-		bindings.index_buffer=sg_make_buffer(ibuf_desc);
+	void setupMesh() {
+		if(!Mesh::loadFromOBJ(mesh, "assets/suzanne.txt")) {
+			//default to cube if mesh loading fails
+			Mesh::makeCube(mesh);
+		}
 
-		std::uint32_t pixels[4*4]{
-			0xFF000000, 0xFF000055, 0xFF0000AA, 0xFF0000FF,
-			0xFF005500, 0xFF005555, 0xFF0055AA, 0xFF0055FF,
-			0xFF00AA00, 0xFF00AA55, 0xFF00AAAA, 0xFF00AAFF,
-			0xFF00FF00, 0xFF00FF55, 0xFF00FFAA, 0xFF00FFFF,
-		};
+		bindings.vertex_buffers[0]=mesh.vbuf;
+		bindings.index_buffer=mesh.ibuf;
+	}
+
+	void setupTexture() {
+		int width=256;
+		int height=256;
+		std::uint32_t* pixels=new std::uint32_t[width*height];
+		for(int i=0; i<width; i++) {
+			for(int j=0; j<height; j++) {
+				float u=(.5f+i)/width;
+				float v=(.5f+j)/height;
+				int r=255*u;
+				int g=127;
+				int b=255*v;
+				int a=255;
+				pixels[i+width*j]=(a<<24)|(b<<16)|(g<<8)|r;
+			}
+		}
 		sg_image_desc image_desc; zeroMem(image_desc);
-		image_desc.width=4;
-		image_desc.height=4;
-		image_desc.data.mip_levels[0]=SG_RANGE(pixels);
+		image_desc.width=width;
+		image_desc.height=height;
+		image_desc.data.mip_levels[0].ptr=pixels;
+		image_desc.data.mip_levels[0].size=sizeof(std::uint32_t)*width*height;
 		sg_view_desc view_desc; zeroMem(view_desc);
 		view_desc.texture.image=sg_make_image(image_desc);
 		bindings.views[VIEW_u_tex]=sg_make_view(view_desc);
+		delete[] pixels;
+	}
 
+	void setupSampler() {
 		sg_sampler_desc sampler_desc; zeroMem(sampler_desc);
 		bindings.samplers[SMP_u_smp]=sg_make_sampler(sampler_desc);
+	}
 
+	void setupPipeline() {
 		sg_pipeline_desc pipeline_desc; zeroMem(pipeline_desc);
 		pipeline_desc.shader=sg_make_shader(shd_shader_desc(sg_query_backend()));
 		pipeline_desc.layout.attrs[ATTR_shd_pos].format=SG_VERTEXFORMAT_FLOAT3;
 		pipeline_desc.layout.attrs[ATTR_shd_norm].format=SG_VERTEXFORMAT_FLOAT3;
 		pipeline_desc.layout.attrs[ATTR_shd_uv].format=SG_VERTEXFORMAT_SHORT2N;
-		pipeline_desc.index_type=SG_INDEXTYPE_UINT16;//use the index buffer
-		pipeline_desc.cull_mode=SG_CULLMODE_BACK;//cull triangles
+		pipeline_desc.index_type=SG_INDEXTYPE_UINT32;//use the index buffer
+		pipeline_desc.cull_mode=SG_CULLMODE_NONE;
 		pipeline_desc.depth.write_enabled=true;//use depth buffer
 		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		pipeline=sg_make_pipeline(pipeline_desc);
+	}
+
+	void userInit() {
+		setupMesh();
+
+		setupTexture();
+		
+		setupSampler();
+
+		setupPipeline();
 	}
 
 	void init() {
@@ -232,7 +213,7 @@ struct Demo {
 			const float sensitivity=0.5f*dt;
 
 			//left/right
-			cam_yaw+=sensitivity*mouse_dx;
+			cam_yaw-=sensitivity*mouse_dx;
 
 			//up/down (y backwards
 			cam_pitch-=sensitivity*mouse_dy;
@@ -277,14 +258,24 @@ struct Demo {
 			light_pos=cam_pos;
 		}
 
-		if(getKey(SAPP_KEYCODE_ENTER).pressed) {
-			TINKER_FLOAT(3.f, light_pos.x);
-			TINKER_FLOAT(4.f, light_pos.y);
-			TINKER_FLOAT(-3.f, light_pos.z);
+		if(getKey(SAPP_KEYCODE_F11).pressed) {
+			sapp_toggle_fullscreen();
 		}
 
 		//exit
 		if(getKey(SAPP_KEYCODE_ESCAPE).pressed) sapp_request_quit();
+	}
+
+	//set title to framerate
+	void updateTitle(float dt) {
+		char title[64];
+		std::snprintf(
+			title,
+			sizeof(title),
+			"Mesh Demo - FPS: %d",
+			int(1/dt)
+		);
+		sapp_set_window_title(title);
 	}
 
 	void userUpdate(float dt) {
@@ -293,23 +284,16 @@ struct Demo {
 		//polar to cartesian
 		cam_dir=polar3D(cam_yaw, cam_pitch);
 
-		//set title to framerate
-		{
-			char title[64];
-			std::snprintf(
-				title,
-				sizeof(title),
-				"Lighting Demo - FPS: %d",
-				int(1/dt)
-			);
-			sapp_set_window_title(title);
-		}
+		//rotate mesh about x & z
+		mesh.rot.x+=.5f*dt;
+		mesh.rot.z+=dt;
+		mesh.updateMatrixes();
+
+		updateTitle(dt);
 	}
 
 	void userRender() {
-		//compute transform matrixes
-		mat4 model=mat4::makeIdentity();
-
+		//camera transformation matrix
 		mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
 		mat4 view=mat4::inverse(look_at);
 
@@ -321,7 +305,7 @@ struct Demo {
 
 		sg_pass pass; zeroMem(pass);
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		pass.action.colors[0].clear_value={.2f, .3f, .4f, 1.f};
+		pass.action.colors[0].clear_value={.62f, .35f, .82f, 1.f};
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
@@ -330,24 +314,21 @@ struct Demo {
 
 		//send vertex uniforms
 		vs_params_t vs_params; zeroMem(vs_params);
-		std::memcpy(vs_params.u_model, model.m, sizeof(vs_params.u_model));
+		std::memcpy(vs_params.u_model, mesh.m_model.m, sizeof(vs_params.u_model));
 		std::memcpy(vs_params.u_view_proj, view_proj.m, sizeof(vs_params.u_view_proj));
 		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
 
 		//send fragment uniforms
 		fs_params_t fs_params; zeroMem(fs_params);
-		light_pos_xyz[0]=light_pos.x;
-		light_pos_xyz[1]=light_pos.y;
-		light_pos_xyz[2]=light_pos.z;
-		std::memcpy(fs_params.u_light_pos, &light_pos_xyz, sizeof(fs_params.u_light_pos));
-		cam_pos_xyz[0]=cam_pos.x;
-		cam_pos_xyz[1]=cam_pos.y;
-		cam_pos_xyz[2]=cam_pos.z;
-		std::memcpy(fs_params.u_cam_pos, &cam_pos_xyz, sizeof(fs_params.u_cam_pos));
+		fs_params.u_light_pos[0]=light_pos.x;
+		fs_params.u_light_pos[1]=light_pos.y;
+		fs_params.u_light_pos[2]=light_pos.z;
+		fs_params.u_cam_pos[0]=cam_pos.x;
+		fs_params.u_cam_pos[1]=cam_pos.y;
+		fs_params.u_cam_pos[2]=cam_pos.z;
 		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
 
-
-		sg_draw(0, 3*12, 1);
+		sg_draw(0, 3*mesh.index_tris.size(), 1);
 
 		sg_end_pass();
 		sg_commit();
