@@ -2,6 +2,8 @@
 #ifndef MESH_CLASS_H
 #define MESH_CLASS_H
 
+#include <vector>
+
 struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
@@ -9,15 +11,32 @@ struct IndexTriangle {
 struct Mesh {
 	std::vector<vf3d> vertices;
 	std::vector<IndexTriangle> index_tris;
+
 	vf3d rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
-	Mat4 mat_world;//local->world
-	std::vector<cmn::Triangle> tris;
-	int id=-1;
 
+	Mat4 mat_world;
+
+	std::vector<cmn::Triangle> tris;
+
+	float intersectRay(const vf3d& orig, const vf3d& dir) const {
+		//sort by closest
+		float record=-1;
+		for(const auto& t:tris) {
+			float dist=t.intersectSeg(orig, orig+dir);
+			if(dist>0) {
+				if(record<0||dist<record) {
+					record=dist;
+				}
+			}
+		}
+
+		return record;
+	}
+
+	//combine all transforms
 	void updateTransforms() {
-		//combine all transforms
 		Mat4 mat_rot_x=Mat4::makeRotX(rotation.x);
 		Mat4 mat_rot_y=Mat4::makeRotY(rotation.y);
 		Mat4 mat_rot_z=Mat4::makeRotZ(rotation.z);
@@ -27,7 +46,19 @@ struct Mesh {
 		mat_world=mat_scale*mat_rot*mat_trans;
 	}
 
-	void updateTriangles() {
+	//get transforms from new coordinate system
+	void updateTransforms(const vf3d& rgt, const vf3d& up, const vf3d& fwd) {
+		Mat4 mat_rot;
+		mat_rot(0, 0)=rgt.x, mat_rot(0, 1)=rgt.y, mat_rot(0, 2)=rgt.z;
+		mat_rot(1, 0)=up.x, mat_rot(1, 1)=up.y, mat_rot(1, 2)=up.z;
+		mat_rot(2, 0)=-fwd.x, mat_rot(2, 1)=-fwd.y, mat_rot(2, 2)=-fwd.z;
+		mat_rot(3, 3)=1;
+		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
+		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
+		mat_world=mat_scale*mat_rot*mat_trans;
+	}
+
+	void updateTriangles(const olc::Pixel& col=olc::WHITE) {
 		std::vector<vf3d> new_verts;
 		new_verts.reserve(vertices.size());
 		for(const auto& v:vertices) {
@@ -42,7 +73,6 @@ struct Mesh {
 				new_verts[it.b],
 				new_verts[it.c]
 			};
-			t.id=id;
 			tris.push_back(t);
 		}
 	}
@@ -55,11 +85,11 @@ struct Mesh {
 		}
 	}
 
-	static Mesh loadFromOBJ(const std::string& filename) {
-		Mesh m;
-
+	static bool loadFromOBJ(Mesh& m, const std::string& filename) {
+		m=Mesh{};
+		
 		std::ifstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
+		if(file.fail()) return false;
 
 		//parse file line by line
 		std::string line;
@@ -97,7 +127,7 @@ struct Mesh {
 
 		file.close();
 
-		return m;
+		return true;
 	}
 };
 #endif

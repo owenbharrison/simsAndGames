@@ -26,10 +26,20 @@
     <ClInclude Include="src\camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\following_camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\suzanne.txt" />
-    <Text Include="assets\car.txt" />
-    <Text Include="assets\icosphere.txt" />
+    <Text Include="assets\models\suzanne.txt" />
+    <Text Include="assets\models\jeep.txt" />
+    <Text Include="assets\models\mountains.txt" />
+    <Text Include="assets\models\cctv.txt" />
+    <Text Include="assets\models\house.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\img\grass_falloff.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
