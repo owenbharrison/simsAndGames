@@ -11,17 +11,27 @@ using cmn::Mat4;
 
 constexpr float Pi=3.1415927f;
 
-struct Example : cmn::Engine3D {
-	Example() {
-		sAppName="mesh fracturing";
+//y p => x y z
+//0 0 => 0 0 1
+static vf3d polar3D(float yaw, float pitch) {
+	return {
+		std::sin(yaw)*std::cos(pitch),
+		std::sin(pitch),
+		std::cos(yaw)*std::cos(pitch)
+	};
+}
+
+struct FractureUI : cmn::Engine3D {
+	FractureUI() {
+		sAppName="Mesh Fracturing";
 	}
 
 	//camera positioning
-	float cam_yaw=-Pi/2;
-	float cam_pitch=0;
-	vf3d light_pos;
+	float cam_yaw=-2.69f;
+	float cam_pitch=-0.254f;
 
-	Mesh mesh;
+	std::vector<Mesh> meshes;
+	Mesh* mesh_to_use=nullptr;
 
 	float rot_x=0, rot_y=0, rot_z=0;
 	bool to_spin=true;
@@ -30,89 +40,39 @@ struct Example : cmn::Engine3D {
 	bool show_bounds=false;
 	bool fill_triangles=true;
 
-	bool user_create() override {
-		cam_pos={0, 0, 2};
-		light_pos={1, 2, 2};
+	bool help_menu=false;
 
-		try {
-			mesh=Mesh::loadFromOBJ("assets/bunny.txt");
-		} catch(const std::exception& e) {
-			std::cout<<"  "<<e.what()<<'\n';
-			return false;
+	bool user_create() override {
+		std::srand(std::time(0));
+		
+		cam_pos={1.34f, .558f, 2.03f};
+		
+		{//load meshes
+			const std::vector<std::string> filenames{
+				"assets/armadillo.txt",
+				"assets/bunny.txt",
+				"assets/cow.txt",
+				"assets/dragon.txt",
+				"assets/horse.txt",
+				"assets/monkey.txt",
+				"assets/teapot.txt",
+			};
+			for(const auto& f:filenames) {
+				meshes.push_back({});
+				if(!Mesh::loadFromOBJ(meshes.back(), f)) {
+					std::cout<<"  unable to load "<<f<<'\n';
+
+					return false;
+				}
+			}
 		}
 
-		std::cout<<"Press ESC for integrated console.\n"
-			"  then type help for help.\n";
-		ConsoleCaptureStdOut(true);
+		randomizeMesh();
 
 		return true;
 	}
 
-	bool OnConsoleCommand(const std::string& line) override {
-		std::stringstream line_str(line);
-		std::string cmd; line_str>>cmd;
-
-		if(cmd=="clear") {
-			ConsoleClear();
-
-			return true;
-		}
-
-		if(cmd=="import") {
-			std::string filename;
-			line_str>>filename;
-			if(filename.empty()) {
-				std::cout<<"no filename. try using:\n  import <filename>\n";
-
-				return false;
-			}
-			
-			//try load model
-			Mesh m;
-			try {
-				m=Mesh::loadFromOBJ(filename);
-			} catch(const std::exception& e) {
-				std::cout<<"  "<<e.what()<<'\n';
-				return false;
-			}
-			mesh=m;
-
-			std::cout<<"  successfully loaded mesh w/ "<<mesh.tris.size()<<"tris\n";
-
-			return true;
-		}
-
-		if(cmd=="keybinds") {
-			std::cout<<
-				"  ARROWS   look up, down, left, right\n"
-				"  WASD     move forward, back, left, right\n"
-				"  SPACE    move up\n"
-				"  SHIFT    move down\n"
-				"  L        set light pos\n"
-				"  ENTER    toggle spinning\n"
-				"  O        toggle offset view\n"
-				"  B        toggle bounds view\n"
-				"  F        toggle triangle fill\n"
-				"  ESC      toggle integrated console\n";
-
-			return true;
-		}
-
-		if(cmd=="help") {
-			std::cout<<
-				"  clear        clears the console\n"
-				"  import       import mesh from file\n"
-				"  keybinds     which keys to press for this program?\n";
-
-			return true;
-		}
-
-		std::cout<<"unknown command. type help for list of commands.\n";
-
-		return false;
-	}
-
-	void handleUserInput(float dt) {
+	void handleCameraLooking(float dt) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
 		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
@@ -120,22 +80,17 @@ struct Example : cmn::Engine3D {
 		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
 
 		//look left, right
-		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
-		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw+=dt;
+		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw-=dt;
+	}
 
-		//polar to cartesian
-		cam_dir=vf3d(
-			std::cosf(cam_yaw)*std::cosf(cam_pitch),
-			std::sinf(cam_pitch),
-			std::sinf(cam_yaw)*std::cosf(cam_pitch)
-		);
-
+	void handleCameraMovement(float dt) {
 		//move up, down
 		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
 		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 		//move forward, backward
-		vf3d fb_dir(std::cosf(cam_yaw), 0, std::sinf(cam_yaw));
+		vf3d fb_dir(std::sin(cam_yaw), 0, std::cos(cam_yaw));
 		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
 		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
@@ -143,23 +98,31 @@ struct Example : cmn::Engine3D {
 		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
 		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
 		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+	}
 
-		//set light pos
-		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
+	void randomizeMesh() {
+		int i=std::rand()%meshes.size();
+		mesh_to_use=&meshes[i];
+	}
+
+	void handleUserInput(float dt) {
+		handleCameraLooking(dt);
+
+		cam_dir=polar3D(cam_yaw, cam_pitch);
+
+		handleCameraMovement(dt);
 
 		//debug toggles
 		if(GetKey(olc::Key::ENTER).bPressed) to_spin^=true;
 		if(GetKey(olc::Key::O).bPressed) offset_meshes^=true;
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
 		if(GetKey(olc::Key::F).bPressed) fill_triangles^=true;
+		if(GetKey(olc::Key::R).bPressed) randomizeMesh();
+		if(GetKey(olc::Key::H).bPressed) help_menu^=true;
 	}
 
 	bool user_update(float dt) override {
-		//open and close the integrated console
-		if(GetKey(olc::Key::ESCAPE).bPressed) ConsoleShow(olc::Key::ESCAPE);
-
-		//only allow input when console NOT open
-		if(!IsConsoleShowing()) handleUserInput(dt);
+		handleUserInput(dt);
 
 		if(to_spin) {
 			rot_x+=.3f*dt;
@@ -171,8 +134,8 @@ struct Example : cmn::Engine3D {
 	}
 
 	bool user_geometry() override {
-		//add main light
-		lights.push_back({light_pos, olc::WHITE});
+		//add main light at cam_pos
+		lights.push_back({cam_pos, olc::WHITE});
 		
 		//split mesh and color each side accordingly
 		vf3d norm{0, 1, 0};
@@ -181,13 +144,13 @@ struct Example : cmn::Engine3D {
 		Mat4 mat_z=Mat4::makeRotZ(rot_z);
 		norm=norm*mat_x*mat_y*mat_z;
 		Mesh pos, neg;
-		if(mesh.splitByPlane({0, 0, 0}, norm, pos, neg)) {
+		if(mesh_to_use->splitByPlane({0, 0, 0}, norm, pos, neg)) {
 			if(offset_meshes) {
 				vf3d offset=.075f*norm;
 				for(auto& v:pos.verts) v+=offset;
-				pos.triangulate();
+				pos.updateTriangles();
 				for(auto& v:neg.verts) v-=offset;
-				neg.triangulate();
+				neg.updateTriangles();
 			}
 			tris_to_project.insert(tris_to_project.end(),
 				pos.tris.begin(), pos.tris.end()
@@ -235,6 +198,26 @@ struct Example : cmn::Engine3D {
 		return true;
 	}
 
+	void renderHelpHints() {
+		int cx=ScreenWidth()/2;
+		if(help_menu) {
+			DrawString(8, 8, "Movement Controls");
+			DrawString(8, 16, "WASD, Shift, & Space to move");
+			DrawString(8, 24, "ARROWS to look around");
+
+			DrawString(ScreenWidth()-8*19, 8, "Toggleable Options");
+			DrawString(ScreenWidth()-8*21, 16, "Enter for model spin", to_spin?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*18, 24, "O for mesh offset", offset_meshes?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*21, 32, "B for bounding boxes", show_bounds?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*20, 40, "F for triangle fill", fill_triangles?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*15, 48, "R for new mesh");
+
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H to close]");
+		} else {
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H for help]");
+		}
+	}
+
 	bool user_render() override {
 		Clear(olc::BLACK);
 
@@ -258,16 +241,15 @@ struct Example : cmn::Engine3D {
 			);
 		}
 
-		//show pause border
-		if(!to_spin) DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::BLACK);
+		renderHelpHints();
 
 		return true;
 	}
 };
 
 int main() {
-	Example e;
-	if(e.Construct(540, 360, 1, 1, false, true)) e.Start();
+	FractureUI fui;
+	if(fui.Construct(540, 360, 1, 1, false, true)) fui.Start();
 
 	return 0;
 }

@@ -151,9 +151,13 @@
     <ClInclude Include="src\mesh.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="assets\armadillo.txt" />
     <Text Include="assets\bunny.txt" />
+    <Text Include="assets\cow.txt" />
     <Text Include="assets\dragon.txt" />
-    <Text Include="assets\suzanne.txt" />
+    <Text Include="assets\horse.txt" />
+    <Text Include="assets\monkey.txt" />
+    <Text Include="assets\teapot.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

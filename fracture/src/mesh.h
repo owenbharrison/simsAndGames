@@ -19,31 +19,14 @@ struct IndexTriangle {
 	}
 };
 
-struct IndexEdge {
-	int a=0, b=0;
-
-	//sorted edges
-	IndexEdge(int a_, int b_) {
-		a=a_, b=b_;
-		if(a>b) std::swap(a, b);
-	}
-};
+#include <vector>
+#include <string>
+#include <fstream>
+#include <sstream>
 
 #include <unordered_map>
-#include <utility>
-
-struct EdgeHash {
-	std::size_t operator()(const IndexEdge& e) const {
-		std::hash<int> hasher;
-		return hasher(e.a)^(hasher(e.b)<<1);
-	}
-};
-
-struct EdgeEqual {
-	bool operator()(const IndexEdge& a, const IndexEdge& b) const {
-		return a.a==b.a&&a.b==b.b;
-	}
-};
+//for hash
+#include <functional>
 
 struct Mesh {
 	std::vector<vf3d> verts;
@@ -51,7 +34,7 @@ struct Mesh {
 	std::vector<cmn::Triangle> tris;
 	int id=-1;
 
-	void triangulate() {
+	void updateTriangles() {
 		tris.clear();
 		for(const auto& it:index_tris) {
 			cmn::Triangle t{
@@ -93,8 +76,29 @@ struct Mesh {
 		//plane doesnt intersect(all on one side)
 		if(me_pos.empty()||me_neg.empty()) return false;
 
+		struct edge_t {
+			int a=0, b=0;
+
+			//sorted edges
+			edge_t(int a_, int b_) {
+				a=a_, b=b_;
+				if(a>b) std::swap(a, b);
+			}
+
+			bool operator==(const edge_t& e) const {
+				return e.a==a&&e.b==b;
+			}
+		};
+
+		struct edge_hash_t {
+			std::size_t operator()(const edge_t& e) const {
+				auto hasher=std::hash<int>();
+				return hasher(e.a)^(hasher(e.b)<<1);
+			}
+		};
+
 		//clip each tri
-		std::unordered_map<IndexEdge, std::pair<int, int>, EdgeHash, EdgeEqual> edge_pn;
+		std::unordered_map<edge_t, std::pair<int, int>, edge_hash_t> edge_pn;
 		int pos_pts[3], neg_pts[3];
 		for(const auto& it:index_tris) {
 			vf3d it_ba=verts[it[1]]-verts[it[0]];
@@ -117,12 +121,12 @@ struct Mesh {
 					break;
 				case 1: {//clip tri
 					std::pair<int, int> pn1;
-					IndexEdge e1(pos_pts[0], neg_pts[0]);
+					edge_t e1(pos_pts[0], neg_pts[0]);
 					auto pn1it=edge_pn.find(e1);
 					//reuse
 					if(pn1it!=edge_pn.end()) pn1=pn1it->second;
 					else {//make
-						vf3d pt=segIntersectPlane(
+						vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[0]], verts[neg_pts[0]],
 							ctr, norm
 						);
@@ -131,12 +135,12 @@ struct Mesh {
 					}
 
 					std::pair<int, int> pn2;
-					IndexEdge e2(pos_pts[0], neg_pts[1]);
+					edge_t e2(pos_pts[0], neg_pts[1]);
 					auto pn2it=edge_pn.find(e2);
 					//reuse
 					if(pn2it!=edge_pn.end()) pn2=pn2it->second;
 					else {//make
-						vf3d pt=segIntersectPlane(
+						vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[0]], verts[neg_pts[1]],
 							ctr, norm
 						);
@@ -165,12 +169,12 @@ struct Mesh {
 				}
 				case 2: {//clip tri
 					std::pair<int, int> pn1;
-					IndexEdge e1(pos_pts[0], neg_pts[0]);
+					edge_t e1(pos_pts[0], neg_pts[0]);
 					auto pn1it=edge_pn.find(e1);
 					//reuse
 					if(pn1it!=edge_pn.end()) pn1=pn1it->second;
 					else {//make
-						vf3d pt=segIntersectPlane(
+						vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[0]], verts[neg_pts[0]],
 							ctr, norm
 						);
@@ -179,19 +183,19 @@ struct Mesh {
 					}
 
 					std::pair<int, int> pn2;
-					IndexEdge e2(pos_pts[1], neg_pts[0]);
+					edge_t e2(pos_pts[1], neg_pts[0]);
 					auto pn2it=edge_pn.find(e2);
 					//reuse
 					if(pn2it!=edge_pn.end()) pn2=pn2it->second;
 					else {//make
-						vf3d pt=segIntersectPlane(
+						vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[1]], verts[neg_pts[0]],
 							ctr, norm
 						);
 						pn2={pos.verts.size(), neg.verts.size()}, edge_pn[e2]=pn2;
 						pos.verts.push_back(pt), neg.verts.push_back(pt);
 					}
-					
+
 					IndexTriangle newp1{me_pos[pos_pts[0]], pn1.first, pn2.first, olc::MAGENTA};
 					IndexTriangle newp2{me_pos[pos_pts[0]], pn2.first, me_pos[pos_pts[1]], olc::RED};
 					IndexTriangle newn1{pn1.second, me_neg[neg_pts[0]], pn2.second, olc::BLUE};
@@ -221,17 +225,17 @@ struct Mesh {
 			}
 		}
 
-		pos.triangulate();
-		neg.triangulate();
+		pos.updateTriangles();
+		neg.updateTriangles();
 
 		return true;
 	}
 
-	static Mesh loadFromOBJ(const std::string& filename) {
-		Mesh m;
+	static bool loadFromOBJ(Mesh& m, const std::string& filename) {
+		m={};
 
 		std::ifstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
+		if(file.fail()) return false;
 
 		//parse file line by line
 		std::string line;
@@ -264,11 +268,11 @@ struct Mesh {
 			}
 		}
 
-		m.triangulate();
-
 		file.close();
 
-		return m;
+		m.updateTriangles();
+
+		return true;
 	}
 };
 #endif
