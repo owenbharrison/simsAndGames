@@ -1,9 +1,5 @@
-//focal length for frustum bounds
 #define OLC_PGE_APPLICATION
 #include "common/3d/engine_3d.h"
-namespace olc {
-	static const Pixel PURPLE(144, 0, 255);
-}
 using cmn::vf3d;
 using cmn::Mat4;
 
@@ -57,7 +53,8 @@ class TrackingUI : public cmn::Engine3D {
 	std::vector<Camera*> cams;
 
 	float track_timer=0;
-	std::vector<cmn::Line> track_rays;
+	struct Ray { vf3d orig, dir; };
+	std::vector<Ray> track_rays;
 	bool trackee_moving=false;
 	vf3d trackee_pos;
 
@@ -85,7 +82,7 @@ class TrackingUI : public cmn::Engine3D {
 		house.translation={0, 3, 0};
 		house.scale={.8f, .8f, .8f};
 		house.updateTransforms();
-		house.updateTriangles(olc::YELLOW);
+		house.updateTriangles(olc::Pixel(33, 174, 255));
 
 		return true;
 	}
@@ -110,7 +107,6 @@ class TrackingUI : public cmn::Engine3D {
 	}
 
 	//pretty hardcoded for now
-	//  add scenes later
 	void placeCameras() {
 		cams.push_back(new FollowingCamera(
 			320, 240,
@@ -468,9 +464,7 @@ class TrackingUI : public cmn::Engine3D {
 			if(c->guess_valid){
 				const float len=3.2f;
 				vf3d dir=c->getDir(c->guess_x, c->guess_y);
-				cmn::Line l{c->pos, c->pos+len*dir};
-				l.col=olc::WHITE;
-				track_rays.push_back(l);
+				track_rays.push_back({c->pos, dir});
 			}
 		}
 
@@ -486,15 +480,14 @@ class TrackingUI : public cmn::Engine3D {
 			auto cost=[&] (vf3d pos) {
 				float sum=0;
 				for(const auto& r:track_rays) {
-					vf3d pa=pos-r.p[0], ba=r.p[1]-r.p[0];
-					sum+=pa.cross(ba).mag()/ba.mag();
+					sum+=r.dir.cross(pos-r.orig).mag();
 				}
 				return sum;
 			};
 
 			//initial guess at average of camera positions
 			vf3d cam_sum;
-			for(const auto& r:track_rays) cam_sum+=r.p[0];
+			for(const auto& r:track_rays) cam_sum+=r.orig;
 			trackee_pos=cam_sum/num_track_rays;
 			
 			//gradient descent
@@ -540,7 +533,6 @@ class TrackingUI : public cmn::Engine3D {
 
 		//spin model about y axis
 		if(spin_model) model.rotation.y+=.67f*dt;
-
 		handleModelMeshUpdate();
 
 		//"track" every now and then
@@ -664,11 +656,11 @@ class TrackingUI : public cmn::Engine3D {
 		);
 	}
 
-	void realizeCameraMeshes() {
+	void realizeCameraMeshes(const olc::Pixel& col) {
 		for(const auto& c:cams) {
 			cctv.translation=c->pos;
 			cctv.updateTransforms(c->rgt, c->up, c->fwd);
-			cctv.updateTriangles();
+			cctv.updateTriangles(col);
 			tris_to_project.insert(tris_to_project.end(),
 				cctv.tris.begin(), cctv.tris.end()
 			);
@@ -714,7 +706,7 @@ class TrackingUI : public cmn::Engine3D {
 	}
 
 	//show outline of camera view
-	void realizeCameraFrustums() {
+	void realizeCameraFrustums(const olc::Pixel& col) {
 		for(const auto& c:cams) {
 			//camera sizing
 			float d=.3f;
@@ -729,25 +721,33 @@ class TrackingUI : public cmn::Engine3D {
 			vf3d br=ctr-w/2*c->rgt-h/2*c->up;
 
 			//show camera wireframe
-			cmn::Line l1{tl, tr}; l1.col=olc::PURPLE;
+			cmn::Line l1{tl, tr}; l1.col=col;
 			lines_to_project.push_back(l1);
-			cmn::Line l2{tr, br}; l2.col=olc::PURPLE;
+			cmn::Line l2{tr, br}; l2.col=col;
 			lines_to_project.push_back(l2);
-			cmn::Line l3{br, bl}; l3.col=olc::PURPLE;
+			cmn::Line l3{br, bl}; l3.col=col;
 			lines_to_project.push_back(l3);
-			cmn::Line l4{bl, tl}; l4.col=olc::PURPLE;
+			cmn::Line l4{bl, tl}; l4.col=col;
 			lines_to_project.push_back(l4);
-			cmn::Line l5{tl, c->pos}; l5.col=olc::PURPLE;
+			cmn::Line l5{tl, c->pos}; l5.col=col;
 			lines_to_project.push_back(l5);
-			cmn::Line l6{tr, c->pos}; l6.col=olc::PURPLE;
+			cmn::Line l6{tr, c->pos}; l6.col=col;
 			lines_to_project.push_back(l6);
-			cmn::Line l7{br, c->pos}; l7.col=olc::PURPLE;
+			cmn::Line l7{br, c->pos}; l7.col=col;
 			lines_to_project.push_back(l7);
-			cmn::Line l8{bl, c->pos}; l8.col=olc::PURPLE;
+			cmn::Line l8{bl, c->pos}; l8.col=col;
 			lines_to_project.push_back(l8);
 		}
 	}
 
+	void realizeTrackRays(const olc::Pixel& col) {
+		const float len=3.2f;
+		for(const auto& r:track_rays) {
+			cmn::Line l{r.orig, r.orig+len*r.dir};
+			l.col=col;
+			lines_to_project.push_back(l);
+		}
+	}
 #pragma endregion
 
 	bool user_geometry() override {
@@ -762,16 +762,14 @@ class TrackingUI : public cmn::Engine3D {
 
 		realizeModelMesh(tris_to_project);
 
-		realizeCameraMeshes();
+		realizeCameraMeshes(olc::WHITE);
 
 		if(realize_renders) realizeCameraRenders();
 
-		if(realize_frustums) realizeCameraFrustums();
+		//purple
+		if(realize_frustums) realizeCameraFrustums(olc::Pixel(170, 0, 255));
 
-		//realize track rays
-		lines_to_project.insert(lines_to_project.begin(),
-			track_rays.begin(), track_rays.end()
-		);
+		realizeTrackRays(olc::WHITE);
 
 		//realize trackee pos
 		if(trackee_moving) realizeAxes(trackee_pos, .9f);
@@ -825,7 +823,7 @@ int main() {
 	TrackingUI tui;
 	bool fullscreen=false;
 	bool vsync=true;
-	if(tui.Construct(360, 270, 2, 2, fullscreen, vsync)) tui.Start();
+	if(tui.Construct(640, 480, 1, 1, fullscreen, vsync)) tui.Start();
 
 	return 0;
 }

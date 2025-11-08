@@ -73,6 +73,7 @@ struct Mesh {
 				new_verts[it.b],
 				new_verts[it.c]
 			};
+			t.col=col;
 			tris.push_back(t);
 		}
 	}
