@@ -779,15 +779,15 @@ class TrackingUI : public cmn::Engine3D {
 	void renderHelpHints() {
 		int cx=ScreenWidth()/2;
 		if(help_menu) {
-			DrawString(0, 0, "Movement Controls");
-			DrawString(0, 8, "WASD, Shift, & Space to move");
-			DrawString(0, 16, "ARROWS to look around");
+			DrawString(8, 8, "Movement Controls");
+			DrawString(8, 16, "WASD, Shift, & Space to move");
+			DrawString(8, 24, "ARROWS to look around");
 
-			DrawString(ScreenWidth()-8*18, 0, "Toggleable Options");
-			DrawString(ScreenWidth()-8*20, 8, "Enter for model spin", spin_model?olc::WHITE:olc::RED);
-			DrawString(ScreenWidth()-8*17, 16, "G for model gizmo", use_gizmo?olc::WHITE:olc::RED);
-			DrawString(ScreenWidth()-8*17, 24, "R for render view", realize_renders?olc::WHITE:olc::RED);
-			DrawString(ScreenWidth()-8*18, 32, "F for frustum view", realize_frustums?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*19, 8, "Toggleable Options");
+			DrawString(ScreenWidth()-8*21, 16, "Enter for model spin", spin_model?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*18, 24, "G for model gizmo", use_gizmo?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*18, 32, "R for render view", realize_renders?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*19, 40, "F for frustum view", realize_frustums?olc::WHITE:olc::RED);
 
 			DrawString(cx-4*18, ScreenHeight()-8, "[Press H to close]");
 		} else {
