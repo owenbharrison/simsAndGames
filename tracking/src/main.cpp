@@ -58,6 +58,8 @@ class TrackingUI : public cmn::Engine3D {
 	bool trackee_moving=false;
 	vf3d trackee_pos;
 
+	bool help_menu=false;
+
 #pragma region SETUP_HELPERS
 	bool setupTerrainMesh() {
 		//load terrain mesh
@@ -89,7 +91,7 @@ class TrackingUI : public cmn::Engine3D {
 
 	bool setupModelMesh() {
 		if(!Mesh::loadFromOBJ(model, "assets/models/jeep.txt")) return false;
-		
+
 		model.translation={-2.4f, 2.2f, 6.5f};
 		model.scale={.3f, .3f, .3f};
 		handleModelMeshUpdate();
@@ -182,7 +184,7 @@ class TrackingUI : public cmn::Engine3D {
 
 	bool user_create() override {
 		std::srand(std::time(0));
-		
+
 		cam_pos={2.49f, 5.12f, 12.2f};
 		light_pos={3, 23, 11};
 
@@ -293,23 +295,19 @@ class TrackingUI : public cmn::Engine3D {
 		//dont move while gizmoing
 		if(gizmo_mode!=GizmoMode::None) return;
 
-		//speed multiplier
-		float speed=dt;
-		if(GetKey(olc::Key::CTRL).bHeld) speed*=2.5f;
-
 		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*speed;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*speed;
+		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
 		//move forward, backward
 		vf3d fb_dir(std::sin(cam_yaw), 0, std::cos(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*speed*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*speed*fb_dir;
+		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
 		//move left, right
 		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*speed*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*speed*lr_dir;
+		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
 	}
 
 	void handleMouseRays() {
@@ -370,7 +368,7 @@ class TrackingUI : public cmn::Engine3D {
 		//intersect prev & curr mouse rays to plane
 		vf3d curr_pt=cmn::segIntersectPlane(cam_pos, cam_pos+mouse_dir, gizmo_drag_orig, norm);
 		vf3d prev_pt=cmn::segIntersectPlane(cam_pos, cam_pos+prev_mouse_dir, gizmo_drag_orig, norm);
-		
+
 		//move by delta
 		vf3d delta=curr_pt-prev_pt;
 
@@ -409,13 +407,14 @@ class TrackingUI : public cmn::Engine3D {
 
 		handleGizmoUpdate();
 
+		//set light pos
+		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
+
 		//toggles
 		if(GetKey(olc::Key::ENTER).bPressed) spin_model^=true;
 		if(GetKey(olc::Key::F).bPressed) realize_frustums^=true;
 		if(GetKey(olc::Key::R).bPressed) realize_renders^=true;
-
-		//set light pos
-		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
+		if(GetKey(olc::Key::H).bPressed) help_menu^=true;
 	}
 
 	void handleModelMeshUpdate() {
@@ -459,9 +458,9 @@ class TrackingUI : public cmn::Engine3D {
 			//capture & compute motion
 			handleCameraCapture(*c, mini_tris);
 			c->updateGuess();
-			
+
 			//update rays
-			if(c->guess_valid){
+			if(c->guess_valid) {
 				const float len=3.2f;
 				vf3d dir=c->getDir(c->guess_x, c->guess_y);
 				track_rays.push_back({c->pos, dir});
@@ -489,7 +488,7 @@ class TrackingUI : public cmn::Engine3D {
 			vf3d cam_sum;
 			for(const auto& r:track_rays) cam_sum+=r.orig;
 			trackee_pos=cam_sum/num_track_rays;
-			
+
 			//gradient descent
 			const float h=.001f;
 			const float rate=.05f;
@@ -777,6 +776,25 @@ class TrackingUI : public cmn::Engine3D {
 		return true;
 	}
 
+	void renderHelpHints() {
+		int cx=ScreenWidth()/2;
+		if(help_menu) {
+			DrawString(0, 0, "Movement Controls");
+			DrawString(0, 8, "WASD, Shift, & Space to move");
+			DrawString(0, 16, "ARROWS to look around");
+
+			DrawString(ScreenWidth()-8*18, 0, "Toggleable Options");
+			DrawString(ScreenWidth()-8*20, 8, "Enter for model spin", spin_model?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*17, 16, "G for model gizmo", use_gizmo?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*17, 24, "R for render view", realize_renders?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*18, 32, "F for frustum view", realize_frustums?olc::WHITE:olc::RED);
+
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H to close]");
+		} else {
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H for help]");
+		}
+	}
+
 	bool user_render() override {
 		//grey background
 		Clear(olc::BLACK);
@@ -785,7 +803,7 @@ class TrackingUI : public cmn::Engine3D {
 		resetBuffers();
 
 		for(const auto& t:tris_to_draw) {
-			if(t.id==-1){
+			if(t.id==-1) {
 				FillDepthTriangle(
 					t.p[0].x, t.p[0].y, t.t[0].w,
 					t.p[1].x, t.p[1].y, t.t[1].w,
@@ -809,6 +827,8 @@ class TrackingUI : public cmn::Engine3D {
 				l.col, l.id
 			);
 		}
+
+		renderHelpHints();
 
 		return true;
 	}
