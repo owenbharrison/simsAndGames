@@ -55,7 +55,7 @@ struct FractureUI : cmn::Engine3D {
 				"assets/dragon.txt",
 				"assets/horse.txt",
 				"assets/monkey.txt",
-				"assets/teapot.txt",
+				"assets/jeep.txt"
 			};
 			for(const auto& f:filenames) {
 				meshes.push_back({});
