@@ -15,8 +15,8 @@ struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
 
-struct Cloth3DUI : cmn::Engine3D {
-	Cloth3DUI() {
+struct ClothUI : cmn::Engine3D {
+	ClothUI() {
 		sAppName="3D Cloth";
 	}
 
@@ -38,9 +38,9 @@ struct Cloth3DUI : cmn::Engine3D {
 	//physics stuff
 	float total_dt=0;
 
-	int length=0, height=0;
+	int width=0, height=0;
 	Particle* grid=nullptr;
-	int ix(int i, int j) const { return i+length*j; }
+	int ix(int i, int j) const { return i+width*j; }
 
 	std::list<Spring> springs;
 	std::list<IndexTriangle> surface;
@@ -55,8 +55,10 @@ struct Cloth3DUI : cmn::Engine3D {
 	//graphics stuff
 	olc::Sprite* strain_spr=nullptr;
 
-	olc::Sprite* flag_spr[4];
+	std::vector<olc::Sprite*> flag_spr;
 	int flag_idx=0;
+
+	bool help_menu=false;
 
 	bool user_create() override {
 		std::srand(std::time(0));
@@ -65,13 +67,13 @@ struct Cloth3DUI : cmn::Engine3D {
 		light_pos=cam_pos;
 
 		//allocate grid
-		length=40+std::rand()%11;
+		width=40+std::rand()%11;
 		height=30+std::rand()%11;
-		grid=new Particle[length*height];
+		grid=new Particle[width*height];
 
 		//start cloth on on xy plane
-		for(int i=0; i<length; i++) {
-			float u=i/(length-1.f);
+		for(int i=0; i<width; i++) {
+			float u=i/(width-1.f);
 			float x=3*u;
 			for(int j=0; j<height; j++) {
 				float v=j/(height-1.f);
@@ -86,7 +88,7 @@ struct Cloth3DUI : cmn::Engine3D {
 		//connect em up!
 		const float k=2256.47f;
 		const float d=375.9f;
-		for(int i=0; i<length; i++) {
+		for(int i=0; i<width; i++) {
 			for(int j=0; j<height; j++) {
 				if(i>0) springs.emplace_back(&grid[ix(i, j)], &grid[ix(i-1, j)], k, d);
 				if(j>0) springs.emplace_back(&grid[ix(i, j)], &grid[ix(i, j-1)], k, d);
@@ -98,7 +100,7 @@ struct Cloth3DUI : cmn::Engine3D {
 		}
 
 		//tesselate surface
-		for(int i=1; i<length; i++) {
+		for(int i=1; i<width; i++) {
 			for(int j=1; j<height; j++) {
 				const auto& k00=ix(i-1, j-1);
 				const auto& k01=ix(i-1, j);
@@ -114,11 +116,24 @@ struct Cloth3DUI : cmn::Engine3D {
 		//load gradient
 		strain_spr=new olc::Sprite("assets/strain_gradient.png");
 		
-		//cloth texture
-		flag_spr[0]=new olc::Sprite("assets/flag_usa.png");
-		flag_spr[1]=new olc::Sprite("assets/flag_colorado.png");
-		flag_spr[2]=new olc::Sprite("assets/flag_brazil.png");
-		flag_spr[3]=new olc::Sprite("assets/flag_djibouti.png");
+		//cloth textures
+		{
+			const std::vector<std::string> filenames{
+				"assets/barbados.png",
+				"assets/brazil.png",
+				"assets/colorado.png",
+				"assets/djibouti.png",
+				"assets/new_york_city.png",
+				"assets/portugal.png",
+				"assets/south_korea.png",
+				"assets/usa.png"
+			};
+			for(const auto& f:filenames) {
+				flag_spr.push_back(new olc::Sprite(f));
+			}
+
+			flag_idx=std::rand()%flag_spr.size();
+		}
 
 		return true;
 	}
@@ -126,29 +141,29 @@ struct Cloth3DUI : cmn::Engine3D {
 	bool user_destroy() override {
 		delete strain_spr;
 		
-		for(int i=0; i<4; i++) {
-			delete flag_spr[i];
-		}
+		for(auto& f:flag_spr) delete f;
 
 		delete[] grid;
 
 		return true;
 	}
 
+#pragma region UPDATE HELPERS
+	//unproject mouse with inverse view_proj
+	void handleMouseRay() {
+		Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
+		float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+		float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+		vf3d clip(ndc_x, ndc_y, 1);
+		vf3d world=clip*inv_vp;
+		world/=world.w;
+
+		mouse_dir=(world-cam_pos).norm();
+	}
+
 	//mostly just camera controls!
 	void handleUserInput(float dt) {
-		//update mouse ray
-		//screen -> world with inverse matrix
-		{
-			Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
-			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
-			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
-			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*inv_vp;
-			world/=world.w;
-
-			mouse_dir=(world-cam_pos).norm();
-		}
+		handleMouseRay();
 
 		//cant drag particle and move around at same time.
 		if(!held_ptc) {
@@ -191,15 +206,15 @@ struct Cloth3DUI : cmn::Engine3D {
 		if(GetKey(olc::Key::L).bPressed) light_pos=cam_pos;
 
 		//debug toggles
-		if(GetKey(olc::Key::ENTER).bPressed) update_phys^=true;
+		if(GetKey(olc::Key::P).bPressed) update_phys^=true;
 		if(GetKey(olc::Key::O).bPressed) show_outlines^=true;
 		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		if(GetKey(olc::Key::H).bPressed) help_menu^=true;
 
 		//flag choice!
-		if(GetKey(olc::Key::K1).bPressed) flag_idx=0;
-		if(GetKey(olc::Key::K2).bPressed) flag_idx=1;
-		if(GetKey(olc::Key::K3).bPressed) flag_idx=2;
-		if(GetKey(olc::Key::K4).bPressed) flag_idx=3;
+		for(int i=0; i<flag_spr.size(); i++){
+			if(GetKey(olc::Key(olc::Key::K1+i)).bPressed) flag_idx=i;
+		}
 
 		//grab particles
 		const auto hold_action=GetMouse(olc::Mouse::LEFT);
@@ -207,7 +222,7 @@ struct Cloth3DUI : cmn::Engine3D {
 			//get close particle
 			float record=-1;
 			held_ptc=nullptr;
-			for(int i=0; i<length*height; i++) {
+			for(int i=0; i<width*height; i++) {
 				//is particle under mouse?
 				auto& p=grid[i];
 				vf3d sub=p.pos-cam_pos;
@@ -247,7 +262,7 @@ struct Cloth3DUI : cmn::Engine3D {
 		}
 
 		//update particles
-		for(int i=0; i<length*height; i++) {
+		for(int i=0; i<width*height; i++) {
 			auto& p=grid[i];
 
 			p.accelerate(getWind(p.pos, .25f*total_dt));
@@ -256,6 +271,7 @@ struct Cloth3DUI : cmn::Engine3D {
 			p.update(time_step);
 		}
 	}
+#pragma endregion
 
 	bool user_update(float dt) override {
 		handleUserInput(dt);
@@ -286,11 +302,8 @@ struct Cloth3DUI : cmn::Engine3D {
 		return true;
 	}
 
-	bool user_geometry() override {
-		//add main light
-		lights.push_back({light_pos, olc::WHITE});
-		
-		//realize surface
+#pragma region GEOMETRY HELPERS
+	void realizeSurface() {
 		for(const auto& pt:surface) {
 			//twofaced to prevent culling
 			cmn::Triangle t{
@@ -301,36 +314,66 @@ struct Cloth3DUI : cmn::Engine3D {
 			std::swap(t.p[0], t.p[1]), std::swap(t.t[0], t.t[1]);
 			tris_to_project.push_back(t);
 		}
+	}
 
-		if(show_outlines) {
-			//find max strain
-			float max_strain=1e-3f;
-			for(const auto& s:springs) {
-				float strain=std::abs(s.strain);
-				if(strain>max_strain) {
-					max_strain=strain;
-				}
-			}
-
-			//add all lines
-			for(const auto& s:springs) {
-				cmn::Line l{s.a->pos, s.b->pos};
-				float u=std::abs(s.strain)/max_strain;
-				l.col=strain_spr->Sample(u, 0);
-				lines_to_project.push_back(l);
+	void realizeOutlines() {
+		//find max strain
+		float max_strain=1e-3f;
+		for(const auto& s:springs) {
+			float strain=std::abs(s.strain);
+			if(strain>max_strain) {
+				max_strain=strain;
 			}
 		}
+
+		//add all lines
+		for(const auto& s:springs) {
+			cmn::Line l{s.a->pos, s.b->pos};
+			float u=std::abs(s.strain)/max_strain;
+			l.col=strain_spr->Sample(u, 0);
+			lines_to_project.push_back(l);
+		}
+	}
+#pragma endregion
+
+	bool user_geometry() override {
+		//add main light
+		lights.push_back({light_pos, olc::WHITE});
+		
+		realizeSurface();
+
+		if(show_outlines) realizeOutlines();
 
 		//show cloth bounds
 		if(show_bounds) {
 			cmn::AABB3 box;
-			for(int i=0; i<length*height; i++) {
+			for(int i=0; i<width*height; i++) {
 				box.fitToEnclose(grid[i].pos);
 			}
 			addAABB(box, olc::BLACK);
 		}
 
 		return true;
+	}
+
+	void renderHelpHints() {
+		int cx=ScreenWidth()/2;
+		if(help_menu) {
+			DrawString(8, 8, "Movement Controls");
+			DrawString(8, 16, "WASD, Shift, & Space to move");
+			DrawString(8, 24, "ARROWS to look around");
+
+			DrawString(ScreenWidth()-8*19, 8, "Toggleable Options");
+			DrawString(ScreenWidth()-8*17, 16, "P for pause/play", update_phys?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*15, 24, "O for outlines", show_outlines?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*19, 32, "B for bounding box", show_bounds?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*18, 40, "1.."+std::to_string(flag_spr.size())+" for new flag");
+			DrawString(ScreenWidth()-8*16, 48, "L for light pos");
+
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H to close]");
+		} else {
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H for help]");
+		}
 	}
 
 	bool user_render() override {
@@ -355,17 +398,15 @@ struct Cloth3DUI : cmn::Engine3D {
 			);
 		}
 
-		if(!update_phys) {
-			DrawRect(0, 0, ScreenWidth()-1, ScreenHeight()-1, olc::WHITE);
-		}
+		renderHelpHints();
 
 		return true;
 	}
 };
 
 int main() {
-	Cloth3DUI c3dui;
-	if(c3dui.Construct(480, 360, 1, 1, false, true)) c3dui.Start();
+	ClothUI cui;
+	if(cui.Construct(480, 360, 1, 1, false, true)) cui.Start();
 
 	return 0;
 }
