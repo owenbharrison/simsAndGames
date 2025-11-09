@@ -42,4 +42,4 @@ struct Smoke {
 		return life<0;
 	}
 };
-#endif SMOKE_STRUCT_H
+#endif

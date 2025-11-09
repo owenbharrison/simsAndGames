@@ -198,10 +198,10 @@ struct SmokeDemo : olc::PixelGameEngine {
 			DrawStringDecal(vf2d(8, 32), "Middle for bomb");
 
 			DrawStringDecal(vf2d(ScreenWidth()-8*19, 8), "Toggleable Options");
-			DrawStringDecal(vf2d(ScreenWidth()-8*21, 16), "E for emitter", update_emitter?olc::WHITE:olc::RED);
-			DrawStringDecal(vf2d(ScreenWidth()-8*18, 24), "S for sprites", show_sprites?olc::WHITE:olc::RED);
-			DrawStringDecal(vf2d(ScreenWidth()-8*18, 32), "O for outlines", show_outlines?olc::WHITE:olc::RED);
-			DrawStringDecal(vf2d(ScreenWidth()-8*19, 40), "P for pause/play", update_physics?olc::WHITE:olc::RED);
+			DrawStringDecal(vf2d(ScreenWidth()-8*14, 16), "E for emitter", update_emitter?olc::WHITE:olc::RED);
+			DrawStringDecal(vf2d(ScreenWidth()-8*14, 24), "S for sprites", show_sprites?olc::WHITE:olc::RED);
+			DrawStringDecal(vf2d(ScreenWidth()-8*15, 32), "O for outlines", show_outlines?olc::WHITE:olc::RED);
+			DrawStringDecal(vf2d(ScreenWidth()-8*17, 40), "P for pause/play", update_physics?olc::WHITE:olc::RED);
 
 			DrawStringDecal(vf2d(cx-4*18, ScreenHeight()-8), "[Press H to close]");
 		} else {
