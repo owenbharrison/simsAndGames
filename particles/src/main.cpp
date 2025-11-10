@@ -2,7 +2,7 @@
 
 int main() {
 	ParticlesUI pui;
-	bool vsync=false;
+	bool vsync=true;
 	if(pui.Construct(720, 480, 1, 1, false, vsync)) pui.Start();
 
 	return 0;
