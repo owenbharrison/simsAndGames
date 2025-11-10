@@ -3,8 +3,6 @@
 using cmn::vf3d;
 using cmn::Mat4;
 
-constexpr float Pi=3.1415927f;
-
 #include "common/aabb.h"
 #include "common/utils.h"
 namespace cmn {
@@ -20,19 +18,19 @@ namespace cmn {
 
 #include "graph.h"
 
-float fract(float x) {
-	return x-std::floor(x);
-}
+struct AStarNavUI : cmn::Engine3D {
+	AStarNavUI() {
+		sAppName="A* Navigation";
+	}
 
-class AStarNavUI : public cmn::Engine3D {
 	//camera positioning
-	float cam_yaw=Pi/2;
+	float cam_yaw=cmn::Pi/2;
 	float cam_pitch=0;
 	vf3d light_pos;
 
 	//ui stuff
 	vf3d mouse_dir;
-	bool show_graph=true;
+	bool realize_graph=true;
 
 	//scene stuff
 	Mesh terrain;
@@ -47,6 +45,8 @@ class AStarNavUI : public cmn::Engine3D {
 	//route fanciness
 	std::vector<olc::Sprite*> texture_atlas;
 	float anim_timer=0;
+
+	bool help_menu=false;
 
 #pragma region SETUP HELPERS
 	bool setupTerrain() {
@@ -84,18 +84,18 @@ class AStarNavUI : public cmn::Engine3D {
 		//transform and add homes
 		struct House { vf3d p; float r; olc::Pixel col; };
 		const std::vector<House> homes{
-			{{3.54f, 1.37f, 18.2f}, .8f*Pi, olc::WHITE},
-			{{5.64f, 2.86f, 51.79f}, 1.4f*Pi, olc::BLUE},
-			{{51.31f, 1.67f, 41.95f}, .2f*Pi, olc::WHITE},
-			{{62.04f, 1.67f, -5.12f}, .6f*Pi, olc::RED},
-			{{12.09f, 2.16f, -38.03f}, 1.1f*Pi, olc::WHITE},
-			{{-38.35f, 2.63f, -33.38f}, .3f*Pi, olc::GREEN},
-			{{-52.99f, 1.43f, 16.84f}, 1.8f*Pi, olc::WHITE}
+			{{3.54f, 1.37f, 18.2f}, .8f*cmn::Pi, olc::WHITE},
+			{{5.64f, 2.86f, 51.79f}, 1.4f*cmn::Pi, olc::BLUE},
+			{{51.31f, 1.67f, 41.95f}, .2f*cmn::Pi, olc::WHITE},
+			{{62.04f, 1.67f, -5.12f}, .6f*cmn::Pi, olc::RED},
+			{{12.09f, 2.16f, -38.03f}, 1.1f*cmn::Pi, olc::WHITE},
+			{{-38.35f, 2.63f, -33.38f}, .3f*cmn::Pi, olc::GREEN},
+			{{-52.99f, 1.43f, 16.84f}, 1.8f*cmn::Pi, olc::WHITE}
 		};
 
 		for(const auto& h:homes) {
-			house_model.translation=h.p;
-			house_model.rotation.y=h.r;
+			house_model.pos=h.p;
+			house_model.rot.y=h.r;
 			house_model.updateTransforms();
 			house_model.updateTriangles(h.col);
 			obstacles.push_back(house_model);
@@ -178,16 +178,51 @@ class AStarNavUI : public cmn::Engine3D {
 	}
 
 #pragma region UPDATE HELPERS
-	void handleCameraMovement(float dt) {
+	void handleCameraLooking(float dt) {
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
 		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
+		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
 
 		//look left, right
 		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
 		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+	}
+
+	void handleCameraMovement(float dt) {
+		//move up, down
+		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+
+		//move forward, backward
+		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
+		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+
+		//move left, right
+		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+	}
+
+	void handleMouseRay() {
+		//unprojection matrix
+		cmn::Mat4 inv_vp=cmn::Mat4::inverse(mat_view*mat_proj);
+
+		//get ray thru screen mouse pos
+		float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+		float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+		vf3d clip(ndc_x, ndc_y, 1);
+		vf3d world=clip*inv_vp;
+		world/=world.w;
+
+		mouse_dir=(world-cam_pos).norm();
+	}
+#pragma endregion
+
+	bool user_update(float dt) override {
+		handleCameraLooking(dt);
 
 		//polar to cartesian
 		cam_dir=vf3d(
@@ -196,48 +231,9 @@ class AStarNavUI : public cmn::Engine3D {
 			std::sin(cam_yaw)*std::cos(cam_pitch)
 		);
 
-		//speed modifier
-		float speed=dt;
-		if(GetKey(olc::Key::CTRL).bHeld) speed*=3;
-
-		//move up, down
-		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*speed;
-		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*speed;
-
-		//move forward, backward
-		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
-		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*speed*fb_dir;
-		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*speed*fb_dir;
-
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*speed*lr_dir;
-		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*speed*lr_dir;
-	}
-#pragma endregion
-
-	bool user_update(float dt) override {
 		handleCameraMovement(dt);
 
-		//set light pos
-		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
-
-		//graphics toggles
-		if(GetKey(olc::Key::G).bPressed) show_graph^=true;
-
-		//update mouse ray
-		{
-			//unprojection matrix
-			cmn::Mat4 inv_vp=cmn::Mat4::inverse(mat_view*mat_proj);
-
-			//get ray thru screen mouse pos
-			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
-			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
-			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*inv_vp;
-			world/=world.w;
-			mouse_dir=(world-cam_pos).norm();
-		}
+		handleMouseRay();
 
 		//find node "under" mouse
 		float record=-1;
@@ -261,8 +257,6 @@ class AStarNavUI : public cmn::Engine3D {
 				from_node=close_node;
 
 				route.clear();
-
-				if(GetKey(olc::Key::CTRL).bHeld) route=graph.route(from_node, to_node);
 			}
 
 			//set to waypoint
@@ -270,8 +264,6 @@ class AStarNavUI : public cmn::Engine3D {
 				to_node=close_node;
 
 				route.clear();
-
-				if(GetKey(olc::Key::CTRL).bHeld) route=graph.route(from_node, to_node);
 			}
 		}
 
@@ -290,9 +282,16 @@ class AStarNavUI : public cmn::Engine3D {
 		}
 
 		//route
-		if(GetKey(olc::Key::ENTER).bPressed) {
+		if(GetKey(olc::Key::R).bPressed) {
 			route=graph.route(from_node, to_node);
 		}
+
+		//set light pos
+		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
+
+		//graphics toggles
+		if(GetKey(olc::Key::G).bPressed) realize_graph^=true;
+		if(GetKey(olc::Key::H).bPressed) help_menu^=true;
 
 		anim_timer+=dt;
 
@@ -324,7 +323,7 @@ class AStarNavUI : public cmn::Engine3D {
 		b={tl, bl, br, tl_t, bl_t, br_t};
 	}
 
-	void realizeGraph(const olc::Pixel& col) {
+	void realizeLinks(const olc::Pixel& col) {
 		//add links as lines
 		for(const auto& n:graph.nodes) {
 			for(const auto& o:n->links) {
@@ -345,7 +344,7 @@ class AStarNavUI : public cmn::Engine3D {
 			float sz=size;
 			if(n==from_node) sz*=3, ay=1, id=0;
 			else if(n==to_node) sz*=3, ay=1, id=1;
-			else if(!show_graph) continue;
+			else if(!realize_graph) continue;
 
 			//tessellate
 			cmn::Triangle t1, t2;
@@ -364,7 +363,8 @@ class AStarNavUI : public cmn::Engine3D {
 		bool is_first=true;
 		vf3d prev;
 		//silly little walk animation
-		float anim=fract(anim_timer);
+		//  take fractional part of anim_timer
+		float anim=anim_timer-int(anim_timer);
 		for(const auto& r:route) {
 			vf3d curr=r->pos;
 			if(is_first) is_first=false;
@@ -400,13 +400,34 @@ class AStarNavUI : public cmn::Engine3D {
 			tris_to_project.insert(tris_to_project.end(), o.tris.begin(), o.tris.end());
 		}
 
-		if(show_graph) realizeGraph(olc::BLACK);
+		if(realize_graph) realizeLinks(olc::BLACK);
 
 		realizeNodes(.5f, olc::WHITE);
 
 		realizeRoute(.3f, olc::YELLOW);
 
 		return true;
+	}
+
+	void renderHelpHints() {
+		int cx=ScreenWidth()/2;
+		if(help_menu) {
+			DrawString(8, 8, "Movement Controls");
+			DrawString(8, 16, "WASD, Space, & Shift to move");
+			DrawString(8, 24, "ARROWS to look around");
+
+			DrawString(ScreenWidth()-8*17, 8, "General Controls");
+			DrawString(ScreenWidth()-8*15, 16, "F for set from", from_node?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*13, 24, "T for set to", to_node?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*13, 32, "Tab for swap");
+			DrawString(ScreenWidth()-8*12, 40, "R for route", route.size()?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*14, 48, "ESC for clear");
+			DrawString(ScreenWidth()-8*17, 56, "G for graph view", realize_graph?olc::WHITE:olc::RED);
+
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H to close]");
+		} else {
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H for help]");
+		}
 	}
 
 	bool user_render() override {
@@ -443,12 +464,9 @@ class AStarNavUI : public cmn::Engine3D {
 			);
 		}
 
-		return true;
-	}
+		renderHelpHints();
 
-public:
-	AStarNavUI() {
-		sAppName="A* Navigation";
+		return true;
 	}
 };
 

@@ -3,6 +3,8 @@
 #define MESH_STRUCT_H
 
 #include <vector>
+
+#include <string>
 #include <fstream>
 #include <sstream>
 
@@ -13,19 +15,19 @@ struct IndexTriangle {
 struct Mesh {
 	std::vector<vf3d> vertexes;
 	std::vector<IndexTriangle> index_tris;
-	vf3d rotation, scale{1, 1, 1}, translation;
+	vf3d pos, rot, scale{1, 1, 1};
 	Mat4 mat_world;
 	std::vector<cmn::Triangle> tris;
 
 	void updateTransforms() {
 		//combine all transforms
-		Mat4 mat_rot_x=Mat4::makeRotX(rotation.x);
-		Mat4 mat_rot_y=Mat4::makeRotY(rotation.y);
-		Mat4 mat_rot_z=Mat4::makeRotZ(rotation.z);
+		Mat4 mat_rot_x=Mat4::makeRotX(rot.x);
+		Mat4 mat_rot_y=Mat4::makeRotY(rot.y);
+		Mat4 mat_rot_z=Mat4::makeRotZ(rot.z);
 		Mat4 mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
 		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
-		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_world=mat_scale*mat_rot*mat_trans;
+		Mat4 mat_trans=Mat4::makeTrans(pos.x, pos.y, pos.z);
+		mat_world=mat_rot*mat_scale*mat_trans;
 	}
 
 	void updateTriangles(const olc::Pixel& col) {
@@ -85,6 +87,8 @@ struct Mesh {
 	}
 
 	static bool loadFromOBJ(Mesh& m, const std::string& filename) {
+		m={};
+		
 		std::ifstream file(filename);
 		if(file.fail()) return false;
 
