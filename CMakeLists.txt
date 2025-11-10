@@ -12,6 +12,7 @@ set(PROJECTS
     3d_fx
     3d_physics
     a_star_nav
+    asteroids
     block_craft
     clock
     cloth
@@ -20,26 +21,27 @@ set(PROJECTS
     fluid
     fracture
     fruit_ninja
+    geometrize
+    glitch
+    imgui
     inverse_kinematics
     jelly_car_clone
     marching_cubes
     minesweeper
     particles
     pixels
-    procedural_audio
+    planet_game
     raycasting
     rigging
     rigid_bodies
-    shaders
     slicer
     smoke
-    sudoku
+    sokol_testing
+    steering_behaviors
     targetting
     terraria_clone
     testing
     tracking
-    voxels
-    wordle
 )
 
 foreach(proj ${PROJECTS})
