@@ -150,19 +150,27 @@
     <ClInclude Include="src\demo.h" />
     <ClInclude Include="src\math\mat4.h" />
     <ClInclude Include="src\mesh.h" />
+    <ClInclude Include="src\return_code.h" />
     <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\sokol\sokol_app.h" />
     <ClInclude Include="src\sokol\sokol_gfx.h" />
     <ClInclude Include="src\sokol\sokol_glue.h" />
     <ClInclude Include="src\sokol\sokol_log.h" />
     <ClInclude Include="src\math\v3d.h" />
-    <ClInclude Include="src\tinker.h" />
+    <ClInclude Include="src\sokol_engine.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\bunny.txt" />
+    <Text Include="assets\cow.txt" />
+    <Text Include="assets\dragon.txt" />
+    <Text Include="assets\horse.txt" />
+    <Text Include="assets\monkey.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

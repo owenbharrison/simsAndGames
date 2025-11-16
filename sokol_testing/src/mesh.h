@@ -5,13 +5,14 @@
 #include "math/v3d.h"
 #include "math/mat4.h"
 
-#include <string>
 #include <fstream>
 #include <vector>
 #include <sstream>
 #include <unordered_map>
 //for hash
 #include <functional>
+
+#include "return_code.h"
 
 struct v2d_t { float u=0, v=0; };
 
@@ -99,6 +100,8 @@ struct Mesh {
 	}
 	
 	void updateMatrixes() {
+		mat4 m_scale=mat4::makeScale(scale);
+
 		//xyz euler angles
 		mat4 m_rot_x=mat4::makeRotX(rot.x);
 		mat4 m_rot_y=mat4::makeRotY(rot.y);
@@ -106,21 +109,20 @@ struct Mesh {
 		m_rot=mat4::mul(m_rot_z, mat4::mul(m_rot_y, m_rot_x));
 		m_inv_rot=mat4::inverse(m_rot);
 
-		mat4 m_scale=mat4::makeScale(scale);
 		mat4 m_trans=mat4::makeTranslation(pos);
-		m_model=mat4::mul(m_trans, mat4::mul(m_scale, m_rot));
+		m_model=mat4::mul(m_trans, mat4::mul(m_rot, m_scale));
 		m_inv_model=mat4::inverse(m_model);
 	}
 
-	static bool loadFromOBJ(Mesh& m, const std::string& filename) {
+	[[nodiscrd]] static ReturnCode loadFromOBJ(Mesh& m, const std::string& filename) {
 		m=Mesh{};
 
 		std::ifstream file(filename);
-		if(file.fail()) return false;
+		if(file.fail()) return {false, "invalid filename"};
 
 		std::vector<vf3d> vertex_pos;
 		std::vector<vf3d> vertex_norm;
-		std::vector<v2d_t> vertex_tex;
+		std::vector<v2d_t> vertex_tex{{0, 0}};
 
 		struct vtn_t {
 			int v=0, t=0, n=0;
@@ -167,9 +169,27 @@ struct Mesh {
 				for(std::string vtn_str; line_ss>>vtn_str;) {
 					std::stringstream vtn_ss(vtn_str);
 
-					int v=-1, t=-1, n=-1; char j;
-					vtn_ss>>v>>j>>t>>j>>n;
-					if(v==-1||t==-1||n==-1) return false;
+					int v=-1, t=1, n=-1;
+
+					std::string v_str;
+					std::getline(vtn_ss, v_str, '/');
+					std::stringstream v_ss(v_str);
+					if(!(v_ss>>v)) v=-1;
+
+					std::string t_str;
+					if(std::getline(vtn_ss, t_str, '/')) {
+						std::stringstream t_ss(t_str);
+						if(!(t_ss>>t)) t=1;
+					}
+
+					std::string n_str;
+					if(std::getline(vtn_ss, n_str, '/')) {
+						std::stringstream n_ss(n_str);
+						if(!(n_ss>>n)) n=-1;
+					}
+
+					if(v==-1) return {false, "invalid face vertex index"};
+					if(n==-1) return {false, "invalid face normal index"};
 
 					//obj 1-based indexing
 					vtns.push_back({v-1, t-1, n-1});
@@ -212,7 +232,7 @@ struct Mesh {
 		m.updateIndexBuffer();
 		m.updateMatrixes();
 
-		return true;
+		return {true, "success"};
 	}
 
 	static void makeCube(Mesh& m) {

@@ -1,21 +1,10 @@
-#define SOKOL_IMPL
-#define SOKOL_GLCORE
-#include "sokol/sokol_app.h"
-#include "sokol/sokol_gfx.h"
-#include "sokol/sokol_glue.h"
+#include "sokol_engine.h"
 #include "shd.glsl.h"
 
 #include "math/v3d.h"
 #include "math/mat4.h"
 
-#include <string>
-#include <cmath>
-
-//generalized struct initializer
-template<typename T>
-void zeroMem(T& t) {
-	std::memset(&t, 0, sizeof(T));
-}
+#include "mesh.h"
 
 //y p => x y z
 //0 0 => 0 0 1
@@ -51,70 +40,53 @@ vf3d randDir() {
 	).norm();
 }
 
-#include "mesh.h"
-
-struct Demo {
+struct Demo : SokolEngine {
 	sg_bindings bindings;
 	sg_pipeline pipeline;
 
-#define NUM_KEYS 512
-	bool _keys_old[NUM_KEYS],
-		_keys_curr[NUM_KEYS],
-		_keys_new[NUM_KEYS];
-
 	//cam info
-	vf3d cam_pos{2, 2, 4};
-	float cam_pos_xyz[3];
-	vf3d cam_dir{1, 0, 0};
-	float cam_yaw=-2.6f;
-	float cam_pitch=-.6f;
+	vf3d cam_pos{0, 0, 0};
+	vf3d cam_dir;
+	float cam_yaw=0;
+	float cam_pitch=0;
 
 	//scene info
-	vf3d light_pos{3, 4, -3};
-	float light_pos_xyz[3];
-
-	bool _mouse_moving_new=false;
-	bool mouse_moving=false;
-
-	float _mouse_x_new=0;
-	float _mouse_y_new=0;
-	float mouse_x=0;
-	float mouse_y=0;
-
-	float _mouse_dx_new=0;
-	float _mouse_dy_new=0;
-	float mouse_dx=0;
-	float mouse_dy=0;
+	vf3d light_pos{0, 3, 0};
 
 	bool fps_controls=false;
 
-	Mesh mesh;
+	std::vector<Mesh> meshes;
 
-	void setupMesh() {
-		if(!Mesh::loadFromOBJ(mesh, "assets/suzanne.txt")) {
-			//default to cube if mesh loading fails
-			Mesh::makeCube(mesh);
+	void setupMeshes() {
+		ReturnCode status;
+
+		const std::vector<std::string> filenames{
+			"assets/monkey.txt",
+			"assets/bunny.txt",
+			"assets/cow.txt",
+			"assets/horse.txt",
+			"assets/dragon.txt"
+		};
+
+		const float radius=3;
+		for(int i=0; i<filenames.size(); i++) {
+			Mesh m;
+			auto status=Mesh::loadFromOBJ(m, filenames[i]);
+			if(!status.valid) Mesh::makeCube(m);
+			float angle=2*Pi*i/filenames.size();
+			m.pos.x=radius*std::cos(angle);
+			m.pos.z=radius*std::sin(angle);
+			m.rot.y=1.5f*Pi-angle;
+			m.updateMatrixes();
+			meshes.push_back(m);
 		}
-
-		bindings.vertex_buffers[0]=mesh.vbuf;
-		bindings.index_buffer=mesh.ibuf;
 	}
 
 	void setupTexture() {
-		int width=256;
-		int height=256;
+		int width=1;
+		int height=1;
 		std::uint32_t* pixels=new std::uint32_t[width*height];
-		for(int i=0; i<width; i++) {
-			for(int j=0; j<height; j++) {
-				float u=(.5f+i)/width;
-				float v=(.5f+j)/height;
-				int r=255*u;
-				int g=127;
-				int b=255*v;
-				int a=255;
-				pixels[i+width*j]=(a<<24)|(b<<16)|(g<<8)|r;
-			}
-		}
+		pixels[0]=0xFFFFFFFF;
 		sg_image_desc image_desc; zeroMem(image_desc);
 		image_desc.width=width;
 		image_desc.height=height;
@@ -138,14 +110,14 @@ struct Demo {
 		pipeline_desc.layout.attrs[ATTR_shd_norm].format=SG_VERTEXFORMAT_FLOAT3;
 		pipeline_desc.layout.attrs[ATTR_shd_uv].format=SG_VERTEXFORMAT_SHORT2N;
 		pipeline_desc.index_type=SG_INDEXTYPE_UINT32;//use the index buffer
-		pipeline_desc.cull_mode=SG_CULLMODE_NONE;
+		pipeline_desc.cull_mode=SG_CULLMODE_FRONT;
 		pipeline_desc.depth.write_enabled=true;//use depth buffer
 		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		pipeline=sg_make_pipeline(pipeline_desc);
 	}
 
-	void userInit() {
-		setupMesh();
+	void userCreate() override {
+		setupMeshes();
 
 		setupTexture();
 		
@@ -154,53 +126,7 @@ struct Demo {
 		setupPipeline();
 	}
 
-	void init() {
-		sg_desc desc; zeroMem(desc);
-		desc.environment=sglue_environment();
-		sg_setup(desc);
-
-		userInit();
-
-		std::memset(_keys_old, false, sizeof(bool)*NUM_KEYS);
-		std::memset(_keys_curr, false, sizeof(bool)*NUM_KEYS);
-		std::memset(_keys_new, false, sizeof(bool)*NUM_KEYS);
-	}
-
-	void cleanup() {
-		sg_shutdown();
-	}
-
-	//dont immediately send new key states.
-	void input(const sapp_event* e) {
-		switch(e->type) {
-			case SAPP_EVENTTYPE_KEY_DOWN:
-				_keys_new[e->key_code]=true;
-				break;
-			case SAPP_EVENTTYPE_KEY_UP:
-				_keys_new[e->key_code]=false;
-				break;
-			case SAPP_EVENTTYPE_MOUSE_MOVE:
-				mouse_moving=true;
-				//apparently these are invalid?
-				if(sapp_mouse_locked()) {
-					_mouse_x_new=e->mouse_x;
-					_mouse_y_new=e->mouse_y;
-				}
-				//always valid...
-				_mouse_dx_new=e->mouse_dx;
-				_mouse_dy_new=e->mouse_dy;
-				break;
-		}
-	}
-
-	//fun little helper.
-	struct KeyState { bool pressed, held, released; };
-	KeyState getKey(const sapp_keycode& kc) const {
-		bool held=_keys_curr[kc];
-		bool pressed=held&&!_keys_old[kc];
-		return {pressed, held, !pressed};
-	}
-
+#pragma region UPDATE HELPERS
 	void handleCameraLooking(float dt) {
 		//lock mouse position
 		if(getKey(SAPP_KEYCODE_F).pressed) {
@@ -254,7 +180,7 @@ struct Demo {
 		handleCameraLooking(dt);
 		handleCameraMovement(dt);
 
-		if(getKey(SAPP_KEYCODE_L).pressed) {
+		if(getKey(SAPP_KEYCODE_L).held) {
 			light_pos=cam_pos;
 		}
 
@@ -277,17 +203,13 @@ struct Demo {
 		);
 		sapp_set_window_title(title);
 	}
+#pragma endregion
 
 	void userUpdate(float dt) {
 		handleUserInput(dt);
 
 		//polar to cartesian
 		cam_dir=polar3D(cam_yaw, cam_pitch);
-
-		//rotate mesh about x & z
-		mesh.rot.x+=.5f*dt;
-		mesh.rot.z+=dt;
-		mesh.updateMatrixes();
 
 		updateTitle(dt);
 	}
@@ -310,52 +232,32 @@ struct Demo {
 		sg_begin_pass(pass);
 
 		sg_apply_pipeline(pipeline);
-		sg_apply_bindings(bindings);
+		
+		for(const auto& m:meshes) {
+			bindings.vertex_buffers[0]=m.vbuf;
+			bindings.index_buffer=m.ibuf;
+			sg_apply_bindings(bindings);
 
-		//send vertex uniforms
-		vs_params_t vs_params; zeroMem(vs_params);
-		std::memcpy(vs_params.u_model, mesh.m_model.m, sizeof(vs_params.u_model));
-		std::memcpy(vs_params.u_view_proj, view_proj.m, sizeof(vs_params.u_view_proj));
-		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+			//send vertex uniforms
+			vs_params_t vs_params; zeroMem(vs_params);
+			std::memcpy(vs_params.u_model, m.m_model.m, sizeof(vs_params.u_model));
+			std::memcpy(vs_params.u_view_proj, view_proj.m, sizeof(vs_params.u_view_proj));
+			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
 
-		//send fragment uniforms
-		fs_params_t fs_params; zeroMem(fs_params);
-		fs_params.u_light_pos[0]=light_pos.x;
-		fs_params.u_light_pos[1]=light_pos.y;
-		fs_params.u_light_pos[2]=light_pos.z;
-		fs_params.u_cam_pos[0]=cam_pos.x;
-		fs_params.u_cam_pos[1]=cam_pos.y;
-		fs_params.u_cam_pos[2]=cam_pos.z;
-		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
+			//send fragment uniforms
+			fs_params_t fs_params; zeroMem(fs_params);
+			fs_params.u_light_pos[0]=light_pos.x;
+			fs_params.u_light_pos[1]=light_pos.y;
+			fs_params.u_light_pos[2]=light_pos.z;
+			fs_params.u_cam_pos[0]=cam_pos.x;
+			fs_params.u_cam_pos[1]=cam_pos.y;
+			fs_params.u_cam_pos[2]=cam_pos.z;
+			sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
 
-		sg_draw(0, 3*mesh.index_tris.size(), 1);
+			sg_draw(0, 3*m.index_tris.size(), 1);
+		}
 
 		sg_end_pass();
 		sg_commit();
-	}
-
-	void frame() {
-		//update curr key values
-		std::memcpy(_keys_curr, _keys_new, sizeof(bool)*NUM_KEYS);
-
-		//hmm...
-		if(mouse_moving) {
-			mouse_dx=_mouse_dx_new;
-			mouse_dy=_mouse_dy_new;
-		} else {
-			mouse_dx=0;
-			mouse_dy=0;
-		}
-
-		const float dt=sapp_frame_duration();
-
-		userUpdate(dt);
-
-		userRender();
-
-		mouse_moving=false;
-
-		//update prev key values
-		std::memcpy(_keys_old, _keys_curr, sizeof(bool)*NUM_KEYS);
 	}
 };

@@ -36,7 +36,16 @@
     <ClInclude Include="src\demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\tinker.h">
+    <ClInclude Include="src\mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\shd.glsl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\sokol_engine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\return_code.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -47,5 +56,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\bunny.txt" />
+    <Text Include="assets\cow.txt" />
+    <Text Include="assets\dragon.txt" />
+    <Text Include="assets\horse.txt" />
+    <Text Include="assets\monkey.txt" />
   </ItemGroup>
 </Project>
