@@ -2,6 +2,8 @@
 #ifndef QUAT_STRUCT_H
 #define QUAT_STRUCT_H
 
+#include <cmath>
+
 struct Quat {
 	float w=1, x=0, y=0, z=0;
 
@@ -53,8 +55,8 @@ Quat normalize(const Quat& q) {
 vf3d rotateVec(const Quat& q, const vf3d& v) {
 	Quat p{0, v.x, v.y, v.z};
 	//unit inverse=conjugate
-	Quat qInv=conjugate(q);
-	Quat result=q*p*qInv;
+	Quat q_inv=conjugate(q);
+	Quat result=q*p*q_inv;
 	return {result.x, result.y, result.z};
 }
 #endif

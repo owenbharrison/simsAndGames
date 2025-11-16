@@ -26,6 +26,9 @@
     <ClInclude Include="src\quat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\return_code.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\suzanne.txt" />

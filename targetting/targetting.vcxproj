@@ -150,6 +150,7 @@
   <ItemGroup>
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\quat.h" />
+    <ClInclude Include="src\return_code.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\bunny.txt" />

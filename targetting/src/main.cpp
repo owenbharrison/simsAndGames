@@ -26,7 +26,7 @@ struct Example : cmn::Engine3D {
 	vf2d mouse_pos;
 	vf2d prev_mouse_pos;
 
-	vf3d mouse_dir;
+	vf3d mouse_dir, prev_mouse_dir;
 
 	//handles and offsets
 	Mesh* trans_mesh=nullptr;
@@ -44,7 +44,9 @@ struct Example : cmn::Engine3D {
 	std::vector<Mesh> meshes;
 
 	//debug toggles
-	bool show_bounds=false;
+	bool realize_bounds=false;
+
+	bool help_menu=false;
 
 	//dont want to sort meshes by id...
 	int lowestUniqueID() const {
@@ -64,20 +66,39 @@ struct Example : cmn::Engine3D {
 		cam_pos={0, 0, 3.5f};
 
 		//load monkey, dragon, and bunny
-		try {
-			Mesh a=Mesh::loadFromOBJ("assets/suzanne.txt");
-			a.translation={-3, 0, 0};
-			meshes.push_back(a);
-			Mesh b=Mesh::loadFromOBJ("assets/dragon.txt");
-			b.scale={3, 3, 3};
-			meshes.push_back(b);
-			Mesh c=Mesh::loadFromOBJ("assets/bunny.txt");
-			c.scale={10, 10, 10};
-			c.translation={3, -.3f, 0};
-			meshes.push_back(c);
-		} catch(const std::exception& e) {
-			std::cout<<e.what()<<'\n';
-			return false;
+		{
+			ReturnCode status;
+
+			Mesh monkey;
+			status=Mesh::loadFromOBJ(monkey, "assets/suzanne.txt");
+			if(!status.valid) {
+				std::cout<<"  "<<status.msg<<'\n';
+
+				return false;
+			}
+			monkey.translation={-3, 0, 0};
+			meshes.push_back(monkey);
+
+			Mesh dragon;
+			status=Mesh::loadFromOBJ(dragon, "assets/dragon.txt");
+			if(!status.valid) {
+				std::cout<<"  "<<status.msg<<'\n';
+
+				return false;
+			}
+			dragon.scale={3, 3, 3};
+			meshes.push_back(dragon);
+
+			Mesh bunny;
+			status=Mesh::loadFromOBJ(bunny, "assets/bunny.txt");
+			if(!status.valid) {
+				std::cout<<"  "<<status.msg<<'\n';
+
+				return false;
+			}
+			bunny.scale={12, 12, 12};
+			bunny.translation={3, -.3f, 0};
+			meshes.push_back(bunny);
 		}
 
 		//update things
@@ -91,64 +112,119 @@ struct Example : cmn::Engine3D {
 		return true;
 	}
 
-	bool user_update(float dt) override {
+#pragma region UPDATE HELPERS
+	void handleCameraLooking(float dt) {
+		//cant look while updating
+		if(trans_mesh||rot_mesh||scale_mesh) return;
+		
+		//look up, down
+		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
+		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
+		if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
+		if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
+
+		//look left, right
+		if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
+		if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+	}
+
+	void handleCameraMovement(float dt) {
 		//cant move while updating
-		if(!trans_mesh&&!rot_mesh&&!scale_mesh) {
-			//look up, down
-			if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
-			if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
-			if(GetKey(olc::Key::DOWN).bHeld) cam_pitch-=dt;
-			if(cam_pitch<-cmn::Pi/2) cam_pitch=.001f-cmn::Pi/2;
+		if(trans_mesh||rot_mesh||scale_mesh) return;
 
-			//look left, right
-			if(GetKey(olc::Key::LEFT).bHeld) cam_yaw-=dt;
-			if(GetKey(olc::Key::RIGHT).bHeld) cam_yaw+=dt;
+		//move up, down
+		if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
+		if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
 
-			//polar to cartesian
-			cam_dir=vf3d(
-				std::cos(cam_yaw)*std::cos(cam_pitch),
-				std::sin(cam_pitch),
-				std::sin(cam_yaw)*std::cos(cam_pitch)
-			);
+		//move forward, backward
+		vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
+		if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
+		if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
 
-			//move up, down
-			if(GetKey(olc::Key::SPACE).bHeld) cam_pos.y+=4.f*dt;
-			if(GetKey(olc::Key::SHIFT).bHeld) cam_pos.y-=4.f*dt;
+		//move left, right
+		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+		if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
+		if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+	}
 
-			//move forward, backward
-			vf3d fb_dir(std::cos(cam_yaw), 0, std::sin(cam_yaw));
-			if(GetKey(olc::Key::W).bHeld) cam_pos+=5.f*dt*fb_dir;
-			if(GetKey(olc::Key::S).bHeld) cam_pos-=3.f*dt*fb_dir;
+	void handleMouseRay() {
+		prev_mouse_dir=mouse_dir;
 
-			//move left, right
-			vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-			if(GetKey(olc::Key::A).bHeld) cam_pos+=4.f*dt*lr_dir;
-			if(GetKey(olc::Key::D).bHeld) cam_pos-=4.f*dt*lr_dir;
+		//unprojection matrix
+		Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
+
+		float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+		float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
+		vf3d clip(ndc_x, ndc_y, 1);
+		vf3d world=clip*inv_vp;
+		world/=world.w;
+
+		mouse_dir=(world-cam_pos).norm();
+	}
+
+	void handleTransActionUpdate() {
+		if(!trans_mesh) return;
+
+		//project screen ray onto translation plane
+		vf3d prev_pt=segIntersectPlane(cam_pos, cam_pos+prev_mouse_dir, trans_plane, cam_dir);
+		vf3d curr_pt=segIntersectPlane(cam_pos, cam_pos+mouse_dir, trans_plane, cam_dir);
+
+		//apply translation delta and update
+		trans_mesh->translation+=curr_pt-prev_pt;
+		trans_mesh->updateTransforms();
+		trans_mesh->applyTransforms();
+		trans_mesh->colorNormals();
+	}
+
+	void handleRotActionUpdate() {
+		if(!rot_mesh) return;
+
+		vf2d b=mouse_pos-rot_start;
+		if(b.mag()>20) {
+			vf2d a=prev_mouse_pos-rot_start;
+			float dot=a.x*b.x+a.y*b.y;
+			float cross=a.x*b.y-a.y*b.x;
+			float angle=-std::atan2(cross, dot);
+			//apply rotation delta and update
+			rot_mesh->rotation=rot_mesh->rotation*Quat::fromAxisAngle(cam_dir, angle);
+			rot_mesh->updateTransforms();
+			rot_mesh->applyTransforms();
+			rot_mesh->colorNormals();
 		}
+	}
 
-		//set light pos
-		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
+	void handleScaleActionUpdate() {
+		if(!scale_mesh) return;
 
-		//debug toggles
-		if(GetKey(olc::Key::B).bPressed) show_bounds^=true;
+		//get scale delta
+		float m2c=(mouse_pos-scale_ctr).mag();
+		float s2c=(scale_start-scale_ctr).mag();
+
+		//apply scale delta and update
+		scale_mesh->scale=base_scale*m2c/s2c;
+		scale_mesh->updateTransforms();
+		scale_mesh->applyTransforms();
+		scale_mesh->colorNormals();
+	}
+#pragma endregion
+
+	bool user_update(float dt) override {
+		handleCameraLooking(dt);
+
+		//polar to cartesian
+		cam_dir=vf3d(
+			std::cos(cam_yaw)*std::cos(cam_pitch),
+			std::sin(cam_pitch),
+			std::sin(cam_yaw)*std::cos(cam_pitch)
+		);
+
+		handleCameraMovement(dt);
 
 		//update screen mouse
 		prev_mouse_pos=mouse_pos;
 		mouse_pos=GetMousePos();
 
-		//unprojection matrix
-		Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
-
-		//update world mouse ray
-		{
-			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
-			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
-			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*inv_vp;
-			world/=world.w;
-
-			mouse_dir=(world-cam_pos).norm();
-		}
+		handleMouseRay();
 
 		//get closest mesh
 		float mesh_dist=-1;
@@ -163,7 +239,7 @@ struct Example : cmn::Engine3D {
 			}
 		}
 
-		const auto translate_action=GetMouse(olc::Mouse::LEFT);
+		const auto translate_action=GetKey(olc::Key::T);
 		if(translate_action.bPressed) {
 			trans_mesh=close_mesh;
 			if(trans_mesh) {
@@ -171,16 +247,18 @@ struct Example : cmn::Engine3D {
 				trans_start=mouse_pos;
 			}
 		}
+		if(translate_action.bHeld) handleTransActionUpdate();
 		if(translate_action.bReleased) trans_mesh=nullptr;
 
-		const auto rotate_action=GetMouse(olc::Mouse::RIGHT);
+		const auto rotate_action=GetKey(olc::Key::R);
 		if(rotate_action.bPressed) {
 			rot_mesh=close_mesh;
 			if(rot_mesh) rot_start=mouse_pos;
 		}
+		if(rotate_action.bHeld) handleRotActionUpdate();
 		if(rotate_action.bReleased) rot_mesh=nullptr;
 
-		const auto scale_action=GetMouse(olc::Mouse::MIDDLE);
+		const auto scale_action=GetKey(olc::Key::E);
 		if(scale_action.bPressed) {
 			scale_mesh=close_mesh;
 			if(scale_mesh) {
@@ -192,57 +270,15 @@ struct Example : cmn::Engine3D {
 				scale_ctr.y=(1-ctr_ndc.y)*ScreenHeight()/2;
 			}
 		}
+		if(scale_action.bHeld) handleScaleActionUpdate();
 		if(scale_action.bReleased) scale_mesh=nullptr;
 
-		//update translated mesh
-		if(trans_mesh) {
-			//project screen ray onto translation plane
-			float prev_ndc_x=1-2*prev_mouse_pos.x/ScreenWidth();
-			float prev_ndc_y=1-2*prev_mouse_pos.y/ScreenHeight();
-			vf3d prev_clip(prev_ndc_x, prev_ndc_y, 1);
-			vf3d prev_world=prev_clip*inv_vp;
-			prev_world/=prev_world.w;
-			vf3d prev_pt=segIntersectPlane(cam_pos, prev_world, trans_plane, cam_dir);
-			float curr_ndc_x=1-2*mouse_pos.x/ScreenWidth();
-			float curr_ndc_y=1-2*mouse_pos.y/ScreenHeight();
-			vf3d curr_clip(curr_ndc_x, curr_ndc_y, 1);
-			vf3d curr_world=curr_clip*inv_vp;
-			curr_world/=curr_world.w;
-			vf3d curr_pt=segIntersectPlane(cam_pos, curr_world, trans_plane, cam_dir);
+		//set light pos
+		if(GetKey(olc::Key::L).bHeld) light_pos=cam_pos;
 
-			//apply translation delta and update
-			trans_mesh->translation+=curr_pt-prev_pt;
-			trans_mesh->updateTransforms();
-			trans_mesh->applyTransforms();
-			trans_mesh->colorNormals();
-		}
-
-		//update rotated mesh
-		if(rot_mesh) {
-			vf2d b=mouse_pos-rot_start;
-			if(b.mag()>20) {
-				vf2d a=prev_mouse_pos-rot_start;
-				float dot=a.x*b.x+a.y*b.y;
-				float cross=a.x*b.y-a.y*b.x;
-				float angle=-std::atan2(cross, dot);
-				//apply rotation delta and update
-				rot_mesh->rotation=Quat::fromAxisAngle(cam_dir, angle)*rot_mesh->rotation;
-				rot_mesh->updateTransforms();
-				rot_mesh->applyTransforms();
-				rot_mesh->colorNormals();
-			}
-		}
-
-		//update scaled mesh
-		if(scale_mesh) {
-			float m2c=(mouse_pos-scale_ctr).mag();
-			float s2c=(scale_start-scale_ctr).mag();
-			//apply scale delta and update
-			scale_mesh->scale=base_scale*m2c/s2c;
-			scale_mesh->updateTransforms();
-			scale_mesh->applyTransforms();
-			scale_mesh->colorNormals();
-		}
+		//debug toggles
+		if(GetKey(olc::Key::B).bPressed) realize_bounds^=true;
+		if(GetKey(olc::Key::H).bPressed) help_menu^=true;
 
 		return true;
 	}
@@ -259,7 +295,7 @@ struct Example : cmn::Engine3D {
 		}
 
 		//add bound lines
-		if(show_bounds) {
+		if(realize_bounds) {
 			for(const auto& m:meshes) {
 				addAABB(m.getAABB(), olc::WHITE);
 			}
@@ -267,6 +303,99 @@ struct Example : cmn::Engine3D {
 
 		return true;
 	}
+
+#pragma region RENDER HELPERS
+	void renderSelectedMeshEdges() {
+		for(int k=0; k<3; k++) {
+			Mesh* select=nullptr;
+			olc::Pixel col;
+			switch(k) {
+				case 0: select=trans_mesh, col=olc::ORANGE; break;
+				case 1: select=rot_mesh, col=olc::RED; break;
+				case 2: select=scale_mesh, col=olc::YELLOW; break;
+			}
+			if(!select) continue;
+			
+			int id=select->id;
+			for(int i=1; i<ScreenWidth()-1; i++) {
+				for(int j=1; j<ScreenHeight()-1; j++) {
+					bool curr=id_buffer[bufferIX(i, j)]==id;
+					bool lft=id_buffer[bufferIX(i-1, j)]==id;
+					bool rgt=id_buffer[bufferIX(i+1, j)]==id;
+					bool top=id_buffer[bufferIX(i, j-1)]==id;
+					bool btm=id_buffer[bufferIX(i, j+1)]==id;
+					if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
+						Draw(i, j, col);
+					}
+				}
+			}
+		}
+	}
+
+	void renderTransMeshHandle() {
+		if(!trans_mesh) return;
+
+		//line of action
+		DrawLine(trans_start, mouse_pos, olc::BLUE);
+
+		//crosshair
+		DrawLine(trans_start.x-8, trans_start.y, trans_start.x+8, trans_start.y, olc::ORANGE);
+		DrawLine(trans_start.x, trans_start.y-8, trans_start.x, trans_start.y+8, olc::ORANGE);
+	}
+
+	void renderRotMeshHandle() {
+		if(!rot_mesh) return;
+
+		//fun looking triangle?
+		vf2d sub=mouse_pos-rot_start;
+		float dist=sub.mag();
+		float rad=std::max(20.f, dist);
+		float angle=std::atan2(sub.y, sub.x);
+		vf2d a=rot_start+cmn::polar<vf2d>(rad, angle);
+		vf2d b=rot_start+cmn::polar<vf2d>(rad, angle+.667f*cmn::Pi);
+		vf2d c=rot_start+cmn::polar<vf2d>(rad, angle+1.33f*cmn::Pi);
+		DrawLine(a, b, olc::GREEN);
+		DrawLine(b, c, olc::GREEN);
+		DrawLine(c, a, olc::GREEN);
+		
+		//crosshair
+		DrawLine(rot_start.x-8, rot_start.y, rot_start.x+8, rot_start.y, olc::RED);
+		DrawLine(rot_start.x, rot_start.y-8, rot_start.x, rot_start.y+8, olc::RED);
+	}
+
+	void renderScaleMeshHandle() {
+		if(!scale_mesh) return;
+
+		//cool circles
+		float m2c=(mouse_pos-scale_ctr).mag();
+		DrawCircle(scale_ctr, m2c, olc::PURPLE);
+		float s2c=(scale_start-scale_ctr).mag();
+		DrawCircle(scale_ctr, s2c, olc::PURPLE);
+
+		//crosshair
+		DrawLine(scale_ctr.x-8, scale_ctr.y, scale_ctr.x+8, scale_ctr.y, olc::YELLOW);
+		DrawLine(scale_ctr.x, scale_ctr.y-8, scale_ctr.x, scale_ctr.y+8, olc::YELLOW);
+	}
+
+	void renderHelpHints() {
+		int cx=ScreenWidth()/2;
+		if(help_menu) {
+			DrawString(8, 8, "Movement Controls");
+			DrawString(8, 16, "WASD, Space, & Shift to move");
+			DrawString(8, 24, "ARROWS to look around");
+
+			DrawString(ScreenWidth()-8*17, 8, "General Controls");
+			DrawString(ScreenWidth()-8*16, 16, "T for translate", trans_mesh?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*13, 24, "R for rotate", rot_mesh?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*13, 32, "E for extent", scale_mesh?olc::WHITE:olc::RED);
+			DrawString(ScreenWidth()-8*13, 40, "B for bounds", realize_bounds?olc::WHITE:olc::RED);
+
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H to close]");
+		} else {
+			DrawString(cx-4*18, ScreenHeight()-8, "[Press H for help]");
+		}
+	}
+#pragma endregion
 
 	bool user_render() override {
 		Clear(olc::Pixel(150, 150, 150));
@@ -291,64 +420,15 @@ struct Example : cmn::Engine3D {
 			);
 		}
 
-		//selected mesh edge detection
-		for(int k=0; k<3; k++) {
-			Mesh* select=nullptr;
-			olc::Pixel col;
-			switch(k) {
-				case 0: select=trans_mesh, col=olc::ORANGE; break;
-				case 1: select=rot_mesh, col=olc::RED; break;
-				case 2: select=scale_mesh, col=olc::YELLOW; break;
-			}
-			if(select) {
-				int id=select->id;
-				for(int i=1; i<ScreenWidth()-1; i++) {
-					for(int j=1; j<ScreenHeight()-1; j++) {
-						bool curr=id_buffer[bufferIX(i, j)]==id;
-						bool lft=id_buffer[bufferIX(i-1, j)]==id;
-						bool rgt=id_buffer[bufferIX(i+1, j)]==id;
-						bool top=id_buffer[bufferIX(i, j-1)]==id;
-						bool btm=id_buffer[bufferIX(i, j+1)]==id;
-						if(curr!=lft||curr!=rgt||curr!=top||curr!=btm) {
-							Draw(i, j, col);
-						}
-					}
-				}
-			}
-		}
+		renderSelectedMeshEdges();
 
-		//draw translation handle
-		if(trans_mesh) {
-			DrawLine(trans_start, mouse_pos, olc::BLUE);
-			DrawLine(trans_start.x-8, trans_start.y, trans_start.x+8, trans_start.y, olc::ORANGE);
-			DrawLine(trans_start.x, trans_start.y-8, trans_start.x, trans_start.y+8, olc::ORANGE);
-		}
+		renderTransMeshHandle();
 
-		//draw rotation handle
-		if(rot_mesh) {
-			vf2d sub=mouse_pos-rot_start;
-			float dist=sub.mag();
-			float rad=std::max(20.f, dist);
-			float angle=std::atan2(sub.y, sub.x);
-			vf2d a=rot_start+cmn::polar<vf2d>(rad, angle);
-			vf2d b=rot_start+cmn::polar<vf2d>(rad, angle+.667f*cmn::Pi);
-			vf2d c=rot_start+cmn::polar<vf2d>(rad, angle+1.33f*cmn::Pi);
-			DrawLine(a, b, olc::GREEN);
-			DrawLine(b, c, olc::GREEN);
-			DrawLine(c, a, olc::GREEN);
-			DrawLine(rot_start.x-8, rot_start.y, rot_start.x+8, rot_start.y, olc::RED);
-			DrawLine(rot_start.x, rot_start.y-8, rot_start.x, rot_start.y+8, olc::RED);
-		}
+		renderRotMeshHandle();
 
-		//draw scale handle
-		if(scale_mesh) {
-			float m2c=(mouse_pos-scale_ctr).mag();
-			DrawCircle(scale_ctr, m2c, olc::PURPLE);
-			float s2c=(scale_start-scale_ctr).mag();
-			DrawCircle(scale_ctr, s2c, olc::PURPLE);
-			DrawLine(scale_ctr.x-8, scale_ctr.y, scale_ctr.x+8, scale_ctr.y, olc::YELLOW);
-			DrawLine(scale_ctr.x, scale_ctr.y-8, scale_ctr.x, scale_ctr.y+8, olc::YELLOW);
-		}
+		renderScaleMeshHandle();
+
+		renderHelpHints();
 
 		return true;
 	}

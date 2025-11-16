@@ -4,18 +4,19 @@
 
 #include "quat.h"
 
+#include "return_code.h"
+
 struct IndexTriangle {
 	int a=0, b=0, c=0;
 };
 
 struct Mesh {
-	std::vector<vf3d> vertices;
+	std::vector<vf3d> vertexes;
 	std::vector<IndexTriangle> index_tris;
 	Quat rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
-	Mat4 mat_world;//local->world
-	Mat4 mat_local;//world->local
+	Mat4 mat_model;
 	std::vector<cmn::Triangle> tris;
 	int id=-1;
 
@@ -24,15 +25,14 @@ struct Mesh {
 		Mat4 mat_rot=Quat::toMat4(rotation);
 		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
 		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_world=mat_scale*mat_rot*mat_trans;
-		mat_local=Mat4::inverse(mat_world);
+		mat_model=mat_scale*mat_rot*mat_trans;
 	}
 
 	void applyTransforms() {
 		std::vector<vf3d> new_verts;
-		new_verts.reserve(vertices.size());
-		for(const auto& v:vertices) {
-			new_verts.push_back(v*mat_world);
+		new_verts.reserve(vertexes.size());
+		for(const auto& v:vertexes) {
+			new_verts.push_back(v*mat_model);
 		}
 
 		tris.clear();
@@ -56,20 +56,16 @@ struct Mesh {
 		}
 	}
 
+	//world space aabb
 	cmn::AABB3 getAABB() const {
 		cmn::AABB3 box;
-		for(const auto& t:tris) {
-			for(int i=0; i<3; i++) {
-				box.fitToEnclose(t.p[i]);
-			}
+		for(const auto& v:vertexes) {
+			box.fitToEnclose(v*mat_model);
 		}
 		return box;
 	}
 
 	float intersectRay(const vf3d& orig, const vf3d& dir) const {
-		if(getAABB().intersectRay(orig, dir)<0) return -1;
-
-		//sort by closest
 		float record=-1;
 		for(const auto& t:tris) {
 			float dist=t.intersectSeg(orig, orig+dir);
@@ -83,11 +79,11 @@ struct Mesh {
 		return record;
 	}
 
-	static Mesh loadFromOBJ(const std::string& filename) {
-		Mesh m;
+	static ReturnCode loadFromOBJ(Mesh& m, const std::string& filename) {
+		m={};
 
 		std::ifstream file(filename);
-		if(file.fail()) throw std::runtime_error("invalid filename");
+		if(file.fail()) return {false, "invalid filename"};
 
 		//parse file line by line
 		std::string line;
@@ -97,7 +93,7 @@ struct Mesh {
 			if(type=="v") {
 				vf3d v;
 				line_str>>v.x>>v.y>>v.z;
-				m.vertices.push_back(v);
+				m.vertexes.push_back(v);
 			} else if(type=="f") {
 				std::vector<int> v_ixs;
 
@@ -122,7 +118,7 @@ struct Mesh {
 
 		file.close();
 
-		return m;
+		return {true, "success"};
 	}
 };
 #endif
