@@ -5,13 +5,14 @@
 #include "mesh.h"
 #include "voxel_set.h"
 
-#include <thread>
+//for memset & memcpy
+#include <string>
 
 VoxelSet meshToVoxels(const Mesh& m, vf3d res) {
 	//get global mesh dimensions
 	cmn::AABB3 m_box;
 	for(const auto& v:m.verts) {
-		m_box.fitToEnclose(v*m.mat_total);
+		m_box.fitToEnclose(v*m.mat_model);
 	}
 
 	//determine sizing
@@ -25,39 +26,16 @@ VoxelSet meshToVoxels(const Mesh& m, vf3d res) {
 	v.scale=res;
 	v.offset=m_box.min;
 
-	//make workers
-	const int num_thr=std::thread::hardware_concurrency();
-	std::thread* workers=new std::thread[num_thr];
-	const int num_jobs=width*height*depth;
-	std::atomic<int> jobs_left=num_jobs;
-
-	//queue work based on index modulo
-	for(int w=0; w<num_thr; w++) {
-		workers[w]=std::thread([&, num_thr, w] () {
-			//for every voxel, is it in the polyhedra?
-			for(int i=0; i<v.getWidth(); i++) {
-				for(int j=0; j<v.getHeight(); j++) {
-					for(int k=0; k<v.getDepth(); k++) {
-						//skip if this isnt my work
-						int ix=v.ix(i, j, k);
-						if(ix%num_thr!=w) continue;
-
-						vf3d pos=v.offset+v.scale*vf3d(.5f+i, .5f+j, .5f+k);
-
-						if(m.contains(pos)) v.grid[ix]=true;
-
-						jobs_left--;
-					}
-				}
+	//for every voxel...
+	for(int i=0; i<v.getWidth(); i++) {
+		for(int j=0; j<v.getHeight(); j++) {
+			for(int k=0; k<v.getDepth(); k++) {
+				//is it in the polyhedra?
+				vf3d pos=v.offset+v.scale*vf3d(.5f+i, .5f+j, .5f+k);
+				if(m.contains(pos)) v.grid[v.ix(i, j, k)]=true;
 			}
-		});
+		}
 	}
-
-	//wait for threads to finish
-	for(int i=0; i<num_thr; i++) {
-		workers[i].join();
-	}
-	delete[] workers;
 
 	return v;
 }
@@ -77,7 +55,7 @@ Mesh voxelsToMesh(const VoxelSet& v) {
 	int* lookup=new int[(1+width)*(1+height)*(1+depth)];
 	std::memset(lookup, -1, sizeof(int)*(1+width)*(1+height)*(1+depth));
 	auto lookupIX=[&] (int i, int j, int k) {
-		return i+(1+width)*j+(1+width)*(1+height)*k;
+		return i+j*(1+width)+k*(1+width)*(1+height);
 	};
 
 	//vertex index getter
@@ -206,7 +184,7 @@ Mesh voxelsToMesh(const VoxelSet& v) {
 
 	delete[] lookup;
 
-	m.updateTransforms();
+	m.updateMatrixes();
 	m.updateTriangles();
 
 	return m;
