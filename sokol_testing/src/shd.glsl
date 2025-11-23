@@ -1,7 +1,7 @@
 @vs vs
 layout(binding=0) uniform vs_params{
 	mat4 u_model;
-	mat4 u_view_proj;
+	mat4 u_proj_view;
 };
 
 in vec3 pos;
@@ -16,7 +16,7 @@ void main() {
 	vec4 world_pos=u_model*vec4(pos, 1);
 	v_pos=world_pos.xyz;
 	v_norm=mat3(u_model)*norm;
-	gl_Position=u_view_proj*world_pos;
+	gl_Position=u_proj_view*world_pos;
 	v_uv=uv;
 }
 @end

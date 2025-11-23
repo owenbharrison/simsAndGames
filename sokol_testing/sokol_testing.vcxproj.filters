@@ -63,5 +63,6 @@
     <Text Include="assets\dragon.txt" />
     <Text Include="assets\horse.txt" />
     <Text Include="assets\monkey.txt" />
+    <Text Include="assets\icosphere.txt" />
   </ItemGroup>
 </Project>

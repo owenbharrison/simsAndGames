@@ -22,8 +22,6 @@ float randFloat(float b=1, float a=0) {
 	return a+t*(b-a);
 }
 
-constexpr float Pi=3.1415927f;
-
 //https://stackoverflow.com/a/6178290
 float randNormal() {
 	float rho=std::sqrt(-2*std::log(randFloat()));
@@ -47,7 +45,7 @@ struct Demo : SokolEngine {
 	//cam info
 	vf3d cam_pos{0, 0, 0};
 	vf3d cam_dir;
-	float cam_yaw=0;
+	float cam_yaw=-Pi;
 	float cam_pitch=0;
 
 	//scene info
@@ -55,11 +53,16 @@ struct Demo : SokolEngine {
 
 	bool fps_controls=false;
 
-	std::vector<Mesh> meshes;
+	std::vector<Mesh> animals;
 
-	void setupMeshes() {
-		ReturnCode status;
+	Mesh cursor;
 
+	mat4 m_proj_view;
+
+	vf3d mouse_dir;
+
+#pragma region SETUP HELPERS
+	void setupAnimals() {
 		const std::vector<std::string> filenames{
 			"assets/monkey.txt",
 			"assets/bunny.txt",
@@ -71,15 +74,29 @@ struct Demo : SokolEngine {
 		const float radius=3;
 		for(int i=0; i<filenames.size(); i++) {
 			Mesh m;
+			
 			auto status=Mesh::loadFromOBJ(m, filenames[i]);
 			if(!status.valid) Mesh::makeCube(m);
+
 			float angle=2*Pi*i/filenames.size();
-			m.pos.x=radius*std::cos(angle);
-			m.pos.z=radius*std::sin(angle);
-			m.rot.y=1.5f*Pi-angle;
+			//load animals in circle around origin
+			m.translation.x=radius*std::cos(angle);
+			m.translation.z=radius*std::sin(angle);
+			//pointing toward origin
+			m.rotation.y=1.5f*Pi-angle;
+
 			m.updateMatrixes();
-			meshes.push_back(m);
+			
+			animals.push_back(m);
 		}
+	}
+
+	void setupCursor() {
+		auto status=Mesh::loadFromOBJ(cursor, "assets/icosphere.txt");
+		if(!status.valid) Mesh::makeCube(cursor);
+
+		cursor.scale={.1f, .1f, .1f};
+		cursor.updateMatrixes();
 	}
 
 	void setupTexture() {
@@ -115,9 +132,12 @@ struct Demo : SokolEngine {
 		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		pipeline=sg_make_pipeline(pipeline_desc);
 	}
+#pragma endregion
 
 	void userCreate() override {
-		setupMeshes();
+		setupAnimals();
+
+		setupCursor();
 
 		setupTexture();
 		
@@ -178,8 +198,13 @@ struct Demo : SokolEngine {
 
 	void handleUserInput(float dt) {
 		handleCameraLooking(dt);
+
+		//polar to cartesian
+		cam_dir=polar3D(cam_yaw, cam_pitch);
+
 		handleCameraMovement(dt);
 
+		//set light pos
 		if(getKey(SAPP_KEYCODE_L).held) {
 			light_pos=cam_pos;
 		}
@@ -188,8 +213,42 @@ struct Demo : SokolEngine {
 			sapp_toggle_fullscreen();
 		}
 
-		//exit
+		//exit on escape
 		if(getKey(SAPP_KEYCODE_ESCAPE).pressed) sapp_request_quit();
+	}
+
+	void updateMatrixes() {
+		//camera transformation matrix	
+		mat4 m_look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
+		mat4 m_view=mat4::inverse(m_look_at);
+
+		//perspective
+		mat4 m_proj=mat4::makeProjection(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000.f);
+
+		//premultiply transform
+		m_proj_view=mat4::mul(m_proj, m_view);
+	}
+
+	void updateMouseRay() {
+		//unprojection matrix
+		mat4 m_inv_view_proj=mat4::inverse(m_proj_view);
+
+		//mouse coords from clip -> world
+		float ndc_x=2*mouse_x/sapp_widthf()-1;
+		float ndc_y=1-2*mouse_y/sapp_heightf();
+		vf3d clip(ndc_x, ndc_y, 1);
+		float w=1;
+		vf3d world=matMulVec(m_inv_view_proj, clip, w);
+		world/=w;
+
+		//normalize direction
+		mouse_dir=(world-cam_pos).norm();
+	}
+
+	void updateCursor() {
+		//place cursor in front of cam
+		cursor.translation=cam_pos+2.f*mouse_dir;
+		cursor.updateMatrixes();
 	}
 
 	//set title to framerate
@@ -208,23 +267,34 @@ struct Demo : SokolEngine {
 	void userUpdate(float dt) {
 		handleUserInput(dt);
 
-		//polar to cartesian
-		cam_dir=polar3D(cam_yaw, cam_pitch);
+		updateMatrixes();
+
+		updateMouseRay();
+
+		updateCursor();
 
 		updateTitle(dt);
 	}
 
+#pragma region RENDER HELPERS
+	void renderMesh(const Mesh& m) {
+		//update bindings
+		bindings.vertex_buffers[0]=m.vbuf;
+		bindings.index_buffer=m.ibuf;
+		sg_apply_bindings(bindings);
+
+		//send vertex uniforms
+		vs_params_t vs_params; zeroMem(vs_params);
+		std::memcpy(vs_params.u_model, m.m_model.m, sizeof(vs_params.u_model));
+		std::memcpy(vs_params.u_proj_view, m_proj_view.m, sizeof(vs_params.u_proj_view));
+		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+		
+		sg_draw(0, 3*m.index_tris.size(), 1);
+	}
+#pragma endregion
+
 	void userRender() {
-		//camera transformation matrix
-		mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
-		mat4 view=mat4::inverse(look_at);
-
-		//perspective
-		mat4 proj=mat4::makeProjection(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000.f);
-
-		//premultiply transform
-		mat4 view_proj=mat4::mul(proj, view);
-
+		//still not sure what a pass is...
 		sg_pass pass; zeroMem(pass);
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
 		pass.action.colors[0].clear_value={.62f, .35f, .82f, 1.f};
@@ -232,30 +302,22 @@ struct Demo : SokolEngine {
 		sg_begin_pass(pass);
 
 		sg_apply_pipeline(pipeline);
+
+		//send fragment uniforms
+		fs_params_t fs_params; zeroMem(fs_params);
+		fs_params.u_light_pos[0]=light_pos.x;
+		fs_params.u_light_pos[1]=light_pos.y;
+		fs_params.u_light_pos[2]=light_pos.z;
+		fs_params.u_cam_pos[0]=cam_pos.x;
+		fs_params.u_cam_pos[1]=cam_pos.y;
+		fs_params.u_cam_pos[2]=cam_pos.z;
+		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
 		
-		for(const auto& m:meshes) {
-			bindings.vertex_buffers[0]=m.vbuf;
-			bindings.index_buffer=m.ibuf;
-			sg_apply_bindings(bindings);
-
-			//send vertex uniforms
-			vs_params_t vs_params; zeroMem(vs_params);
-			std::memcpy(vs_params.u_model, m.m_model.m, sizeof(vs_params.u_model));
-			std::memcpy(vs_params.u_view_proj, view_proj.m, sizeof(vs_params.u_view_proj));
-			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-
-			//send fragment uniforms
-			fs_params_t fs_params; zeroMem(fs_params);
-			fs_params.u_light_pos[0]=light_pos.x;
-			fs_params.u_light_pos[1]=light_pos.y;
-			fs_params.u_light_pos[2]=light_pos.z;
-			fs_params.u_cam_pos[0]=cam_pos.x;
-			fs_params.u_cam_pos[1]=cam_pos.y;
-			fs_params.u_cam_pos[2]=cam_pos.z;
-			sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
-
-			sg_draw(0, 3*m.index_tris.size(), 1);
+		for(const auto& a:animals) {
+			renderMesh(a);
 		}
+
+		renderMesh(cursor);
 
 		sg_end_pass();
 		sg_commit();

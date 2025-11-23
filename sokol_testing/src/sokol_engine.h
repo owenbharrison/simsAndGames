@@ -76,12 +76,14 @@ public:
 				break;
 			case SAPP_EVENTTYPE_MOUSE_MOVE:
 				_mouse_moving=true;
-				//apparently these are invalid?
-				if(sapp_mouse_locked()) {
+
+				//absolute invalid when locked
+				if(!sapp_mouse_locked()) {
 					_mouse_x_new=e->mouse_x;
 					_mouse_y_new=e->mouse_y;
 				}
-				//always valid...
+
+				//delta always valid
 				_mouse_dx_new=e->mouse_dx;
 				_mouse_dy_new=e->mouse_dy;
 				break;
@@ -91,14 +93,17 @@ public:
 	//fun little helper.
 	struct KeyState { bool pressed, held, released; };
 	KeyState getKey(const sapp_keycode& kc) const {
-		bool held=_keys_curr[kc];
-		bool pressed=held&&!_keys_old[kc];
-		return {pressed, held, !pressed};
+		bool curr=_keys_curr[kc], prev=_keys_old[kc];
+		return {curr&&!prev, curr, !curr&&prev};
 	}
 
 	void frame() {
 		//update curr key values
 		std::memcpy(_keys_curr, _keys_new, sizeof(bool)*_num_keys);
+
+		//update mouse coords
+		mouse_x=_mouse_x_new;
+		mouse_y=_mouse_y_new;
 
 		//hmm...
 		if(_mouse_moving) {

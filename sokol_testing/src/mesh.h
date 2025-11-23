@@ -31,10 +31,7 @@ struct Mesh {
 	sg_buffer vbuf;
 	sg_buffer ibuf;
 
-	vf3d pos, scale{1, 1, 1}, rot;
-	//transform directions
-	mat4 m_rot, m_inv_rot;
-	//transform positions
+	vf3d rotation, scale{1, 1, 1}, translation;
 	mat4 m_model, m_inv_model;
 
 	void updateVertexBuffer() {
@@ -100,21 +97,22 @@ struct Mesh {
 	}
 	
 	void updateMatrixes() {
+		//xyz euler angles?
+		mat4 m_rot_x=mat4::makeRotX(rotation.x);
+		mat4 m_rot_y=mat4::makeRotY(rotation.y);
+		mat4 m_rot_z=mat4::makeRotZ(rotation.z);
+		mat4 m_rot=mat4::mul(m_rot_z, mat4::mul(m_rot_y, m_rot_x));
+
 		mat4 m_scale=mat4::makeScale(scale);
 
-		//xyz euler angles
-		mat4 m_rot_x=mat4::makeRotX(rot.x);
-		mat4 m_rot_y=mat4::makeRotY(rot.y);
-		mat4 m_rot_z=mat4::makeRotZ(rot.z);
-		m_rot=mat4::mul(m_rot_z, mat4::mul(m_rot_y, m_rot_x));
-		m_inv_rot=mat4::inverse(m_rot);
+		mat4 m_trans=mat4::makeTranslation(translation);
 
-		mat4 m_trans=mat4::makeTranslation(pos);
+		//combine & invert
 		m_model=mat4::mul(m_trans, mat4::mul(m_rot, m_scale));
 		m_inv_model=mat4::inverse(m_model);
 	}
 
-	[[nodiscrd]] static ReturnCode loadFromOBJ(Mesh& m, const std::string& filename) {
+	[[nodiscard]] static ReturnCode loadFromOBJ(Mesh& m, const std::string& filename) {
 		m=Mesh{};
 
 		std::ifstream file(filename);

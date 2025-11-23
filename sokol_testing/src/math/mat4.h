@@ -15,13 +15,16 @@
 
 #include "v3d.h"
 
+constexpr float Pi=3.1415927f;
+
 struct mat4 {
 	float m[16];
 
-	mat4() { std:memset(m, 0.f, sizeof(float)*16); }
+	mat4() { std::memset(m, 0.f, sizeof(float)*16); }
 
-	const float& operator()(int i, int j) const { return m[j+4*i]; }
-	float& operator()(int i, int j) { return m[j+4*i]; }
+	//row, col
+	const float& operator()(int r, int c) const { return m[r+4*c]; }
+	float& operator()(int r, int c) { return m[r+4*c]; }
 
 	static mat4 makeIdentity() {
 		mat4 c;
@@ -34,9 +37,9 @@ struct mat4 {
 
 	static mat4 makeTranslation(const vf3d& trans) {
 		mat4 c=mat4::makeIdentity();
-		c(3, 0)=trans.x;
-		c(3, 1)=trans.y;
-		c(3, 2)=trans.z;
+		c(0, 3)=trans.x;
+		c(1, 3)=trans.y;
+		c(2, 3)=trans.z;
 		return c;
 	}
 
@@ -53,10 +56,8 @@ struct mat4 {
 		mat4 a;
 		float c=std::cos(t), s=std::sin(t);
 		a(0, 0)=1;
-		a(1, 1)=c;
-		a(2, 1)=-s;
-		a(1, 2)=s;
-		a(2, 2)=c;
+		a(1, 1)=c, a ( 1, 2)=-s;
+		a(2, 1)=s, a(2, 2)=c;
 		a(3, 3)=1;
 		return a;
 	}
@@ -64,11 +65,9 @@ struct mat4 {
 	static mat4 makeRotY(float t) {
 		mat4 a;
 		float c=std::cos(t), s=std::sin(t);
-		a(0, 0)=c;
-		a(2, 0)=s;
+		a(0, 0)=c, a(0, 2)=s;
 		a(1, 1)=1;
-		a(0, 2)=-s;
-		a(2, 2)=c;
+		a(2, 0)=-s, a(2, 2)=c;
 		a(3, 3)=1;
 		return a;
 	}
@@ -76,16 +75,14 @@ struct mat4 {
 	static mat4 makeRotZ(float t) {
 		mat4 a;
 		float c=std::cos(t), s=std::sin(t);
-		a(0, 0)=c;
-		a(1, 0)=-s;
-		a(0, 1)=s;
-		a(1, 1)=c;
+		a(0, 0)=c, a(0, 1)=-s;
+		a(1, 0)=s, a(1, 1)=c;
 		a(2, 2)=1;
 		a(3, 3)=1;
 		return a;
 	}
 
-	//from coordinate system to world.
+	//from camera -> world
 	//invert this for view matrix.
 	static mat4 makeLookAt(const vf3d& eye, const vf3d& target, vf3d y_axis) {
 		//coordinate axes from RHR
@@ -95,103 +92,89 @@ struct mat4 {
 
 		//column vectors + translation
 		mat4 a;
-		a(0, 0)=x_axis.x, a(1, 0)=y_axis.x, a(2, 0)=z_axis.x, a(3, 0)=eye.x;
-		a(0, 1)=x_axis.y, a(1, 1)=y_axis.y, a(2, 1)=z_axis.y, a(3, 1)=eye.y;
-		a(0, 2)=x_axis.z, a(1, 2)=y_axis.z, a(2, 2)=z_axis.z, a(3, 2)=eye.z;
+		a(0, 0)=x_axis.x, a(0, 1)=y_axis.x, a(0, 2)=z_axis.x, a(0, 3)=eye.x;
+		a(1, 0)=x_axis.y, a(1, 1)=y_axis.y, a(1, 2)=z_axis.y, a(1, 3)=eye.y;
+		a(2, 0)=x_axis.z, a(2, 1)=y_axis.z, a(2, 2)=z_axis.z, a(2, 3)=eye.z;
 		a(3, 3)=1;
 		return a;
 	}
 
-	static mat4 makeView(const vf3d& eye, const vf3d& target, vf3d up) {
-		vf3d fwd=(target-eye).norm();
-		vf3d rgt=fwd.cross(up).norm();
-		up=rgt.cross(fwd);
-
-		mat4 a;
-		a(0, 0)=rgt.x, a(0, 1)=rgt.y, a(0, 2)=rgt.z, a(0, 3)=-eye.dot(rgt);
-		a(1, 0)=up.x, a(1, 1)=up.y, a(1, 2)=up.z, a(1, 3)=-eye.dot(up);
-		a(2, 0)=-fwd.x, a(2, 1)=-fwd.y, a(2, 2)=-fwd.z, a(2, 3)=eye.dot(fwd);
-		a(3, 3)=1;
-		return a;
-	}
-
-	//this takes degrees.
-	//asp=width/height
+	//fov=degrees & asp=width/height
 	//https://gamedev.stackexchange.com/questions/120338
 	static mat4 makeProjection(float fov_deg, float asp, float near, float far) {
-		float fov_rad=fov_deg/180*3.1415927f;
+		float fov_rad=fov_deg/180*Pi;
 		float inv_tan=1/std::tan(fov_rad/2);
 		float inv_nearfar=1/(near-far);
 		mat4 a;
 		a(0, 0)=inv_tan/asp;
 		a(1, 1)=inv_tan;
-		a(2, 2)=(far+near)*inv_nearfar;
-		a(3, 2)=2*far*near*inv_nearfar;
-		a(2, 3)=-1;
+		a(2, 2)=(far+near)*inv_nearfar, a(2, 3)=2*far*near*inv_nearfar;
+		a(3, 2)=-1;
 		return a;
 	}
 
-	static mat4 mul(const mat4& a, const mat4& b) {
-		mat4 c;
-		for(int i=0; i<4; i++) {
-			for(int j=0; j<4; j++) {
-				c(i, j)=
-					a(0, j)*b(i, 0)+
-					a(1, j)*b(i, 1)+
-					a(2, j)*b(i, 2)+
-					a(3, j)*b(i, 3);
+	//basically a lot of corresponding dot products...
+	static mat4 mul(const mat4& lhs, const mat4& rhs) {
+		mat4 res;
+		for(int r=0; r<4; r++) {
+			for(int c=0; c<4; c++) {
+				res(r, c)=
+					lhs(r, 0)*rhs(0, c)+
+					lhs(r, 1)*rhs(1, c)+
+					lhs(r, 2)*rhs(2, c)+
+					lhs(r, 3)*rhs(3, c);
 			}
 		}
-		return c;
+		return res;
 	}
 
 	static mat4 transpose(const mat4& a) {
 		mat4 b;
-		for(int i=0; i<4; i++) {
-			for(int j=0; j<4; j++) {
-				b(i, j)=a(j, i);
+		for(int r=0; r<4; r++) {
+			for(int c=0; c<4; c++) {
+				b(r, c)=a(c, r);
 			}
 		}
 		return b;
 	}
 
 	//compute determinant of sub matrix
-	static float minor(const mat4& a, int row, int col) {
-		float m[9];
-		int subi=0;
-		for(int i=0; i<4; i++) {
-			if(i==row) continue;
-			int subj=0;
-			for(int j=0; j<4; j++) {
-				if(j==col) continue;
-				m[subj+3*subi]=a(i, j);
-				subj++;
+	static float minor(const mat4& m44, int row, int col) {
+		float m33[9];
+		int subr=0;
+		for(int r=0; r<4; r++) {
+			if(r==row) continue;
+			int subc=0;
+			for(int c=0; c<4; c++) {
+				if(c==col) continue;
+				m33[subr+3*subc]=m44(r, c);
+				subc++;
 			}
-			subi++;
+			subr++;
 		}
 		return
-			m[0+3*0]*(m[1+3*1]*m[2+3*2]-m[1+3*2]*m[2+3*1])-
-			m[0+3*1]*(m[1+3*0]*m[2+3*2]-m[1+3*2]*m[2+3*0])+
-			m[0+3*2]*(m[1+3*0]*m[2+3*1]-m[1+3*1]*m[2+3*0]);
+			m33[0+3*0]*(m33[1+3*1]*m33[2+3*2]-m33[1+3*2]*m33[2+3*1])-
+			m33[0+3*1]*(m33[1+3*0]*m33[2+3*2]-m33[1+3*2]*m33[2+3*0])+
+			m33[0+3*2]*(m33[1+3*0]*m33[2+3*1]-m33[1+3*1]*m33[2+3*0]);
 	}
 
 	static mat4 inverse(const mat4& a) {
 		mat4 cofactors;
-		for(int i=0; i<4; i++) {
-			for(int j=0; j<4; j++) {
-				cofactors(i, j)=((i+j)%2?-1:1)*mat4::minor(a, i, j);
+		for(int r=0; r<4; r++) {
+			for(int c=0; c<4; c++) {
+				cofactors(r, c)=((r+c)%2?-1:1)*mat4::minor(a, r, c);
 			}
 		}
 		mat4 adjugate=mat4::transpose(cofactors);
 
+		//default to identity if singular
+		mat4 inv=mat4::makeIdentity();
+		
 		//get determinant using first row and cofactors
 		float det=0;
-		for(int j=0; j<4; j++) {
-			det+=a(0, j)*cofactors(0, j);
+		for(int c=0; c<4; c++) {
+			det+=a(0, c)*cofactors(0, c);
 		}
-
-		//return identity if singular...
-		mat4 inv=mat4::makeIdentity();
 		if(det!=0) {
 			//divide adjugate by determinant
 			float recip=1/det;
@@ -201,4 +184,15 @@ struct mat4 {
 		return inv;
 	}
 };
+
+//mat4 * vec4 implies homogeneous coordinates
+//  but im not going to make a vec4 struct for this.
+vf3d matMulVec(const mat4& m, const vf3d& v, float& w) {
+	float x=m(0, 0)*v.x+m(0, 1)*v.y+m(0, 2)*v.z+m(0, 3)*w;
+	float y=m(1, 0)*v.x+m(1, 1)*v.y+m(1, 2)*v.z+m(1, 3)*w;
+	float z=m(2, 0)*v.x+m(2, 1)*v.y+m(2, 2)*v.z+m(2, 3)*w;
+	w=m(3, 0)*v.x+m(3, 1)*v.y+m(3, 2)*v.z+m(3, 3)*w;
+
+	return {x, y, z};
+}
 #endif
