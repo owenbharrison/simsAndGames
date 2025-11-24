@@ -25,6 +25,61 @@ struct IndexTriangle {
 	int a, b, c;
 };
 
+//come on you guys!
+//there it is right there in front of you the whole time.
+//you're dereferencing a null pointer!
+//open your eyes.
+float rayIntersectTri(
+	const vf3d& orig, const vf3d& dir,
+	const vf3d& t0, const vf3d& t1, const vf3d& t2,
+	float* uptr=nullptr, float* vptr=nullptr
+) {
+	/*ray equation
+	p=o+td
+	triangle equation
+	t0+u(t1-t0)+v(t2-t0)
+	set equal
+	o+td=t0+u(t1-t0)+v(t2-t0)
+	rearrange
+	td+u(t0-t1)+v(t0-t2)=t0-o
+	solve like matrix!
+	*/
+
+	static const float epsilon=1e-6f;
+
+	//column vectors
+	vf3d a=dir;
+	vf3d b=t0-t1;
+	vf3d c=t0-t2;
+	vf3d d=t0-orig;
+	vf3d bxc=b.cross(c);
+	float det=a.dot(bxc);
+	//parallel
+	if(std::abs(det)<epsilon) return -1;
+
+	vf3d f=c.cross(a)/det;
+	float u=f.dot(d);
+	if(uptr) *uptr=u;
+
+	vf3d g=a.cross(b)/det;
+	float v=g.dot(d);
+	if(vptr) *vptr=v;
+
+	//within unit uv triangle
+	if(u<0||u>1) return -1;
+	if(v<0||v>1) return -1;
+	if(u+v>1) return -1;
+
+	//get t
+	vf3d e=bxc/det;
+	float t=e.dot(d);
+
+	//behind ray
+	if(t<0) return -1;
+
+	return t;
+}
+
 struct Mesh {
 	std::vector<Vertex> verts;
 	std::vector<IndexTriangle> index_tris;
@@ -33,6 +88,44 @@ struct Mesh {
 
 	vf3d rotation, scale{1, 1, 1}, translation;
 	mat4 m_model, m_inv_model;
+
+	float intersectRay(const vf3d& orig_world, const vf3d& dir_world) const {
+		//localize ray
+		float w=1;//want translation
+		vf3d orig_local=matMulVec(m_inv_model, orig_world, w);
+		w=0;//no translation
+		vf3d dir_local=matMulVec(m_inv_model, dir_world, w);
+		//renormalization is not necessary here, because
+		//  rayIntersect is basically segment intersection,
+		//  but it feels wrong not to pass a unit vector.
+		dir_local=dir_local.norm();
+
+		//find closest tri
+		float record=-1;
+		for(const auto& it:index_tris) {
+			//valid intersection?
+			float dist=rayIntersectTri(
+				orig_local, dir_local,
+				verts[it.a].pos,
+				verts[it.b].pos,
+				verts[it.c].pos
+			);
+			if(dist<0) continue;
+
+			//"sort" while iterating
+			if(record<0||dist<record) record=dist;
+		}
+
+		//i hate fp== comparisons.
+		if(record<0) return -1;
+
+		//get point from local -> world & get dist to orig
+		//i need to do this because of the non-uniform scale
+		vf3d p_local=orig_local+record*dir_local;
+		w=1;//want translation
+		vf3d p_world=matMulVec(m_model, p_local, w);
+		return (p_world-orig_world).mag();
+	}
 
 	void updateVertexBuffer() {
 		//free old

@@ -6,6 +6,9 @@
 
 #include "mesh.h"
 
+//for time
+#include <ctime>
+
 //y p => x y z
 //0 0 => 0 0 1
 static vf3d polar3D(float yaw, float pitch) {
@@ -38,6 +41,38 @@ vf3d randDir() {
 	).norm();
 }
 
+vf3d rayIntersectPlane(const vf3d& orig, const vf3d& dir, const vf3d& ctr, const vf3d& norm) {
+	float t=norm.dot(ctr-orig)/norm.dot(dir);
+	return orig+t*dir;
+}
+
+//https://www.rapidtables.com/convert/color/hsv-to-rgb.html
+static sg_color hsv2rgb(int h, float s, float v) {
+	float c=v*s;
+	float x=c*(1-std::abs(1-std::fmod(h/60.f, 2)));
+	float m=v-c;
+	float r=0, g=0, b=0;
+	switch(h/60) {
+		case 0: r=c, g=x, b=0; break;
+		case 1: r=x, g=c, b=0; break;
+		case 2: r=0, g=c, b=x; break;
+		case 3: r=0, g=x, b=c; break;
+		case 4: r=x, g=0, b=c; break;
+		case 5: r=c, g=0, b=x; break;
+	}
+	return {m+r, m+g, m+b, 1};
+}
+
+static sg_color randomPastel() {
+	//hue=pure color
+	int h=std::rand()%360;
+	//saturation=intensity
+	float s=randFloat(.1f, .4f);
+	//value=brightness
+	float v=randFloat(.75f, 1);
+	return hsv2rgb(h, s, v);
+}
+
 struct Demo : SokolEngine {
 	sg_bindings bindings;
 	sg_pipeline pipeline;
@@ -49,17 +84,24 @@ struct Demo : SokolEngine {
 	float cam_pitch=0;
 
 	//scene info
-	vf3d light_pos{0, 3, 0};
+	vf3d light_pos{0, 2, 0};
 
 	bool fps_controls=false;
 
 	std::vector<Mesh> animals;
 
-	Mesh cursor;
-
 	mat4 m_proj_view;
 
 	vf3d mouse_dir;
+	vf3d prev_mouse_dir;
+
+	//store mesh handle and grab plane
+	Mesh* grab_mesh=nullptr;
+	vf3d grab_ctr, grab_norm;
+
+	float color_timer=0;
+	const float color_period=5;
+	sg_color prev_col, next_col, curr_col;
 
 #pragma region SETUP HELPERS
 	void setupAnimals() {
@@ -89,14 +131,6 @@ struct Demo : SokolEngine {
 			
 			animals.push_back(m);
 		}
-	}
-
-	void setupCursor() {
-		auto status=Mesh::loadFromOBJ(cursor, "assets/icosphere.txt");
-		if(!status.valid) Mesh::makeCube(cursor);
-
-		cursor.scale={.1f, .1f, .1f};
-		cursor.updateMatrixes();
 	}
 
 	void setupTexture() {
@@ -135,19 +169,58 @@ struct Demo : SokolEngine {
 #pragma endregion
 
 	void userCreate() override {
+		app_title="Mouse Interaction Demo";
+		
+		std::srand(std::time(0));
+		
 		setupAnimals();
-
-		setupCursor();
 
 		setupTexture();
 		
 		setupSampler();
 
 		setupPipeline();
+
+		//init rand cols
+		prev_col=randomPastel();
+		next_col=randomPastel();
 	}
 
 #pragma region UPDATE HELPERS
+	void updateMatrixes() {
+		//camera transformation matrix	
+		mat4 m_look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
+		mat4 m_view=mat4::inverse(m_look_at);
+
+		//perspective
+		mat4 m_proj=mat4::makeProjection(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000.f);
+
+		//premultiply transform
+		m_proj_view=mat4::mul(m_proj, m_view);
+	}
+
+	void updateMouseRay() {
+		prev_mouse_dir=mouse_dir;
+		
+		//unprojection matrix
+		mat4 m_inv_view_proj=mat4::inverse(m_proj_view);
+
+		//mouse coords from clip -> world
+		float ndc_x=2*mouse_x/sapp_widthf()-1;
+		float ndc_y=1-2*mouse_y/sapp_heightf();
+		vf3d clip(ndc_x, ndc_y, 1);
+		float w=1;
+		vf3d world=matMulVec(m_inv_view_proj, clip, w);
+		world/=w;
+
+		//normalize direction
+		mouse_dir=(world-cam_pos).norm();
+	}
+
 	void handleCameraLooking(float dt) {
+		//cant look while grabbing.
+		if(grab_mesh) return;
+		
 		//lock mouse position
 		if(getKey(SAPP_KEYCODE_F).pressed) {
 			fps_controls^=true;
@@ -181,6 +254,9 @@ struct Demo : SokolEngine {
 	}
 
 	void handleCameraMovement(float dt) {
+		//cant move while grabbing.
+		if(grab_mesh) return;
+		
 		//move up, down
 		if(getKey(SAPP_KEYCODE_SPACE).held) cam_pos.y+=4.f*dt;
 		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam_pos.y-=4.f*dt;
@@ -196,6 +272,43 @@ struct Demo : SokolEngine {
 		if(getKey(SAPP_KEYCODE_D).held) cam_pos-=4.f*dt*lr_dir;
 	}
 
+	void handleGrabActionBegin() {
+		handleGrabActionEnd();
+
+		//find closest mesh
+		float record=-1;
+		for(auto& a:animals) {
+			//is intersection valid?
+			float dist=a.intersectRay(cam_pos, mouse_dir);
+			if(dist<0) continue;
+
+			//"sort" while iterating
+			if(record<0||dist<record) {
+				record=dist;
+				grab_mesh=&a;
+			}
+		}
+		if(!grab_mesh) return;
+
+		grab_ctr=cam_pos+record*mouse_dir;
+		grab_norm=cam_dir;
+	}
+
+	void handleGrabActionUpdate() {
+		if(!grab_mesh) return;
+
+		//project delta onto grab plane
+		vf3d prev_pt=rayIntersectPlane(cam_pos, prev_mouse_dir, grab_ctr, grab_norm);
+		vf3d curr_pt=rayIntersectPlane(cam_pos, mouse_dir, grab_ctr, grab_norm);
+		//move by delta.
+		grab_mesh->translation+=curr_pt-prev_pt;
+		grab_mesh->updateMatrixes();
+	}
+
+	void handleGrabActionEnd() {
+		grab_mesh=nullptr;
+	}
+
 	void handleUserInput(float dt) {
 		handleCameraLooking(dt);
 
@@ -203,6 +316,13 @@ struct Demo : SokolEngine {
 		cam_dir=polar3D(cam_yaw, cam_pitch);
 
 		handleCameraMovement(dt);
+
+		{
+			const auto grab_action=getKey(SAPP_KEYCODE_G);
+			if(grab_action.pressed) handleGrabActionBegin();
+			if(grab_action.held) handleGrabActionUpdate();
+			if(grab_action.released) handleGrabActionEnd();
+		}
 
 		//set light pos
 		if(getKey(SAPP_KEYCODE_L).held) {
@@ -217,63 +337,30 @@ struct Demo : SokolEngine {
 		if(getKey(SAPP_KEYCODE_ESCAPE).pressed) sapp_request_quit();
 	}
 
-	void updateMatrixes() {
-		//camera transformation matrix	
-		mat4 m_look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
-		mat4 m_view=mat4::inverse(m_look_at);
+	void updateColor(float dt) {
+		if(color_timer>color_period) {
+			color_timer-=color_period;
 
-		//perspective
-		mat4 m_proj=mat4::makeProjection(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000.f);
+			prev_col=next_col;
+			next_col=randomPastel();
+		}
 
-		//premultiply transform
-		m_proj_view=mat4::mul(m_proj, m_view);
-	}
+		//lerp between prev & next
+		float t=color_timer/color_period;
+		curr_col=prev_col+t*(next_col-prev_col);
 
-	void updateMouseRay() {
-		//unprojection matrix
-		mat4 m_inv_view_proj=mat4::inverse(m_proj_view);
-
-		//mouse coords from clip -> world
-		float ndc_x=2*mouse_x/sapp_widthf()-1;
-		float ndc_y=1-2*mouse_y/sapp_heightf();
-		vf3d clip(ndc_x, ndc_y, 1);
-		float w=1;
-		vf3d world=matMulVec(m_inv_view_proj, clip, w);
-		world/=w;
-
-		//normalize direction
-		mouse_dir=(world-cam_pos).norm();
-	}
-
-	void updateCursor() {
-		//place cursor in front of cam
-		cursor.translation=cam_pos+2.f*mouse_dir;
-		cursor.updateMatrixes();
-	}
-
-	//set title to framerate
-	void updateTitle(float dt) {
-		char title[64];
-		std::snprintf(
-			title,
-			sizeof(title),
-			"Mesh Demo - FPS: %d",
-			int(1/dt)
-		);
-		sapp_set_window_title(title);
+		color_timer+=dt;
 	}
 #pragma endregion
 
 	void userUpdate(float dt) {
-		handleUserInput(dt);
-
 		updateMatrixes();
 
 		updateMouseRay();
 
-		updateCursor();
+		handleUserInput(dt);
 
-		updateTitle(dt);
+		updateColor(dt);
 	}
 
 #pragma region RENDER HELPERS
@@ -297,7 +384,7 @@ struct Demo : SokolEngine {
 		//still not sure what a pass is...
 		sg_pass pass; zeroMem(pass);
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		pass.action.colors[0].clear_value={.62f, .35f, .82f, 1.f};
+		pass.action.colors[0].clear_value=curr_col;
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
@@ -316,8 +403,6 @@ struct Demo : SokolEngine {
 		for(const auto& a:animals) {
 			renderMesh(a);
 		}
-
-		renderMesh(cursor);
 
 		sg_end_pass();
 		sg_commit();

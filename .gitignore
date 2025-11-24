@@ -398,6 +398,7 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+#user defined
 /sokol_testing/sokol-shdc.exe
-/sokol_testing/compile_shd.bat
-/sokol_testing/compile_shader.bat
+/sokol_testing/sokol-shdc.bat
