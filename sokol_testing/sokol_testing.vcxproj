@@ -158,6 +158,8 @@
     <ClInclude Include="src\sokol\sokol_log.h" />
     <ClInclude Include="src\math\v3d.h" />
     <ClInclude Include="src\sokol_engine.h" />
+    <ClInclude Include="src\stb_image.h" />
+    <ClInclude Include="src\texture.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
@@ -166,12 +168,20 @@
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\bunny.txt" />
-    <Text Include="assets\cow.txt" />
-    <Text Include="assets\dragon.txt" />
-    <Text Include="assets\horse.txt" />
+    <Text Include="assets\models\bunny.txt" />
+    <Text Include="assets\models\cow.txt" />
+    <Text Include="assets\models\dragon.txt" />
+    <Text Include="assets\models\horse.txt" />
     <Text Include="assets\icosphere.txt" />
-    <Text Include="assets\monkey.txt" />
+    <Text Include="assets\models\monkey.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\img\xy+.png" />
+    <Image Include="assets\img\xy-.png" />
+    <Image Include="assets\img\yz+.png" />
+    <Image Include="assets\img\yz-.png" />
+    <Image Include="assets\img\zx+.png" />
+    <Image Include="assets\img\zx-.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

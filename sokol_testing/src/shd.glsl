@@ -43,8 +43,8 @@ void main() {
 	vec3 R=reflect(-L, N);
 
 	//diffuse based on tex col?
-	float amb_mag=.1;
-	float diff_mag=.8*max(dot(N, L), 0);
+	float amb_mag=.2;
+	float diff_mag=.7*max(dot(N, L), 0);
 	vec4 col=texture(sampler2D(u_tex, u_smp), v_uv);
 	vec3 amb=amb_mag*col.rgb;
 	vec3 diff=diff_mag*col.rgb;

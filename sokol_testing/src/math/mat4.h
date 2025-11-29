@@ -35,84 +35,6 @@ struct mat4 {
 		return c;
 	}
 
-	static mat4 makeTranslation(const vf3d& trans) {
-		mat4 c=mat4::makeIdentity();
-		c(0, 3)=trans.x;
-		c(1, 3)=trans.y;
-		c(2, 3)=trans.z;
-		return c;
-	}
-
-	static mat4 makeScale(const vf3d& scl) {
-		mat4 c;
-		c(0, 0)=scl.x;
-		c(1, 1)=scl.y;
-		c(2, 2)=scl.z;
-		c(3, 3)=1;
-		return c;
-	}
-
-	static mat4 makeRotX(float t) {
-		mat4 a;
-		float c=std::cos(t), s=std::sin(t);
-		a(0, 0)=1;
-		a(1, 1)=c, a ( 1, 2)=-s;
-		a(2, 1)=s, a(2, 2)=c;
-		a(3, 3)=1;
-		return a;
-	}
-
-	static mat4 makeRotY(float t) {
-		mat4 a;
-		float c=std::cos(t), s=std::sin(t);
-		a(0, 0)=c, a(0, 2)=s;
-		a(1, 1)=1;
-		a(2, 0)=-s, a(2, 2)=c;
-		a(3, 3)=1;
-		return a;
-	}
-
-	static mat4 makeRotZ(float t) {
-		mat4 a;
-		float c=std::cos(t), s=std::sin(t);
-		a(0, 0)=c, a(0, 1)=-s;
-		a(1, 0)=s, a(1, 1)=c;
-		a(2, 2)=1;
-		a(3, 3)=1;
-		return a;
-	}
-
-	//from camera -> world
-	//invert this for view matrix.
-	static mat4 makeLookAt(const vf3d& eye, const vf3d& target, vf3d y_axis) {
-		//coordinate axes from RHR
-		vf3d z_axis=(eye-target).norm();
-		vf3d x_axis=y_axis.cross(z_axis).norm();
-		y_axis=z_axis.cross(x_axis);
-
-		//column vectors + translation
-		mat4 a;
-		a(0, 0)=x_axis.x, a(0, 1)=y_axis.x, a(0, 2)=z_axis.x, a(0, 3)=eye.x;
-		a(1, 0)=x_axis.y, a(1, 1)=y_axis.y, a(1, 2)=z_axis.y, a(1, 3)=eye.y;
-		a(2, 0)=x_axis.z, a(2, 1)=y_axis.z, a(2, 2)=z_axis.z, a(2, 3)=eye.z;
-		a(3, 3)=1;
-		return a;
-	}
-
-	//fov=degrees & asp=width/height
-	//https://gamedev.stackexchange.com/questions/120338
-	static mat4 makeProjection(float fov_deg, float asp, float near, float far) {
-		float fov_rad=fov_deg/180*Pi;
-		float inv_tan=1/std::tan(fov_rad/2);
-		float inv_nearfar=1/(near-far);
-		mat4 a;
-		a(0, 0)=inv_tan/asp;
-		a(1, 1)=inv_tan;
-		a(2, 2)=(far+near)*inv_nearfar, a(2, 3)=2*far*near*inv_nearfar;
-		a(3, 2)=-1;
-		return a;
-	}
-
 	//basically a lot of corresponding dot products...
 	static mat4 mul(const mat4& lhs, const mat4& rhs) {
 		mat4 res;
@@ -182,6 +104,84 @@ struct mat4 {
 		}
 
 		return inv;
+	}
+
+	static mat4 makeTranslation(const vf3d& trans) {
+		mat4 c=mat4::makeIdentity();
+		c(0, 3)=trans.x;
+		c(1, 3)=trans.y;
+		c(2, 3)=trans.z;
+		return c;
+	}
+
+	static mat4 makeScale(const vf3d& scl) {
+		mat4 c;
+		c(0, 0)=scl.x;
+		c(1, 1)=scl.y;
+		c(2, 2)=scl.z;
+		c(3, 3)=1;
+		return c;
+	}
+
+	static mat4 makeRotX(float t) {
+		mat4 a;
+		float c=std::cos(t), s=std::sin(t);
+		a(0, 0)=1;
+		a(1, 1)=c, a(1, 2)=-s;
+		a(2, 1)=s, a(2, 2)=c;
+		a(3, 3)=1;
+		return a;
+	}
+
+	static mat4 makeRotY(float t) {
+		mat4 a;
+		float c=std::cos(t), s=std::sin(t);
+		a(0, 0)=c, a(0, 2)=s;
+		a(1, 1)=1;
+		a(2, 0)=-s, a(2, 2)=c;
+		a(3, 3)=1;
+		return a;
+	}
+
+	static mat4 makeRotZ(float t) {
+		mat4 a;
+		float c=std::cos(t), s=std::sin(t);
+		a(0, 0)=c, a(0, 1)=-s;
+		a(1, 0)=s, a(1, 1)=c;
+		a(2, 2)=1;
+		a(3, 3)=1;
+		return a;
+	}
+
+	//from camera -> world
+	//invert this for view matrix.
+	static mat4 makeLookAt(const vf3d& eye, const vf3d& target, vf3d up) {
+		//coordinate axes from RHR
+		vf3d fwd=(target-eye).norm();
+		vf3d rgt=fwd.cross(up).norm();
+		up=rgt.cross(fwd);
+
+		//column vectors + translation
+		mat4 a;
+		a(0, 0)=rgt.x, a(0, 1)=up.x, a(0, 2)=-fwd.x, a(0, 3)=eye.x;
+		a(1, 0)=rgt.y, a(1, 1)=up.y, a(1, 2)=-fwd.y, a(1, 3)=eye.y;
+		a(2, 0)=rgt.z, a(2, 1)=up.z, a(2, 2)=-fwd.z, a(2, 3)=eye.z;
+		a(3, 3)=1;
+		return a;
+	}
+
+	//fov=degrees & asp=width/height
+	//https://gamedev.stackexchange.com/questions/120338
+	static mat4 makePerspective(float fov_deg, float asp, float near, float far) {
+		float fov_rad=fov_deg/180*Pi;
+		float inv_tan=1/std::tan(fov_rad/2);
+		float inv_nearfar=1/(near-far);
+		mat4 a;
+		a(0, 0)=inv_tan/asp;
+		a(1, 1)=inv_tan;
+		a(2, 2)=(far+near)*inv_nearfar, a(2, 3)=2*far*near*inv_nearfar;
+		a(3, 2)=-1;
+		return a;
 	}
 };
 

@@ -8,7 +8,7 @@
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_glue.h"
 
-//for memset, memcpy
+//for memset & memcpy
 #include <string>
 
 //generalized struct initializer

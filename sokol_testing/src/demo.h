@@ -73,6 +73,13 @@ static sg_color randomPastel() {
 	return hsv2rgb(h, s, v);
 }
 
+#include "texture.h"
+
+struct Object {
+	Mesh mesh;
+	sg_view view;
+};
+
 struct Demo : SokolEngine {
 	sg_bindings bindings;
 	sg_pipeline pipeline;
@@ -88,15 +95,24 @@ struct Demo : SokolEngine {
 
 	bool fps_controls=false;
 
-	std::vector<Mesh> animals;
+	sg_sampler sampler;
+
+	sg_view tex_blank;
+	sg_view tex_uv;
+
+	Object platform;
+
+	std::vector<Object> animals;
+
+	Object cubemap_faces[6];
 
 	mat4 m_proj_view;
 
 	vf3d mouse_dir;
 	vf3d prev_mouse_dir;
 
-	//store mesh handle and grab plane
-	Mesh* grab_mesh=nullptr;
+	//store object handle and grab plane
+	Object* grab_obj=nullptr;
 	vf3d grab_ctr, grab_norm;
 
 	float color_timer=0;
@@ -104,54 +120,96 @@ struct Demo : SokolEngine {
 	sg_color prev_col, next_col, curr_col;
 
 #pragma region SETUP HELPERS
+	void setupSampler() {
+		sg_sampler_desc sampler_desc; zeroMem(sampler_desc);
+		sampler=sg_make_sampler(sampler_desc);
+		bindings.samplers[SMP_u_smp]=sampler;
+	}
+
+	//make platform for animals to "sit" on
+	void setupPlatform() {
+		Mesh& m=platform.mesh;
+		Mesh::makeCube(m);
+		m.scale={8, .5f, 8};
+		m.translation={0, -2, 0};
+		m.updateMatrixes();
+
+		platform.view=tex_uv;
+	}
+
 	void setupAnimals() {
 		const std::vector<std::string> filenames{
-			"assets/monkey.txt",
-			"assets/bunny.txt",
-			"assets/cow.txt",
-			"assets/horse.txt",
-			"assets/dragon.txt"
+			"assets/models/monkey.txt",
+			"assets/models/bunny.txt",
+			"assets/models/cow.txt",
+			"assets/models/horse.txt",
+			"assets/models/dragon.txt"
 		};
 
 		const float radius=3;
 		for(int i=0; i<filenames.size(); i++) {
 			Mesh m;
-			
+
 			auto status=Mesh::loadFromOBJ(m, filenames[i]);
 			if(!status.valid) Mesh::makeCube(m);
 
 			float angle=2*Pi*i/filenames.size();
 			//load animals in circle around origin
-			m.translation.x=radius*std::cos(angle);
-			m.translation.z=radius*std::sin(angle);
+			m.translation=radius*polar3D(angle, 0);
 			//pointing toward origin
-			m.rotation.y=1.5f*Pi-angle;
+			m.rotation.y=Pi+angle;
 
 			m.updateMatrixes();
-			
-			animals.push_back(m);
+
+			animals.push_back({m, tex_blank});
 		}
 	}
 
-	void setupTexture() {
-		int width=1;
-		int height=1;
-		std::uint32_t* pixels=new std::uint32_t[width*height];
-		pixels[0]=0xFFFFFFFF;
-		sg_image_desc image_desc; zeroMem(image_desc);
-		image_desc.width=width;
-		image_desc.height=height;
-		image_desc.data.mip_levels[0].ptr=pixels;
-		image_desc.data.mip_levels[0].size=sizeof(std::uint32_t)*width*height;
-		sg_view_desc view_desc; zeroMem(view_desc);
-		view_desc.texture.image=sg_make_image(image_desc);
-		bindings.views[VIEW_u_tex]=sg_make_view(view_desc);
-		delete[] pixels;
-	}
+	void setupCubemap() {
+		//base textured face on xz plane
+		std::vector<Vertex> face_verts={
+			{{-.5f, 0, -.5f}, {0, 1, 0}, {1, 0}},
+			{{.5f, 0, -.5f}, {0, 1, 0}, {0, 0}},
+			{{-.5f, 0, .5f}, {0, 1, 0}, {1, 1}},
+			{{.5f, 0, .5f}, {0, 1, 0}, {0, 1}},
+		};
+		std::vector<IndexTriangle> face_tris{
+			{0, 3, 1}, {0, 2, 3}
+		};
 
-	void setupSampler() {
-		sg_sampler_desc sampler_desc; zeroMem(sampler_desc);
-		bindings.samplers[SMP_u_smp]=sg_make_sampler(sampler_desc);
+		//remember xyz rotation order
+		const vf3d rot_trans[6][2]{
+			{Pi*vf3d(.5f, 1, 0), {0, 0, -.5f}},//back
+			{Pi*vf3d(.5f, 0, 0), {0, 0, .5f}},//front
+			{Pi*vf3d(.5f, -.5f, 0), {-.5f, 0, 0}},//left
+			{Pi*vf3d(.5f, .5f, 0), {.5f, 0, 0}},//right
+			{Pi*vf3d(1, 0, 0), {0, -.5f, 0}},//bottom
+			{{0, 0, 0}, {0, .5f, 0}}//top
+		};
+
+		const std::string textures[6]{
+			"assets/img/xy-.png",
+			"assets/img/xy+.png",
+			"assets/img/yz-.png",
+			"assets/img/yz+.png",
+			"assets/img/zx-.png",
+			"assets/img/zx+.png"
+		};
+		for(int i=0; i<6; i++) {
+			Mesh& m=cubemap_faces[i].mesh;
+			m.verts=face_verts;
+			m.tris=face_tris;
+			m.updateIndexBuffer();
+			m.updateVertexBuffer();
+
+			m.rotation=rot_trans[i][0];
+			m.translation=rot_trans[i][1];
+			m.updateMatrixes();
+
+			sg_view view=tex_uv;
+			makeTextureFromFile(view, textures[i]);
+			cubemap_faces[i].view=view;
+		}
 	}
 
 	void setupPipeline() {
@@ -162,6 +220,7 @@ struct Demo : SokolEngine {
 		pipeline_desc.layout.attrs[ATTR_shd_uv].format=SG_VERTEXFORMAT_SHORT2N;
 		pipeline_desc.index_type=SG_INDEXTYPE_UINT32;//use the index buffer
 		pipeline_desc.cull_mode=SG_CULLMODE_FRONT;
+
 		pipeline_desc.depth.write_enabled=true;//use depth buffer
 		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		pipeline=sg_make_pipeline(pipeline_desc);
@@ -169,15 +228,20 @@ struct Demo : SokolEngine {
 #pragma endregion
 
 	void userCreate() override {
-		app_title="Mouse Interaction Demo";
-		
+		app_title="Multiple Textures Demo";
+
 		std::srand(std::time(0));
-		
+
+		setupSampler();
+
+		tex_blank=makeBlankTexture();
+		tex_uv=makeUVTexture(1024, 1024);
+
+		setupPlatform();
+
 		setupAnimals();
 
-		setupTexture();
-		
-		setupSampler();
+		setupCubemap();
 
 		setupPipeline();
 
@@ -193,7 +257,7 @@ struct Demo : SokolEngine {
 		mat4 m_view=mat4::inverse(m_look_at);
 
 		//perspective
-		mat4 m_proj=mat4::makeProjection(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000.f);
+		mat4 m_proj=mat4::makePerspective(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000);
 
 		//premultiply transform
 		m_proj_view=mat4::mul(m_proj, m_view);
@@ -201,7 +265,7 @@ struct Demo : SokolEngine {
 
 	void updateMouseRay() {
 		prev_mouse_dir=mouse_dir;
-		
+
 		//unprojection matrix
 		mat4 m_inv_view_proj=mat4::inverse(m_proj_view);
 
@@ -219,8 +283,8 @@ struct Demo : SokolEngine {
 
 	void handleCameraLooking(float dt) {
 		//cant look while grabbing.
-		if(grab_mesh) return;
-		
+		if(grab_obj) return;
+
 		//lock mouse position
 		if(getKey(SAPP_KEYCODE_F).pressed) {
 			fps_controls^=true;
@@ -255,8 +319,8 @@ struct Demo : SokolEngine {
 
 	void handleCameraMovement(float dt) {
 		//cant move while grabbing.
-		if(grab_mesh) return;
-		
+		if(grab_obj) return;
+
 		//move up, down
 		if(getKey(SAPP_KEYCODE_SPACE).held) cam_pos.y+=4.f*dt;
 		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam_pos.y-=4.f*dt;
@@ -279,34 +343,34 @@ struct Demo : SokolEngine {
 		float record=-1;
 		for(auto& a:animals) {
 			//is intersection valid?
-			float dist=a.intersectRay(cam_pos, mouse_dir);
+			float dist=a.mesh.intersectRay(cam_pos, mouse_dir);
 			if(dist<0) continue;
 
 			//"sort" while iterating
 			if(record<0||dist<record) {
 				record=dist;
-				grab_mesh=&a;
+				grab_obj=&a;
 			}
 		}
-		if(!grab_mesh) return;
+		if(!grab_obj) return;
 
 		grab_ctr=cam_pos+record*mouse_dir;
 		grab_norm=cam_dir;
 	}
 
 	void handleGrabActionUpdate() {
-		if(!grab_mesh) return;
+		if(!grab_obj) return;
 
 		//project delta onto grab plane
 		vf3d prev_pt=rayIntersectPlane(cam_pos, prev_mouse_dir, grab_ctr, grab_norm);
 		vf3d curr_pt=rayIntersectPlane(cam_pos, mouse_dir, grab_ctr, grab_norm);
 		//move by delta.
-		grab_mesh->translation+=curr_pt-prev_pt;
-		grab_mesh->updateMatrixes();
+		grab_obj->mesh.translation+=curr_pt-prev_pt;
+		grab_obj->mesh.updateMatrixes();
 	}
 
 	void handleGrabActionEnd() {
-		grab_mesh=nullptr;
+		grab_obj=nullptr;
 	}
 
 	void handleUserInput(float dt) {
@@ -317,8 +381,9 @@ struct Demo : SokolEngine {
 
 		handleCameraMovement(dt);
 
+		//grab & drag with left mouse button
 		{
-			const auto grab_action=getKey(SAPP_KEYCODE_G);
+			const auto grab_action=getMouse(SAPP_MOUSEBUTTON_LEFT);
 			if(grab_action.pressed) handleGrabActionBegin();
 			if(grab_action.held) handleGrabActionUpdate();
 			if(grab_action.released) handleGrabActionEnd();
@@ -364,19 +429,20 @@ struct Demo : SokolEngine {
 	}
 
 #pragma region RENDER HELPERS
-	void renderMesh(const Mesh& m) {
+	void renderObject(const Object& o) {
 		//update bindings
-		bindings.vertex_buffers[0]=m.vbuf;
-		bindings.index_buffer=m.ibuf;
+		bindings.vertex_buffers[0]=o.mesh.vbuf;
+		bindings.index_buffer=o.mesh.ibuf;
+		bindings.views[VIEW_u_tex]=o.view;
 		sg_apply_bindings(bindings);
 
 		//send vertex uniforms
 		vs_params_t vs_params; zeroMem(vs_params);
-		std::memcpy(vs_params.u_model, m.m_model.m, sizeof(vs_params.u_model));
+		std::memcpy(vs_params.u_model, o.mesh.m_model.m, sizeof(vs_params.u_model));
 		std::memcpy(vs_params.u_proj_view, m_proj_view.m, sizeof(vs_params.u_proj_view));
 		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-		
-		sg_draw(0, 3*m.index_tris.size(), 1);
+
+		sg_draw(0, 3*o.mesh.tris.size(), 1);
 	}
 #pragma endregion
 
@@ -399,9 +465,15 @@ struct Demo : SokolEngine {
 		fs_params.u_cam_pos[1]=cam_pos.y;
 		fs_params.u_cam_pos[2]=cam_pos.z;
 		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
-		
+
+		renderObject(platform);
+
 		for(const auto& a:animals) {
-			renderMesh(a);
+			renderObject(a);
+		}
+
+		for(int i=0; i<6; i++) {
+			renderObject(cubemap_faces[i]);
 		}
 
 		sg_end_pass();

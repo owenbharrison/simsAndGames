@@ -82,7 +82,7 @@ float rayIntersectTri(
 
 struct Mesh {
 	std::vector<Vertex> verts;
-	std::vector<IndexTriangle> index_tris;
+	std::vector<IndexTriangle> tris;
 	sg_buffer vbuf;
 	sg_buffer ibuf;
 
@@ -102,13 +102,13 @@ struct Mesh {
 
 		//find closest tri
 		float record=-1;
-		for(const auto& it:index_tris) {
+		for(const auto& t:tris) {
 			//valid intersection?
 			float dist=rayIntersectTri(
 				orig_local, dir_local,
-				verts[it.a].pos,
-				verts[it.b].pos,
-				verts[it.c].pos
+				verts[t.a].pos,
+				verts[t.b].pos,
+				verts[t.c].pos
 			);
 			if(dist<0) continue;
 
@@ -152,7 +152,7 @@ struct Mesh {
 		}
 
 		//send temp to "gpu"
-		sg_buffer_desc vbuf_desc; zeroMem(vbuf_desc);
+		sg_buffer_desc vbuf_desc{}; zeroMem(vbuf_desc);
 		vbuf_desc.data.ptr=vbuf_data;
 		vbuf_desc.data.size=sizeof(BufferVertex)*num_verts;
 		vbuf=sg_make_buffer(vbuf_desc);
@@ -166,20 +166,20 @@ struct Mesh {
 		if(ibuf.id!=SG_INVALID_ID) sg_destroy_buffer(ibuf);
 
 		//alloc temp
-		const int num_index_tris=index_tris.size();
-		const int num_indexes=3*num_index_tris;
+		const int num_tris=tris.size();
+		const int num_indexes=3*num_tris;
 		std::uint32_t* ibuf_data=new std::uint32_t[num_indexes];
 
 		//transfer to temp
-		for(int i=0; i<num_index_tris; i++) {
-			const auto& it=index_tris[i];
-			ibuf_data[3*i]=it.a;
-			ibuf_data[1+3*i]=it.b;
-			ibuf_data[2+3*i]=it.c;
+		for(int i=0; i<num_tris; i++) {
+			const auto& t=tris[i];
+			ibuf_data[3*i]=t.a;
+			ibuf_data[1+3*i]=t.b;
+			ibuf_data[2+3*i]=t.c;
 		}
 
 		//send temp to "gpu"
-		sg_buffer_desc ibuf_desc; zeroMem(ibuf_desc);
+		sg_buffer_desc ibuf_desc{}; zeroMem(ibuf_desc);
 		ibuf_desc.usage.index_buffer=true;
 		ibuf_desc.data.ptr=ibuf_data;
 		ibuf_desc.data.size=sizeof(std::uint32_t)*num_indexes;
@@ -260,7 +260,7 @@ struct Mesh {
 				for(std::string vtn_str; line_ss>>vtn_str;) {
 					std::stringstream vtn_ss(vtn_str);
 
-					int v=-1, t=1, n=-1;
+					int v=-1, t=0, n=-1;
 
 					std::string v_str;
 					std::getline(vtn_ss, v_str, '/');
@@ -270,7 +270,7 @@ struct Mesh {
 					std::string t_str;
 					if(std::getline(vtn_ss, t_str, '/')) {
 						std::stringstream t_ss(t_str);
-						if(!(t_ss>>t)) t=1;
+						if(!(t_ss>>t)) t=0;
 					}
 
 					std::string n_str;
@@ -283,7 +283,7 @@ struct Mesh {
 					if(n==-1) return {false, "invalid face normal index"};
 
 					//obj 1-based indexing
-					vtns.push_back({v-1, t-1, n-1});
+					vtns.push_back({v-1, t, n-1});
 				}
 
 				//add vertexes
@@ -308,7 +308,7 @@ struct Mesh {
 
 				//triangulate polygon
 				for(int i=2; i<indexes.size(); i++) {
-					m.index_tris.push_back({
+					m.tris.push_back({
 						indexes[0],
 						indexes[i-1],
 						indexes[i]
@@ -362,13 +362,13 @@ struct Mesh {
 			{{1, 1, 1}, {0, 1, 0}, {1, 1}}
 		};
 
-		m.index_tris={
-			{0, 1, 2}, {1, 3, 2},//back
-			{4, 6, 5}, {5, 6, 7},//front
-			{8, 9, 10}, {9, 11, 10},//left
-			{12, 14, 13}, {13, 14, 15},//right
-			{16, 17, 18}, {17, 19, 18},//bottom
-			{20, 22, 21}, {21, 22, 23}//top
+		m.tris={
+			{0, 2, 1}, {1, 2, 3},//back
+			{4, 5, 6}, {5, 7, 6},//front
+			{8, 10, 9}, {9, 10, 11},//left
+			{12, 13, 14}, {13, 15, 14},//right
+			{16, 18, 17}, {17, 18, 19},//bottom
+			{20, 21, 22}, {21, 23, 22}//top
 		};
 
 		m.updateIndexBuffer();
