@@ -11,11 +11,8 @@
 //for memset & memcpy
 #include <string>
 
-//generalized struct initializer
-template<typename T>
-void zeroMem(T& t) {
-	std::memset(&t, 0, sizeof(T));
-}
+//for snprintf
+#include <cstdio>
 
 //qol stuff
 sg_color operator+(const sg_color& a, const sg_color& b) { return {a.r+b.r, a.g+b.g, a.b+b.b, a.a+b.a}; }
@@ -64,7 +61,7 @@ public:
 	virtual void userRender()=0;
 
 	void init() {
-		sg_desc desc; zeroMem(desc);
+		sg_desc desc{};
 		desc.environment=sglue_environment();
 		sg_setup(desc);
 

@@ -70,6 +70,7 @@
     <Text Include="assets\models\horse.txt" />
     <Text Include="assets\models\monkey.txt" />
     <Text Include="assets\icosphere.txt" />
+    <Text Include="assets\models\axis.txt" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\img\xy-.png">

@@ -6,14 +6,14 @@
 #include "stb_image.h"
 
 static sg_view makeTextureFromPixels(std::uint32_t* pixels, int width, int height) {
-	sg_image_desc image_desc; zeroMem(image_desc);
+	sg_image_desc image_desc{};
 	image_desc.width=width;
 	image_desc.height=height;
 	image_desc.data.mip_levels[0].ptr=pixels;
 	image_desc.data.mip_levels[0].size=sizeof(std::uint32_t)*width*height;
 	sg_image image=sg_make_image(image_desc);
 
-	sg_view_desc view_desc; zeroMem(view_desc);
+	sg_view_desc view_desc{};
 	view_desc.texture.image=image;
 	return sg_make_view(view_desc);
 }

@@ -11,7 +11,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 	static Demo demo;
 	demo_ptr=&demo;
 
-	sapp_desc app_desc; zeroMem(app_desc);
+	sapp_desc app_desc{};
 	app_desc.init_cb=init_cb;
 	app_desc.cleanup_cb=cleanup_cb;
 	app_desc.frame_cb=frame_cb;

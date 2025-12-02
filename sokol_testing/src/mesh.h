@@ -83,18 +83,18 @@ float rayIntersectTri(
 struct Mesh {
 	std::vector<Vertex> verts;
 	std::vector<IndexTriangle> tris;
-	sg_buffer vbuf;
-	sg_buffer ibuf;
+	sg_buffer vbuf{SG_INVALID_ID};
+	sg_buffer ibuf{SG_INVALID_ID};
 
 	vf3d rotation, scale{1, 1, 1}, translation;
-	mat4 m_model, m_inv_model;
+	mat4 model, inv_model;
 
 	float intersectRay(const vf3d& orig_world, const vf3d& dir_world) const {
 		//localize ray
 		float w=1;//want translation
-		vf3d orig_local=matMulVec(m_inv_model, orig_world, w);
+		vf3d orig_local=matMulVec(inv_model, orig_world, w);
 		w=0;//no translation
-		vf3d dir_local=matMulVec(m_inv_model, dir_world, w);
+		vf3d dir_local=matMulVec(inv_model, dir_world, w);
 		//renormalization is not necessary here, because
 		//  rayIntersect is basically segment intersection,
 		//  but it feels wrong not to pass a unit vector.
@@ -123,7 +123,7 @@ struct Mesh {
 		//i need to do this because of the non-uniform scale
 		vf3d p_local=orig_local+record*dir_local;
 		w=1;//want translation
-		vf3d p_world=matMulVec(m_model, p_local, w);
+		vf3d p_world=matMulVec(model, p_local, w);
 		return (p_world-orig_world).mag();
 	}
 
@@ -152,7 +152,7 @@ struct Mesh {
 		}
 
 		//send temp to "gpu"
-		sg_buffer_desc vbuf_desc{}; zeroMem(vbuf_desc);
+		sg_buffer_desc vbuf_desc{};
 		vbuf_desc.data.ptr=vbuf_data;
 		vbuf_desc.data.size=sizeof(BufferVertex)*num_verts;
 		vbuf=sg_make_buffer(vbuf_desc);
@@ -179,7 +179,7 @@ struct Mesh {
 		}
 
 		//send temp to "gpu"
-		sg_buffer_desc ibuf_desc{}; zeroMem(ibuf_desc);
+		sg_buffer_desc ibuf_desc{};
 		ibuf_desc.usage.index_buffer=true;
 		ibuf_desc.data.ptr=ibuf_data;
 		ibuf_desc.data.size=sizeof(std::uint32_t)*num_indexes;
@@ -188,22 +188,291 @@ struct Mesh {
 		//free temp
 		delete[] ibuf_data;
 	}
-	
+
 	void updateMatrixes() {
 		//xyz euler angles?
-		mat4 m_rot_x=mat4::makeRotX(rotation.x);
-		mat4 m_rot_y=mat4::makeRotY(rotation.y);
-		mat4 m_rot_z=mat4::makeRotZ(rotation.z);
-		mat4 m_rot=mat4::mul(m_rot_z, mat4::mul(m_rot_y, m_rot_x));
+		mat4 rot_x=mat4::makeRotX(rotation.x);
+		mat4 rot_y=mat4::makeRotY(rotation.y);
+		mat4 rot_z=mat4::makeRotZ(rotation.z);
+		mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
 
-		mat4 m_scale=mat4::makeScale(scale);
+		mat4 scl=mat4::makeScale(scale);
 
-		mat4 m_trans=mat4::makeTranslation(translation);
+		mat4 trans=mat4::makeTranslation(translation);
 
 		//combine & invert
-		m_model=mat4::mul(m_trans, mat4::mul(m_rot, m_scale));
-		m_inv_model=mat4::inverse(m_model);
+		model=mat4::mul(trans, mat4::mul(rot, scl));
+		inv_model=mat4::inverse(model);
 	}
+
+	static Mesh makeCube() {
+		Mesh m;
+
+		m.verts={
+			//back
+			{{-1, -1, -1}, {0, 0, -1}, {1, 1}},
+			{{1, -1, -1}, {0, 0, -1}, {0, 1}},
+			{{-1, 1, -1}, {0, 0, -1}, {1, 0}},
+			{{1, 1, -1}, {0, 0, -1}, {0, 0}},
+			//front
+			{{-1, -1, 1}, {0, 0, 1}, {0, 1}},
+			{{1, -1, 1}, {0, 0, 1}, {1, 1}},
+			{{-1, 1, 1}, {0, 0, 1}, {0, 0}},
+			{{1, 1, 1}, {0, 0, 1}, {1, 0}},
+			//left
+			{{-1, -1, -1}, {-1, 0, 0}, {0, 1}},
+			{{-1, 1, -1}, {-1, 0, 0}, {0, 0}},
+			{{-1, -1, 1}, {-1, 0, 0}, {1, 1}},
+			{{-1, 1, 1}, {-1, 0, 0}, {1, 0}},
+			//right
+			{{1, -1, -1}, {1, 0, 0}, {1, 1}},
+			{{1, 1, -1}, {1, 0, 0}, {1, 0}},
+			{{1, -1, 1}, {1, 0, 0}, {0, 1}},
+			{{1, 1, 1}, {1, 0, 0}, {0, 0}},
+			//bottom
+			{{-1, -1, -1}, {0, -1, 0}, {0, 1}},
+			{{-1, -1, 1}, {0, -1, 0}, {0, 0}},
+			{{1, -1, -1}, {0, -1, 0}, {1, 1}},
+			{{1, -1, 1}, {0, -1, 0}, {1, 0}},
+			//top
+			{{-1, 1, -1}, {0, 1, 0}, {0, 0}},
+			{{-1, 1, 1}, {0, 1, 0}, {0, 1}},
+			{{1, 1, -1}, {0, 1, 0}, {1, 0}},
+			{{1, 1, 1}, {0, 1, 0}, {1, 1}}
+		};
+
+		m.tris={
+			{0, 2, 1}, {1, 2, 3},//back
+			{4, 5, 6}, {5, 7, 6},//front
+			{8, 10, 9}, {9, 10, 11},//left
+			{12, 13, 14}, {13, 15, 14},//right
+			{16, 18, 17}, {17, 18, 19},//bottom
+			{20, 21, 22}, {21, 23, 22}//top
+		};
+
+		m.updateVertexBuffer();
+		m.updateIndexBuffer();
+		m.updateMatrixes();
+
+		return m;
+	}
+
+#pragma region SOLIDS OF REVOLUTION
+	static Mesh makeTorus(float rad_xz, int num_xz, float rad_y, int num_y) {
+		Mesh m;
+
+		//note: loop order matters here.
+		for(int i=0; i<num_xz; i++) {
+			float u=i/(num_xz-1.f);
+			float theta=2*Pi*u;
+
+			//offset from big radius
+			float dx=std::cos(theta);
+			float ox=rad_xz*dx;
+			float dz=std::sin(theta);
+			float oz=rad_xz*dz;
+
+			for(int j=0; j<num_y; j++) {
+				float v=j/(num_y-1.f);
+				float phi=2*Pi*v;
+
+				//scale xz by little radius
+				float dr=std::sin(phi);
+				float nx=dx*dr;
+				float ny=std::cos(phi);
+				float nz=dz*dr;
+				float x=ox+rad_y*nx;
+				float z=oz+rad_y*nz;
+				float y=rad_y*ny;
+
+				m.verts.push_back({{x, y, z}, {nx, ny, nz}, {u, v}});
+			}
+		}
+
+		//tessellate grid
+		auto ix=[&] (int i, int j) { return j+num_y*i; };
+		for(int i=1; i<num_xz; i++) {
+			for(int j=1; j<num_y; j++) {
+				const auto& a=ix(i-1, j-1);
+				const auto& b=ix(i, j-1);
+				const auto& c=ix(i-1, j);
+				const auto& d=ix(i, j);
+				m.tris.push_back({a, b, c});
+				m.tris.push_back({b, d, c});
+			}
+		}
+
+		m.updateVertexBuffer();
+		m.updateIndexBuffer();
+		m.updateMatrixes();
+
+		return m;
+	}
+
+	static Mesh makeUVSphere(float rad, int num_xz, int num_y) {
+		Mesh m;
+
+		//note: loop order matters here.
+		for(int i=0; i<num_xz; i++) {
+			float u=i/(num_xz-1.f);
+			float theta=2*Pi*u;
+
+			float dx=std::cos(theta);
+			float dz=std::sin(theta);
+
+			for(int j=0; j<num_y; j++) {
+				float v=j/(num_y-1.f);
+				float phi=Pi*v;
+
+				float dr=std::sin(phi);
+				float nx=dx*dr;
+				float ny=std::cos(phi);
+				float nz=dz*dr;
+
+				float x=rad*nx;
+				float y=rad*ny;
+				float z=rad*nz;
+
+				m.verts.push_back({{x, y, z}, {nx, ny, nz}, {u, v}});
+			}
+		}
+
+		//tessellate grid
+		auto ix=[&] (int i, int j) { return j+num_y*i; };
+		for(int i=1; i<num_xz; i++) {
+			for(int j=1; j<num_y; j++) {
+				const auto& a=ix(i-1, j-1);
+				const auto& b=ix(i, j-1);
+				const auto& c=ix(i-1, j);
+				const auto& d=ix(i, j);
+				m.tris.push_back({a, b, c});
+				m.tris.push_back({b, d, c});
+			}
+		}
+
+		m.updateVertexBuffer();
+		m.updateIndexBuffer();
+		m.updateMatrixes();
+
+		return m;
+	}
+
+	static Mesh makeCylinder(float rad, int num, float hgt) {
+		Mesh m;
+		
+		//toppole, topedge, topside, btmside, btmedge, btmpole
+
+		float y_top=hgt/2, y_btm=-y_top;
+		float v_top=std::atan(2*rad/hgt)/Pi, v_btm=1-v_top;
+
+		//note: push_back order matters here.
+		for(int i=0; i<num; i++) {
+			float u=i/(num-1.f);
+			float theta=2*Pi*u;
+
+			float nx=std::cos(theta);
+			float nz=std::sin(theta);
+
+			float x=rad*nx;
+			float z=rad*nz;
+
+			m.verts.push_back({{0, y_top, 0}, {0, 1, 0}, {u, 0}});
+			m.verts.push_back({{x, y_top, z}, {0, 1, 0}, {u, v_top}});
+			m.verts.push_back({{x, y_top, z}, {nx, 0, nz}, {u, v_top}});
+			m.verts.push_back({{x, y_btm, z}, {nx, 0, nz}, {u, v_btm}});
+			m.verts.push_back({{x, y_btm, z}, {0, -1, 0}, {u, v_btm}});
+			m.verts.push_back({{0, y_btm, 0}, {0, -1, 0}, {u, 1}});
+		}
+
+		auto ix_tp=[] (int i) { return 6*i; };
+		auto ix_te=[] (int i) { return 1+6*i; };
+		auto ix_ts=[] (int i) { return 2+6*i; };
+		auto ix_bs=[] (int i) { return 3+6*i; };
+		auto ix_be=[] (int i) { return 4+6*i; };
+		auto ix_bp=[] (int i) { return 5+6*i; };
+
+		//lid
+		for(int i=0; i<num; i++) {
+			m.tris.push_back({ix_tp(i), ix_te((i+1)%num), ix_te(i)});
+		}
+
+		//sides
+		for(int i=0; i<num; i++) {
+			int ts=ix_ts(i);
+			int bs=ix_bs(i);
+			int ts_next=ix_ts((i+1)%num);
+			int bs_next=ix_bs((i+1)%num);
+			m.tris.push_back({ts, ts_next, bs});
+			m.tris.push_back({bs, ts_next, bs_next});
+		}
+
+		//base
+		for(int i=0; i<num; i++) {
+			m.tris.push_back({ix_bp(i), ix_be((i+num-1)%num), ix_be(i)});
+		}
+
+		m.updateVertexBuffer();
+		m.updateIndexBuffer();
+		m.updateMatrixes();
+
+		return m;
+	}
+
+	static Mesh makeCone(float rad, int num, float hgt) {
+		Mesh m;
+
+		//topside, btmside, btmedge, btmpole
+		
+		float s=std::sqrt(rad*rad+hgt*hgt);
+		float hs=hgt/s;
+		float rs=rad/s;
+		float ny=rad/s;
+
+		float y_top=hgt/2, y_btm=-y_top;
+		float v_btm=s/(s+rad);
+
+		//note: push_back order matters here.
+		for(int i=0; i<num; i++) {
+			float u=i/(num-1.f);
+			float theta=2*Pi*u;
+
+			float dx=std::cos(theta);
+			float dz=std::sin(theta);
+
+			float nx=hs*dx;
+			float nz=hs*dz;
+
+			float x=rad*dx;
+			float z=rad*dz;
+
+			m.verts.push_back({{0, y_top, 0}, {nx, ny, nz}, {u, 0}});
+			m.verts.push_back({{x, y_btm, z}, {nx, ny, nz}, {u, v_btm}});
+			m.verts.push_back({{x, y_btm, z}, {0, -1, 0}, {u, v_btm}});
+			m.verts.push_back({{0, y_btm, 0}, {0, -1, 0}, {u, 1}});
+		}
+
+		auto ix_ts=[](int i) { return 4*i; };
+		auto ix_bs=[](int i) { return 1+4*i; };
+		auto ix_be=[](int i) { return 2+4*i; };
+		auto ix_bp=[](int i) { return 3+4*i; };
+
+		//side
+		for(int i=0; i<num; i++) {
+			m.tris.push_back({ix_ts(i), ix_bs((i+1)%num), ix_bs(i)});
+		}
+
+		//base
+		for(int i=0; i<num; i++) {
+			m.tris.push_back({ix_bp(i), ix_be((i+num-1)%num), ix_be(i)});
+		}
+
+		m.updateVertexBuffer();
+		m.updateIndexBuffer();
+		m.updateMatrixes();
+
+		return m;
+	}
+#pragma endregion
 
 	[[nodiscard]] static ReturnCode loadFromOBJ(Mesh& m, const std::string& filename) {
 		m=Mesh{};
@@ -301,7 +570,7 @@ struct Mesh {
 							vertex_pos[vtn.v],
 							vertex_norm[vtn.n],
 							vertex_tex[vtn.t]
-						});
+							});
 					}
 					indexes.push_back(ix);
 				}
@@ -312,7 +581,7 @@ struct Mesh {
 						indexes[0],
 						indexes[i-1],
 						indexes[i]
-					});
+						});
 				}
 			}
 		}
@@ -324,56 +593,6 @@ struct Mesh {
 		m.updateMatrixes();
 
 		return {true, "success"};
-	}
-
-	static void makeCube(Mesh& m) {
-		m={};
-
-		m.verts={
-			//back
-			{{-1, -1, -1}, {0, 0, -1}, {1, 1}},
-			{{1, -1, -1}, {0, 0, -1}, {0, 1}},
-			{{-1, 1, -1}, {0, 0, -1}, {1, 0}},
-			{{1, 1, -1}, {0, 0, -1}, {0, 0}},
-			//front
-			{{-1, -1, 1}, {0, 0, 1}, {0, 1}},
-			{{1, -1, 1}, {0, 0, 1}, {1, 1}},
-			{{-1, 1, 1}, {0, 0, 1}, {0, 0}},
-			{{1, 1, 1}, {0, 0, 1}, {1, 0}},
-			//left
-			{{-1, -1, -1}, {-1, 0, 0}, {0, 1}},
-			{{-1, 1, -1}, {-1, 0, 0}, {0, 0}},
-			{{-1, -1, 1}, {-1, 0, 0}, {1, 1}},
-			{{-1, 1, 1}, {-1, 0, 0}, {1, 0}},
-			//right
-			{{1, -1, -1}, {1, 0, 0}, {1, 1}},
-			{{1, 1, -1}, {1, 0, 0}, {1, 0}},
-			{{1, -1, 1}, {1, 0, 0}, {0, 1}},
-			{{1, 1, 1}, {1, 0, 0}, {0, 0}},
-			//bottom
-			{{-1, -1, -1}, {0, -1, 0}, {0, 1}},
-			{{-1, -1, 1}, {0, -1, 0}, {0, 0}},
-			{{1, -1, -1}, {0, -1, 0}, {1, 1}},
-			{{1, -1, 1}, {0, -1, 0}, {1, 0}},
-			//top
-			{{-1, 1, -1}, {0, 1, 0}, {0, 0}},
-			{{-1, 1, 1}, {0, 1, 0}, {0, 1}},
-			{{1, 1, -1}, {0, 1, 0}, {1, 0}},
-			{{1, 1, 1}, {0, 1, 0}, {1, 1}}
-		};
-
-		m.tris={
-			{0, 2, 1}, {1, 2, 3},//back
-			{4, 5, 6}, {5, 7, 6},//front
-			{8, 10, 9}, {9, 10, 11},//left
-			{12, 13, 14}, {13, 15, 14},//right
-			{16, 18, 17}, {17, 18, 19},//bottom
-			{20, 21, 22}, {21, 23, 22}//top
-		};
-
-		m.updateIndexBuffer();
-		m.updateVertexBuffer();
-		m.updateMatrixes();
 	}
 };
 #endif

@@ -77,7 +77,8 @@ static sg_color randomPastel() {
 
 struct Object {
 	Mesh mesh;
-	sg_view view;
+	sg_view tex{SG_INVALID_ID};
+	bool draggable=false;
 };
 
 struct Demo : SokolEngine {
@@ -100,13 +101,11 @@ struct Demo : SokolEngine {
 	sg_view tex_blank;
 	sg_view tex_uv;
 
-	Object platform;
+	std::vector<Object> objects;
 
-	std::vector<Object> animals;
+	Object* billboard;
 
-	Object cubemap_faces[6];
-
-	mat4 m_proj_view;
+	mat4 view_proj;
 
 	vf3d mouse_dir;
 	vf3d prev_mouse_dir;
@@ -120,21 +119,26 @@ struct Demo : SokolEngine {
 	sg_color prev_col, next_col, curr_col;
 
 #pragma region SETUP HELPERS
+	void setupTextures() {
+		tex_blank=makeBlankTexture();
+		tex_uv=makeUVTexture(1024, 1024);
+	}
+	
 	void setupSampler() {
-		sg_sampler_desc sampler_desc; zeroMem(sampler_desc);
+		sg_sampler_desc sampler_desc{};
 		sampler=sg_make_sampler(sampler_desc);
 		bindings.samplers[SMP_u_smp]=sampler;
 	}
 
 	//make platform for animals to "sit" on
 	void setupPlatform() {
-		Mesh& m=platform.mesh;
-		Mesh::makeCube(m);
+		Mesh m;
+		m=Mesh::makeCube();
 		m.scale={8, .5f, 8};
 		m.translation={0, -2, 0};
 		m.updateMatrixes();
 
-		platform.view=tex_uv;
+		objects.push_back({m, tex_uv});
 	}
 
 	void setupAnimals() {
@@ -151,7 +155,7 @@ struct Demo : SokolEngine {
 			Mesh m;
 
 			auto status=Mesh::loadFromOBJ(m, filenames[i]);
-			if(!status.valid) Mesh::makeCube(m);
+			if(!status.valid) m=Mesh::makeCube();
 
 			float angle=2*Pi*i/filenames.size();
 			//load animals in circle around origin
@@ -161,59 +165,68 @@ struct Demo : SokolEngine {
 
 			m.updateMatrixes();
 
-			animals.push_back({m, tex_blank});
+			objects.push_back({m, tex_blank, true});
 		}
 	}
 
-	void setupCubemap() {
-		//base textured face on xz plane
-		std::vector<Vertex> face_verts={
-			{{-.5f, 0, -.5f}, {0, 1, 0}, {1, 0}},
-			{{.5f, 0, -.5f}, {0, 1, 0}, {0, 0}},
-			{{-.5f, 0, .5f}, {0, 1, 0}, {1, 1}},
-			{{.5f, 0, .5f}, {0, 1, 0}, {0, 1}},
-		};
-		std::vector<IndexTriangle> face_tris{
-			{0, 3, 1}, {0, 2, 3}
-		};
+	void setupTorus() {
+		Mesh m;
+		m=Mesh::makeTorus(1, 35, .5f, 24);
+		m.translation={-5, 0, -5};
+		m.updateMatrixes();
 
-		//remember xyz rotation order
-		const vf3d rot_trans[6][2]{
-			{Pi*vf3d(.5f, 1, 0), {0, 0, -.5f}},//back
-			{Pi*vf3d(.5f, 0, 0), {0, 0, .5f}},//front
-			{Pi*vf3d(.5f, -.5f, 0), {-.5f, 0, 0}},//left
-			{Pi*vf3d(.5f, .5f, 0), {.5f, 0, 0}},//right
-			{Pi*vf3d(1, 0, 0), {0, -.5f, 0}},//bottom
-			{{0, 0, 0}, {0, .5f, 0}}//top
+		objects.push_back({m, tex_uv, true});
+	}
+
+	void setupSphere() {
+		Mesh m;
+		m=Mesh::makeUVSphere(1, 24, 12);
+		m.translation={5, 0, -5};
+		m.updateMatrixes();
+
+		objects.push_back({m, tex_uv, true});
+	}
+
+	void setupCylinder() {
+		Mesh m;
+		m=Mesh::makeCylinder(1, 24, 2);
+		m.translation={-5, 0, 5};
+		m.updateMatrixes();
+
+		objects.push_back({m, tex_uv, true});
+	}
+
+	void setupCone() {
+		Mesh m;
+		m=Mesh::makeCone(1, 24, 2);
+		m.translation={5, 0, 5};
+		m.updateMatrixes();
+
+		objects.push_back({m, tex_uv, true});
+	}
+
+	void setupBillboard() {
+		Mesh m;
+		m.verts={
+			{{-.5f, .5f, 0}, {0, 0, -1}, {0, 0}},//tl
+			{{.5f, .5f, 0}, {0, 0, -1}, {1, 0}},//tr
+			{{-.5f, -.5f, 0}, {0, 0, -1}, {0, 1}},//bl
+			{{.5f, -.5f, 0}, {0, 0, -1}, {1, 1}}//br
 		};
-
-		const std::string textures[6]{
-			"assets/img/xy-.png",
-			"assets/img/xy+.png",
-			"assets/img/yz-.png",
-			"assets/img/yz+.png",
-			"assets/img/zx-.png",
-			"assets/img/zx+.png"
+		m.tris={
+			{0, 1, 2},
+			{1, 3, 2}
 		};
-		for(int i=0; i<6; i++) {
-			Mesh& m=cubemap_faces[i].mesh;
-			m.verts=face_verts;
-			m.tris=face_tris;
-			m.updateIndexBuffer();
-			m.updateVertexBuffer();
+		m.updateVertexBuffer();
+		m.updateIndexBuffer();
+		m.updateMatrixes();
 
-			m.rotation=rot_trans[i][0];
-			m.translation=rot_trans[i][1];
-			m.updateMatrixes();
-
-			sg_view view=tex_uv;
-			makeTextureFromFile(view, textures[i]);
-			cubemap_faces[i].view=view;
-		}
+		objects.push_back({m, tex_uv});
+		billboard=&objects.back();
 	}
 
 	void setupPipeline() {
-		sg_pipeline_desc pipeline_desc; zeroMem(pipeline_desc);
+		sg_pipeline_desc pipeline_desc{};
 		pipeline_desc.shader=sg_make_shader(shd_shader_desc(sg_query_backend()));
 		pipeline_desc.layout.attrs[ATTR_shd_pos].format=SG_VERTEXFORMAT_FLOAT3;
 		pipeline_desc.layout.attrs[ATTR_shd_norm].format=SG_VERTEXFORMAT_FLOAT3;
@@ -228,20 +241,27 @@ struct Demo : SokolEngine {
 #pragma endregion
 
 	void userCreate() override {
-		app_title="Multiple Textures Demo";
+		app_title="Solids of Revolution & Billboarding Demo";
 
 		std::srand(std::time(0));
 
-		setupSampler();
+		setupTextures();
 
-		tex_blank=makeBlankTexture();
-		tex_uv=makeUVTexture(1024, 1024);
+		setupSampler();
 
 		setupPlatform();
 
 		setupAnimals();
 
-		setupCubemap();
+		setupTorus();
+
+		setupSphere();
+
+		setupCylinder();
+
+		setupCone();
+
+		setupBillboard();
 
 		setupPipeline();
 
@@ -252,29 +272,29 @@ struct Demo : SokolEngine {
 
 #pragma region UPDATE HELPERS
 	void updateMatrixes() {
-		//camera transformation matrix	
-		mat4 m_look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
-		mat4 m_view=mat4::inverse(m_look_at);
+		//camera transformation matrix
+		mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
+		mat4 view=mat4::inverse(look_at);
 
 		//perspective
-		mat4 m_proj=mat4::makePerspective(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000);
+		mat4 proj=mat4::makePerspective(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000);
 
 		//premultiply transform
-		m_proj_view=mat4::mul(m_proj, m_view);
+		view_proj=mat4::mul(proj, view);
 	}
 
 	void updateMouseRay() {
 		prev_mouse_dir=mouse_dir;
 
 		//unprojection matrix
-		mat4 m_inv_view_proj=mat4::inverse(m_proj_view);
+		mat4 inv_view_proj=mat4::inverse(view_proj);
 
 		//mouse coords from clip -> world
 		float ndc_x=2*mouse_x/sapp_widthf()-1;
 		float ndc_y=1-2*mouse_y/sapp_heightf();
 		vf3d clip(ndc_x, ndc_y, 1);
 		float w=1;
-		vf3d world=matMulVec(m_inv_view_proj, clip, w);
+		vf3d world=matMulVec(inv_view_proj, clip, w);
 		world/=w;
 
 		//normalize direction
@@ -341,19 +361,27 @@ struct Demo : SokolEngine {
 
 		//find closest mesh
 		float record=-1;
-		for(auto& a:animals) {
+		Object* close_obj=nullptr;
+		for(auto& o:objects) {
 			//is intersection valid?
-			float dist=a.mesh.intersectRay(cam_pos, mouse_dir);
+			float dist=o.mesh.intersectRay(cam_pos, mouse_dir);
 			if(dist<0) continue;
 
 			//"sort" while iterating
 			if(record<0||dist<record) {
 				record=dist;
-				grab_obj=&a;
+				close_obj=&o;
 			}
 		}
-		if(!grab_obj) return;
+		if(!close_obj) return;
 
+		//this way we cant grab behind things.
+		if(!close_obj->draggable) return;
+
+		grab_obj=close_obj;
+
+		//place plane at intersection point
+		//perp to cam view.
 		grab_ctr=cam_pos+record*mouse_dir;
 		grab_norm=cam_dir;
 	}
@@ -387,6 +415,11 @@ struct Demo : SokolEngine {
 			if(grab_action.pressed) handleGrabActionBegin();
 			if(grab_action.held) handleGrabActionUpdate();
 			if(grab_action.released) handleGrabActionEnd();
+		}
+
+		//place billboard at camera
+		if(getKey(SAPP_KEYCODE_B).held) {
+			billboard->mesh.translation=cam_pos;
 		}
 
 		//set light pos
@@ -426,6 +459,9 @@ struct Demo : SokolEngine {
 		handleUserInput(dt);
 
 		updateColor(dt);
+
+		//make billboard point towards camera.
+		billboard->mesh.model=mat4::makeLookAt(billboard->mesh.translation, cam_pos, {0, 1, 0});
 	}
 
 #pragma region RENDER HELPERS
@@ -433,13 +469,13 @@ struct Demo : SokolEngine {
 		//update bindings
 		bindings.vertex_buffers[0]=o.mesh.vbuf;
 		bindings.index_buffer=o.mesh.ibuf;
-		bindings.views[VIEW_u_tex]=o.view;
+		bindings.views[VIEW_u_tex]=o.tex;
 		sg_apply_bindings(bindings);
 
 		//send vertex uniforms
-		vs_params_t vs_params; zeroMem(vs_params);
-		std::memcpy(vs_params.u_model, o.mesh.m_model.m, sizeof(vs_params.u_model));
-		std::memcpy(vs_params.u_proj_view, m_proj_view.m, sizeof(vs_params.u_proj_view));
+		vs_params_t vs_params{};
+		std::memcpy(vs_params.u_model, o.mesh.model.m, sizeof(vs_params.u_model));
+		std::memcpy(vs_params.u_proj_view, view_proj.m, sizeof(vs_params.u_proj_view));
 		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
 
 		sg_draw(0, 3*o.mesh.tris.size(), 1);
@@ -448,7 +484,7 @@ struct Demo : SokolEngine {
 
 	void userRender() {
 		//still not sure what a pass is...
-		sg_pass pass; zeroMem(pass);
+		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
 		pass.action.colors[0].clear_value=curr_col;
 		pass.swapchain=sglue_swapchain();
@@ -457,7 +493,7 @@ struct Demo : SokolEngine {
 		sg_apply_pipeline(pipeline);
 
 		//send fragment uniforms
-		fs_params_t fs_params; zeroMem(fs_params);
+		fs_params_t fs_params{};
 		fs_params.u_light_pos[0]=light_pos.x;
 		fs_params.u_light_pos[1]=light_pos.y;
 		fs_params.u_light_pos[2]=light_pos.z;
@@ -466,14 +502,8 @@ struct Demo : SokolEngine {
 		fs_params.u_cam_pos[2]=cam_pos.z;
 		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
 
-		renderObject(platform);
-
-		for(const auto& a:animals) {
-			renderObject(a);
-		}
-
-		for(int i=0; i<6; i++) {
-			renderObject(cubemap_faces[i]);
+		for(const auto& o:objects) {
+			renderObject(o);
 		}
 
 		sg_end_pass();

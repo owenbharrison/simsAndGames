@@ -168,6 +168,7 @@
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="assets\models\axis.txt" />
     <Text Include="assets\models\bunny.txt" />
     <Text Include="assets\models\cow.txt" />
     <Text Include="assets\models\dragon.txt" />
