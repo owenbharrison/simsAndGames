@@ -91,5 +91,8 @@
     <Image Include="assets\img\zx+.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\img\checker.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

@@ -9,6 +9,8 @@
 //for time
 #include <ctime>
 
+#include "texture.h"
+
 //y p => x y z
 //0 0 => 0 0 1
 static vf3d polar3D(float yaw, float pitch) {
@@ -73,8 +75,6 @@ static sg_color randomPastel() {
 	return hsv2rgb(h, s, v);
 }
 
-#include "texture.h"
-
 struct Object {
 	Mesh mesh;
 	sg_view tex{SG_INVALID_ID};
@@ -86,13 +86,13 @@ struct Demo : SokolEngine {
 	sg_pipeline pipeline;
 
 	//cam info
-	vf3d cam_pos{0, 0, 0};
+	vf3d cam_pos{0, 2, 2};
 	vf3d cam_dir;
 	float cam_yaw=-Pi;
-	float cam_pitch=0;
+	float cam_pitch=-Pi/4;
 
 	//scene info
-	vf3d light_pos{0, 2, 0};
+	vf3d light_pos{-1, 3, 1};
 
 	bool fps_controls=false;
 
@@ -100,6 +100,7 @@ struct Demo : SokolEngine {
 
 	sg_view tex_blank;
 	sg_view tex_uv;
+	sg_view tex_checker;
 
 	std::vector<Object> objects;
 
@@ -121,7 +122,11 @@ struct Demo : SokolEngine {
 #pragma region SETUP HELPERS
 	void setupTextures() {
 		tex_blank=makeBlankTexture();
+		
 		tex_uv=makeUVTexture(1024, 1024);
+
+		tex_checker=tex_blank;
+		makeTextureFromFile(tex_checker, "assets/img/checker.png");
 	}
 	
 	void setupSampler() {
@@ -175,7 +180,7 @@ struct Demo : SokolEngine {
 		m.translation={-5, 0, -5};
 		m.updateMatrixes();
 
-		objects.push_back({m, tex_uv, true});
+		objects.push_back({m, tex_checker, true});
 	}
 
 	void setupSphere() {
@@ -184,7 +189,7 @@ struct Demo : SokolEngine {
 		m.translation={5, 0, -5};
 		m.updateMatrixes();
 
-		objects.push_back({m, tex_uv, true});
+		objects.push_back({m, tex_checker, true});
 	}
 
 	void setupCylinder() {
@@ -193,7 +198,7 @@ struct Demo : SokolEngine {
 		m.translation={-5, 0, 5};
 		m.updateMatrixes();
 
-		objects.push_back({m, tex_uv, true});
+		objects.push_back({m, tex_checker, true});
 	}
 
 	void setupCone() {
@@ -202,20 +207,20 @@ struct Demo : SokolEngine {
 		m.translation={5, 0, 5};
 		m.updateMatrixes();
 
-		objects.push_back({m, tex_uv, true});
+		objects.push_back({m, tex_checker, true});
 	}
 
 	void setupBillboard() {
 		Mesh m;
 		m.verts={
-			{{-.5f, .5f, 0}, {0, 0, -1}, {0, 0}},//tl
-			{{.5f, .5f, 0}, {0, 0, -1}, {1, 0}},//tr
-			{{-.5f, -.5f, 0}, {0, 0, -1}, {0, 1}},//bl
-			{{.5f, -.5f, 0}, {0, 0, -1}, {1, 1}}//br
+			{{-.5f, .5f, 0}, {0, 0, 1}, {0, 0}},//tl
+			{{.5f, .5f, 0}, {0, 0, 1}, {1, 0}},//tr
+			{{-.5f, -.5f, 0}, {0, 0, 1}, {0, 1}},//bl
+			{{.5f, -.5f, 0}, {0, 0, 1}, {1, 1}}//br
 		};
 		m.tris={
-			{0, 1, 2},
-			{1, 3, 2}
+			{0, 2, 1},
+			{1, 2, 3}
 		};
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
@@ -435,6 +440,27 @@ struct Demo : SokolEngine {
 		if(getKey(SAPP_KEYCODE_ESCAPE).pressed) sapp_request_quit();
 	}
 
+	//make billboard always point at camera.
+	void updateBillboard() {
+		vf3d eye_pos=billboard->mesh.translation;
+		vf3d target=cam_pos;
+
+		vf3d y_axis(0, 1, 0);
+		vf3d z_axis=(target-eye_pos).norm();
+		vf3d x_axis=y_axis.cross(z_axis).norm();
+		y_axis=z_axis.cross(x_axis);
+
+		//slightly different than makeLookAt.
+		mat4 m;
+		m(0, 0)=x_axis.x, m(0, 1)=y_axis.x, m(0, 2)=z_axis.x, m(0, 3)=eye_pos.x;
+		m(1, 0)=x_axis.y, m(1, 1)=y_axis.y, m(1, 2)=z_axis.y, m(1, 3)=eye_pos.y;
+		m(2, 0)=x_axis.z, m(2, 1)=y_axis.z, m(2, 2)=z_axis.z, m(2, 3)=eye_pos.z;
+		m(3, 3)=1;
+
+		billboard->mesh.model=m;
+		billboard->mesh.inv_model=mat4::inverse(m);
+	}
+
 	void updateColor(float dt) {
 		if(color_timer>color_period) {
 			color_timer-=color_period;
@@ -458,10 +484,9 @@ struct Demo : SokolEngine {
 
 		handleUserInput(dt);
 
-		updateColor(dt);
+		updateBillboard();
 
-		//make billboard point towards camera.
-		billboard->mesh.model=mat4::makeLookAt(billboard->mesh.translation, cam_pos, {0, 1, 0});
+		updateColor(dt);
 	}
 
 #pragma region RENDER HELPERS

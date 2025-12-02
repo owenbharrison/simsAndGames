@@ -267,9 +267,9 @@ struct Mesh {
 			float theta=2*Pi*u;
 
 			//offset from big radius
-			float dx=std::cos(theta);
+			float dx=std::sin(theta);
 			float ox=rad_xz*dx;
-			float dz=std::sin(theta);
+			float dz=std::cos(theta);
 			float oz=rad_xz*dz;
 
 			for(int j=0; j<num_y; j++) {
@@ -297,8 +297,8 @@ struct Mesh {
 				const auto& b=ix(i, j-1);
 				const auto& c=ix(i-1, j);
 				const auto& d=ix(i, j);
-				m.tris.push_back({a, b, c});
-				m.tris.push_back({b, d, c});
+				m.tris.push_back({a, c, b});
+				m.tris.push_back({b, c, d});
 			}
 		}
 
@@ -317,8 +317,8 @@ struct Mesh {
 			float u=i/(num_xz-1.f);
 			float theta=2*Pi*u;
 
-			float dx=std::cos(theta);
-			float dz=std::sin(theta);
+			float dx=std::sin(theta);
+			float dz=std::cos(theta);
 
 			for(int j=0; j<num_y; j++) {
 				float v=j/(num_y-1.f);
@@ -345,8 +345,8 @@ struct Mesh {
 				const auto& b=ix(i, j-1);
 				const auto& c=ix(i-1, j);
 				const auto& d=ix(i, j);
-				m.tris.push_back({a, b, c});
-				m.tris.push_back({b, d, c});
+				m.tris.push_back({a, c, b});
+				m.tris.push_back({b, c, d});
 			}
 		}
 
@@ -370,8 +370,8 @@ struct Mesh {
 			float u=i/(num-1.f);
 			float theta=2*Pi*u;
 
-			float nx=std::cos(theta);
-			float nz=std::sin(theta);
+			float nx=std::sin(theta);
+			float nz=std::cos(theta);
 
 			float x=rad*nx;
 			float z=rad*nz;
@@ -393,7 +393,7 @@ struct Mesh {
 
 		//lid
 		for(int i=0; i<num; i++) {
-			m.tris.push_back({ix_tp(i), ix_te((i+1)%num), ix_te(i)});
+			m.tris.push_back({ix_tp(i), ix_te(i), ix_te((i+1)%num)});
 		}
 
 		//sides
@@ -402,13 +402,13 @@ struct Mesh {
 			int bs=ix_bs(i);
 			int ts_next=ix_ts((i+1)%num);
 			int bs_next=ix_bs((i+1)%num);
-			m.tris.push_back({ts, ts_next, bs});
-			m.tris.push_back({bs, ts_next, bs_next});
+			m.tris.push_back({ts, bs, ts_next});
+			m.tris.push_back({bs, bs_next, ts_next});
 		}
 
 		//base
 		for(int i=0; i<num; i++) {
-			m.tris.push_back({ix_bp(i), ix_be((i+num-1)%num), ix_be(i)});
+			m.tris.push_back({ix_bp(i), ix_be(i), ix_be((i+num-1)%num)});
 		}
 
 		m.updateVertexBuffer();
@@ -436,8 +436,8 @@ struct Mesh {
 			float u=i/(num-1.f);
 			float theta=2*Pi*u;
 
-			float dx=std::cos(theta);
-			float dz=std::sin(theta);
+			float dx=std::sin(theta);
+			float dz=std::cos(theta);
 
 			float nx=hs*dx;
 			float nz=hs*dz;
@@ -458,12 +458,12 @@ struct Mesh {
 
 		//side
 		for(int i=0; i<num; i++) {
-			m.tris.push_back({ix_ts(i), ix_bs((i+1)%num), ix_bs(i)});
+			m.tris.push_back({ix_ts(i), ix_bs(i), ix_bs((i+1)%num)});
 		}
 
 		//base
 		for(int i=0; i<num; i++) {
-			m.tris.push_back({ix_bp(i), ix_be((i+num-1)%num), ix_be(i)});
+			m.tris.push_back({ix_bp(i), ix_be(i), ix_be((i+num-1)%num)});
 		}
 
 		m.updateVertexBuffer();

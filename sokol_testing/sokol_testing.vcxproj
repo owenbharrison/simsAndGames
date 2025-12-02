@@ -177,6 +177,7 @@
     <Text Include="assets\models\monkey.txt" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\img\checker.png" />
     <Image Include="assets\img\xy+.png" />
     <Image Include="assets\img\xy-.png" />
     <Image Include="assets\img\yz+.png" />
