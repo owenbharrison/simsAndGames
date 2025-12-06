@@ -23,7 +23,6 @@ set(PROJECTS
     fruit_ninja
     geometrize
     glitch
-    imgui
     inverse_kinematics
     jelly_car_clone
     marching_cubes
@@ -37,6 +36,7 @@ set(PROJECTS
     slicer
     smoke
     sokol_testing
+    spiders
     steering_behaviors
     targetting
     terraria_clone
