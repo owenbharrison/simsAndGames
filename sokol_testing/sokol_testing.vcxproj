@@ -178,12 +178,6 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\img\checker.png" />
-    <Image Include="assets\img\xy+.png" />
-    <Image Include="assets\img\xy-.png" />
-    <Image Include="assets\img\yz+.png" />
-    <Image Include="assets\img\yz-.png" />
-    <Image Include="assets\img\zx+.png" />
-    <Image Include="assets\img\zx-.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

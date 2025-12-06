@@ -28,8 +28,8 @@ struct v3d_generic {
 	v3d_generic& operator=(const v3d_generic& v)=default;
 
 	T dot(const v3d_generic& v) const { return x*v.x+y*v.y+z*v.z; }
-	T mag2() const { return dot(*this); }
-	T mag() const { return std::sqrt(mag2()); }
+	T mag_sq() const { return dot(*this); }
+	T mag() const { return std::sqrt(mag_sq()); }
 
 	v3d_generic norm() const { T r=1/mag(); return operator*(r); }
 	v3d_generic cross(const v3d_generic& v) const {

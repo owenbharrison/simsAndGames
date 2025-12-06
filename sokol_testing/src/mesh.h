@@ -29,7 +29,7 @@ struct IndexTriangle {
 //there it is right there in front of you the whole time.
 //you're dereferencing a null pointer!
 //open your eyes.
-float rayIntersectTri(
+static float rayIntersectTri(
 	const vf3d& orig, const vf3d& dir,
 	const vf3d& t0, const vf3d& t1, const vf3d& t2,
 	float* uptr=nullptr, float* vptr=nullptr
@@ -80,6 +80,50 @@ float rayIntersectTri(
 	return t;
 }
 
+//https://stackoverflow.com/a/74395029
+static vf3d getClosePt(const vf3d& pt, const vf3d& t0, const vf3d& t1, const vf3d& t2) {
+	vf3d ab=t1-t0;
+	vf3d ac=t2-t0;
+
+	vf3d ap=pt-t0;
+	float d1=ab.dot(ap);
+	float d2=ac.dot(ap);
+	if(d1<=0&&d2<=0) return t0;
+
+	vf3d bp=pt-t1;
+	float d3=ab.dot(bp);
+	float d4=ac.dot(bp);
+	if(d3>=0&&d4<=d3) return t1;
+
+	vf3d cp=pt-t2;
+	float d5=ab.dot(cp);
+	float d6=ac.dot(cp);
+	if(d6>=0&&d5<=d6) return t2;
+
+	float vc=d1*d4-d3*d2;
+	if(vc<=0&&d1>=0&&d3<=0) {
+		float v=d1/(d1-d3);
+		return t0+v*ab;
+	}
+
+	float vb=d5*d2-d1*d6;
+	if(vb<=0&&d2>=0&&d6<=0) {
+		float v=d2/(d2-d6);
+		return t0+v*ac;
+	}
+
+	float va=d3*d6-d5*d4;
+	if(va<=0&&(d4-d3)>=0&&(d5-d6)>=0) {
+		float v=(d4-d3)/((d4-d3)+(d5-d6));
+		return t1+v*(t2-t1);
+	}
+
+	float denom=1/(va+vb+vc);
+	float v=vb*denom;
+	float w=vc*denom;
+	return t0+v*ab+w*ac;
+}
+
 struct Mesh {
 	std::vector<Vertex> verts;
 	std::vector<IndexTriangle> tris;
@@ -125,6 +169,36 @@ struct Mesh {
 		w=1;//want translation
 		vf3d p_world=matMulVec(model, p_local, w);
 		return (p_world-orig_world).mag();
+	}
+
+	vf3d getClosePt(vf3d pt) const {
+		//bring into local space
+		float w=1;
+		pt=matMulVec(inv_model, pt, w);
+
+		//for every tri...
+		float record=-1;
+		vf3d closest_pt;
+		for(const auto& t:tris) {
+			vf3d close_pt=::getClosePt(
+				pt,
+				verts[t.a].pos,
+				verts[t.b].pos,
+				verts[t.c].pos
+			);
+
+			//sort based on square dist
+			//this works bc sqrt is monotonic!
+			float dist=(close_pt-pt).mag_sq();
+			if(record<0||dist<record) {
+				record=dist;
+				closest_pt=close_pt;
+			}
+		}
+
+		//bring back to world space
+		w=1;
+		return matMulVec(model, closest_pt, w);
 	}
 
 	void updateVertexBuffer() {

@@ -73,24 +73,6 @@
     <Text Include="assets\models\axis.txt" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\img\xy-.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\xy+.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\yz-.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\yz+.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\zx-.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\zx+.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\img\checker.png">
       <Filter>Resource Files</Filter>
     </Image>

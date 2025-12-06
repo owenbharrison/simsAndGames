@@ -81,6 +81,11 @@ struct Object {
 	bool draggable=false;
 };
 
+struct Light {
+	vf3d pos;
+	sg_color col;
+};
+
 struct Demo : SokolEngine {
 	sg_bindings bindings;
 	sg_pipeline pipeline;
@@ -92,7 +97,8 @@ struct Demo : SokolEngine {
 	float cam_pitch=-Pi/4;
 
 	//scene info
-	vf3d light_pos{-1, 3, 1};
+	std::list<Light> lights;
+	Light* red_light, * green_light, * blue_light;
 
 	bool fps_controls=false;
 
@@ -103,8 +109,6 @@ struct Demo : SokolEngine {
 	sg_view tex_checker;
 
 	std::vector<Object> objects;
-
-	Object* billboard;
 
 	mat4 view_proj;
 
@@ -210,24 +214,16 @@ struct Demo : SokolEngine {
 		objects.push_back({m, tex_checker, true});
 	}
 
-	void setupBillboard() {
-		Mesh m;
-		m.verts={
-			{{-.5f, .5f, 0}, {0, 0, 1}, {0, 0}},//tl
-			{{.5f, .5f, 0}, {0, 0, 1}, {1, 0}},//tr
-			{{-.5f, -.5f, 0}, {0, 0, 1}, {0, 1}},//bl
-			{{.5f, -.5f, 0}, {0, 0, 1}, {1, 1}}//br
-		};
-		m.tris={
-			{0, 2, 1},
-			{1, 2, 3}
-		};
-		m.updateVertexBuffer();
-		m.updateIndexBuffer();
-		m.updateMatrixes();
+	//add red green and blue lights.
+	void setupLights() {
+		lights.push_back({{-1, 3, 1}, {1, 0, 0, 1}});
+		red_light=&lights.back();
 
-		objects.push_back({m, tex_uv});
-		billboard=&objects.back();
+		lights.push_back({{-1, 3, 1}, {0, 1, 0, 1}});
+		green_light=&lights.back();
+
+		lights.push_back({{-1, 3, 1}, {0, 0, 1, 1}});
+		blue_light=&lights.back();
 	}
 
 	void setupPipeline() {
@@ -246,7 +242,7 @@ struct Demo : SokolEngine {
 #pragma endregion
 
 	void userCreate() override {
-		app_title="Solids of Revolution & Billboarding Demo";
+		app_title="Multiple Colored Lights Demo";
 
 		std::srand(std::time(0));
 
@@ -266,7 +262,7 @@ struct Demo : SokolEngine {
 
 		setupCone();
 
-		setupBillboard();
+		setupLights();
 
 		setupPipeline();
 
@@ -422,15 +418,10 @@ struct Demo : SokolEngine {
 			if(grab_action.released) handleGrabActionEnd();
 		}
 
-		//place billboard at camera
-		if(getKey(SAPP_KEYCODE_B).held) {
-			billboard->mesh.translation=cam_pos;
-		}
-
 		//set light pos
-		if(getKey(SAPP_KEYCODE_L).held) {
-			light_pos=cam_pos;
-		}
+		if(getKey(SAPP_KEYCODE_R).held) red_light->pos=cam_pos;
+		if(getKey(SAPP_KEYCODE_G).held) green_light->pos=cam_pos;
+		if(getKey(SAPP_KEYCODE_B).held) blue_light->pos=cam_pos;
 
 		if(getKey(SAPP_KEYCODE_F11).pressed) {
 			sapp_toggle_fullscreen();
@@ -438,27 +429,6 @@ struct Demo : SokolEngine {
 
 		//exit on escape
 		if(getKey(SAPP_KEYCODE_ESCAPE).pressed) sapp_request_quit();
-	}
-
-	//make billboard always point at camera.
-	void updateBillboard() {
-		vf3d eye_pos=billboard->mesh.translation;
-		vf3d target=cam_pos;
-
-		vf3d y_axis(0, 1, 0);
-		vf3d z_axis=(target-eye_pos).norm();
-		vf3d x_axis=y_axis.cross(z_axis).norm();
-		y_axis=z_axis.cross(x_axis);
-
-		//slightly different than makeLookAt.
-		mat4 m;
-		m(0, 0)=x_axis.x, m(0, 1)=y_axis.x, m(0, 2)=z_axis.x, m(0, 3)=eye_pos.x;
-		m(1, 0)=x_axis.y, m(1, 1)=y_axis.y, m(1, 2)=z_axis.y, m(1, 3)=eye_pos.y;
-		m(2, 0)=x_axis.z, m(2, 1)=y_axis.z, m(2, 2)=z_axis.z, m(2, 3)=eye_pos.z;
-		m(3, 3)=1;
-
-		billboard->mesh.model=m;
-		billboard->mesh.inv_model=mat4::inverse(m);
 	}
 
 	void updateColor(float dt) {
@@ -483,8 +453,6 @@ struct Demo : SokolEngine {
 		updateMouseRay();
 
 		handleUserInput(dt);
-
-		updateBillboard();
 
 		updateColor(dt);
 	}
@@ -519,12 +487,22 @@ struct Demo : SokolEngine {
 
 		//send fragment uniforms
 		fs_params_t fs_params{};
-		fs_params.u_light_pos[0]=light_pos.x;
-		fs_params.u_light_pos[1]=light_pos.y;
-		fs_params.u_light_pos[2]=light_pos.z;
-		fs_params.u_cam_pos[0]=cam_pos.x;
-		fs_params.u_cam_pos[1]=cam_pos.y;
-		fs_params.u_cam_pos[2]=cam_pos.z;
+		{
+			fs_params.u_num_lights=lights.size();
+			int idx=0;
+			for(const auto& l:lights) {
+				fs_params.u_light_pos[idx][0]=l.pos.x;
+				fs_params.u_light_pos[idx][1]=l.pos.y;
+				fs_params.u_light_pos[idx][2]=l.pos.z;
+				fs_params.u_light_col[idx][0]=l.col.r;
+				fs_params.u_light_col[idx][1]=l.col.g;
+				fs_params.u_light_col[idx][2]=l.col.b;
+				idx++;
+			}
+		}
+		fs_params.u_view_pos[0]=cam_pos.x;
+		fs_params.u_view_pos[1]=cam_pos.y;
+		fs_params.u_view_pos[2]=cam_pos.z;
 		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
 
 		for(const auto& o:objects) {
