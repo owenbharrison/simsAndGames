@@ -1,515 +1,201 @@
 #include "sokol_engine.h"
 #include "shd.glsl.h"
 
-#include "math/v3d.h"
 #include "math/mat4.h"
 
 #include "mesh.h"
 
-//for time
-#include <ctime>
-
-#include "texture.h"
-
-//y p => x y z
-//0 0 => 0 0 1
-static vf3d polar3D(float yaw, float pitch) {
-	return {
-		std::sin(yaw)*std::cos(pitch),
-		std::sin(pitch),
-		std::cos(yaw)*std::cos(pitch)
-	};
-}
-
-float randFloat(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=std::rand()/rand_max;
-	return a+t*(b-a);
-}
-
-//https://stackoverflow.com/a/6178290
-float randNormal() {
-	float rho=std::sqrt(-2*std::log(randFloat()));
-	float theta=2*Pi*randFloat();
-	return rho*std::cos(theta);
-}
-
-//https://math.stackexchange.com/a/1585996
-vf3d randDir() {
-	return vf3d(
-		randNormal(),
-		randNormal(),
-		randNormal()
-	).norm();
-}
-
-vf3d rayIntersectPlane(const vf3d& orig, const vf3d& dir, const vf3d& ctr, const vf3d& norm) {
-	float t=norm.dot(ctr-orig)/norm.dot(dir);
-	return orig+t*dir;
-}
-
-//https://www.rapidtables.com/convert/color/hsv-to-rgb.html
-static sg_color hsv2rgb(int h, float s, float v) {
-	float c=v*s;
-	float x=c*(1-std::abs(1-std::fmod(h/60.f, 2)));
-	float m=v-c;
-	float r=0, g=0, b=0;
-	switch(h/60) {
-		case 0: r=c, g=x, b=0; break;
-		case 1: r=x, g=c, b=0; break;
-		case 2: r=0, g=c, b=x; break;
-		case 3: r=0, g=x, b=c; break;
-		case 4: r=x, g=0, b=c; break;
-		case 5: r=c, g=0, b=x; break;
-	}
-	return {m+r, m+g, m+b, 1};
-}
-
-static sg_color randomPastel() {
-	//hue=pure color
-	int h=std::rand()%360;
-	//saturation=intensity
-	float s=randFloat(.1f, .4f);
-	//value=brightness
-	float v=randFloat(.75f, 1);
-	return hsv2rgb(h, s, v);
-}
-
-struct Object {
-	Mesh mesh;
-	sg_view tex{SG_INVALID_ID};
-	bool draggable=false;
-};
-
-struct Light {
-	vf3d pos;
-	sg_color col;
-};
-
 struct Demo : SokolEngine {
-	sg_bindings bindings;
-	sg_pipeline pipeline;
-
-	//cam info
-	vf3d cam_pos{0, 2, 2};
-	vf3d cam_dir;
-	float cam_yaw=-Pi;
-	float cam_pitch=-Pi/4;
-
-	//scene info
-	std::list<Light> lights;
-	Light* red_light, * green_light, * blue_light;
-
-	bool fps_controls=false;
-
-	sg_sampler sampler;
-
-	sg_view tex_blank;
-	sg_view tex_uv;
-	sg_view tex_checker;
-
-	std::vector<Object> objects;
-
 	mat4 view_proj;
 
-	vf3d mouse_dir;
-	vf3d prev_mouse_dir;
+	sg_image color_img;
 
-	//store object handle and grab plane
-	Object* grab_obj=nullptr;
-	vf3d grab_ctr, grab_norm;
-
-	float color_timer=0;
-	const float color_period=5;
-	sg_color prev_col, next_col, curr_col;
-
-#pragma region SETUP HELPERS
-	void setupTextures() {
-		tex_blank=makeBlankTexture();
-		
-		tex_uv=makeUVTexture(1024, 1024);
-
-		tex_checker=tex_blank;
-		makeTextureFromFile(tex_checker, "assets/img/checker.png");
-	}
+	struct {
+		sg_pass pass{};
+		sg_pipeline pip{};
+		sg_bindings bind{};
+	} offscreen;
 	
-	void setupSampler() {
-		sg_sampler_desc sampler_desc{};
-		sampler=sg_make_sampler(sampler_desc);
-		bindings.samplers[SMP_u_smp]=sampler;
+	struct {
+		sg_pass_action pass_action{};
+		sg_pipeline pip{};
+		sg_bindings bind{};
+	} display;
+
+	Mesh donut;
+	Mesh sphere;
+
+	float rx=0, ry=0;
+
+	void setupDisplayPass() {
+		//clear to bluish
+		display.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		display.pass_action.colors[0].clear_value={0.25f, 0.45f, 0.65f, 1.0f};
 	}
 
-	//make platform for animals to "sit" on
-	void setupPlatform() {
-		Mesh m;
-		m=Mesh::makeCube();
-		m.scale={8, .5f, 8};
-		m.translation={0, -2, 0};
-		m.updateMatrixes();
+	void setupOffscreenPass() {
+		{
+			sg_image_desc image_desc{};
+			image_desc.usage.color_attachment=true;
+			image_desc.width=256;
+			image_desc.height=256;
+			image_desc.pixel_format=SG_PIXELFORMAT_RGBA8;
+			color_img=sg_make_image(image_desc);
 
-		objects.push_back({m, tex_uv});
-	}
-
-	void setupAnimals() {
-		const std::vector<std::string> filenames{
-			"assets/models/monkey.txt",
-			"assets/models/bunny.txt",
-			"assets/models/cow.txt",
-			"assets/models/horse.txt",
-			"assets/models/dragon.txt"
-		};
-
-		const float radius=3;
-		for(int i=0; i<filenames.size(); i++) {
-			Mesh m;
-
-			auto status=Mesh::loadFromOBJ(m, filenames[i]);
-			if(!status.valid) m=Mesh::makeCube();
-
-			float angle=2*Pi*i/filenames.size();
-			//load animals in circle around origin
-			m.translation=radius*polar3D(angle, 0);
-			//pointing toward origin
-			m.rotation.y=Pi+angle;
-
-			m.updateMatrixes();
-
-			objects.push_back({m, tex_blank, true});
+			sg_view_desc view_desc{};
+			view_desc.color_attachment.image=color_img;
+			offscreen.pass.attachments.colors[0]=sg_make_view(view_desc);
 		}
+
+		{
+			sg_image_desc image_desc{};
+			image_desc.usage.depth_stencil_attachment=true;
+			image_desc.width=256;
+			image_desc.height=256;
+			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
+			sg_image depth_img=sg_make_image(image_desc);
+
+			sg_view_desc view_desc{};
+			view_desc.depth_stencil_attachment.image=depth_img;
+			offscreen.pass.attachments.depth_stencil=sg_make_view(view_desc);
+		}
+
+		offscreen.pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		offscreen.pass.action.colors[0].clear_value={0.25f, 0.25f, 0.25f, 1.0f};
 	}
 
-	void setupTorus() {
-		Mesh m;
-		m=Mesh::makeTorus(1, 35, .5f, 24);
-		m.translation={-5, 0, -5};
-		m.updateMatrixes();
-
-		objects.push_back({m, tex_checker, true});
+	void setupMeshes() {
+		donut=Mesh::makeTorus(.5f, 24, .3f, 12);
+		sphere=Mesh::makeUVSphere(.5f, 36, 24);
 	}
 
-	void setupSphere() {
-		Mesh m;
-		m=Mesh::makeUVSphere(1, 24, 12);
-		m.translation={5, 0, -5};
-		m.updateMatrixes();
-
-		objects.push_back({m, tex_checker, true});
+	void setupOffscreenPipeline() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_offscreen_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_offscreen_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_offscreen_v_uv].format=SG_VERTEXFORMAT_SHORT2N;
+		pip_desc.shader=sg_make_shader(offscreen_shader_desc(sg_query_backend())),
+		pip_desc.index_type=SG_INDEXTYPE_UINT32;
+		pip_desc.cull_mode=SG_CULLMODE_FRONT;
+		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip_desc.depth.write_enabled=true;
+		pip_desc.colors[0].pixel_format=SG_PIXELFORMAT_RGBA8;
+		offscreen.pip=sg_make_pipeline(pip_desc);
 	}
 
-	void setupCylinder() {
-		Mesh m;
-		m=Mesh::makeCylinder(1, 24, 2);
-		m.translation={-5, 0, 5};
-		m.updateMatrixes();
-
-		objects.push_back({m, tex_checker, true});
+	void setupDisplayPipeline() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_default_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_default_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_default_v_uv].format=SG_VERTEXFORMAT_SHORT2N;
+		pip_desc.shader=sg_make_shader(default_shader_desc(sg_query_backend()));
+		pip_desc.index_type=SG_INDEXTYPE_UINT32;
+		pip_desc.cull_mode=SG_CULLMODE_FRONT;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip_desc.depth.write_enabled=true;
+		display.pip=sg_make_pipeline(pip_desc);
 	}
 
-	void setupCone() {
-		Mesh m;
-		m=Mesh::makeCone(1, 24, 2);
-		m.translation={5, 0, 5};
-		m.updateMatrixes();
-
-		objects.push_back({m, tex_checker, true});
+	void setupOffscreenBindings() {
+		offscreen.bind.vertex_buffers[0]=donut.vbuf;
+		offscreen.bind.index_buffer=donut.ibuf;
 	}
 
-	//add red green and blue lights.
-	void setupLights() {
-		lights.push_back({{-1, 3, 1}, {1, 0, 0, 1}});
-		red_light=&lights.back();
+	void setupDisplayBindings() {
+		display.bind.vertex_buffers[0]=sphere.vbuf;
+		display.bind.index_buffer=sphere.ibuf;
 
-		lights.push_back({{-1, 3, 1}, {0, 1, 0, 1}});
-		green_light=&lights.back();
+		sg_view_desc view_desc{};
+		view_desc.texture.image=color_img;
+		display.bind.views[VIEW_u_tex]=sg_make_view(view_desc);
 
-		lights.push_back({{-1, 3, 1}, {0, 0, 1, 1}});
-		blue_light=&lights.back();
+		sg_sampler_desc sampler_desc{};
+		sampler_desc.min_filter=SG_FILTER_LINEAR;
+		sampler_desc.mag_filter=SG_FILTER_LINEAR;
+		sampler_desc.wrap_u=SG_WRAP_REPEAT;
+		sampler_desc.wrap_v=SG_WRAP_REPEAT;
+		display.bind.samplers[SMP_u_smp]=sg_make_sampler(sampler_desc);
 	}
-
-	void setupPipeline() {
-		sg_pipeline_desc pipeline_desc{};
-		pipeline_desc.shader=sg_make_shader(shd_shader_desc(sg_query_backend()));
-		pipeline_desc.layout.attrs[ATTR_shd_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pipeline_desc.layout.attrs[ATTR_shd_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pipeline_desc.layout.attrs[ATTR_shd_uv].format=SG_VERTEXFORMAT_SHORT2N;
-		pipeline_desc.index_type=SG_INDEXTYPE_UINT32;//use the index buffer
-		pipeline_desc.cull_mode=SG_CULLMODE_FRONT;
-
-		pipeline_desc.depth.write_enabled=true;//use depth buffer
-		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pipeline=sg_make_pipeline(pipeline_desc);
-	}
-#pragma endregion
 
 	void userCreate() override {
-		app_title="Multiple Colored Lights Demo";
+		app_title="Offscreen Demo";
 
-		std::srand(std::time(0));
+		setupDisplayPass();
 
-		setupTextures();
+		setupOffscreenPass();
 
-		setupSampler();
+		setupMeshes();
 
-		setupPlatform();
+		setupOffscreenPipeline();
 
-		setupAnimals();
+		setupDisplayPipeline();
 
-		setupTorus();
+		setupOffscreenBindings();
 
-		setupSphere();
-
-		setupCylinder();
-
-		setupCone();
-
-		setupLights();
-
-		setupPipeline();
-
-		//init rand cols
-		prev_col=randomPastel();
-		next_col=randomPastel();
+		setupDisplayBindings();
 	}
-
-#pragma region UPDATE HELPERS
-	void updateMatrixes() {
-		//camera transformation matrix
-		mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
-		mat4 view=mat4::inverse(look_at);
-
-		//perspective
-		mat4 proj=mat4::makePerspective(90.f, sapp_widthf()/sapp_heightf(), .001f, 1000);
-
-		//premultiply transform
-		view_proj=mat4::mul(proj, view);
-	}
-
-	void updateMouseRay() {
-		prev_mouse_dir=mouse_dir;
-
-		//unprojection matrix
-		mat4 inv_view_proj=mat4::inverse(view_proj);
-
-		//mouse coords from clip -> world
-		float ndc_x=2*mouse_x/sapp_widthf()-1;
-		float ndc_y=1-2*mouse_y/sapp_heightf();
-		vf3d clip(ndc_x, ndc_y, 1);
-		float w=1;
-		vf3d world=matMulVec(inv_view_proj, clip, w);
-		world/=w;
-
-		//normalize direction
-		mouse_dir=(world-cam_pos).norm();
-	}
-
-	void handleCameraLooking(float dt) {
-		//cant look while grabbing.
-		if(grab_obj) return;
-
-		//lock mouse position
-		if(getKey(SAPP_KEYCODE_F).pressed) {
-			fps_controls^=true;
-			sapp_lock_mouse(fps_controls);
-		}
-
-		if(fps_controls) {
-			//move with mouse
-			const float sensitivity=0.5f*dt;
-
-			//left/right
-			cam_yaw-=sensitivity*mouse_dx;
-
-			//up/down (y backwards
-			cam_pitch-=sensitivity*mouse_dy;
-		} else {
-			//move with keys
-
-			//left/right
-			if(getKey(SAPP_KEYCODE_LEFT).held) cam_yaw+=dt;
-			if(getKey(SAPP_KEYCODE_RIGHT).held) cam_yaw-=dt;
-
-			//up/down
-			if(getKey(SAPP_KEYCODE_UP).held) cam_pitch+=dt;
-			if(getKey(SAPP_KEYCODE_DOWN).held) cam_pitch-=dt;
-		}
-
-		//clamp camera pitch
-		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
-		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
-	}
-
-	void handleCameraMovement(float dt) {
-		//cant move while grabbing.
-		if(grab_obj) return;
-
-		//move up, down
-		if(getKey(SAPP_KEYCODE_SPACE).held) cam_pos.y+=4.f*dt;
-		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam_pos.y-=4.f*dt;
-
-		//move forward, backward
-		vf3d fb_dir(std::sin(cam_yaw), 0, std::cos(cam_yaw));
-		if(getKey(SAPP_KEYCODE_W).held) cam_pos+=5.f*dt*fb_dir;
-		if(getKey(SAPP_KEYCODE_S).held) cam_pos-=3.f*dt*fb_dir;
-
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(getKey(SAPP_KEYCODE_A).held) cam_pos+=4.f*dt*lr_dir;
-		if(getKey(SAPP_KEYCODE_D).held) cam_pos-=4.f*dt*lr_dir;
-	}
-
-	void handleGrabActionBegin() {
-		handleGrabActionEnd();
-
-		//find closest mesh
-		float record=-1;
-		Object* close_obj=nullptr;
-		for(auto& o:objects) {
-			//is intersection valid?
-			float dist=o.mesh.intersectRay(cam_pos, mouse_dir);
-			if(dist<0) continue;
-
-			//"sort" while iterating
-			if(record<0||dist<record) {
-				record=dist;
-				close_obj=&o;
-			}
-		}
-		if(!close_obj) return;
-
-		//this way we cant grab behind things.
-		if(!close_obj->draggable) return;
-
-		grab_obj=close_obj;
-
-		//place plane at intersection point
-		//perp to cam view.
-		grab_ctr=cam_pos+record*mouse_dir;
-		grab_norm=cam_dir;
-	}
-
-	void handleGrabActionUpdate() {
-		if(!grab_obj) return;
-
-		//project delta onto grab plane
-		vf3d prev_pt=rayIntersectPlane(cam_pos, prev_mouse_dir, grab_ctr, grab_norm);
-		vf3d curr_pt=rayIntersectPlane(cam_pos, mouse_dir, grab_ctr, grab_norm);
-		//move by delta.
-		grab_obj->mesh.translation+=curr_pt-prev_pt;
-		grab_obj->mesh.updateMatrixes();
-	}
-
-	void handleGrabActionEnd() {
-		grab_obj=nullptr;
-	}
-
-	void handleUserInput(float dt) {
-		handleCameraLooking(dt);
-
-		//polar to cartesian
-		cam_dir=polar3D(cam_yaw, cam_pitch);
-
-		handleCameraMovement(dt);
-
-		//grab & drag with left mouse button
-		{
-			const auto grab_action=getMouse(SAPP_MOUSEBUTTON_LEFT);
-			if(grab_action.pressed) handleGrabActionBegin();
-			if(grab_action.held) handleGrabActionUpdate();
-			if(grab_action.released) handleGrabActionEnd();
-		}
-
-		//set light pos
-		if(getKey(SAPP_KEYCODE_R).held) red_light->pos=cam_pos;
-		if(getKey(SAPP_KEYCODE_G).held) green_light->pos=cam_pos;
-		if(getKey(SAPP_KEYCODE_B).held) blue_light->pos=cam_pos;
-
-		if(getKey(SAPP_KEYCODE_F11).pressed) {
-			sapp_toggle_fullscreen();
-		}
-
-		//exit on escape
-		if(getKey(SAPP_KEYCODE_ESCAPE).pressed) sapp_request_quit();
-	}
-
-	void updateColor(float dt) {
-		if(color_timer>color_period) {
-			color_timer-=color_period;
-
-			prev_col=next_col;
-			next_col=randomPastel();
-		}
-
-		//lerp between prev & next
-		float t=color_timer/color_period;
-		curr_col=prev_col+t*(next_col-prev_col);
-
-		color_timer+=dt;
-	}
-#pragma endregion
 
 	void userUpdate(float dt) {
-		updateMatrixes();
-
-		updateMouseRay();
-
-		handleUserInput(dt);
-
-		updateColor(dt);
+		rx+=dt;
+		ry+=2*dt;
 	}
 
-#pragma region RENDER HELPERS
-	void renderObject(const Object& o) {
-		//update bindings
-		bindings.vertex_buffers[0]=o.mesh.vbuf;
-		bindings.index_buffer=o.mesh.ibuf;
-		bindings.views[VIEW_u_tex]=o.tex;
-		sg_apply_bindings(bindings);
+	void renderOffscreen() {
+		mat4 rot_x=mat4::makeRotX(rx);
+		mat4 rot_y=mat4::makeRotY(ry);
+		mat4 model=mat4::mul(rot_y, rot_x);
+		
+		mat4 look_at=mat4::makeLookAt({0, 0, 2.5f}, {0, 0, 0}, {0, 1, 0});
+		mat4 view=mat4::inverse(look_at);
 
-		//send vertex uniforms
+		mat4 proj=mat4::makePerspective(45, 1, .01f, 10.f);
+
+		mat4 mvp=mat4::mul(proj, mat4::mul(view, model));
+
 		vs_params_t vs_params{};
-		std::memcpy(vs_params.u_model, o.mesh.model.m, sizeof(vs_params.u_model));
-		std::memcpy(vs_params.u_proj_view, view_proj.m, sizeof(vs_params.u_proj_view));
+		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
+
+		sg_begin_pass(offscreen.pass);
+		sg_apply_pipeline(offscreen.pip);
+		sg_apply_bindings(offscreen.bind);
 		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-
-		sg_draw(0, 3*o.mesh.tris.size(), 1);
+		sg_draw(0, 3*donut.tris.size(), 1);
+		sg_end_pass();
 	}
-#pragma endregion
 
-	void userRender() {
-		//still not sure what a pass is...
+	void renderDisplay() {
+		mat4 rot_x=mat4::makeRotX(-.25f*rx);
+		mat4 rot_y=mat4::makeRotY(.25f*ry);
+		mat4 model=mat4::mul(rot_y, rot_x);
+
+		mat4 look_at=mat4::makeLookAt({0, 0, 1.5f}, {0, 0, 0}, {0, 1, 0});
+		mat4 view=mat4::inverse(look_at);
+
+		float asp=sapp_widthf()/sapp_heightf();
+		mat4 proj=mat4::makePerspective(45, asp, .01f, 10.f);
+
+		mat4 mvp=mat4::mul(proj, mat4::mul(view, model));
+
+		vs_params_t vs_params{};
+		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
+
 		sg_pass pass{};
-		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		pass.action.colors[0].clear_value=curr_col;
+		pass.action=display.pass_action;
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
-
-		sg_apply_pipeline(pipeline);
-
-		//send fragment uniforms
-		fs_params_t fs_params{};
-		{
-			fs_params.u_num_lights=lights.size();
-			int idx=0;
-			for(const auto& l:lights) {
-				fs_params.u_light_pos[idx][0]=l.pos.x;
-				fs_params.u_light_pos[idx][1]=l.pos.y;
-				fs_params.u_light_pos[idx][2]=l.pos.z;
-				fs_params.u_light_col[idx][0]=l.col.r;
-				fs_params.u_light_col[idx][1]=l.col.g;
-				fs_params.u_light_col[idx][2]=l.col.b;
-				idx++;
-			}
-		}
-		fs_params.u_view_pos[0]=cam_pos.x;
-		fs_params.u_view_pos[1]=cam_pos.y;
-		fs_params.u_view_pos[2]=cam_pos.z;
-		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
-
-		for(const auto& o:objects) {
-			renderObject(o);
-		}
-
+		sg_apply_pipeline(display.pip);
+		sg_apply_bindings(display.bind);
+		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+		sg_draw(0, 3*sphere.tris.size(), 1);
 		sg_end_pass();
+	}
+
+	void userRender() {
+		renderOffscreen();
+
+		renderDisplay();
+
 		sg_commit();
 	}
 };
