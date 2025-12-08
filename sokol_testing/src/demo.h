@@ -5,191 +5,397 @@
 
 #include "mesh.h"
 
+#include "texture.h"
+
+//y p => x y z
+//0 0 => 0 0 1
+static vf3d polar3D(float yaw, float pitch) {
+	return {
+		std::sin(yaw)*std::cos(pitch),
+		std::sin(pitch),
+		std::cos(yaw)*std::cos(pitch)
+	};
+}
+
+static float randFloat(float b=1, float a=0) {
+	static const float rand_max=RAND_MAX;
+	float t=std::rand()/rand_max;
+	return a+t*(b-a);
+}
+
+//https://stackoverflow.com/a/6178290
+static float randNormal() {
+	float rho=std::sqrt(-2*std::log(randFloat()));
+	float theta=2*Pi*randFloat();
+	return rho*std::cos(theta);
+}
+
+//https://math.stackexchange.com/a/1585996
+static vf3d randDir() {
+	return vf3d(
+		randNormal(),
+		randNormal(),
+		randNormal()
+	).norm();
+}
+
+static vf3d projectOntoPlane(const vf3d& pt, const vf3d& norm) {
+	return pt-norm.dot(pt)*norm;
+}
+
+struct Shape {
+	Mesh mesh;
+	sg_view tex;
+
+	float radius;
+
+	vf3d fwd;
+	float speed;
+
+	vf3d rot_speed;
+};
+
 struct Demo : SokolEngine {
-	mat4 view_proj;
+	sg_pass offscreen_pass{};
+	sg_pass_action display_pass_action{};
+	sg_pipeline pipeline;
 
-	sg_image color_img;
+	sg_sampler sampler;
+
+	sg_view tex_blank;
+	sg_view tex_uv;
+	sg_view tex_checker;
+
+	//cam info
+	vf3d cam_pos{3, 3, 3};
+	vf3d cam_dir;
+	float cam_yaw=-3*Pi/4;
+	float cam_pitch=-Pi/4;
+
+	std::list<Shape> shapes;
 
 	struct {
-		sg_pass pass{};
-		sg_pipeline pip{};
-		sg_bindings bind{};
-	} offscreen;
-	
-	struct {
-		sg_pass_action pass_action{};
-		sg_pipeline pip{};
-		sg_bindings bind{};
-	} display;
+		sg_view tex_color;
+		sg_view tex_depth;
 
-	Mesh donut;
-	Mesh sphere;
+		Mesh mesh;
+		mat4 view;
+	} cubemap_faces[6];
 
-	float rx=0, ry=0;
+	mat4 face_proj;
 
+#pragma region SETUP HELPERS
 	void setupDisplayPass() {
 		//clear to bluish
-		display.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		display.pass_action.colors[0].clear_value={0.25f, 0.45f, 0.65f, 1.0f};
+		display_pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		display_pass_action.colors[0].clear_value={0.25f, 0.45f, 0.65f, 1.0f};
 	}
 
 	void setupOffscreenPass() {
-		{
+		offscreen_pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		offscreen_pass.action.colors[0].clear_value={0.25f, 0.25f, 0.25f, 1.0f};
+	}
+
+	//for now, these both use the same pipeline & shader
+	void setupPipeline() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_shd_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shd_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shd_v_uv].format=SG_VERTEXFORMAT_SHORT2N;
+		pip_desc.shader=sg_make_shader(shd_shader_desc(sg_query_backend()));
+		pip_desc.index_type=SG_INDEXTYPE_UINT32;
+		pip_desc.cull_mode=SG_CULLMODE_FRONT;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip_desc.depth.write_enabled=true;
+		pipeline=sg_make_pipeline(pip_desc);
+	}
+
+	void setupSampler() {
+		sg_sampler_desc sampler_desc{};
+		sampler=sg_make_sampler(sampler_desc);
+	}
+
+	void setupTextures() {
+		tex_blank=makeBlankTexture();
+		
+		tex_uv=makeUVTexture(1024, 1024);
+
+		tex_checker=tex_blank;
+		makeTextureFromFile(tex_checker, "assets/img/checker.png");
+	}
+
+	void setupShapes() {
+		shapes.push_back({Mesh::makeCube(), tex_uv});
+		shapes.push_back({Mesh::makeTorus(.7f, 24, .3f, 12), tex_checker});
+		shapes.push_back({Mesh::makeUVSphere(1, 24, 12), tex_checker});
+		shapes.push_back({Mesh::makeCylinder(1, 24, 1), tex_checker});
+		shapes.push_back({Mesh::makeCone(1, 24, 1), tex_uv});
+		
+		for(auto& s:shapes) {
+			//starting pos
+			vf3d dir=randDir();
+			s.radius=randFloat(2.5f, 3.5f);
+			s.mesh.translation=s.radius*dir;
+			s.mesh.scale=randFloat(.5f, .75f)*vf3d(1, 1, 1);
+
+			vf3d fwd=randDir();
+			s.fwd=projectOntoPlane(fwd, dir).norm();
+			s.speed=randFloat(.5f, 1.5f);
+
+			s.rot_speed.x=.5f-randFloat();
+			s.rot_speed.y=.5f-randFloat();
+			s.rot_speed.z=.5f-randFloat();
+		}
+	}
+
+	void setupCubemap() {
+		//make color textures
+		for(int i=0; i<6; i++) {
+			auto& f=cubemap_faces[i];
+
 			sg_image_desc image_desc{};
 			image_desc.usage.color_attachment=true;
-			image_desc.width=256;
-			image_desc.height=256;
+			image_desc.width=1024;
+			image_desc.height=1024;
 			image_desc.pixel_format=SG_PIXELFORMAT_RGBA8;
-			color_img=sg_make_image(image_desc);
+			sg_image img_color=sg_make_image(image_desc);
 
 			sg_view_desc view_desc{};
-			view_desc.color_attachment.image=color_img;
-			offscreen.pass.attachments.colors[0]=sg_make_view(view_desc);
+			view_desc.color_attachment.image=img_color;
+			view_desc.texture.image=img_color;
+			f.tex_color=sg_make_view(view_desc);
 		}
 
-		{
+		//make depth textures
+		for(int i=0; i<6; i++) {
+			auto& f=cubemap_faces[i];
+			
 			sg_image_desc image_desc{};
 			image_desc.usage.depth_stencil_attachment=true;
-			image_desc.width=256;
-			image_desc.height=256;
+			image_desc.width=1024;
+			image_desc.height=1024;
 			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
 			sg_image depth_img=sg_make_image(image_desc);
 
 			sg_view_desc view_desc{};
 			view_desc.depth_stencil_attachment.image=depth_img;
-			offscreen.pass.attachments.depth_stencil=sg_make_view(view_desc);
+			f.tex_depth=sg_make_view(view_desc);
 		}
 
-		offscreen.pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		offscreen.pass.action.colors[0].clear_value={0.25f, 0.25f, 0.25f, 1.0f};
+		//orient meshes
+		Mesh face;
+		face.verts={
+			{{-1, 0, -1}, {0, 1, 0}, {1, 1}},
+			{{1, 0, -1}, {0, 1, 0}, {0, 1}},
+			{{-1, 0, 1}, {0, 1, 0}, {1, 0}},
+			{{1, 0, 1}, {0, 1, 0}, {0, 0}}
+		};
+		face.tris={
+			{0, 2, 1},
+			{1, 2, 3}
+		};
+		face.updateVertexBuffer();
+		face.updateIndexBuffer();
+		const vf3d rot_trans[6][2]{
+			{Pi*vf3d(.5f, 1, 0), {0, 0, -1}},
+			{Pi*vf3d(.5f, 0, 0), {0, 0, 1}},
+			{Pi*vf3d(.5f, -.5f, 0), {-1, 0, 0}},
+			{Pi*vf3d(.5f, .5f, 0), {1, 0, 0}},
+			{Pi*vf3d(1, .5f, 0), {0, -1, 0}},
+			{Pi*vf3d(0, 1, 0), {0, 1, 0}}
+		};
+		for(int i=0; i<6; i++) {
+			Mesh& m=cubemap_faces[i].mesh;
+			m=face;
+			m.rotation=rot_trans[i][0];
+			m.translation=rot_trans[i][1];
+			m.updateMatrixes();
+		}
+
+		//make view matrixes
+		const vf3d dir_up[6][2]{
+			{{0, 0, -1}, {0, 1, 0}},
+			{{0, 0, 1}, {0, 1, 0}},
+			{{-1, 0, 0}, {0, 1, 0}},
+			{{1, 0, 0}, {0, 1, 0}},
+			{{0, -1, 0}, {1, 0, 0}},
+			{{0, 1, 0}, {0, 0, 1}}
+		};
+		for(int i=0; i<6; i++) {
+			const auto& dir=dir_up[i][0];
+			const auto& up=dir_up[i][1];
+			mat4 look_at=mat4::makeLookAt({}, dir, up);
+			cubemap_faces[i].view=mat4::inverse(look_at);
+		}
+
+		//make projection matrix
+		face_proj=mat4::makePerspective(90.f, 1, .01f, 10.f);
 	}
-
-	void setupMeshes() {
-		donut=Mesh::makeTorus(.5f, 24, .3f, 12);
-		sphere=Mesh::makeUVSphere(.5f, 36, 24);
-	}
-
-	void setupOffscreenPipeline() {
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_offscreen_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_offscreen_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_offscreen_v_uv].format=SG_VERTEXFORMAT_SHORT2N;
-		pip_desc.shader=sg_make_shader(offscreen_shader_desc(sg_query_backend())),
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.cull_mode=SG_CULLMODE_FRONT;
-		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.colors[0].pixel_format=SG_PIXELFORMAT_RGBA8;
-		offscreen.pip=sg_make_pipeline(pip_desc);
-	}
-
-	void setupDisplayPipeline() {
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_default_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_default_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_default_v_uv].format=SG_VERTEXFORMAT_SHORT2N;
-		pip_desc.shader=sg_make_shader(default_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.cull_mode=SG_CULLMODE_FRONT;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pip_desc.depth.write_enabled=true;
-		display.pip=sg_make_pipeline(pip_desc);
-	}
-
-	void setupOffscreenBindings() {
-		offscreen.bind.vertex_buffers[0]=donut.vbuf;
-		offscreen.bind.index_buffer=donut.ibuf;
-	}
-
-	void setupDisplayBindings() {
-		display.bind.vertex_buffers[0]=sphere.vbuf;
-		display.bind.index_buffer=sphere.ibuf;
-
-		sg_view_desc view_desc{};
-		view_desc.texture.image=color_img;
-		display.bind.views[VIEW_u_tex]=sg_make_view(view_desc);
-
-		sg_sampler_desc sampler_desc{};
-		sampler_desc.min_filter=SG_FILTER_LINEAR;
-		sampler_desc.mag_filter=SG_FILTER_LINEAR;
-		sampler_desc.wrap_u=SG_WRAP_REPEAT;
-		sampler_desc.wrap_v=SG_WRAP_REPEAT;
-		display.bind.samplers[SMP_u_smp]=sg_make_sampler(sampler_desc);
-	}
+#pragma endregion
 
 	void userCreate() override {
-		app_title="Offscreen Demo";
+		app_title="Cubemap Demo";
 
 		setupDisplayPass();
 
 		setupOffscreenPass();
 
-		setupMeshes();
+		setupPipeline();
 
-		setupOffscreenPipeline();
+		setupSampler();
 
-		setupDisplayPipeline();
+		setupTextures();
 
-		setupOffscreenBindings();
+		setupShapes();
 
-		setupDisplayBindings();
+		setupCubemap();
 	}
+
+#pragma region UPDATE HELPERS
+	void handleCameraLooking(float dt) {
+		//left/right
+		if(getKey(SAPP_KEYCODE_LEFT).held) cam_yaw+=dt;
+		if(getKey(SAPP_KEYCODE_RIGHT).held) cam_yaw-=dt;
+
+		//up/down
+		if(getKey(SAPP_KEYCODE_UP).held) cam_pitch+=dt;
+		if(getKey(SAPP_KEYCODE_DOWN).held) cam_pitch-=dt;
+
+		//clamp camera pitch
+		if(cam_pitch>Pi/2) cam_pitch=Pi/2-.001f;
+		if(cam_pitch<-Pi/2) cam_pitch=.001f-Pi/2;
+	}
+
+	void handleCameraMovement(float dt) {
+		//move up, down
+		if(getKey(SAPP_KEYCODE_SPACE).held) cam_pos.y+=4.f*dt;
+		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam_pos.y-=4.f*dt;
+
+		//move forward, backward
+		vf3d fb_dir(std::sin(cam_yaw), 0, std::cos(cam_yaw));
+		if(getKey(SAPP_KEYCODE_W).held) cam_pos+=5.f*dt*fb_dir;
+		if(getKey(SAPP_KEYCODE_S).held) cam_pos-=3.f*dt*fb_dir;
+
+		//move left, right
+		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
+		if(getKey(SAPP_KEYCODE_A).held) cam_pos+=4.f*dt*lr_dir;
+		if(getKey(SAPP_KEYCODE_D).held) cam_pos-=4.f*dt*lr_dir;
+	}
+
+	void handleUserInput(float dt) {
+		handleCameraLooking(dt);
+
+		//polar to cartesian
+		cam_dir=polar3D(cam_yaw, cam_pitch);
+
+		handleCameraMovement(dt);
+	}
+#pragma endregion
 
 	void userUpdate(float dt) {
-		rx+=dt;
-		ry+=2*dt;
+		handleUserInput(dt);
+
+		for(auto& s:shapes) {
+			Mesh& m=s.mesh;
+
+			//move by vel
+			vf3d delta=s.speed*s.fwd*dt;
+			//reproject pos & fwd onto sphere
+			vf3d dir=(m.translation+delta).norm();
+			m.translation=s.radius*dir;
+			s.fwd=projectOntoPlane(s.fwd, dir).norm();
+
+			m.rotation+=s.rot_speed*dt;
+			
+			m.updateMatrixes();
+		}
 	}
 
+#pragma region RENDER HELPERS
 	void renderOffscreen() {
-		mat4 rot_x=mat4::makeRotX(rx);
-		mat4 rot_y=mat4::makeRotY(ry);
-		mat4 model=mat4::mul(rot_y, rot_x);
-		
-		mat4 look_at=mat4::makeLookAt({0, 0, 2.5f}, {0, 0, 0}, {0, 1, 0});
-		mat4 view=mat4::inverse(look_at);
+		for(int i=0; i<6; i++) {
+			auto& face=cubemap_faces[i];
 
-		mat4 proj=mat4::makePerspective(45, 1, .01f, 10.f);
+			offscreen_pass.attachments.colors[0]=face.tex_color;
+			offscreen_pass.attachments.depth_stencil=face.tex_depth;
+			sg_begin_pass(offscreen_pass);
 
-		mat4 mvp=mat4::mul(proj, mat4::mul(view, model));
+			sg_apply_pipeline(pipeline);
 
-		vs_params_t vs_params{};
-		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
+			const mat4& view=face.view;
+			const mat4& proj=face_proj;
 
-		sg_begin_pass(offscreen.pass);
-		sg_apply_pipeline(offscreen.pip);
-		sg_apply_bindings(offscreen.bind);
-		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-		sg_draw(0, 3*donut.tris.size(), 1);
-		sg_end_pass();
+			mat4 view_proj=mat4::mul(proj, view);
+
+			sg_bindings bind{};
+			bind.samplers[SMP_u_smp]=sampler;
+			for(const auto& s:shapes) {
+				bind.vertex_buffers[0]=s.mesh.vbuf;
+				bind.index_buffer=s.mesh.ibuf;
+				bind.views[VIEW_u_tex]=s.tex;
+				sg_apply_bindings(bind);
+
+				vs_params_t vs_params{};
+				mat4 mvp=mat4::mul(view_proj, s.mesh.model);
+				std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
+				sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+
+				sg_draw(0, 3*s.mesh.tris.size(), 1);
+			}
+
+			sg_end_pass();
+		}
 	}
 
 	void renderDisplay() {
-		mat4 rot_x=mat4::makeRotX(-.25f*rx);
-		mat4 rot_y=mat4::makeRotY(.25f*ry);
-		mat4 model=mat4::mul(rot_y, rot_x);
-
-		mat4 look_at=mat4::makeLookAt({0, 0, 1.5f}, {0, 0, 0}, {0, 1, 0});
-		mat4 view=mat4::inverse(look_at);
-
-		float asp=sapp_widthf()/sapp_heightf();
-		mat4 proj=mat4::makePerspective(45, asp, .01f, 10.f);
-
-		mat4 mvp=mat4::mul(proj, mat4::mul(view, model));
-
-		vs_params_t vs_params{};
-		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-
 		sg_pass pass{};
-		pass.action=display.pass_action;
+		pass.action=display_pass_action;
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
-		sg_apply_pipeline(display.pip);
-		sg_apply_bindings(display.bind);
-		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-		sg_draw(0, 3*sphere.tris.size(), 1);
+
+		sg_apply_pipeline(pipeline);
+
+		mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
+		mat4 view=mat4::inverse(look_at);
+		float asp=sapp_widthf()/sapp_heightf();
+		mat4 proj=mat4::makePerspective(60, asp, .01f, 10.f);
+		mat4 view_proj=mat4::mul(proj, view);
+
+		sg_bindings bind{};
+		bind.samplers[SMP_u_smp]=sampler;
+		for(const auto& s:shapes) {
+			bind.vertex_buffers[0]=s.mesh.vbuf;
+			bind.index_buffer=s.mesh.ibuf;
+			bind.views[VIEW_u_tex]=s.tex;
+			sg_apply_bindings(bind);
+
+			mat4 mvp=mat4::mul(view_proj, s.mesh.model);
+			vs_params_t vs_params{};
+			std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
+			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+
+			sg_draw(0, 3*s.mesh.tris.size(), 1);
+		}
+
+		for(int i=0; i<6; i++) {
+			const auto& face=cubemap_faces[i];
+
+			bind.vertex_buffers[0]=face.mesh.vbuf;
+			bind.index_buffer=face.mesh.ibuf;
+			bind.views[VIEW_u_tex]=face.tex_color;
+			sg_apply_bindings(bind);
+
+			mat4 mvp=mat4::mul(view_proj, face.mesh.model);
+			vs_params_t vs_params{};
+			std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
+			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+
+			sg_draw(0, 3*face.mesh.tris.size(), 1);
+		}
+
 		sg_end_pass();
 	}
+#pragma endregion
 
 	void userRender() {
 		renderOffscreen();

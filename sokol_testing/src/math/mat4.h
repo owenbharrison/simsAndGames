@@ -35,6 +35,19 @@ struct mat4 {
 		return c;
 	}
 
+	//frobenius norm
+	static float norm(const mat4& m) {
+		float sum=0;
+		for(int i=0; i<16; i++) sum+=m.m[i]*m.m[i];
+		return std::sqrt(sum);
+	}
+
+	static mat4 sub(const mat4& lhs, const mat4& rhs) {
+		mat4 r;
+		for(int i=0; i<16; i++) r.m[i]=lhs.m[i]-rhs.m[i];
+		return r;
+	}
+	
 	//basically a lot of corresponding dot products...
 	static mat4 mul(const mat4& lhs, const mat4& rhs) {
 		mat4 res;
@@ -151,6 +164,21 @@ struct mat4 {
 		a(2, 2)=1;
 		a(3, 3)=1;
 		return a;
+	}
+
+	//rodrigues axis-angle formula
+	static mat4 makeRotAxis(const vf3d& axis, float theta) {
+		float x=axis.x, y=axis.y, z=axis.z;
+		float c=cos(theta);
+		float s=sin(theta);
+		float t=1-c;
+
+		mat4 m;
+		m(0, 0)=c+x*x*t, m(0, 1)=x*y*t-z*s, m(0, 2)=x*z*t+y*s;
+		m(1, 0)=y*x*t+z*s, m(1, 1)=c+y*y*t, m(1, 2)=y*z*t-x*s;
+		m(2, 0)=z*x*t-y*s, m(2, 1)=z*y*t-x*s, m(2, 2)=c+z*z*t;
+		m(3, 3)=1;
+		return m;
 	}
 
 	//from camera -> world

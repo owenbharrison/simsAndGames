@@ -130,8 +130,13 @@ struct Mesh {
 	sg_buffer vbuf{SG_INVALID_ID};
 	sg_buffer ibuf{SG_INVALID_ID};
 
-	vf3d rotation, scale{1, 1, 1}, translation;
+	vf3d rotation, scale, translation;
 	mat4 model, inv_model;
+
+	Mesh() {
+		resetTransforms();
+		updateMatrixes();
+	}
 
 	float intersectRay(const vf3d& orig_world, const vf3d& dir_world) const {
 		//localize ray
@@ -263,6 +268,12 @@ struct Mesh {
 		delete[] ibuf_data;
 	}
 
+	void resetTransforms() {
+		rotation={0, 0, 0};
+		scale={1, 1, 1};
+		translation={0, 0, 0};
+	}
+
 	void updateMatrixes() {
 		//xyz euler angles?
 		mat4 rot_x=mat4::makeRotX(rotation.x);
@@ -277,6 +288,21 @@ struct Mesh {
 		//combine & invert
 		model=mat4::mul(trans, mat4::mul(rot, scl));
 		inv_model=mat4::inverse(model);
+	}
+
+	//bring verts into "world" space
+	void applyTransforms() {
+		for(auto& v:verts) {
+			//translate position
+			float w=1;
+			v.pos=matMulVec(model, v.pos, w);
+
+			//DONT translate norm
+			w=0;
+			v.norm=matMulVec(model, v.norm, w);
+		}
+		
+		resetTransforms();
 	}
 
 	static Mesh makeCube() {
