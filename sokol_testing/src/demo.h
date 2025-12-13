@@ -1,4 +1,8 @@
+#define SOKOL_GLCORE
 #include "sokol_engine.h"
+#include "sokol/sokol_gfx.h"
+#include "sokol/sokol_glue.h"
+
 #include "shd.glsl.h"
 
 #include "math/mat4.h"
@@ -55,16 +59,16 @@ struct Shape {
 	vf3d rot_speed;
 };
 
-struct Demo : SokolEngine {
+class Demo : public SokolEngine {
 	sg_pass offscreen_pass{};
 	sg_pass_action display_pass_action{};
-	sg_pipeline pipeline;
+	sg_pipeline pipeline{};
 
-	sg_sampler sampler;
+	sg_sampler sampler{};
 
-	sg_view tex_blank;
-	sg_view tex_uv;
-	sg_view tex_checker;
+	sg_view tex_blank{};
+	sg_view tex_uv{};
+	sg_view tex_checker{};
 
 	//cam info
 	vf3d cam_pos{3, 3, 3};
@@ -75,8 +79,8 @@ struct Demo : SokolEngine {
 	std::list<Shape> shapes;
 
 	struct {
-		sg_view tex_color;
-		sg_view tex_depth;
+		sg_view tex_color{};
+		sg_view tex_depth{};
 
 		Mesh mesh;
 		mat4 view;
@@ -84,7 +88,14 @@ struct Demo : SokolEngine {
 
 	mat4 face_proj;
 
+public:
 #pragma region SETUP HELPERS
+	void setupEnvironment() {
+		sg_desc desc{};
+		desc.environment=sglue_environment();
+		sg_setup(desc);
+	}
+
 	void setupDisplayPass() {
 		//clear to bluish
 		display_pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
@@ -117,7 +128,7 @@ struct Demo : SokolEngine {
 
 	void setupTextures() {
 		tex_blank=makeBlankTexture();
-		
+
 		tex_uv=makeUVTexture(1024, 1024);
 
 		tex_checker=tex_blank;
@@ -130,7 +141,7 @@ struct Demo : SokolEngine {
 		shapes.push_back({Mesh::makeUVSphere(1, 24, 12), tex_checker});
 		shapes.push_back({Mesh::makeCylinder(1, 24, 1), tex_checker});
 		shapes.push_back({Mesh::makeCone(1, 24, 1), tex_uv});
-		
+
 		for(auto& s:shapes) {
 			//starting pos
 			vf3d dir=randDir();
@@ -169,7 +180,7 @@ struct Demo : SokolEngine {
 		//make depth textures
 		for(int i=0; i<6; i++) {
 			auto& f=cubemap_faces[i];
-			
+
 			sg_image_desc image_desc{};
 			image_desc.usage.depth_stencil_attachment=true;
 			image_desc.width=1024;
@@ -197,12 +208,12 @@ struct Demo : SokolEngine {
 		face.updateVertexBuffer();
 		face.updateIndexBuffer();
 		const vf3d rot_trans[6][2]{
-			{Pi*vf3d(.5f, 1, 0), {0, 0, -1}},
+			{Pi*vf3d(.5f, .5f, 0), {1, 0, 0}},
+			{Pi*vf3d(0, 0, 0), {0, 1, 0}},
 			{Pi*vf3d(.5f, 0, 0), {0, 0, 1}},
 			{Pi*vf3d(.5f, -.5f, 0), {-1, 0, 0}},
-			{Pi*vf3d(.5f, .5f, 0), {1, 0, 0}},
-			{Pi*vf3d(1, .5f, 0), {0, -1, 0}},
-			{Pi*vf3d(0, 1, 0), {0, 1, 0}}
+			{Pi*vf3d(1, 0, 0), {0, -1, 0}},
+			{Pi*vf3d(.5f, 1, 0), {0, 0, -1}}
 		};
 		for(int i=0; i<6; i++) {
 			Mesh& m=cubemap_faces[i].mesh;
@@ -214,27 +225,29 @@ struct Demo : SokolEngine {
 
 		//make view matrixes
 		const vf3d dir_up[6][2]{
-			{{0, 0, -1}, {0, 1, 0}},
+			{{1, 0, 0}, {0, 1, 0}},
+			{{0, 1, 0}, {0, 0, -1}},
 			{{0, 0, 1}, {0, 1, 0}},
 			{{-1, 0, 0}, {0, 1, 0}},
-			{{1, 0, 0}, {0, 1, 0}},
-			{{0, -1, 0}, {1, 0, 0}},
-			{{0, 1, 0}, {0, 0, 1}}
+			{{0, -1, 0}, {0, 0, 1}},
+			{{0, 0, -1}, {0, 1, 0}}
 		};
 		for(int i=0; i<6; i++) {
 			const auto& dir=dir_up[i][0];
 			const auto& up=dir_up[i][1];
-			mat4 look_at=mat4::makeLookAt({}, dir, up);
+			mat4 look_at=mat4::makeLookAt({0, 0, 0}, dir, up);
 			cubemap_faces[i].view=mat4::inverse(look_at);
 		}
 
 		//make projection matrix
-		face_proj=mat4::makePerspective(90.f, 1, .01f, 10.f);
+		face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
 	}
 #pragma endregion
 
 	void userCreate() override {
-		app_title="Cubemap Demo";
+		std::srand(std::time(0));
+		
+		setupEnvironment();
 
 		setupDisplayPass();
 
@@ -306,13 +319,13 @@ struct Demo : SokolEngine {
 			s.fwd=projectOntoPlane(s.fwd, dir).norm();
 
 			m.rotation+=s.rot_speed*dt;
-			
+
 			m.updateMatrixes();
 		}
 	}
 
 #pragma region RENDER HELPERS
-	void renderOffscreen() {
+	void renderIntoCubemap() {
 		for(int i=0; i<6; i++) {
 			auto& face=cubemap_faces[i];
 
@@ -347,7 +360,7 @@ struct Demo : SokolEngine {
 		}
 	}
 
-	void renderDisplay() {
+	void renderToDisplay() {
 		sg_pass pass{};
 		pass.action=display_pass_action;
 		pass.swapchain=sglue_swapchain();
@@ -398,10 +411,14 @@ struct Demo : SokolEngine {
 #pragma endregion
 
 	void userRender() {
-		renderOffscreen();
+		renderIntoCubemap();
 
-		renderDisplay();
+		renderToDisplay();
 
 		sg_commit();
+	}
+
+	Demo() {
+		app_title="Cubemap Demo";
 	}
 };

@@ -3,24 +3,13 @@
 #define SOKOL_ENGINE_CLASS_H
 
 #define SOKOL_IMPL
-#define SOKOL_GLCORE
-#include "sokol/sokol_app.h"
-#include "sokol/sokol_gfx.h"
-#include "sokol/sokol_glue.h"
+#include "sokol/sokol_app.h"  
 
 //for memset & memcpy
 #include <string>
 
 //for snprintf
 #include <cstdio>
-
-//qol stuff
-sg_color operator+(const sg_color& a, const sg_color& b) { return {a.r+b.r, a.g+b.g, a.b+b.b, a.a+b.a}; }
-sg_color operator-(const sg_color& c) { return {-c.r, -c.g, -c.b, -c.a}; }
-sg_color operator-(const sg_color& a, const sg_color& b) { return a+(-b); }
-sg_color operator*(const sg_color& c, const float& f) { return {f*c.r, f*c.g, f*c.b, f*c.a}; }
-sg_color operator*(const float& f, const sg_color& c) { return c*f; }
-sg_color operator*(const sg_color& a, const sg_color& b) { return {a.r*b.r, a.g*b.g, a.b*b.b, a.a*b.a}; }
 
 class SokolEngine {
 	static const int _num_keys=512;
@@ -49,7 +38,7 @@ protected:
 	float mouse_dx=0;
 	float mouse_dy=0;
 
-	std::string app_title="Undefined";
+	std::string app_title="Untitled";
 
 public:
 	virtual void userCreate()=0;
@@ -61,10 +50,6 @@ public:
 	virtual void userRender()=0;
 
 	void init() {
-		sg_desc desc{};
-		desc.environment=sglue_environment();
-		sg_setup(desc);
-
 		std::memset(_keys_old, false, sizeof(bool)*_num_keys);
 		std::memset(_keys_curr, false, sizeof(bool)*_num_keys);
 		std::memset(_keys_new, false, sizeof(bool)*_num_keys);
@@ -78,8 +63,6 @@ public:
 
 	void cleanup() {
 		userDestroy();
-
-		sg_shutdown();
 	}
 
 	//dont immediately send new key states.

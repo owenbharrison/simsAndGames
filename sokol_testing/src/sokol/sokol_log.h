@@ -52,7 +52,7 @@
 
 		On Windows with sokol_app.h also note the runtime config items to make
 		stdout/stderr output visible on the console for WinMain() applications
-		via sapp_desc.win32_console_attach or sapp_desc.win32_console_create,
+		via sapp_desc.win32.console_attach or sapp_desc.win32.console_create,
 		however when running in a debugger on Windows, the logging output should
 		show up on the debug output UI panel.
 
@@ -121,16 +121,16 @@
 extern "C" {
 #endif
 
-/*
-		Plug this function into the 'logger.func' struct item when initializing any of the sokol
-		headers. For instance for sokol_audio.h it would look like this:
+	/*
+			Plug this function into the 'logger.func' struct item when initializing any of the sokol
+			headers. For instance for sokol_audio.h it would look like this:
 
-		saudio_setup(&(saudio_desc){
-				.logger = {
-						.func = slog_func
-				}
-		});
-*/
+			saudio_setup(&(saudio_desc){
+					.logger = {
+							.func = slog_func
+					}
+			});
+	*/
 	SOKOL_LOG_API_DECL void slog_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* message, uint32_t line_nr, const char* filename, void* user_data);
 
 #ifdef __cplusplus
@@ -245,10 +245,10 @@ switch(level) {
 	case 2: console.warn(str); break;
 	default: console.info(str); break;
 }
-})
+	})
 #endif
 
-SOKOL_API_IMPL void slog_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* message, uint32_t line_nr, const char* filename, void* user_data) {
+	SOKOL_API_IMPL void slog_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* message, uint32_t line_nr, const char* filename, void* user_data) {
 	_SOKOL_UNUSED(user_data);
 
 	const char* log_level_str;
@@ -311,7 +311,7 @@ SOKOL_API_IMPL void slog_func(const char* tag, uint32_t log_level, uint32_t log_
 	fputs(line_buf, stderr);
 #endif
 
-// platform specific logging calls
+	// platform specific logging calls
 #if defined(_SLOG_WINDOWS)
 	OutputDebugStringA(line_buf);
 #elif defined(_SLOG_ANDROID)
