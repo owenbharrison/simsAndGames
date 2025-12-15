@@ -54,6 +54,12 @@
     <ClInclude Include="src\texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\shape.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -74,6 +80,42 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\img\checker.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\debug\nz.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\debug\px.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\debug\py.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\debug\pz.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\debug\nx.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\debug\ny.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\pz.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\nx.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\ny.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\nz.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\px.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\skybox\py.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

@@ -151,6 +151,7 @@
     <ClInclude Include="src\math\mat4.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\return_code.h" />
+    <ClInclude Include="src\shape.h" />
     <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\sokol\sokol_app.h" />
     <ClInclude Include="src\sokol\sokol_gfx.h" />
@@ -160,6 +161,7 @@
     <ClInclude Include="src\sokol_engine.h" />
     <ClInclude Include="src\stb_image.h" />
     <ClInclude Include="src\texture.h" />
+    <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
@@ -178,6 +180,18 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\img\checker.png" />
+    <Image Include="assets\img\skybox\debug\px.png" />
+    <Image Include="assets\img\skybox\debug\py.png" />
+    <Image Include="assets\img\skybox\debug\pz.png" />
+    <Image Include="assets\img\skybox\debug\nx.png" />
+    <Image Include="assets\img\skybox\debug\ny.png" />
+    <Image Include="assets\img\skybox\debug\nz.png" />
+    <Image Include="assets\img\skybox\nx.png" />
+    <Image Include="assets\img\skybox\ny.png" />
+    <Image Include="assets\img\skybox\nz.png" />
+    <Image Include="assets\img\skybox\px.png" />
+    <Image Include="assets\img\skybox\py.png" />
+    <Image Include="assets\img\skybox\pz.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

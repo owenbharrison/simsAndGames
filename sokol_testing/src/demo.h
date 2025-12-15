@@ -5,11 +5,12 @@
 
 #include "shd.glsl.h"
 
-#include "math/mat4.h"
+#include "shape.h"
 
-#include "mesh.h"
+//for time
+#include <ctime>
 
-#include "texture.h"
+#include <list>
 
 //y p => x y z
 //0 0 => 0 0 1
@@ -21,48 +22,10 @@ static vf3d polar3D(float yaw, float pitch) {
 	};
 }
 
-static float randFloat(float b=1, float a=0) {
-	static const float rand_max=RAND_MAX;
-	float t=std::rand()/rand_max;
-	return a+t*(b-a);
-}
-
-//https://stackoverflow.com/a/6178290
-static float randNormal() {
-	float rho=std::sqrt(-2*std::log(randFloat()));
-	float theta=2*Pi*randFloat();
-	return rho*std::cos(theta);
-}
-
-//https://math.stackexchange.com/a/1585996
-static vf3d randDir() {
-	return vf3d(
-		randNormal(),
-		randNormal(),
-		randNormal()
-	).norm();
-}
-
-static vf3d projectOntoPlane(const vf3d& pt, const vf3d& norm) {
-	return pt-norm.dot(pt)*norm;
-}
-
-struct Shape {
-	Mesh mesh;
-	sg_view tex;
-
-	float radius;
-
-	vf3d fwd;
-	float speed;
-
-	vf3d rot_speed;
-};
-
 class Demo : public SokolEngine {
 	sg_pass offscreen_pass{};
 	sg_pass_action display_pass_action{};
-	sg_pipeline pipeline{};
+	sg_pipeline default_pipeline{};
 
 	sg_sampler sampler{};
 
@@ -75,18 +38,28 @@ class Demo : public SokolEngine {
 	vf3d cam_dir;
 	float cam_yaw=-3*Pi/4;
 	float cam_pitch=-Pi/4;
+	mat4 cam_proj, cam_view;
+	//view, then project
+	mat4 cam_view_proj;
+
+	struct {
+		sg_pipeline pip{};
+		sg_bindings bind{};
+	} skybox;
 
 	std::list<Shape> shapes;
 
 	struct {
-		sg_view tex_color{};
-		sg_view tex_depth{};
+		struct {
+			Shape shape;
 
-		Mesh mesh;
-		mat4 view;
-	} cubemap_faces[6];
+			sg_view tex_depth{};
 
-	mat4 face_proj;
+			mat4 view;
+		} faces[6];
+
+		mat4 face_proj;
+	} cubemap;
 
 public:
 #pragma region SETUP HELPERS
@@ -107,18 +80,17 @@ public:
 		offscreen_pass.action.colors[0].clear_value={0.25f, 0.25f, 0.25f, 1.0f};
 	}
 
-	//for now, these both use the same pipeline & shader
-	void setupPipeline() {
+	void setupDefaultPipeline() {
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_shd_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shd_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shd_v_uv].format=SG_VERTEXFORMAT_SHORT2N;
-		pip_desc.shader=sg_make_shader(shd_shader_desc(sg_query_backend()));
+		pip_desc.layout.attrs[ATTR_default_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_default_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_default_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(default_shader_desc(sg_query_backend()));
 		pip_desc.index_type=SG_INDEXTYPE_UINT32;
 		pip_desc.cull_mode=SG_CULLMODE_FRONT;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		pip_desc.depth.write_enabled=true;
-		pipeline=sg_make_pipeline(pip_desc);
+		default_pipeline=sg_make_pipeline(pip_desc);
 	}
 
 	void setupSampler() {
@@ -135,95 +107,72 @@ public:
 		makeTextureFromFile(tex_checker, "assets/img/checker.png");
 	}
 
-	void setupShapes() {
-		shapes.push_back({Mesh::makeCube(), tex_uv});
-		shapes.push_back({Mesh::makeTorus(.7f, 24, .3f, 12), tex_checker});
-		shapes.push_back({Mesh::makeUVSphere(1, 24, 12), tex_checker});
-		shapes.push_back({Mesh::makeCylinder(1, 24, 1), tex_checker});
-		shapes.push_back({Mesh::makeCone(1, 24, 1), tex_uv});
+	void setupSkybox() {
+		//pipeline
+		{
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_skybox_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.shader=sg_make_shader(skybox_shader_desc(sg_query_backend()));
+			pip_desc.index_type=SG_INDEXTYPE_UINT32;
+			skybox.pip=sg_make_pipeline(pip_desc);
+		}
 
-		for(auto& s:shapes) {
-			//starting pos
-			vf3d dir=randDir();
-			s.radius=randFloat(2.5f, 3.5f);
-			s.mesh.translation=s.radius*dir;
-			s.mesh.scale=randFloat(.5f, .75f)*vf3d(1, 1, 1);
+		//bindings
+		{
+			float vertexes[8][3]{
+				{-1, -1, -1},
+				{1, -1, -1},
+				{-1, 1, -1},
+				{1, 1, -1},
+				{-1, -1, 1},
+				{1, -1, 1},
+				{-1, 1, 1},
+				{1, 1, 1}
+			};
+			sg_buffer_desc vbuf_desc{};
+			vbuf_desc.data.ptr=vertexes;
+			vbuf_desc.data.size=sizeof(vertexes);
+			skybox.bind.vertex_buffers[0]=sg_make_buffer(vbuf_desc);
 
-			vf3d fwd=randDir();
-			s.fwd=projectOntoPlane(fwd, dir).norm();
-			s.speed=randFloat(.5f, 1.5f);
+			std::uint32_t indexes[12][3]{
+				{7, 5, 3}, {3, 5, 1},
+				{2, 6, 3}, {3, 6, 7},
+				{6, 4, 7}, {7, 4, 5},
+				{2, 0, 6}, {6, 0, 4},
+				{4, 0, 5}, {5, 0, 1},
+				{3, 1, 2}, {2, 1, 0}
+			};
+			sg_buffer_desc ibuf_desc{};
+			ibuf_desc.usage.index_buffer=true;
+			ibuf_desc.data.ptr=indexes;
+			ibuf_desc.data.size=sizeof(indexes);
+			skybox.bind.index_buffer=sg_make_buffer(ibuf_desc);
 
-			s.rot_speed.x=.5f-randFloat();
-			s.rot_speed.y=.5f-randFloat();
-			s.rot_speed.z=.5f-randFloat();
+			auto getTexture=[&] (const std::string& s) {
+				sg_view tex;
+				if(!makeTextureFromFile(tex, s).valid) tex=tex_uv;
+				return tex;
+			};
+			skybox.bind.views[VIEW_skybox_px]=getTexture("assets/img/skybox/px.png");
+			skybox.bind.views[VIEW_skybox_nx]=getTexture("assets/img/skybox/nx.png");
+			skybox.bind.views[VIEW_skybox_py]=getTexture("assets/img/skybox/py.png");
+			skybox.bind.views[VIEW_skybox_ny]=getTexture("assets/img/skybox/ny.png");
+			skybox.bind.views[VIEW_skybox_pz]=getTexture("assets/img/skybox/pz.png");
+			skybox.bind.views[VIEW_skybox_nz]=getTexture("assets/img/skybox/nz.png");
+			skybox.bind.samplers[SMP_skybox_smp]=sampler;
 		}
 	}
 
 	void setupCubemap() {
-		//make color textures
-		for(int i=0; i<6; i++) {
-			auto& f=cubemap_faces[i];
-
-			sg_image_desc image_desc{};
-			image_desc.usage.color_attachment=true;
-			image_desc.width=1024;
-			image_desc.height=1024;
-			image_desc.pixel_format=SG_PIXELFORMAT_RGBA8;
-			sg_image img_color=sg_make_image(image_desc);
-
-			sg_view_desc view_desc{};
-			view_desc.color_attachment.image=img_color;
-			view_desc.texture.image=img_color;
-			f.tex_color=sg_make_view(view_desc);
-		}
-
-		//make depth textures
-		for(int i=0; i<6; i++) {
-			auto& f=cubemap_faces[i];
-
-			sg_image_desc image_desc{};
-			image_desc.usage.depth_stencil_attachment=true;
-			image_desc.width=1024;
-			image_desc.height=1024;
-			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
-			sg_image depth_img=sg_make_image(image_desc);
-
-			sg_view_desc view_desc{};
-			view_desc.depth_stencil_attachment.image=depth_img;
-			f.tex_depth=sg_make_view(view_desc);
-		}
-
-		//orient meshes
-		Mesh face;
-		face.verts={
-			{{-1, 0, -1}, {0, 1, 0}, {1, 1}},
-			{{1, 0, -1}, {0, 1, 0}, {0, 1}},
-			{{-1, 0, 1}, {0, 1, 0}, {1, 0}},
-			{{1, 0, 1}, {0, 1, 0}, {0, 0}}
-		};
-		face.tris={
-			{0, 2, 1},
-			{1, 2, 3}
-		};
-		face.updateVertexBuffer();
-		face.updateIndexBuffer();
 		const vf3d rot_trans[6][2]{
-			{Pi*vf3d(.5f, .5f, 0), {1, 0, 0}},
-			{Pi*vf3d(0, 0, 0), {0, 1, 0}},
-			{Pi*vf3d(.5f, 0, 0), {0, 0, 1}},
-			{Pi*vf3d(.5f, -.5f, 0), {-1, 0, 0}},
-			{Pi*vf3d(1, 0, 0), {0, -1, 0}},
-			{Pi*vf3d(.5f, 1, 0), {0, 0, -1}}
+			{Pi*vf3d(.5f, .5f, 0), {.5f, 0, 0}},
+			{Pi*vf3d(0, 0, 0), {0, .5f, 0}},
+			{Pi*vf3d(.5f, 0, 0), {0, 0, .5f}},
+			{Pi*vf3d(.5f, -.5f, 0), {-.5f, 0, 0}},
+			{Pi*vf3d(1, 0, 0), {0, -.5f, 0}},
+			{Pi*vf3d(.5f, 1, 0), {0, 0, -.5f}}
 		};
-		for(int i=0; i<6; i++) {
-			Mesh& m=cubemap_faces[i].mesh;
-			m=face;
-			m.rotation=rot_trans[i][0];
-			m.translation=rot_trans[i][1];
-			m.updateMatrixes();
-		}
 
-		//make view matrixes
 		const vf3d dir_up[6][2]{
 			{{1, 0, 0}, {0, 1, 0}},
 			{{0, 1, 0}, {0, 0, -1}},
@@ -232,36 +181,156 @@ public:
 			{{0, -1, 0}, {0, 0, 1}},
 			{{0, 0, -1}, {0, 1, 0}}
 		};
+
+		Mesh face_mesh;
+		face_mesh.verts={
+			{{-1, 0, -1}, {0, 1, 0}, {1, 1}},
+			{{1, 0, -1}, {0, 1, 0}, {0, 1}},
+			{{-1, 0, 1}, {0, 1, 0}, {1, 0}},
+			{{1, 0, 1}, {0, 1, 0}, {0, 0}}
+		};
+		face_mesh.tris={
+			{0, 2, 1},
+			{1, 2, 3}
+		};
+		face_mesh.updateVertexBuffer();
+		face_mesh.updateIndexBuffer();
+
 		for(int i=0; i<6; i++) {
-			const auto& dir=dir_up[i][0];
-			const auto& up=dir_up[i][1];
-			mat4 look_at=mat4::makeLookAt({0, 0, 0}, dir, up);
-			cubemap_faces[i].view=mat4::inverse(look_at);
+			auto& face=cubemap.faces[i];
+			auto& shape=face.shape;
+
+			//orient meshes
+			shape.mesh=face_mesh;
+			shape.scale=.5f*vf3d(1, 1, 1);
+			shape.rotation=rot_trans[i][0];
+			shape.translation=rot_trans[i][1];
+			shape.updateMatrixes();
+
+			//make color texture
+			{
+				sg_image_desc image_desc{};
+				image_desc.usage.color_attachment=true;
+				image_desc.width=1024;
+				image_desc.height=1024;
+				image_desc.pixel_format=SG_PIXELFORMAT_RGBA8;
+				sg_image img_color=sg_make_image(image_desc);
+
+				sg_view_desc view_desc{};
+				view_desc.color_attachment.image=img_color;
+				view_desc.texture.image=img_color;
+				shape.tex=sg_make_view(view_desc);
+			}
+
+			//make depth texture
+			{
+				sg_image_desc image_desc{};
+				image_desc.usage.depth_stencil_attachment=true;
+				image_desc.width=1024;
+				image_desc.height=1024;
+				image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
+				sg_image depth_img=sg_make_image(image_desc);
+
+				sg_view_desc view_desc{};
+				view_desc.depth_stencil_attachment.image=depth_img;
+				face.tex_depth=sg_make_view(view_desc);
+			}
+
+			//make view matrix
+			{
+				const auto& dir=dir_up[i][0];
+				const auto& up=dir_up[i][1];
+				mat4 look_at=mat4::makeLookAt({0, 0, 0}, dir, up);
+				cubemap.faces[i].view=mat4::inverse(look_at);
+			}
 		}
 
 		//make projection matrix
-		face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
+		cubemap.face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
+	}
+
+	void setupPlatform() {
+		Shape shp;
+		shp.mesh=Mesh::makeCube();
+
+		shp.scale={4, .5f, 4};
+		shp.translation={0, -1.1f, 0};
+		shp.updateMatrixes();
+
+		shp.tex=tex_uv;
+
+		shapes.push_back(shp);
+	}
+
+	void setupShapes() {
+		//load animal meshes
+		const std::vector<std::string> filenames{
+			"assets/models/monkey.txt",
+			"assets/models/bunny.txt",
+			"assets/models/cow.txt",
+			"assets/models/horse.txt",
+			"assets/models/dragon.txt"
+		};
+		std::vector<Shape> shape_circle;
+		for(const auto& f:filenames) {
+			Mesh m;
+			auto status=Mesh::loadFromOBJ(m, f);
+			if(!status.valid) m=Mesh::makeCube();
+			shape_circle.push_back(Shape(m, tex_blank, true));
+		}
+		//i dont like using emplace_back
+		shape_circle.push_back(Shape(Mesh::makeCube(), tex_uv, true));
+		shape_circle.push_back(Shape(Mesh::makeTorus(.7f, 24, .3f, 12), tex_checker, true));
+		shape_circle.push_back(Shape(Mesh::makeUVSphere(1, 24, 12), tex_checker, true));
+		shape_circle.push_back(Shape(Mesh::makeCylinder(1, 24, 2), tex_checker, true));
+		shape_circle.push_back(Shape(Mesh::makeCone(1, 24, 2), tex_checker, true));
+
+		//fisher-yates shuffle
+		for(int i=shape_circle.size()-1; i>=1; i--) {
+			int j=std::rand()%(i+1);
+			std::swap(shape_circle[i], shape_circle[j]);
+		}
+
+		//place shapes in circle pointing toward origin
+		const float radius=3;
+		for(int i=0; i<shape_circle.size(); i++) {
+			auto& shp=shape_circle[i];
+			float angle=2*Pi*i/shape_circle.size();
+			shp.translation=radius*polar3D(angle, 0);
+			shp.rotation={0, Pi+angle, 0};
+			float scl=randFloat(.3f, .5f);
+			shp.scale=scl*vf3d(1, 1, 1);
+			shp.updateMatrixes();
+		}
+
+		shapes.insert(shapes.end(),
+			shape_circle.begin(), shape_circle.end()
+		);
 	}
 #pragma endregion
 
 	void userCreate() override {
 		std::srand(std::time(0));
-		
+
 		setupEnvironment();
 
 		setupDisplayPass();
 
 		setupOffscreenPass();
 
-		setupPipeline();
+		setupDefaultPipeline();
 
 		setupSampler();
 
 		setupTextures();
 
-		setupShapes();
+		setupSkybox();
 
 		setupCubemap();
+
+		setupPlatform();
+
+		setupShapes();
 	}
 
 #pragma region UPDATE HELPERS
@@ -303,61 +372,85 @@ public:
 
 		handleCameraMovement(dt);
 	}
+
+	void updateCameraMatrixes() {
+		{
+			mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
+			cam_view=mat4::inverse(look_at);
+		}
+
+		//cam proj can change with window resize
+		{
+			float asp=sapp_widthf()/sapp_heightf();
+			cam_proj=mat4::makePerspective(60, asp, .001f, 1000.f);
+		}
+
+		cam_view_proj=mat4::mul(cam_proj, cam_view);
+	}
 #pragma endregion
 
 	void userUpdate(float dt) {
 		handleUserInput(dt);
 
-		for(auto& s:shapes) {
-			Mesh& m=s.mesh;
-
-			//move by vel
-			vf3d delta=s.speed*s.fwd*dt;
-			//reproject pos & fwd onto sphere
-			vf3d dir=(m.translation+delta).norm();
-			m.translation=s.radius*dir;
-			s.fwd=projectOntoPlane(s.fwd, dir).norm();
-
-			m.rotation+=s.rot_speed*dt;
-
-			m.updateMatrixes();
-		}
+		updateCameraMatrixes();
 	}
 
 #pragma region RENDER HELPERS
-	void renderIntoCubemap() {
-		for(int i=0; i<6; i++) {
-			auto& face=cubemap_faces[i];
+	void renderShape(const Shape& s, const mat4& view_proj) {
+		sg_bindings bind{};
+		bind.samplers[SMP_default_smp]=sampler;
+		bind.vertex_buffers[0]=s.mesh.vbuf;
+		bind.index_buffer=s.mesh.ibuf;
+		bind.views[VIEW_default_tex]=s.tex;
+		sg_apply_bindings(bind);
 
-			offscreen_pass.attachments.colors[0]=face.tex_color;
+		default_vs_params_t default_vs_params{};
+		mat4 mvp=mat4::mul(view_proj, s.model);
+		std::memcpy(default_vs_params.u_mvp, mvp.m, sizeof(default_vs_params.u_mvp));
+		sg_apply_uniforms(UB_default_vs_params, SG_RANGE(default_vs_params));
+
+		sg_draw(0, 3*s.mesh.tris.size(), 1);
+	}
+	
+	void renderToCubemap() {
+		const mat4& proj=cubemap.face_proj;
+
+		for(int i=0; i<6; i++) {
+			auto& face=cubemap.faces[i];
+
+			offscreen_pass.attachments.colors[0]=face.shape.tex;
 			offscreen_pass.attachments.depth_stencil=face.tex_depth;
 			sg_begin_pass(offscreen_pass);
 
-			sg_apply_pipeline(pipeline);
+			sg_apply_pipeline(default_pipeline);
 
 			const mat4& view=face.view;
-			const mat4& proj=face_proj;
 
 			mat4 view_proj=mat4::mul(proj, view);
 
-			sg_bindings bind{};
-			bind.samplers[SMP_u_smp]=sampler;
 			for(const auto& s:shapes) {
-				bind.vertex_buffers[0]=s.mesh.vbuf;
-				bind.index_buffer=s.mesh.ibuf;
-				bind.views[VIEW_u_tex]=s.tex;
-				sg_apply_bindings(bind);
-
-				vs_params_t vs_params{};
-				mat4 mvp=mat4::mul(view_proj, s.mesh.model);
-				std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-				sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-
-				sg_draw(0, 3*s.mesh.tris.size(), 1);
+				renderShape(s, view_proj);
 			}
 
 			sg_end_pass();
 		}
+	}
+
+	void renderSkybox() {
+		sg_apply_pipeline(skybox.pip);
+
+		sg_apply_bindings(skybox.bind);
+
+		mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam_dir, {0, 1, 0});
+		mat4 view=mat4::inverse(look_at);
+		float asp=sapp_widthf()/sapp_heightf();
+		mat4 view_proj=mat4::mul(cam_proj, view);
+
+		skybox_vs_params_t skybox_vs_params{};
+		std::memcpy(skybox_vs_params.u_view_proj, view_proj.m, sizeof(view_proj.m));
+		sg_apply_uniforms(UB_skybox_vs_params, SG_RANGE(skybox_vs_params));
+
+		sg_draw(0, 36, 1);
 	}
 
 	void renderToDisplay() {
@@ -366,52 +459,45 @@ public:
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
-		sg_apply_pipeline(pipeline);
+		//render skybox
+		{
+			sg_apply_pipeline(skybox.pip);
 
-		mat4 look_at=mat4::makeLookAt(cam_pos, cam_pos+cam_dir, {0, 1, 0});
-		mat4 view=mat4::inverse(look_at);
-		float asp=sapp_widthf()/sapp_heightf();
-		mat4 proj=mat4::makePerspective(60, asp, .01f, 10.f);
-		mat4 view_proj=mat4::mul(proj, view);
+			sg_apply_bindings(skybox.bind);
 
-		sg_bindings bind{};
-		bind.samplers[SMP_u_smp]=sampler;
-		for(const auto& s:shapes) {
-			bind.vertex_buffers[0]=s.mesh.vbuf;
-			bind.index_buffer=s.mesh.ibuf;
-			bind.views[VIEW_u_tex]=s.tex;
-			sg_apply_bindings(bind);
+			mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam_dir, {0, 1, 0});
+			mat4 view=mat4::inverse(look_at);
+			float asp=sapp_widthf()/sapp_heightf();
+			mat4 view_proj=mat4::mul(cam_proj, view);
 
-			mat4 mvp=mat4::mul(view_proj, s.mesh.model);
-			vs_params_t vs_params{};
-			std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+			skybox_vs_params_t skybox_vs_params{};
+			std::memcpy(skybox_vs_params.u_view_proj, view_proj.m, sizeof(view_proj.m));
+			sg_apply_uniforms(UB_skybox_vs_params, SG_RANGE(skybox_vs_params));
 
-			sg_draw(0, 3*s.mesh.tris.size(), 1);
+			sg_draw(0, 36, 1);
 		}
 
-		for(int i=0; i<6; i++) {
-			const auto& face=cubemap_faces[i];
+		//render shapes
+		{
+			sg_apply_pipeline(default_pipeline);
 
-			bind.vertex_buffers[0]=face.mesh.vbuf;
-			bind.index_buffer=face.mesh.ibuf;
-			bind.views[VIEW_u_tex]=face.tex_color;
-			sg_apply_bindings(bind);
+			for(const auto& s:shapes) {
+				renderShape(s, cam_view_proj);
+			}
 
-			mat4 mvp=mat4::mul(view_proj, face.mesh.model);
-			vs_params_t vs_params{};
-			std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-
-			sg_draw(0, 3*face.mesh.tris.size(), 1);
+			//render cubemap
+			for(int i=0; i<6; i++) {
+				renderShape(cubemap.faces[i].shape, cam_view_proj);
+			}
 		}
 
 		sg_end_pass();
 	}
-#pragma endregion
 
+#pragma endregion
+	
 	void userRender() {
-		renderIntoCubemap();
+		renderToCubemap();
 
 		renderToDisplay();
 

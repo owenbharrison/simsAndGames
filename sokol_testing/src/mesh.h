@@ -3,7 +3,6 @@
 #define MESH_STRUCT_H
 
 #include "math/v3d.h"
-#include "math/mat4.h"
 
 #include <fstream>
 #include <vector>
@@ -14,230 +13,31 @@
 
 #include "return_code.h"
 
-struct v2d_t { float u=0, v=0; };
-
-struct Vertex {
-	vf3d pos, norm;
-	v2d_t tex;
-};
-
-struct IndexTriangle {
-	int a, b, c;
-};
-
-//come on you guys!
-//there it is right there in front of you the whole time.
-//you're dereferencing a null pointer!
-//open your eyes.
-static float rayIntersectTri(
-	const vf3d& orig, const vf3d& dir,
-	const vf3d& t0, const vf3d& t1, const vf3d& t2,
-	float* uptr=nullptr, float* vptr=nullptr
-) {
-	/*ray equation
-	p=o+td
-	triangle equation
-	t0+u(t1-t0)+v(t2-t0)
-	set equal
-	o+td=t0+u(t1-t0)+v(t2-t0)
-	rearrange
-	td+u(t0-t1)+v(t0-t2)=t0-o
-	solve like matrix!
-	*/
-
-	static const float epsilon=1e-6f;
-
-	//column vectors
-	vf3d a=dir;
-	vf3d b=t0-t1;
-	vf3d c=t0-t2;
-	vf3d d=t0-orig;
-	vf3d bxc=b.cross(c);
-	float det=a.dot(bxc);
-	//parallel
-	if(std::abs(det)<epsilon) return -1;
-
-	vf3d f=c.cross(a)/det;
-	float u=f.dot(d);
-	if(uptr) *uptr=u;
-
-	vf3d g=a.cross(b)/det;
-	float v=g.dot(d);
-	if(vptr) *vptr=v;
-
-	//within unit uv triangle
-	if(u<0||u>1) return -1;
-	if(v<0||v>1) return -1;
-	if(u+v>1) return -1;
-
-	//get t
-	vf3d e=bxc/det;
-	float t=e.dot(d);
-
-	//behind ray
-	if(t<0) return -1;
-
-	return t;
-}
-
-//https://stackoverflow.com/a/74395029
-static vf3d getClosePt(const vf3d& pt, const vf3d& t0, const vf3d& t1, const vf3d& t2) {
-	vf3d ab=t1-t0;
-	vf3d ac=t2-t0;
-
-	vf3d ap=pt-t0;
-	float d1=ab.dot(ap);
-	float d2=ac.dot(ap);
-	if(d1<=0&&d2<=0) return t0;
-
-	vf3d bp=pt-t1;
-	float d3=ab.dot(bp);
-	float d4=ac.dot(bp);
-	if(d3>=0&&d4<=d3) return t1;
-
-	vf3d cp=pt-t2;
-	float d5=ab.dot(cp);
-	float d6=ac.dot(cp);
-	if(d6>=0&&d5<=d6) return t2;
-
-	float vc=d1*d4-d3*d2;
-	if(vc<=0&&d1>=0&&d3<=0) {
-		float v=d1/(d1-d3);
-		return t0+v*ab;
-	}
-
-	float vb=d5*d2-d1*d6;
-	if(vb<=0&&d2>=0&&d6<=0) {
-		float v=d2/(d2-d6);
-		return t0+v*ac;
-	}
-
-	float va=d3*d6-d5*d4;
-	if(va<=0&&(d4-d3)>=0&&(d5-d6)>=0) {
-		float v=(d4-d3)/((d4-d3)+(d5-d6));
-		return t1+v*(t2-t1);
-	}
-
-	float denom=1/(va+vb+vc);
-	float v=vb*denom;
-	float w=vc*denom;
-	return t0+v*ab+w*ac;
-}
+#include "utils.h"
 
 struct Mesh {
+	struct v2d_t { float u=0, v=0; };
+	struct Vertex {
+		vf3d pos, norm;
+		v2d_t tex;
+	};
 	std::vector<Vertex> verts;
+	struct IndexTriangle {
+		int a, b, c;
+	};
 	std::vector<IndexTriangle> tris;
 	sg_buffer vbuf{SG_INVALID_ID};
 	sg_buffer ibuf{SG_INVALID_ID};
-
-	vf3d rotation, scale, translation;
-	mat4 model, inv_model;
-
-	Mesh() {
-		resetTransforms();
-		updateMatrixes();
-	}
-
-	float intersectRay(const vf3d& orig_world, const vf3d& dir_world) const {
-		//localize ray
-		float w=1;//want translation
-		vf3d orig_local=matMulVec(inv_model, orig_world, w);
-		w=0;//no translation
-		vf3d dir_local=matMulVec(inv_model, dir_world, w);
-		//renormalization is not necessary here, because
-		//  rayIntersect is basically segment intersection,
-		//  but it feels wrong not to pass a unit vector.
-		dir_local=dir_local.norm();
-
-		//find closest tri
-		float record=-1;
-		for(const auto& t:tris) {
-			//valid intersection?
-			float dist=rayIntersectTri(
-				orig_local, dir_local,
-				verts[t.a].pos,
-				verts[t.b].pos,
-				verts[t.c].pos
-			);
-			if(dist<0) continue;
-
-			//"sort" while iterating
-			if(record<0||dist<record) record=dist;
-		}
-
-		//i hate fp== comparisons.
-		if(record<0) return -1;
-
-		//get point from local -> world & get dist to orig
-		//i need to do this because of the non-uniform scale
-		vf3d p_local=orig_local+record*dir_local;
-		w=1;//want translation
-		vf3d p_world=matMulVec(model, p_local, w);
-		return (p_world-orig_world).mag();
-	}
-
-	vf3d getClosePt(vf3d pt) const {
-		//bring into local space
-		float w=1;
-		pt=matMulVec(inv_model, pt, w);
-
-		//for every tri...
-		float record=-1;
-		vf3d closest_pt;
-		for(const auto& t:tris) {
-			vf3d close_pt=::getClosePt(
-				pt,
-				verts[t.a].pos,
-				verts[t.b].pos,
-				verts[t.c].pos
-			);
-
-			//sort based on square dist
-			//this works bc sqrt is monotonic!
-			float dist=(close_pt-pt).mag_sq();
-			if(record<0||dist<record) {
-				record=dist;
-				closest_pt=close_pt;
-			}
-		}
-
-		//bring back to world space
-		w=1;
-		return matMulVec(model, closest_pt, w);
-	}
 
 	void updateVertexBuffer() {
 		//free old
 		if(vbuf.id!=SG_INVALID_ID) sg_destroy_buffer(vbuf);
 
-		struct BufferVertex {
-			float x, y, z;
-			float nx, ny, nz;
-			std::int16_t u, v;
-		};
-
-		//alloc temp
-		const int num_verts=verts.size();
-		BufferVertex* vbuf_data=new BufferVertex[num_verts];
-
-		//transfer to temp
-		for(int i=0; i<num_verts; i++) {
-			const auto& v=verts[i];
-			vbuf_data[i]={
-				v.pos.x, v.pos.y, v.pos.z,
-				v.norm.x, v.norm.y, v.norm.z,
-				std::int16_t(32767*v.tex.u), std::int16_t(32767*v.tex.v)
-			};
-		}
-
-		//send temp to "gpu"
+		//send data to "gpu"
 		sg_buffer_desc vbuf_desc{};
-		vbuf_desc.data.ptr=vbuf_data;
-		vbuf_desc.data.size=sizeof(BufferVertex)*num_verts;
+		vbuf_desc.data.ptr=verts.data();
+		vbuf_desc.data.size=sizeof(Vertex)*verts.size();
 		vbuf=sg_make_buffer(vbuf_desc);
-
-		//free temp
-		delete[] vbuf_data;
 	}
 
 	void updateIndexBuffer() {
@@ -266,43 +66,6 @@ struct Mesh {
 
 		//free temp
 		delete[] ibuf_data;
-	}
-
-	void resetTransforms() {
-		rotation={0, 0, 0};
-		scale={1, 1, 1};
-		translation={0, 0, 0};
-	}
-
-	void updateMatrixes() {
-		//xyz euler angles?
-		mat4 rot_x=mat4::makeRotX(rotation.x);
-		mat4 rot_y=mat4::makeRotY(rotation.y);
-		mat4 rot_z=mat4::makeRotZ(rotation.z);
-		mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
-
-		mat4 scl=mat4::makeScale(scale);
-
-		mat4 trans=mat4::makeTranslation(translation);
-
-		//combine & invert
-		model=mat4::mul(trans, mat4::mul(rot, scl));
-		inv_model=mat4::inverse(model);
-	}
-
-	//bring verts into "world" space
-	void applyTransforms() {
-		for(auto& v:verts) {
-			//translate position
-			float w=1;
-			v.pos=matMulVec(model, v.pos, w);
-
-			//DONT translate norm
-			w=0;
-			v.norm=matMulVec(model, v.norm, w);
-		}
-		
-		resetTransforms();
 	}
 
 	static Mesh makeCube() {
@@ -352,7 +115,6 @@ struct Mesh {
 
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
-		m.updateMatrixes();
 
 		return m;
 	}
@@ -404,7 +166,6 @@ struct Mesh {
 
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
-		m.updateMatrixes();
 
 		return m;
 	}
@@ -452,7 +213,6 @@ struct Mesh {
 
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
-		m.updateMatrixes();
 
 		return m;
 	}
@@ -513,7 +273,6 @@ struct Mesh {
 
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
-		m.updateMatrixes();
 
 		return m;
 	}
@@ -568,7 +327,6 @@ struct Mesh {
 
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
-		m.updateMatrixes();
 
 		return m;
 	}
@@ -690,7 +448,6 @@ struct Mesh {
 
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
-		m.updateMatrixes();
 
 		return {true, "success"};
 	}

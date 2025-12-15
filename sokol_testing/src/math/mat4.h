@@ -15,7 +15,7 @@
 
 #include "v3d.h"
 
-constexpr float Pi=3.1415927f;
+#include "utils.h"
 
 struct mat4 {
 	float m[16];
