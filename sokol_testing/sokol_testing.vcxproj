@@ -180,12 +180,6 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\img\checker.png" />
-    <Image Include="assets\img\skybox\debug\px.png" />
-    <Image Include="assets\img\skybox\debug\py.png" />
-    <Image Include="assets\img\skybox\debug\pz.png" />
-    <Image Include="assets\img\skybox\debug\nx.png" />
-    <Image Include="assets\img\skybox\debug\ny.png" />
-    <Image Include="assets\img\skybox\debug\nz.png" />
     <Image Include="assets\img\skybox\nx.png" />
     <Image Include="assets\img\skybox\ny.png" />
     <Image Include="assets\img\skybox\nz.png" />

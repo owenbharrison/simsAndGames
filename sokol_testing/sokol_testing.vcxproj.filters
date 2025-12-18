@@ -82,24 +82,6 @@
     <Image Include="assets\img\checker.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\img\skybox\debug\nz.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\skybox\debug\px.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\skybox\debug\py.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\skybox\debug\pz.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\skybox\debug\nx.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\skybox\debug\ny.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\img\skybox\pz.png">
       <Filter>Resource Files</Filter>
     </Image>

@@ -25,7 +25,7 @@ static vf3d polar3D(float yaw, float pitch) {
 class Demo : public SokolEngine {
 	sg_pass offscreen_pass{};
 	sg_pass_action display_pass_action{};
-	sg_pipeline default_pipeline{};
+	sg_pipeline default_pip{};
 
 	sg_sampler sampler{};
 
@@ -44,7 +44,8 @@ class Demo : public SokolEngine {
 
 	struct {
 		sg_pipeline pip{};
-		sg_bindings bind{};
+
+		Shape faces[6];
 	} skybox;
 
 	std::list<Shape> shapes;
@@ -90,7 +91,7 @@ public:
 		pip_desc.cull_mode=SG_CULLMODE_FRONT;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		pip_desc.depth.write_enabled=true;
-		default_pipeline=sg_make_pipeline(pip_desc);
+		default_pip=sg_make_pipeline(pip_desc);
 	}
 
 	void setupSampler() {
@@ -112,54 +113,57 @@ public:
 		{
 			sg_pipeline_desc pip_desc{};
 			pip_desc.layout.attrs[ATTR_skybox_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_skybox_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_skybox_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
 			pip_desc.shader=sg_make_shader(skybox_shader_desc(sg_query_backend()));
 			pip_desc.index_type=SG_INDEXTYPE_UINT32;
 			skybox.pip=sg_make_pipeline(pip_desc);
 		}
+		
+		const vf3d rot_trans[6][2]{
+			{Pi*vf3d(.5f, -.5f, 0), {.5f, 0, 0}},
+			{Pi*vf3d(.5f, .5f, 0), {-.5f, 0, 0}},
+			{Pi*vf3d(0, 0, 1), {0, .5f, 0}},
+			{Pi*vf3d(1, 0, 1), {0, -.5f, 0}},
+			{Pi*vf3d(.5f, 1, 0), {0, 0, .5f}},
+			{Pi*vf3d(.5f, 0, 0), {0, 0, -.5f}}
+		};
 
-		//bindings
-		{
-			float vertexes[8][3]{
-				{-1, -1, -1},
-				{1, -1, -1},
-				{-1, 1, -1},
-				{1, 1, -1},
-				{-1, -1, 1},
-				{1, -1, 1},
-				{-1, 1, 1},
-				{1, 1, 1}
-			};
-			sg_buffer_desc vbuf_desc{};
-			vbuf_desc.data.ptr=vertexes;
-			vbuf_desc.data.size=sizeof(vertexes);
-			skybox.bind.vertex_buffers[0]=sg_make_buffer(vbuf_desc);
+		Mesh face_mesh;
+		face_mesh.verts={
+			{{-1, 0, -1}, {0, 1, 0}, {0, 0}},
+			{{1, 0, -1}, {0, 1, 0}, {1, 0}},
+			{{-1, 0, 1}, {0, 1, 0}, {0, 1}},
+			{{1, 0, 1}, {0, 1, 0}, {1, 1}}
+		};
+		face_mesh.tris={
+			{0, 2, 1},
+			{1, 2, 3}
+		};
+		face_mesh.updateVertexBuffer();
+		face_mesh.updateIndexBuffer();
 
-			std::uint32_t indexes[12][3]{
-				{7, 5, 3}, {3, 5, 1},
-				{2, 6, 3}, {3, 6, 7},
-				{6, 4, 7}, {7, 4, 5},
-				{2, 0, 6}, {6, 0, 4},
-				{4, 0, 5}, {5, 0, 1},
-				{3, 1, 2}, {2, 1, 0}
-			};
-			sg_buffer_desc ibuf_desc{};
-			ibuf_desc.usage.index_buffer=true;
-			ibuf_desc.data.ptr=indexes;
-			ibuf_desc.data.size=sizeof(indexes);
-			skybox.bind.index_buffer=sg_make_buffer(ibuf_desc);
+		const std::string filenames[6]{
+			"assets/img/skybox/px.png",
+			"assets/img/skybox/nx.png",
+			"assets/img/skybox/py.png",
+			"assets/img/skybox/ny.png",
+			"assets/img/skybox/pz.png",
+			"assets/img/skybox/nz.png"
+		};
 
-			auto getTexture=[&] (const std::string& s) {
-				sg_view tex;
-				if(!makeTextureFromFile(tex, s).valid) tex=tex_uv;
-				return tex;
-			};
-			skybox.bind.views[VIEW_skybox_px]=getTexture("assets/img/skybox/px.png");
-			skybox.bind.views[VIEW_skybox_nx]=getTexture("assets/img/skybox/nx.png");
-			skybox.bind.views[VIEW_skybox_py]=getTexture("assets/img/skybox/py.png");
-			skybox.bind.views[VIEW_skybox_ny]=getTexture("assets/img/skybox/ny.png");
-			skybox.bind.views[VIEW_skybox_pz]=getTexture("assets/img/skybox/pz.png");
-			skybox.bind.views[VIEW_skybox_nz]=getTexture("assets/img/skybox/nz.png");
-			skybox.bind.samplers[SMP_skybox_smp]=sampler;
+		for(int i=0; i<6; i++) {
+			auto& shape=skybox.faces[i];
+
+			//orient meshes
+			shape.mesh=face_mesh;
+			shape.scale=.5f*vf3d(1, 1, 1);
+			shape.rotation=rot_trans[i][0];
+			shape.translation=rot_trans[i][1];
+			shape.updateMatrixes();
+
+			sg_view& tex=shape.tex;
+			if(!makeTextureFromFile(tex, filenames[i]).valid) tex=tex_uv;
 		}
 	}
 
@@ -404,10 +408,10 @@ public:
 		bind.views[VIEW_default_tex]=s.tex;
 		sg_apply_bindings(bind);
 
-		default_vs_params_t default_vs_params{};
+		vs_params_t vs_params{};
 		mat4 mvp=mat4::mul(view_proj, s.model);
-		std::memcpy(default_vs_params.u_mvp, mvp.m, sizeof(default_vs_params.u_mvp));
-		sg_apply_uniforms(UB_default_vs_params, SG_RANGE(default_vs_params));
+		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
+		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
 
 		sg_draw(0, 3*s.mesh.tris.size(), 1);
 	}
@@ -422,7 +426,7 @@ public:
 			offscreen_pass.attachments.depth_stencil=face.tex_depth;
 			sg_begin_pass(offscreen_pass);
 
-			sg_apply_pipeline(default_pipeline);
+			sg_apply_pipeline(default_pip);
 
 			const mat4& view=face.view;
 
@@ -436,23 +440,6 @@ public:
 		}
 	}
 
-	void renderSkybox() {
-		sg_apply_pipeline(skybox.pip);
-
-		sg_apply_bindings(skybox.bind);
-
-		mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam_dir, {0, 1, 0});
-		mat4 view=mat4::inverse(look_at);
-		float asp=sapp_widthf()/sapp_heightf();
-		mat4 view_proj=mat4::mul(cam_proj, view);
-
-		skybox_vs_params_t skybox_vs_params{};
-		std::memcpy(skybox_vs_params.u_view_proj, view_proj.m, sizeof(view_proj.m));
-		sg_apply_uniforms(UB_skybox_vs_params, SG_RANGE(skybox_vs_params));
-
-		sg_draw(0, 36, 1);
-	}
-
 	void renderToDisplay() {
 		sg_pass pass{};
 		pass.action=display_pass_action;
@@ -462,24 +449,20 @@ public:
 		//render skybox
 		{
 			sg_apply_pipeline(skybox.pip);
-
-			sg_apply_bindings(skybox.bind);
-
+			
+			//imagine camera at origin!
 			mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam_dir, {0, 1, 0});
 			mat4 view=mat4::inverse(look_at);
-			float asp=sapp_widthf()/sapp_heightf();
 			mat4 view_proj=mat4::mul(cam_proj, view);
 
-			skybox_vs_params_t skybox_vs_params{};
-			std::memcpy(skybox_vs_params.u_view_proj, view_proj.m, sizeof(view_proj.m));
-			sg_apply_uniforms(UB_skybox_vs_params, SG_RANGE(skybox_vs_params));
-
-			sg_draw(0, 36, 1);
+			for(int i=0; i<6; i++) {
+				renderShape(skybox.faces[i], view_proj);
+			}
 		}
 
 		//render shapes
 		{
-			sg_apply_pipeline(default_pipeline);
+			sg_apply_pipeline(default_pip);
 
 			for(const auto& s:shapes) {
 				renderShape(s, cam_view_proj);
