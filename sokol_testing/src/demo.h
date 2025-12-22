@@ -86,6 +86,8 @@ class Demo : public SokolEngine {
 	bool render_outlines=false;
 	std::list<Shape> shapes;
 
+	bool render_cubemap=false;
+
 public:
 #pragma region SETUP HELPERS
 	void setupEnvironment() {
@@ -284,19 +286,16 @@ public:
 		line_pip=sg_make_pipeline(pip_desc);
 	}
 
-	//2d tristrip
-	void setupTexviewPipeline() {
+	void setupTexview() {
+		//2d tristrip pipeline
 		sg_pipeline_desc pip_desc{};
 		pip_desc.layout.attrs[ATTR_texview_v_pos].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.layout.attrs[ATTR_texview_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(texview_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 		texview.pip=sg_make_pipeline(pip_desc);
-	}
 
-	//just a quad
-	void setupTexviewBindings() {
-		//vertex buffer: xyuv
+		//quad vertex buffer: xyuv
 		float vertexes[4][2][2]{
 			{{-1, -1}, {0, 0}},//tl
 			{{1, -1}, {1, 0}},//tr
@@ -391,9 +390,7 @@ public:
 
 		setupDefaultPipeline();
 
-		setupTexviewPipeline();
-		setupTexviewBindings();
-
+		setupTexview();
 
 		setupPlatform();
 		setupShapes();
@@ -438,8 +435,11 @@ public:
 
 		handleCameraMovement(dt);
 
-		//toggle outlines
+		//toggle shape outlines
 		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
+
+		//toggle cubemap overlay
+		if(getKey(SAPP_KEYCODE_C).pressed) render_cubemap^=true;
 
 		//set shadow map position with L
 		if(getKey(SAPP_KEYCODE_L).held) shadow_map.pos=cam.pos;
@@ -608,9 +608,9 @@ public:
 		renderSkybox();
 
 		if(render_outlines) renderShapeOutlines();
-		renderShapes();
+		else renderShapes();
 
-		renderCubemap();
+		if(render_cubemap) renderCubemap();
 
 		sg_end_pass();
 
