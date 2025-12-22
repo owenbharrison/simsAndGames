@@ -48,9 +48,10 @@ struct mat4 {
 		return r;
 	}
 	
-	//basically a lot of corresponding dot products...
+	//transform order is right to left: A then B = mul(B, A)
 	static mat4 mul(const mat4& lhs, const mat4& rhs) {
 		mat4 res;
+		//basically a lot of corresponding dot products...
 		for(int r=0; r<4; r++) {
 			for(int c=0; c<4; c++) {
 				res(r, c)=

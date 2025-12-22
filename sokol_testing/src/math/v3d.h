@@ -64,7 +64,7 @@ struct v3d_generic {
 template<typename T> v3d_generic<T> operator+(const T& s, const v3d_generic<T>& v) { return v+s; }
 template<typename T> v3d_generic<T> operator-(const T& s, const v3d_generic<T>& v) { return -v+s; }
 template<typename T> v3d_generic<T> operator*(const T& s, const v3d_generic<T>& v) { return v*s; }
-template<typename T> v3d_generic<T> operator/(const T& s, const v3d_generic<T>& v) { return {s/v.x, s/v.y, s.v.z}; }
+template<typename T> v3d_generic<T> operator/(const T& s, const v3d_generic<T>& v) { return {s/v.x, s/v.y, s/v.z}; }
 
 typedef v3d_generic<float> vf3d;
 #endif//V3D_STRUCT

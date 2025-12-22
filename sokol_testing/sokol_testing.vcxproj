@@ -148,6 +148,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\demo.h" />
+    <ClInclude Include="src\linemesh.h" />
     <ClInclude Include="src\math\mat4.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\return_code.h" />
@@ -160,7 +161,7 @@
     <ClInclude Include="src\math\v3d.h" />
     <ClInclude Include="src\sokol_engine.h" />
     <ClInclude Include="src\stb_image.h" />
-    <ClInclude Include="src\texture.h" />
+    <ClInclude Include="src\texture_utils.h" />
     <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>

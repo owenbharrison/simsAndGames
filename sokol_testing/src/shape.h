@@ -4,26 +4,28 @@
 
 #include "mesh.h"
 
-#include "math/mat4.h"
+#include "linemesh.h"
 
-#include "texture.h"
+#include "math/mat4.h"
 
 struct Shape {
 	Mesh mesh;
 
-	vf3d translation, rotation, scale{1, 1, 1};
-	mat4 model=mat4::makeIdentity();
+	LineMesh linemesh;
 
 	sg_view tex{};
 
-	bool draggable=false;
+	vf3d translation, rotation, scale{1, 1, 1};
+	mat4 model=mat4::makeIdentity();
 
 	Shape() {}
 
-	Shape(const Mesh& m, sg_view t, bool d) {
+	Shape(const Mesh& m, sg_view t) {
 		mesh=m;
+		linemesh=LineMesh::makeFromMesh(m);
+		linemesh.randomizeColors();
+		linemesh.updateVertexBuffer();
 		tex=t;
-		draggable=d;
 	}
 
 	void updateMatrixes() {

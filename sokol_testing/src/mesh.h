@@ -17,15 +17,18 @@
 
 struct Mesh {
 	struct v2d_t { float u=0, v=0; };
+
 	struct Vertex {
 		vf3d pos, norm;
 		v2d_t tex;
 	};
 	std::vector<Vertex> verts;
+
 	struct IndexTriangle {
 		int a, b, c;
 	};
 	std::vector<IndexTriangle> tris;
+
 	sg_buffer vbuf{SG_INVALID_ID};
 	sg_buffer ibuf{SG_INVALID_ID};
 
@@ -35,6 +38,8 @@ struct Mesh {
 
 		//send data to "gpu"
 		sg_buffer_desc vbuf_desc{};
+		vbuf_desc.usage.index_buffer=false;
+		vbuf_desc.usage.vertex_buffer=true;
 		vbuf_desc.data.ptr=verts.data();
 		vbuf_desc.data.size=sizeof(Vertex)*verts.size();
 		vbuf=sg_make_buffer(vbuf_desc);
@@ -59,6 +64,7 @@ struct Mesh {
 
 		//send temp to "gpu"
 		sg_buffer_desc ibuf_desc{};
+		ibuf_desc.usage.vertex_buffer=false;
 		ibuf_desc.usage.index_buffer=true;
 		ibuf_desc.data.ptr=ibuf_data;
 		ibuf_desc.data.size=sizeof(std::uint32_t)*num_indexes;
