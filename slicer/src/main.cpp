@@ -15,15 +15,15 @@ instructions
 
 #define OLC_GFX_OPENGL33
 #define OLC_PGE_APPLICATION
-#include "common/3d/engine_3d.h"
+#include "olc/engine_3d.h"
 namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
 	static const Pixel ORANGE(255, 115, 0);
 }
 using cmn::vf3d;
-using cmn::Mat4;
+using cmn::mat4;
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 #include "conversions.h"
 
@@ -110,7 +110,7 @@ public:
 
 			//scale & place model in center
 			model.scale={scl, scl, scl};
-			model.offset=build_volume.getCenter()-model_box.getCenter();
+			model.translation=build_volume.getCenter()-model_box.getCenter();
 
 			model.updateMatrixes();
 			model.updateTriangles();
@@ -374,7 +374,7 @@ public:
 			if(p.y>max_layer) continue;
 
 			//scale to correct position
-			vf3d pos=voxels.offset+voxels.scale*vf3d(p.x, p.y, p.z);
+			vf3d pos=voxels.translation+voxels.scale*vf3d(p.x, p.y, p.z);
 			vf3d size=voxels.scale*vf3d(p.w, 1, p.d);
 
 			//shrink if showing edges
@@ -510,17 +510,17 @@ public:
 
 		for(const auto& t:tris_to_draw) {
 			FillDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.p[0].x, t.p[0].y, t.t[0].z,
+				t.p[1].x, t.p[1].y, t.t[1].z,
+				t.p[2].x, t.p[2].y, t.t[2].z,
 				t.col, t.id
 			);
 		}
 
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
-				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.p[0].x, l.p[0].y, l.t[0].z,
+				l.p[1].x, l.p[1].y, l.t[1].z,
 				l.col, l.id
 			);
 		}

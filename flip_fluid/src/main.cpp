@@ -1,12 +1,12 @@
 //my implementation of
 //https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/18-flip.html
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #include "flip_fluid.h"
 
-#include "common/stopwatch.h"
+#include "cmn/stopwatch.h"
 
 struct FluidUI : olc::PixelGameEngine {
 	FluidUI() {

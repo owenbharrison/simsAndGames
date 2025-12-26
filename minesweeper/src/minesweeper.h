@@ -238,11 +238,11 @@ public:
 		auto ijk2pos=[this] (int i, int j, int k) {
 			return vf3d(i-.5f*width, j-.5f*height, k-.5f*depth);
 		};
-		const cmn::v2d vt[4]{
-			{0, 0},
-			{1, 0},
-			{0, 1},
-			{1, 1}
+		const vf3d vt[4]{
+			{0, 0, 0},
+			{1, 0, 0},
+			{0, 1, 0},
+			{1, 1, 0}
 		};
 		auto tessellate=[&] (
 			int i, int j, int k, bool tf, vf3d* v, int a, int b, int c, int d

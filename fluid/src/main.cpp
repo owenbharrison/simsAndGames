@@ -1,8 +1,8 @@
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 #include "fluid.h"
 

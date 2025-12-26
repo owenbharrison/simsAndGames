@@ -2,6 +2,17 @@
 #ifndef MESH_CLASS_H
 #define MESH_CLASS_H
 
+#include "cmn/math/mat4.h"
+
+#include <vector>
+#include <string>
+#include <fstream>
+#include <sstream>
+
+#include <unordered_map>
+//for hash
+#include <functional>
+
 struct IndexTriangle {
 	int x=0, y=0, z=0;
 	olc::Pixel col=olc::WHITE;
@@ -19,17 +30,8 @@ struct IndexTriangle {
 	}
 };
 
-#include <vector>
-#include <string>
-#include <fstream>
-#include <sstream>
-
-#include <unordered_map>
-//for hash
-#include <functional>
-
 struct Mesh {
-	std::vector<vf3d> verts;
+	std::vector<cmn::vf3d> verts;
 	std::vector<IndexTriangle> index_tris;
 	std::vector<cmn::Triangle> tris;
 	int id=-1;
@@ -56,7 +58,7 @@ struct Mesh {
 		return box;
 	}
 
-	bool splitByPlane(const vf3d& ctr, const vf3d& norm, Mesh& pos, Mesh& neg) const {
+	bool splitByPlane(const cmn::vf3d& ctr, const cmn::vf3d& norm, Mesh& pos, Mesh& neg) const {
 		//classify and populate verts and initialize lookup
 		std::vector<bool> sides;
 		sides.reserve(verts.size());
@@ -101,9 +103,9 @@ struct Mesh {
 		std::unordered_map<edge_t, std::pair<int, int>, edge_hash_t> edge_pn;
 		int pos_pts[3], neg_pts[3];
 		for(const auto& it:index_tris) {
-			vf3d it_ba=verts[it[1]]-verts[it[0]];
-			vf3d it_ca=verts[it[2]]-verts[it[0]];
-			vf3d orig_surf=it_ba.cross(it_ca);
+			cmn::vf3d it_ba=verts[it[1]]-verts[it[0]];
+			cmn::vf3d it_ca=verts[it[2]]-verts[it[0]];
+			cmn::vf3d orig_surf=it_ba.cross(it_ca);
 			//wind pts
 			int pos_ct=0, neg_ct=0;
 			for(int i=0; i<3; i++) {
@@ -126,7 +128,7 @@ struct Mesh {
 					//reuse
 					if(pn1it!=edge_pn.end()) pn1=pn1it->second;
 					else {//make
-						vf3d pt=cmn::segIntersectPlane(
+						cmn::vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[0]], verts[neg_pts[0]],
 							ctr, norm
 						);
@@ -140,7 +142,7 @@ struct Mesh {
 					//reuse
 					if(pn2it!=edge_pn.end()) pn2=pn2it->second;
 					else {//make
-						vf3d pt=cmn::segIntersectPlane(
+						cmn::vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[0]], verts[neg_pts[1]],
 							ctr, norm
 						);
@@ -152,9 +154,9 @@ struct Mesh {
 					IndexTriangle newn1{pn1.second, me_neg[neg_pts[0]], me_neg[neg_pts[1]], olc::CYAN};
 					IndexTriangle newn2{pn1.second, me_neg[neg_pts[1]], pn2.second, olc::GREEN};
 
-					vf3d cl_ba=verts[neg_pts[0]]-verts[pos_pts[0]];
-					vf3d cl_ca=verts[neg_pts[1]]-verts[pos_pts[0]];
-					vf3d cl_surf=cl_ba.cross(cl_ca);
+					cmn::vf3d cl_ba=verts[neg_pts[0]]-verts[pos_pts[0]];
+					cmn::vf3d cl_ca=verts[neg_pts[1]]-verts[pos_pts[0]];
+					cmn::vf3d cl_surf=cl_ba.cross(cl_ca);
 					if(orig_surf.dot(cl_surf)<0) {
 						std::swap(newp1.x, newp1.y);
 						std::swap(newn1.x, newn1.y);
@@ -174,7 +176,7 @@ struct Mesh {
 					//reuse
 					if(pn1it!=edge_pn.end()) pn1=pn1it->second;
 					else {//make
-						vf3d pt=cmn::segIntersectPlane(
+						cmn::vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[0]], verts[neg_pts[0]],
 							ctr, norm
 						);
@@ -188,7 +190,7 @@ struct Mesh {
 					//reuse
 					if(pn2it!=edge_pn.end()) pn2=pn2it->second;
 					else {//make
-						vf3d pt=cmn::segIntersectPlane(
+						cmn::vf3d pt=cmn::segIntersectPlane(
 							verts[pos_pts[1]], verts[neg_pts[0]],
 							ctr, norm
 						);
@@ -200,9 +202,9 @@ struct Mesh {
 					IndexTriangle newp2{me_pos[pos_pts[0]], pn2.first, me_pos[pos_pts[1]], olc::RED};
 					IndexTriangle newn1{pn1.second, me_neg[neg_pts[0]], pn2.second, olc::BLUE};
 
-					vf3d cl_ba=verts[neg_pts[0]]-verts[pos_pts[0]];
-					vf3d cl_ca=verts[pos_pts[1]]-verts[pos_pts[0]];
-					vf3d cl_surf=cl_ba.cross(cl_ca);
+					cmn::vf3d cl_ba=verts[neg_pts[0]]-verts[pos_pts[0]];
+					cmn::vf3d cl_ca=verts[pos_pts[1]]-verts[pos_pts[0]];
+					cmn::vf3d cl_surf=cl_ba.cross(cl_ca);
 					if(orig_surf.dot(cl_surf)<0) {
 						std::swap(newp1.x, newp1.y);
 						std::swap(newp2.x, newp2.y);
@@ -243,7 +245,7 @@ struct Mesh {
 			std::stringstream line_str(line);
 			std::string type; line_str>>type;
 			if(type=="v") {
-				vf3d v;
+				cmn::vf3d v;
 				line_str>>v.x>>v.y>>v.z;
 				m.verts.push_back(v);
 			} else if(type=="f") {

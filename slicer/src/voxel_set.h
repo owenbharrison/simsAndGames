@@ -13,7 +13,7 @@ public:
 	bool* grid=nullptr;
 
 	vf3d scale{1, 1, 1};
-	vf3d offset;
+	vf3d translation;
 
 	VoxelSet() {}
 
@@ -63,7 +63,7 @@ void VoxelSet::copyFrom(const VoxelSet& v) {
 	std::memcpy(grid, v.grid, sizeof(bool)*width*height*depth);
 	
 	scale=v.scale;
-	offset=v.offset;
+	translation=v.translation;
 }
 
 void VoxelSet::clear() {

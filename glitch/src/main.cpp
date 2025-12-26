@@ -1,13 +1,13 @@
 #define OLC_GFX_OPENGL33
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_SOUNDWAVE
-#include "olcSoundWaveEngine.h"
+#include "olc/include/olcSoundWaveEngine.h"
 
 #define OLC_PGEX_SHADERS
-#include "olcPGEX_Shaders.h"
+#include "olc/include/olcPGEX_Shaders.h"
 
 olc::EffectConfig loadEffect(const std::string& filename) {
 	//get file
@@ -26,7 +26,7 @@ olc::EffectConfig loadEffect(const std::string& filename) {
 	};
 }
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 struct Shape {
 	vf2d pos, vel;
@@ -45,7 +45,7 @@ struct Shape {
 		rad=ra;
 		num=n;
 		rot=ro;
-		col=c;
+		col=c; 
 	}
 
 	void update(float dt) {
@@ -55,7 +55,7 @@ struct Shape {
 	}
 };
 
-#include "common/aabb.h"
+#include "cmn/geom/aabb.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
 }

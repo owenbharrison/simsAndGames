@@ -2,7 +2,7 @@
 #ifndef POINTMASS_STRUCT_H
 #define POINTMASS_STRUCT_H
 
-#include "common/aabb.h"
+#include "cmn/geom/aabb.h"
 namespace cmn{
 	using AABB=AABB_generic<vf2d>;
 }

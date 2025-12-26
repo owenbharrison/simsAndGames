@@ -1,12 +1,12 @@
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
 	static const Pixel ORANGE(255, 115, 0);
 }
 using olc::vf2d;
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 static vf2d safeNorm(vf2d n) {
 	float mag=n.mag();

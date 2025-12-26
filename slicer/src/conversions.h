@@ -12,7 +12,8 @@ VoxelSet meshToVoxels(const Mesh& m, vf3d res) {
 	//get global mesh dimensions
 	cmn::AABB3 m_box;
 	for(const auto& v:m.verts) {
-		m_box.fitToEnclose(v*m.mat_model);
+		float w=1;
+		m_box.fitToEnclose(matMulVec(m.model, v, w));
 	}
 
 	//determine sizing
@@ -24,14 +25,14 @@ VoxelSet meshToVoxels(const Mesh& m, vf3d res) {
 	//allocate
 	VoxelSet v(width, height, depth);
 	v.scale=res;
-	v.offset=m_box.min;
+	v.translation=m_box.min;
 
 	//for every voxel...
 	for(int i=0; i<v.getWidth(); i++) {
 		for(int j=0; j<v.getHeight(); j++) {
 			for(int k=0; k<v.getDepth(); k++) {
 				//is it in the polyhedra?
-				vf3d pos=v.offset+v.scale*vf3d(.5f+i, .5f+j, .5f+k);
+				vf3d pos=v.translation+v.scale*vf3d(.5f+i, .5f+j, .5f+k);
 				if(m.contains(pos)) v.grid[v.ix(i, j, k)]=true;
 			}
 		}
@@ -48,8 +49,8 @@ Mesh voxelsToMesh(const VoxelSet& v) {
 	const int dims[3]{width, height, depth};
 
 	Mesh m;
-	m.offset=v.offset;
 	m.scale=v.scale;
+	m.translation=v.translation;
 
 	//mesh vertex lookup
 	int* lookup=new int[(1+width)*(1+height)*(1+depth)];

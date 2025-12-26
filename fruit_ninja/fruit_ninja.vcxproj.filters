@@ -23,7 +23,7 @@
     <ClInclude Include="src\fruit.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\particles.h">
+    <ClInclude Include="src\particle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -4,6 +4,11 @@
 
 #include <vector>
 
+#include "cmn/geom/aabb.h"
+namespace cmn {
+	using AABB=AABB_generic<olc::vf2d>;
+}
+
 //https://www.youtube.com/watch?v=7WcmyxyFO7o
 std::vector<olc::vf2d> poissonDiscSample(const cmn::AABB& box, float rad) {
 	//determine spacing

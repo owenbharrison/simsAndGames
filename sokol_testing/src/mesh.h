@@ -2,24 +2,33 @@
 #ifndef MESH_STRUCT_H
 #define MESH_STRUCT_H
 
-#include "math/v3d.h"
+#include "cmn/math/v3d.h"
 
-#include <fstream>
 #include <vector>
-#include <sstream>
-#include <unordered_map>
-//for hash
-#include <functional>
+
+//for pi
+#include "cmn/utils.h"
+
+#include <cmath>
 
 #include "return_code.h"
 
-#include "utils.h"
+#include <string>
+
+#include <fstream>
+
+//for hash
+#include <functional>
+
+#include <unordered_map>
+
+#include <sstream>
 
 struct Mesh {
 	struct v2d_t { float u=0, v=0; };
 
 	struct Vertex {
-		vf3d pos, norm;
+		cmn::vf3d pos, norm;
 		v2d_t tex;
 	};
 	std::vector<Vertex> verts;
@@ -132,7 +141,7 @@ struct Mesh {
 		//note: loop order matters here.
 		for(int i=0; i<num_xz; i++) {
 			float u=i/(num_xz-1.f);
-			float theta=2*Pi*u;
+			float theta=2*cmn::Pi*u;
 
 			//offset from big radius
 			float dx=std::sin(theta);
@@ -142,7 +151,7 @@ struct Mesh {
 
 			for(int j=0; j<num_y; j++) {
 				float v=j/(num_y-1.f);
-				float phi=2*Pi*v;
+				float phi=2*cmn::Pi*v;
 
 				//scale xz by little radius
 				float dr=std::sin(phi);
@@ -182,14 +191,14 @@ struct Mesh {
 		//note: loop order matters here.
 		for(int i=0; i<num_xz; i++) {
 			float u=i/(num_xz-1.f);
-			float theta=2*Pi*u;
+			float theta=2*cmn::Pi*u;
 
 			float dx=std::sin(theta);
 			float dz=std::cos(theta);
 
 			for(int j=0; j<num_y; j++) {
 				float v=j/(num_y-1.f);
-				float phi=Pi*v;
+				float phi=cmn::Pi*v;
 
 				float dr=std::sin(phi);
 				float nx=dx*dr;
@@ -225,16 +234,16 @@ struct Mesh {
 
 	static Mesh makeCylinder(float rad, int num, float hgt) {
 		Mesh m;
-		
+
 		//toppole, topedge, topside, btmside, btmedge, btmpole
 
 		float y_top=hgt/2, y_btm=-y_top;
-		float v_top=std::atan(2*rad/hgt)/Pi, v_btm=1-v_top;
+		float v_top=std::atan(2*rad/hgt)/cmn::Pi, v_btm=1-v_top;
 
 		//note: push_back order matters here.
 		for(int i=0; i<num; i++) {
 			float u=i/(num-1.f);
-			float theta=2*Pi*u;
+			float theta=2*cmn::Pi*u;
 
 			float nx=std::sin(theta);
 			float nz=std::cos(theta);
@@ -287,7 +296,7 @@ struct Mesh {
 		Mesh m;
 
 		//topside, btmside, btmedge, btmpole
-		
+
 		float s=std::sqrt(rad*rad+hgt*hgt);
 		float hs=hgt/s;
 		float rs=rad/s;
@@ -299,7 +308,7 @@ struct Mesh {
 		//note: push_back order matters here.
 		for(int i=0; i<num; i++) {
 			float u=i/(num-1.f);
-			float theta=2*Pi*u;
+			float theta=2*cmn::Pi*u;
 
 			float dx=std::sin(theta);
 			float dz=std::cos(theta);
@@ -316,10 +325,10 @@ struct Mesh {
 			m.verts.push_back({{0, y_btm, 0}, {0, -1, 0}, {u, 1}});
 		}
 
-		auto ix_ts=[](int i) { return 4*i; };
-		auto ix_bs=[](int i) { return 1+4*i; };
-		auto ix_be=[](int i) { return 2+4*i; };
-		auto ix_bp=[](int i) { return 3+4*i; };
+		auto ix_ts=[] (int i) { return 4*i; };
+		auto ix_bs=[] (int i) { return 1+4*i; };
+		auto ix_be=[] (int i) { return 2+4*i; };
+		auto ix_bp=[] (int i) { return 3+4*i; };
 
 		//side
 		for(int i=0; i<num; i++) {
@@ -344,8 +353,8 @@ struct Mesh {
 		std::ifstream file(filename);
 		if(file.fail()) return {false, "invalid filename"};
 
-		std::vector<vf3d> vertex_pos;
-		std::vector<vf3d> vertex_norm;
+		std::vector<cmn::vf3d> vertex_pos;
+		std::vector<cmn::vf3d> vertex_norm;
 		std::vector<v2d_t> vertex_tex{{0, 0}};
 
 		struct vtn_t {
@@ -372,12 +381,12 @@ struct Mesh {
 
 			std::string type; line_ss>>type;
 			if(type=="v") {
-				vf3d v;
+				cmn::vf3d v;
 				line_ss>>v.x>>v.y>>v.z;
 
 				vertex_pos.push_back(v);
 			} else if(type=="vn") {
-				vf3d n;
+				cmn::vf3d n;
 				line_ss>>n.x>>n.y>>n.z;
 
 				//ensure unit

@@ -1,18 +1,18 @@
 #define OLC_PGE_APPLICATION
-#include "common/3d/engine_3d.h"
+#include "olc/engine_3d.h"
+using cmn::vf3d;
+using cmn::mat4;
 
 #define MULTITHREADING
 #ifdef __EMSCRIPTEN__
 #undef MULTITHREADING
 #endif
 
-using cmn::vf3d;
-
 #include "mesh.h"
 
 #include "particle.h"
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 #ifdef MULTITHREADING
 #include "thread_pool.h"
@@ -148,14 +148,17 @@ struct FXUI : cmn::Engine3D {
 		//update mouse ray
 		{
 			//unprojection matrix
-			cmn::Mat4 inv_vp=cmn::Mat4::inverse(mat_view*mat_proj);
+			
+			mat4 inv_vp=mat4::inverse(mat4::mul(cam_proj, cam_view));
 
 			//get ray thru screen mouse pos
-			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+			float ndc_x=2.f*GetMouseX()/ScreenWidth()-1;
 			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*inv_vp;
-			world/=world.w;
+			float w=1;
+			vf3d world=matMulVec(inv_vp, clip, w);
+			world/=w;
+
 			mouse_dir=(world-cam_pos).norm();
 		}
 
@@ -218,7 +221,7 @@ struct FXUI : cmn::Engine3D {
 
 		//sort particles by camera dist for transparency
 		particles.sort([&] (const Particle& a, const Particle& b) {
-			return (a.pos-cam_pos).mag2()>(b.pos-cam_pos).mag2();
+			return (a.pos-cam_pos).mag_sq()>(b.pos-cam_pos).mag_sq();
 		});
 
 		//add particles as billboards
@@ -241,10 +244,10 @@ struct FXUI : cmn::Engine3D {
 			vf3d br=p.pos+p.size/2*new_rgt-p.size/2*new_up;
 
 			//texture coords
-			cmn::v2d tl_t{0, 0};
-			cmn::v2d tr_t{1, 0};
-			cmn::v2d bl_t{0, 1};
-			cmn::v2d br_t{1, 1};
+			vf3d tl_t(0, 0, 0);
+			vf3d tr_t(1, 0, 0);
+			vf3d bl_t(0, 1, 0);
+			vf3d br_t(1, 1, 0);
 
 			//tessellation
 			float life=1-p.age/p.lifespan;
@@ -548,17 +551,17 @@ struct FXUI : cmn::Engine3D {
 				for(const auto& t:tile_bins[j.x+tiles_x*j.y]) {
 					if(t.id==-1) {
 						FillDepthTriangleWithin(
-							t.p[0].x, t.p[0].y, t.t[0].w,
-							t.p[1].x, t.p[1].y, t.t[1].w,
-							t.p[2].x, t.p[2].y, t.t[2].w,
+							t.p[0].x, t.p[0].y, t.t[0].z,
+							t.p[1].x, t.p[1].y, t.t[1].z,
+							t.p[2].x, t.p[2].y, t.t[2].z,
 							t.col, t.id,
 							nx, ny, mx, my
 						);
 					} else {
 						FillTexturedDepthTriangleWithin(
-							t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-							t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-							t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+							t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+							t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+							t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 							texture_atlas[t.id], t.col, t.id,
 							nx, ny, mx, my
 						);
@@ -574,16 +577,16 @@ struct FXUI : cmn::Engine3D {
 		for(const auto& t:tris_to_draw) {
 			if(t.id==-1) {
 				FillDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].w,
+					t.p[0].x, t.p[0].y, t.t[0].z,
+					t.p[1].x, t.p[1].y, t.t[1].z,
+					t.p[2].x, t.p[2].y, t.t[2].z,
 					t.col, t.id
 				);
 			} else {
 				FillTexturedDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+					t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+					t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+					t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 					texture_atlas[t.id], t.col, t.id
 				);
 			}

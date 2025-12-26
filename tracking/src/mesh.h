@@ -15,8 +15,7 @@ struct Mesh {
 	vf3d rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
-
-	Mat4 mat_world;
+	mat4 model;
 
 	std::vector<cmn::Triangle> tris;
 
@@ -36,33 +35,34 @@ struct Mesh {
 	}
 
 	//combine all transforms
-	void updateTransforms() {
-		Mat4 mat_rot_x=Mat4::makeRotX(rotation.x);
-		Mat4 mat_rot_y=Mat4::makeRotY(rotation.y);
-		Mat4 mat_rot_z=Mat4::makeRotZ(rotation.z);
-		Mat4 mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
-		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
-		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_world=mat_scale*mat_rot*mat_trans;
+	void updateMatrix() {
+		mat4 scl=mat4::makeScale(scale);
+		mat4 rot_x=mat4::makeRotX(rotation.x);
+		mat4 rot_y=mat4::makeRotY(rotation.y);
+		mat4 rot_z=mat4::makeRotZ(rotation.z);
+		mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+		mat4 trans=mat4::makeTranslation(translation);
+		model=mat4::mul(trans, mat4::mul(rot, scl));
 	}
 
 	//get transforms from new coordinate system
-	void updateTransforms(const vf3d& rgt, const vf3d& up, const vf3d& fwd) {
-		Mat4 mat_rot;
-		mat_rot(0, 0)=rgt.x, mat_rot(0, 1)=rgt.y, mat_rot(0, 2)=rgt.z;
-		mat_rot(1, 0)=up.x, mat_rot(1, 1)=up.y, mat_rot(1, 2)=up.z;
-		mat_rot(2, 0)=-fwd.x, mat_rot(2, 1)=-fwd.y, mat_rot(2, 2)=-fwd.z;
-		mat_rot(3, 3)=1;
-		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
-		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_world=mat_scale*mat_rot*mat_trans;
+	void updateMatrix(const vf3d& rgt, const vf3d& up, const vf3d& fwd) {
+		mat4 scl=mat4::makeScale(scale);
+		mat4 rot;
+		rot(0, 0)=rgt.x, rot(0, 1)=rgt.y, rot(0, 2)=rgt.z;
+		rot(1, 0)=up.x, rot(1, 1)=up.y, rot(1, 2)=up.z;
+		rot(2, 0)=-fwd.x, rot(2, 1)=-fwd.y, rot(2, 2)=-fwd.z;
+		rot(3, 3)=1;
+		mat4 trans=mat4::makeTranslation(translation);
+		model=mat4::mul(trans, mat4::mul(rot, scl));
 	}
 
 	void updateTriangles(const olc::Pixel& col=olc::WHITE) {
 		std::vector<vf3d> new_verts;
 		new_verts.reserve(vertices.size());
 		for(const auto& v:vertices) {
-			new_verts.push_back(v*mat_world);
+			float w=1;
+			new_verts.push_back(matMulVec(model, v, w));
 		}
 
 		tris.clear();
@@ -123,7 +123,7 @@ struct Mesh {
 			}
 		}
 
-		m.updateTransforms();
+		m.updateMatrix();
 		m.updateTriangles();
 
 		file.close();

@@ -16,21 +16,21 @@ scoring
 */
 
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_SOUNDWAVE
-#include "olcSoundWaveEngine.h"
+#include "olc/include/olcSoundWaveEngine.h"
 
 #include "fruit.h"
 
-float clamp(float x, float a, float b) {
+static float clamp(float x, float a, float b) {
 	if(x<a) return a;
 	if(x>b) return b;
 	return x;
 }
 
-#include "particles.h"
+#include "particle.h"
 
 struct FruitNinja : olc::PixelGameEngine {
 	FruitNinja() {

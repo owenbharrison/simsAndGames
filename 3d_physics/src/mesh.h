@@ -11,28 +11,29 @@
 struct Mesh {
 	std::vector<vf3d> vertices;
 	std::vector<IndexTriangle> index_tris;
-	vf3d rotation;
-	vf3d scale{1, 1, 1};
-	vf3d translation;
-	Mat4 mat_world;
+	
+	vf3d scale{1, 1, 1}, rotation, translation;
+	mat4 model;
+
 	std::vector<cmn::Triangle> tris;
 
-	void updateTransforms() {
-		//combine all transforms
-		Mat4 mat_rot_x=Mat4::makeRotX(rotation.x);
-		Mat4 mat_rot_y=Mat4::makeRotY(rotation.y);
-		Mat4 mat_rot_z=Mat4::makeRotZ(rotation.z);
-		Mat4 mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
-		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
-		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_world=mat_scale*mat_rot*mat_trans;
+	//combine all transforms
+	void updateMatrix() {
+		mat4 scl=mat4::makeScale(scale);
+		mat4 rot_x=mat4::makeRotX(rotation.x);
+		mat4 rot_y=mat4::makeRotY(rotation.y);
+		mat4 rot_z=mat4::makeRotZ(rotation.z);
+		mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+		mat4 trans=mat4::makeTranslation(translation);
+		model=mat4::mul(trans, mat4::mul(rot, scl));
 	}
 
 	void updateTriangles(const olc::Pixel& col) {
 		std::vector<vf3d> new_verts;
 		new_verts.reserve(vertices.size());
 		for(const auto& v:vertices) {
-			new_verts.push_back(v*mat_world);
+			float w=1;
+			new_verts.push_back(matMulVec(model, v, w));
 		}
 
 		tris.clear();

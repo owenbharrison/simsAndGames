@@ -15,25 +15,28 @@ struct IndexTriangle {
 struct Mesh {
 	std::vector<vf3d> vertexes;
 	std::vector<IndexTriangle> index_tris;
+
 	vf3d rotation, scale{1, 1, 1}, translation;
-	cmn::Mat4 mat_world;
+	mat4 model;
+	
 	std::vector<cmn::Triangle> tris;
 
+	//combine all transforms
 	void updateTransforms() {
-		//combine all transforms
-		cmn::Mat4 mat_rot_x=cmn::Mat4::makeRotX(rotation.x);
-		cmn::Mat4 mat_rot_y=cmn::Mat4::makeRotY(rotation.y);
-		cmn::Mat4 mat_rot_z=cmn::Mat4::makeRotZ(rotation.z);
-		cmn::Mat4 mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
-		cmn::Mat4 mat_scale=cmn::Mat4::makeScale(scale.x, scale.y, scale.z);
-		cmn::Mat4 mat_trans=cmn::Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_world=mat_scale*mat_rot*mat_trans;
+		mat4 scl=mat4::makeScale(scale);
+		mat4 rot_x=mat4::makeRotX(rotation.x);
+		mat4 rot_y=mat4::makeRotY(rotation.y);
+		mat4 rot_z=mat4::makeRotZ(rotation.z);
+		mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+		mat4 trans=mat4::makeTranslation(translation);
+		model=mat4::mul(trans, mat4::mul(rot, scl));
 	}
 
 	void updateTriangles(const olc::Pixel& col) {
 		std::vector<vf3d> transformed;
 		for(const auto& v:vertexes) {
-			transformed.push_back(v*mat_world);
+			float w=1;
+			transformed.push_back(matMulVec(model, v, w));
 		}
 
 		tris.clear();

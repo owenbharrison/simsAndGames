@@ -6,11 +6,11 @@
 */
 
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_PGEX_TRANSFORMEDVIEW
-#include "olcPGEX_TransformedView.h"
+#include "olc/include/olcPGEX_TransformedView.h"
 
 #include "shape.h"
 

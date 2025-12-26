@@ -6,10 +6,10 @@ triangle render generalization/simplification
 */
 #define OLC_GFX_OPENGL33
 #define OLC_PGE_APPLICATION
-#include "common/3d/engine_3d.h"
+#include "olc/engine_3d.h"
 using olc::vi2d;
 using cmn::vf3d;
-using cmn::Mat4;
+using cmn::mat4;
 
 static vf3d polar3D(float yaw, float pitch) {
 	return {
@@ -19,7 +19,7 @@ static vf3d polar3D(float yaw, float pitch) {
 	};
 }
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 #include "particle.h"
 
@@ -46,7 +46,7 @@ static vf3d polar3D(float yaw, float pitch) {
 
 #ifdef USE_SHADERS
 #define OLC_PGEX_SHADERS
-#include "olcPGEX_Shaders.h"
+#include "olc/include/olcPGEX_Shaders.h"
 #endif
 
 struct Button {
@@ -794,10 +794,10 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		vf3d br=pos+sz*(1-ax)*rgt-sz*(1-ay)*up;
 
 		//texture coords
-		cmn::v2d tl_t{0, 0};
-		cmn::v2d tr_t{1, 0};
-		cmn::v2d bl_t{0, 1};
-		cmn::v2d br_t{1, 1};
+		vf3d tl_t(0, 0, 0);
+		vf3d tr_t(1, 0, 0);
+		vf3d bl_t(0, 1, 0);
+		vf3d br_t(1, 1, 0);
 
 		//tessellation
 		a={tl, br, tr, tl_t, br_t, tr_t};
@@ -941,7 +941,7 @@ class Minesweeper3DUI : public cmn::Engine3D {
 	void realizeBillboards() {
 		//sort billboards back to front for transparency
 		std::sort(billboards.begin(), billboards.end(), [&] (const Billboard& a, const Billboard& b) {
-			return (a.pos-cam_pos).mag2()>(b.pos-cam_pos).mag2();
+			return (a.pos-cam_pos).mag_sq()>(b.pos-cam_pos).mag_sq();
 		});
 
 		//triangulate billboards
@@ -970,7 +970,7 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		//translate & tessellate
 		vf3d ijk(cursor_i, cursor_j, cursor_k);
 		cursor_mesh.translation=.5f+ijk-game_size/2;
-		cursor_mesh.updateTransforms();
+		cursor_mesh.updateMatrix();
 		cursor_mesh.updateTriangles(col);
 		tris_to_project.insert(tris_to_project.end(),
 			cursor_mesh.tris.begin(), cursor_mesh.tris.end()
@@ -1169,18 +1169,18 @@ class Minesweeper3DUI : public cmn::Engine3D {
 					switch(type) {
 						default://meshes
 							FillDepthTriangleWithin(
-								t.p[0].x, t.p[0].y, t.t[0].w,
-								t.p[1].x, t.p[1].y, t.t[1].w,
-								t.p[2].x, t.p[2].y, t.t[2].w,
+								t.p[0].x, t.p[0].y, t.t[0].z,
+								t.p[1].x, t.p[1].y, t.t[1].z,
+								t.p[2].x, t.p[2].y, t.t[2].z,
 								t.col, t.id,
 								nx, ny, mx, my
 							);
 							break;
 						case CELL_TRIANGLE:
 							FillTexturedDepthTriangleWithin(
-								t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-								t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-								t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+								t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+								t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+								t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 								texture_atlas[spr_ix], t.col, t.id,
 								nx, ny, mx, my
 							);
@@ -1189,9 +1189,9 @@ class Minesweeper3DUI : public cmn::Engine3D {
 							//this way we avoid lighting for billboards.
 							int bb_ix=0xffff&t.id;
 							FillTexturedDepthTriangleWithin(
-								t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-								t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-								t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+								t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+								t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+								t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 								texture_atlas[spr_ix], billboards[bb_ix].col, t.id,
 								nx, ny, mx, my
 							);
@@ -1212,17 +1212,17 @@ class Minesweeper3DUI : public cmn::Engine3D {
 			switch(type) {
 				default://meshes
 					FillDepthTriangle(
-						t.p[0].x, t.p[0].y, t.t[0].w,
-						t.p[1].x, t.p[1].y, t.t[1].w,
-						t.p[2].x, t.p[2].y, t.t[2].w,
+						t.p[0].x, t.p[0].y, t.t[0].z,
+						t.p[1].x, t.p[1].y, t.t[1].z,
+						t.p[2].x, t.p[2].y, t.t[2].z,
 						t.col, t.id
 					);
 					break;
 				case CELL_TRIANGLE:
 					FillTexturedDepthTriangle(
-						t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-						t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-						t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+						t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+						t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+						t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 						texture_atlas[spr_ix], t.col, t.id
 					);
 					break;
@@ -1230,9 +1230,9 @@ class Minesweeper3DUI : public cmn::Engine3D {
 					//this way we avoid lighting for billboards.
 					int bb_ix=0xffff&t.id;
 					FillTexturedDepthTriangle(
-						t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-						t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-						t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+						t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+						t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+						t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 						texture_atlas[spr_ix], billboards[bb_ix].col, t.id
 					);
 					break;
@@ -1245,8 +1245,8 @@ class Minesweeper3DUI : public cmn::Engine3D {
 		//draw depth lines
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
-				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.p[0].x, l.p[0].y, l.t[0].z,
+				l.p[1].x, l.p[1].y, l.t[1].z,
 				l.col, l.id
 			);
 		}

@@ -1,9 +1,9 @@
 #define OLC_PGE_APPLICATION
-#include "common/3d/engine_3d.h"
+#include "olc/engine_3d.h"
 using cmn::vf3d;
-using cmn::Mat4;
+using cmn::mat4;
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 #include "mesh.h"
 
@@ -22,7 +22,7 @@ class TrackingUI : public cmn::Engine3D {
 	vf3d light_pos;
 
 	//user input
-	Mat4 inv_vp;
+	mat4 inv_vp;
 	vf3d mouse_dir, prev_mouse_dir;
 
 	//helpful movement handle
@@ -83,7 +83,7 @@ class TrackingUI : public cmn::Engine3D {
 
 		house.translation={0, 3, 0};
 		house.scale={.8f, .8f, .8f};
-		house.updateTransforms();
+		house.updateMatrix();
 		house.updateTriangles(olc::Pixel(33, 174, 255));
 
 		return true;
@@ -261,9 +261,9 @@ class TrackingUI : public cmn::Engine3D {
 		//rasterize
 		for(const auto& t:tris_to_draw) {
 			FillDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.p[0].x, t.p[0].y, t.t[0].z,
+				t.p[1].x, t.p[1].y, t.t[1].z,
+				t.p[2].x, t.p[2].y, t.t[2].z,
 				t.col, t.id
 			);
 		}
@@ -314,11 +314,12 @@ class TrackingUI : public cmn::Engine3D {
 		prev_mouse_dir=mouse_dir;
 
 		//unproject mouse point
-		float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+		float ndc_x=2.f*GetMouseX()/ScreenWidth()-1;
 		float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 		vf3d clip(ndc_x, ndc_y, 1);
-		vf3d world=clip*inv_vp;
-		world/=world.w;
+		float w=1;
+		vf3d world=matMulVec(inv_vp, clip, w);
+		world/=w;
 
 		mouse_dir=(world-cam_pos).norm();
 	}
@@ -401,7 +402,7 @@ class TrackingUI : public cmn::Engine3D {
 
 		//update unprojection matrix
 		//  using prev cam transforms, but its fine.
-		inv_vp=Mat4::inverse(mat_view*mat_proj);
+		inv_vp=mat4::inverse(mat4::mul(cam_proj, cam_view));
 
 		handleMouseRays();
 
@@ -418,7 +419,7 @@ class TrackingUI : public cmn::Engine3D {
 	}
 
 	void handleModelMeshUpdate() {
-		model.updateTransforms();
+		model.updateMatrix();
 		model.updateTriangles();
 		model.colorNormals();
 	}
@@ -658,7 +659,7 @@ class TrackingUI : public cmn::Engine3D {
 	void realizeCameraMeshes(const olc::Pixel& col) {
 		for(const auto& c:cams) {
 			cctv.translation=c->pos;
-			cctv.updateTransforms(c->rgt, c->up, c->fwd);
+			cctv.updateMatrix(c->rgt, c->up, c->fwd);
 			cctv.updateTriangles(col);
 			tris_to_project.insert(tris_to_project.end(),
 				cctv.tris.begin(), cctv.tris.end()
@@ -669,10 +670,10 @@ class TrackingUI : public cmn::Engine3D {
 	//show camera renders as textured billboards
 	void realizeCameraRenders() {
 		//texture coords 
-		const cmn::v2d tl_t{1, 0};
-		const cmn::v2d tr_t{1, 1};
-		const cmn::v2d bl_t{0, 0};
-		const cmn::v2d br_t{0, 1};
+		const vf3d tl_t(1, 0, 0);
+		const vf3d tr_t(1, 1, 0);
+		const vf3d bl_t(0, 0, 0);
+		const vf3d br_t(0, 1, 0);
 		for(int i=0; i<cams.size(); i++) {
 			const auto& c=cams[i];
 
@@ -805,16 +806,16 @@ class TrackingUI : public cmn::Engine3D {
 		for(const auto& t:tris_to_draw) {
 			if(t.id==-1) {
 				FillDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].w,
+					t.p[0].x, t.p[0].y, t.t[0].z,
+					t.p[1].x, t.p[1].y, t.t[1].z,
+					t.p[2].x, t.p[2].y, t.t[2].z,
 					t.col, t.id
 				);
 			} else {
 				FillTexturedDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+					t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+					t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+					t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 					cams[t.id]->curr_spr, t.col, t.id
 				);
 			}
@@ -822,8 +823,8 @@ class TrackingUI : public cmn::Engine3D {
 
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
-				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.p[0].x, l.p[0].y, l.t[0].z,
+				l.p[1].x, l.p[1].y, l.t[1].z,
 				l.col, l.id
 			);
 		}

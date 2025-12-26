@@ -1,6 +1,6 @@
 #define OLC_PGE_APPLICATION
 #define OLC_GFX_OPENGL33
-#include "common/3d/engine_3d.h"
+#include "olc/engine_3d.h"
 namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
 	static const Pixel ORANGE(255, 115, 0);
@@ -10,9 +10,9 @@ namespace olc {
 }
 using olc::vf2d;
 using cmn::vf3d;
-using cmn::Mat4;
+using cmn::mat4;
 
-#include "common/stopwatch.h"
+#include "cmn/stopwatch.h"
 
 constexpr float Pi=3.1415927f;
 
@@ -25,7 +25,7 @@ vf3d projectOntoPlane(const vf3d& v, const vf3d& norm) {
 #include "mesh.h"
 
 #define OLC_PGEX_SHADERS
-#include "olcPGEX_Shaders.h"
+#include "olc/include/olcPGEX_Shaders.h"
 
 #include "shader.h"
 
@@ -327,14 +327,16 @@ struct Physics3DUI : cmn::Engine3D {
 		//update mouse ray
 		{
 			//unprojection matrix
-			Mat4 inv_vp=Mat4::inverse(mat_view*mat_proj);
+			mat4 inv_vp=mat4::inverse(mat4::mul(cam_proj, cam_view));
 
 			//get ray thru screen mouse pos
 			float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
 			float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 			vf3d clip(ndc_x, ndc_y, 1);
-			vf3d world=clip*inv_vp;
-			world/=world.w;
+			float w=1;
+			vf3d world=matMulVec(inv_vp, clip, w);
+			world/=w;
+
 			mouse_dir=(world-cam_pos).norm();
 		}
 
@@ -483,7 +485,7 @@ struct Physics3DUI : cmn::Engine3D {
 			olc::Pixel col=i?j.shp_b->fill:j.shp_a->fill;
 			for(const auto& j:ixs) {
 				vertex.translation=shp->particles[j].pos;
-				vertex.updateTransforms();
+				vertex.updateMatrix();
 				vertex.updateTriangles(col);
 				tris_to_project.insert(tris_to_project.end(),
 					vertex.tris.begin(), vertex.tris.end()
@@ -582,16 +584,16 @@ struct Physics3DUI : cmn::Engine3D {
 		resetBuffers();
 		for(const auto& t:tris_to_draw) {
 			FillDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.p[0].x, t.p[0].y, t.t[0].z,
+				t.p[1].x, t.p[1].y, t.t[1].z,
+				t.p[2].x, t.p[2].y, t.t[2].z,
 				t.col, t.id
 			);
 		}
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
-				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.p[0].x, l.p[0].y, l.t[0].z,
+				l.p[1].x, l.p[1].y, l.t[1].z,
 				l.col, l.id
 			);
 		}
@@ -617,18 +619,24 @@ struct Physics3DUI : cmn::Engine3D {
 		auto showVerts=[&] (const Shape& s) {
 			//show vertex indexes
 			for(int i=0; i<s.getNum(); i++) {
-				vf3d ndc=s.particles[i].pos*mat_view*mat_proj;
-				ndc/=ndc.w;
-				float scr_x=(1-ndc.x)*ScreenWidth()/2;
+				float w=1;
+				vf3d view=matMulVec(cam_view, s.particles[i].pos, w);
+				w=1;
+				vf3d ndc=matMulVec(cam_proj, view, w);
+				ndc/=w;
+				float scr_x=(1+ndc.x)*ScreenWidth()/2;
 				float scr_y=(1-ndc.y)*ScreenHeight()/2;
 				auto str=std::to_string(i);
 				DrawString(scr_x-4, scr_y-4, str, olc::WHITE);
 			}
 
 			//show shape index
-			vf3d ndc=s.getAABB().getCenter()*mat_view*mat_proj;
-			ndc/=ndc.w;
-			float scr_x=(1-ndc.x)*ScreenWidth()/2;
+			float w=1;
+			vf3d view=matMulVec(cam_view, s.getAABB().getCenter(), w);
+			w=1;
+			vf3d ndc=matMulVec(cam_proj, view, w);
+			ndc/=w;
+			float scr_x=(1+ndc.x)*ScreenWidth()/2;
 			float scr_y=(1-ndc.y)*ScreenHeight()/2;
 			auto str=std::to_string(s.id);
 			DrawString(scr_x-4, scr_y-4, str, olc::CYAN);

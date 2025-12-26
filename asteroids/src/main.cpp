@@ -15,16 +15,16 @@ check for close calls
 #define OLC_GFX_OPENGL33
 #endif
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 using olc::vi2d;
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
-#include "common/aabb.h"
+#include "cmn/geom/aabb.h"
 namespace cmn { using AABB=AABB_generic<vf2d>; }
 
-#include "common/stopwatch.h"
+#include "cmn/stopwatch.h"
 
 #include "particle.h"
 
@@ -36,7 +36,7 @@ namespace cmn { using AABB=AABB_generic<vf2d>; }
 
 #ifdef USE_SHADERS
 #define OLC_PGEX_SHADERS
-#include "olcPGEX_Shaders.h"
+#include "olc/include/olcPGEX_Shaders.h"
 #endif
 
 class AsteroidsUI : public olc::PixelGameEngine {

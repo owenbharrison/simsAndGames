@@ -116,6 +116,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>NotSet</SubSystem>
@@ -136,6 +137,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>NotSet</SubSystem>
@@ -149,20 +151,11 @@
   <ItemGroup>
     <ClInclude Include="src\demo.h" />
     <ClInclude Include="src\linemesh.h" />
-    <ClInclude Include="src\math\mat4.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\return_code.h" />
     <ClInclude Include="src\shape.h" />
     <ClInclude Include="src\shd.glsl.h" />
-    <ClInclude Include="src\sokol\sokol_app.h" />
-    <ClInclude Include="src\sokol\sokol_gfx.h" />
-    <ClInclude Include="src\sokol\sokol_glue.h" />
-    <ClInclude Include="src\sokol\sokol_log.h" />
-    <ClInclude Include="src\math\v3d.h" />
-    <ClInclude Include="src\sokol_engine.h" />
-    <ClInclude Include="src\stb_image.h" />
     <ClInclude Include="src\texture_utils.h" />
-    <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />

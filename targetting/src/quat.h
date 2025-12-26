@@ -17,6 +17,30 @@ struct Quat {
 		};
 	}
 
+	Quat conjugate() const {
+		return {w, -x, -y, -z};
+	}
+
+	Quat normalize() const {
+		float mag=std::sqrt(w*w+x*x+y*y+z*z);
+		return {w/mag, x/mag, y/mag, z/mag};
+	}
+
+	mat4 getMatrix() const {
+		mat4 m;
+		m(0, 0)=1-2*y*y-2*z*z;
+		m(0, 1)=2*x*y-2*z*w;
+		m(0, 2)=2*x*z+2*y*w;
+		m(1, 0)=2*x*y+2*z*w;
+		m(1, 1)=1-2*x*x-2*z*z;
+		m(1, 2)=2*y*z-2*x*w;
+		m(2, 0)=2*x*z-2*y*w;
+		m(2, 1)=2*y*z+2*x*w;
+		m(2, 2)=1-2*x*x-2*y*y;
+		m(3, 3)=1;
+		return m;
+	}
+
 	static Quat fromAxisAngle(const vf3d& dir, float theta) {
 		float s=std::sin(theta/2);
 		return {
@@ -26,36 +50,12 @@ struct Quat {
 			s*dir.z
 		};
 	}
-
-	static Mat4 toMat4(const Quat& q) {
-		Mat4 m;
-		m(0, 0)=1-2*q.y*q.y-2*q.z*q.z;
-		m(0, 1)=2*q.x*q.y-2*q.z*q.w;
-		m(0, 2)=2*q.x*q.z+2*q.y*q.w;
-		m(1, 0)=2*q.x*q.y+2*q.z*q.w;
-		m(1, 1)=1-2*q.x*q.x-2*q.z*q.z;
-		m(1, 2)=2*q.y*q.z-2*q.x*q.w;
-		m(2, 0)=2*q.x*q.z-2*q.y*q.w;
-		m(2, 1)=2*q.y*q.z+2*q.x*q.w;
-		m(2, 2)=1-2*q.x*q.x-2*q.y*q.y;
-		m(3, 3)=1;
-		return m;
-	}
 };
 
-Quat conjugate(const Quat& q) {
-	return {q.w, -q.x, -q.y, -q.z};
-}
-
-Quat normalize(const Quat& q) {
-	float mag=std::sqrt(q.w*q.w+q.x*q.x+q.y*q.y+q.z*q.z);
-	return {q.w/mag, q.x/mag, q.y/mag, q.z/mag};
-}
-
-vf3d rotateVec(const Quat& q, const vf3d& v) {
+vf3d quatMulVec(const Quat& q, const vf3d& v) {
 	Quat p{0, v.x, v.y, v.z};
 	//unit inverse=conjugate
-	Quat q_inv=conjugate(q);
+	Quat q_inv=q.conjugate();
 	Quat result=q*p*q_inv;
 	return {result.x, result.y, result.z};
 }

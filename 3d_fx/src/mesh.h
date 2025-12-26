@@ -3,6 +3,7 @@
 #define MESH_STRUCT_H
 
 #include <vector>
+
 #include <fstream>
 #include <sstream>
 
@@ -40,7 +41,7 @@ struct Mesh {
 		if(file.fail()) throw std::runtime_error("invalid filename");
 
 		std::vector<vf3d> verts;
-		std::vector<cmn::v2d> texs;
+		std::vector<vf3d> texs;
 
 		std::string line;
 		while(std::getline(file, line)) {
@@ -51,8 +52,8 @@ struct Mesh {
 				line_str>>v.x>>v.y>>v.z;
 				verts.push_back({v});
 			} else if(type=="vt") {
-				cmn::v2d t;
-				line_str>>t.u>>t.v;
+				vf3d t;
+				line_str>>t.x>>t.y;
 				texs.push_back(t);
 			} else if(type=="f") {
 				std::vector<int> v_ixs;

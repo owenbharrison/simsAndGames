@@ -13,12 +13,9 @@
 //for memcpy
 #include <string>
 
-#include "common/utils.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
-}
+#include "cmn/utils.h"
 
-vf2d reflect(const vf2d& in, const vf2d& norm) {
+static vf2d reflect(const vf2d& in, const vf2d& norm) {
 	return in-2*norm.dot(in)*norm;
 }
 

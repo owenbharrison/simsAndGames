@@ -1,12 +1,12 @@
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #include <cmath>
 
 #include "fluid.h"
 
-#include "common/utils.h"
+#include "cmn/utils.h"
 
 struct FluidUI : olc::PixelGameEngine {
 	FluidUI() {

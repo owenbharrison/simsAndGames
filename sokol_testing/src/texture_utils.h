@@ -2,8 +2,11 @@
 #ifndef TEXTURE_UTIL_H
 #define TEXTURE_UTIL_H
 
+//for memcpy
+#include <string>
+
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include "stb/include/stb_image.h"
 
 static sg_view makeTextureFromPixels(std::uint32_t* pixels, int width, int height) {
 	sg_image_desc image_desc{};

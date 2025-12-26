@@ -1,6 +1,7 @@
 #pragma once
 #ifndef CHART_CLASS_H
 #define CHART_CLASS_H
+
 class Chart {
 	int max_num=0;
 	int num=0;

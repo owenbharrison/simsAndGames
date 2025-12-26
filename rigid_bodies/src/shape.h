@@ -2,8 +2,8 @@
 #ifndef SHAPE_CLASS_H
 #define SHAPE_CLASS_H
 
-#include "common/utils.h"
-#include "common/aabb.h"
+#include "cmn/utils.h"
+#include "cmn/geom/aabb.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
 }

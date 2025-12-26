@@ -6,7 +6,9 @@
 
 #include "linemesh.h"
 
-#include "math/mat4.h"
+#include "cmn/math/v3d.h"
+
+#include "cmn/math/mat4.h"
 
 struct Shape {
 	Mesh mesh;
@@ -15,8 +17,8 @@ struct Shape {
 
 	sg_view tex{};
 
-	vf3d translation, rotation, scale{1, 1, 1};
-	mat4 model=mat4::makeIdentity();
+	cmn::vf3d translation, rotation, scale{1, 1, 1};
+	cmn::mat4 model=cmn::mat4::makeIdentity();
 
 	Shape() {}
 
@@ -30,17 +32,17 @@ struct Shape {
 
 	void updateMatrixes() {
 		//xyz euler angles?
-		mat4 rot_x=mat4::makeRotX(rotation.x);
-		mat4 rot_y=mat4::makeRotY(rotation.y);
-		mat4 rot_z=mat4::makeRotZ(rotation.z);
-		mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+		cmn::mat4 rot_x=cmn::mat4::makeRotX(rotation.x);
+		cmn::mat4 rot_y=cmn::mat4::makeRotY(rotation.y);
+		cmn::mat4 rot_z=cmn::mat4::makeRotZ(rotation.z);
+		cmn::mat4 rot=cmn::mat4::mul(rot_z, cmn::mat4::mul(rot_y, rot_x));
 
-		mat4 scl=mat4::makeScale(scale);
+		cmn::mat4 scl=cmn::mat4::makeScale(scale);
 
-		mat4 trans=mat4::makeTranslation(translation);
+		cmn::mat4 trans=cmn::mat4::makeTranslation(translation);
 
 		//combine & invert
-		model=mat4::mul(trans, mat4::mul(rot, scl));
+		model=cmn::mat4::mul(trans, cmn::mat4::mul(rot, scl));
 	}
 };
 #endif

@@ -176,8 +176,7 @@ void main() {
 @end
 
 @fs fs_texview
-@image_sample_type texview_tex unfilterable_float
-@sampler_type texview_smp nonfiltering
+
 layout(binding=0) uniform texture2D texview_tex;
 layout(binding=0) uniform sampler texview_smp;
 
@@ -186,7 +185,8 @@ in vec2 uv;
 out vec4 frag_color;
 
 void main() {
-	frag_color=vec4(texture(sampler2D(texview_tex, texview_smp), uv).xxx, 1);
+	vec4 col=texture(sampler2D(texview_tex, texview_smp), uv);
+	frag_color=vec4(col.rgb, 1);
 }
 
 @end

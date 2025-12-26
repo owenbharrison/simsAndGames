@@ -1,8 +1,8 @@
 #define OLC_PGE_APPLICATION
-#include "common/3d/engine_3d.h"
+#include "olc/engine_3d.h"
 using olc::vf2d;
 using cmn::vf3d;
-using cmn::Mat4;
+using cmn::mat4;
 
 constexpr float Pi=3.1415927f;
 
@@ -260,17 +260,17 @@ struct Example : cmn::Engine3D {
 
 		for(const auto& t:tris_to_draw) {
 			FillDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].w,
-				t.p[1].x, t.p[1].y, t.t[1].w,
-				t.p[2].x, t.p[2].y, t.t[2].w,
+				t.p[0].x, t.p[0].y, t.t[0].z,
+				t.p[1].x, t.p[1].y, t.t[1].z,
+				t.p[2].x, t.p[2].y, t.t[2].z,
 				t.col, t.id
 			);
 		}
 
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
-				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.p[0].x, l.p[0].y, l.t[0].z,
+				l.p[1].x, l.p[1].y, l.t[1].z,
 				l.col, l.id
 			);
 		}

@@ -2,15 +2,18 @@
 #ifndef LINEMESH_STRUCT_H
 #define LINEMESH_STRUCT_H
 
-#include "math/v3d.h"
+#include "cmn/math/v3d.h"
 
 #include <vector>
+
+//for randFloat
+#include "cmn/utils.h"
 
 #include <set>
 
 struct LineMesh {
 	struct Vertex {
-		vf3d pos;
+		cmn::vf3d pos;
 		sg_color col;
 	};
 	std::vector<Vertex> verts;
@@ -80,7 +83,7 @@ struct LineMesh {
 
 	void randomizeColors() {
 		for(auto& v:verts) {
-			v.col={randFloat(), randFloat(), randFloat(), 1};
+			v.col={cmn::randFloat(), cmn::randFloat(), cmn::randFloat(), 1};
 		}
 	}
 

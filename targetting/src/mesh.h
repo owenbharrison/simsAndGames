@@ -13,26 +13,29 @@ struct IndexTriangle {
 struct Mesh {
 	std::vector<vf3d> vertexes;
 	std::vector<IndexTriangle> index_tris;
+
 	Quat rotation;
 	vf3d scale{1, 1, 1};
 	vf3d translation;
-	Mat4 mat_model;
+	mat4 model;
+
 	std::vector<cmn::Triangle> tris;
 	int id=-1;
 
+	//combine all transforms
 	void updateTransforms() {
-		//combine all transforms
-		Mat4 mat_rot=Quat::toMat4(rotation);
-		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
-		Mat4 mat_trans=Mat4::makeTrans(translation.x, translation.y, translation.z);
-		mat_model=mat_scale*mat_rot*mat_trans;
+		mat4 scl=mat4::makeScale(scale);
+		mat4 rot=rotation.getMatrix();
+		mat4 trans=mat4::makeTranslation(translation);
+		model=mat4::mul(trans, mat4::mul(rot, scl));
 	}
 
 	void applyTransforms() {
 		std::vector<vf3d> new_verts;
 		new_verts.reserve(vertexes.size());
 		for(const auto& v:vertexes) {
-			new_verts.push_back(v*mat_model);
+			float w=1;
+			new_verts.push_back(matMulVec(model, v, w));
 		}
 
 		tris.clear();
@@ -60,7 +63,8 @@ struct Mesh {
 	cmn::AABB3 getAABB() const {
 		cmn::AABB3 box;
 		for(const auto& v:vertexes) {
-			box.fitToEnclose(v*mat_model);
+			float w=1;
+			box.fitToEnclose(matMulVec(model, v, w));
 		}
 		return box;
 	}

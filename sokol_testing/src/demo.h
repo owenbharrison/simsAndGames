@@ -1,9 +1,11 @@
 #define SOKOL_GLCORE
-#include "sokol_engine.h"
-#include "sokol/sokol_gfx.h"
-#include "sokol/sokol_glue.h"
+#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_gfx.h"
+#include "sokol/include/sokol_glue.h"
 
 #include "shd.glsl.h"
+
+#include "mesh.h"
 
 #include "shape.h"
 
@@ -14,11 +16,14 @@
 //  b/c vector reallocates
 #include <list>
 
-#include <set>
+#include "texture_utils.h"
+
+using cmn::mat4;
+using cmn::vf3d;
 
 //y p => x y z
 //0 0 => 0 0 1
-static vf3d polar3D(float yaw, float pitch) {
+static vf3d polarToCartesian(float yaw, float pitch) {
 	return {
 		std::sin(yaw)*std::cos(pitch),
 		std::sin(pitch),
@@ -26,7 +31,14 @@ static vf3d polar3D(float yaw, float pitch) {
 	};
 }
 
-#include "texture_utils.h"
+//x y z => y p
+//0 0 1 => 0 0
+static void cartesianToPolar(const vf3d& pt, float& yaw, float& pitch) {
+	//flatten onto xz
+	yaw=std::atan2(pt.x, pt.z);
+	//vertical triangle
+	pitch=std::atan2(pt.y, std::sqrt(pt.x*pt.x+pt.z*pt.z));
+}
 
 class Demo : public SokolEngine {
 	sg_sampler sampler{};
@@ -59,10 +71,9 @@ class Demo : public SokolEngine {
 	sg_pass_action display_pass_action{};
 
 	struct {
-		vf3d pos{3, 3, 3};
+		vf3d pos;
 		vf3d dir;
-		float yaw=-3*Pi/4;
-		float pitch=-Pi/4;
+		float yaw=0, pitch=0;
 		mat4 proj, view;
 		//view, then project
 		mat4 view_proj;
@@ -207,12 +218,12 @@ public:
 		skybox.pip=sg_make_pipeline(pip_desc);
 
 		const vf3d rot_trans[6][2]{
-			{Pi*vf3d(.5f, -.5f, 0), {.5f, 0, 0}},
-			{Pi*vf3d(.5f, .5f, 0), {-.5f, 0, 0}},
-			{Pi*vf3d(0, 0, 1), {0, .5f, 0}},
-			{Pi*vf3d(1, 0, 1), {0, -.5f, 0}},
-			{Pi*vf3d(.5f, 1, 0), {0, 0, .5f}},
-			{Pi*vf3d(.5f, 0, 0), {0, 0, -.5f}}
+			{cmn::Pi*vf3d(.5f, -.5f, 0), {.5f, 0, 0}},
+			{cmn::Pi*vf3d(.5f, .5f, 0), {-.5f, 0, 0}},
+			{cmn::Pi*vf3d(0, 0, 1), {0, .5f, 0}},
+			{cmn::Pi*vf3d(1, 0, 1), {0, -.5f, 0}},
+			{cmn::Pi*vf3d(.5f, 1, 0), {0, 0, .5f}},
+			{cmn::Pi*vf3d(.5f, 0, 0), {0, 0, -.5f}}
 		};
 
 		Mesh face_mesh;
@@ -357,10 +368,10 @@ public:
 		for(int i=0; i<shape_circle.size(); i++) {
 			auto& shp=shape_circle[i];
 
-			float angle=2*Pi*i/shape_circle.size();
-			shp.translation=radius*polar3D(angle, 0);
-			shp.rotation={0, Pi+angle, 0};
-			float scl=randFloat(.3f, .5f);
+			float angle=2*cmn::Pi*i/shape_circle.size();
+			shp.translation=radius*polarToCartesian(angle, 0);
+			shp.rotation={0, cmn::Pi+angle, 0};
+			float scl=cmn::randFloat(.3f, .5f);
 			shp.scale=scl*vf3d(1, 1, 1);
 
 			shp.updateMatrixes();
@@ -369,6 +380,18 @@ public:
 		shapes.insert(shapes.end(),
 			shape_circle.begin(), shape_circle.end()
 		);
+	}
+
+	void setupCamera() {
+		//place camera 3-4 units away from origin
+		float dx=1-2*cmn::randFloat();
+		float dy=cmn::randFloat();
+		float dz=1-2*cmn::randFloat();
+		float dist=cmn::randFloat(3, 4);
+		cam.pos=dist*vf3d(dx, dy, dz).norm();
+
+		//point towards origin
+		cartesianToPolar(-cam.pos, cam.yaw, cam.pitch);
 	}
 #pragma endregion
 
@@ -394,6 +417,8 @@ public:
 
 		setupPlatform();
 		setupShapes();
+
+		setupCamera();
 	}
 
 #pragma region UPDATE HELPERS
@@ -407,8 +432,8 @@ public:
 		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
 
 		//clamp camera pitch
-		if(cam.pitch>Pi/2) cam.pitch=Pi/2-.001f;
-		if(cam.pitch<-Pi/2) cam.pitch=.001f-Pi/2;
+		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
+		if(cam.pitch<-cmn::Pi/2) cam.pitch=.001f-cmn::Pi/2;
 	}
 
 	void handleCameraMovement(float dt) {
@@ -430,10 +455,12 @@ public:
 	void handleUserInput(float dt) {
 		handleCameraLooking(dt);
 
-		//polar to cartesian
-		cam.dir=polar3D(cam.yaw, cam.pitch);
+		cam.dir=polarToCartesian(cam.yaw, cam.pitch);
 
 		handleCameraMovement(dt);
+
+		//look at origin
+		if(getKey(SAPP_KEYCODE_HOME).held) cartesianToPolar(-cam.pos, cam.yaw, cam.pitch);
 
 		//toggle shape outlines
 		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;

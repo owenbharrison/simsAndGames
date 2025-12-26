@@ -105,7 +105,7 @@ public:
 				vf3d close_pt=bt.getClosePt(ap.pos);
 
 				//is it too close to surface?
-				float mag2=(ap.pos-close_pt).mag2();
+				float mag2=(ap.pos-close_pt).mag_sq();
 				if(mag2<Particle::rad*Particle::rad) {
 					//where should it be?
 					vf3d norm=bt.getNorm();
@@ -202,7 +202,7 @@ public:
 
 				//are they too close to eachother?
 				vf3d sub=close_a-close_b;
-				float mag_sq=sub.mag2();
+				float mag_sq=sub.mag_sq();
 				if(mag_sq<Particle::rad*Particle::rad) {
 					//find contributions based on inverse mass
 					float m1a1=1/a1.mass;

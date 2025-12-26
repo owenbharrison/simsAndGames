@@ -23,7 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\fruit.h" />
-    <ClInclude Include="src\particles.h" />
+    <ClInclude Include="src\particle.h" />
   </ItemGroup>
   <ItemGroup>
     <Media Include="assets\explode.wav" />

@@ -1,13 +1,10 @@
 #define OLC_PGE_APPLICATION
-#include "common/3d/engine_3d.h"
+#include "olc/engine_3d.h"
 using cmn::vf3d;
-using cmn::Mat4;
+using cmn::mat4;
 
-#include "common/aabb.h"
-#include "common/utils.h"
-namespace cmn {
-	using AABB=AABB_generic<olc::vf2d>;
-}
+#include "cmn/geom/aabb.h"
+#include "cmn/utils.h"
 
 #include "mesh.h"
 
@@ -93,10 +90,10 @@ struct AStarNavUI : cmn::Engine3D {
 			{{-52.99f, 1.43f, 16.84f}, 1.8f*cmn::Pi, olc::WHITE}
 		};
 
-		for(const auto& h:homes) {
-			house_model.pos=h.p;
-			house_model.rot.y=h.r;
-			house_model.updateTransforms();
+		for(auto& h:homes) {
+			house_model.translation=h.p;
+			house_model.rotation.y=h.r;
+			house_model.updateMatrix();
 			house_model.updateTriangles(h.col);
 			obstacles.push_back(house_model);
 		}
@@ -208,14 +205,15 @@ struct AStarNavUI : cmn::Engine3D {
 
 	void handleMouseRay() {
 		//unprojection matrix
-		cmn::Mat4 inv_vp=cmn::Mat4::inverse(mat_view*mat_proj);
+		cmn::mat4 inv_vp=cmn::mat4::inverse(cmn::mat4::mul(cam_proj, cam_view));
 
 		//get ray thru screen mouse pos
-		float ndc_x=1-2.f*GetMouseX()/ScreenWidth();
+		float ndc_x=2.f*GetMouseX()/ScreenWidth()-1;
 		float ndc_y=1-2.f*GetMouseY()/ScreenHeight();
 		vf3d clip(ndc_x, ndc_y, 1);
-		vf3d world=clip*inv_vp;
-		world/=world.w;
+		float w=1;
+		vf3d world=matMulVec(inv_vp, clip, w);
+		world/=w;
 
 		mouse_dir=(world-cam_pos).norm();
 	}
@@ -313,10 +311,10 @@ struct AStarNavUI : cmn::Engine3D {
 		vf3d br=p+w*(1-ax)*rgt-h*(1-ay)*up;
 
 		//texture coords
-		cmn::v2d tl_t{0, 0};
-		cmn::v2d tr_t{1, 0};
-		cmn::v2d bl_t{0, 1};
-		cmn::v2d br_t{1, 1};
+		vf3d tl_t(0, 0, 0);
+		vf3d tr_t(1, 0, 0);
+		vf3d bl_t(0, 1, 0);
+		vf3d br_t(1, 1, 0);
 
 		//tessellation
 		a={tl, br, tr, tl_t, br_t, tr_t};
@@ -439,17 +437,17 @@ struct AStarNavUI : cmn::Engine3D {
 		for(const auto& t:tris_to_draw) {
 			if(t.id==-1) {
 				FillDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].w,
+					t.p[0].x, t.p[0].y, t.t[0].z,
+					t.p[1].x, t.p[1].y, t.t[1].z,
+					t.p[2].x, t.p[2].y, t.t[2].z,
 					t.col, t.id
 				);
 			} else {
 				SetPixelMode(olc::Pixel::Mode::ALPHA);
 				FillTexturedDepthTriangle(
-					t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.t[0].w,
-					t.p[1].x, t.p[1].y, t.t[1].u, t.t[1].v, t.t[1].w,
-					t.p[2].x, t.p[2].y, t.t[2].u, t.t[2].v, t.t[2].w,
+					t.p[0].x, t.p[0].y, t.t[0].x, t.t[0].y, t.t[0].z,
+					t.p[1].x, t.p[1].y, t.t[1].x, t.t[1].y, t.t[1].z,
+					t.p[2].x, t.p[2].y, t.t[2].x, t.t[2].y, t.t[2].z,
 					texture_atlas[t.id], olc::WHITE, t.id
 				);
 				SetPixelMode(olc::Pixel::Mode::NORMAL);
@@ -458,8 +456,8 @@ struct AStarNavUI : cmn::Engine3D {
 
 		for(const auto& l:lines_to_draw) {
 			DrawDepthLine(
-				l.p[0].x, l.p[0].y, l.t[0].w,
-				l.p[1].x, l.p[1].y, l.t[1].w,
+				l.p[0].x, l.p[0].y, l.t[0].z,
+				l.p[1].x, l.p[1].y, l.t[1].z,
 				l.col, l.id
 			);
 		}

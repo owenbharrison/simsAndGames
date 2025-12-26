@@ -15,25 +15,28 @@ struct IndexTriangle {
 struct Mesh {
 	std::vector<vf3d> vertexes;
 	std::vector<IndexTriangle> index_tris;
-	vf3d pos, rot, scale{1, 1, 1};
-	Mat4 mat_world;
+
+	vf3d scale{1, 1, 1}, rotation, translation;
+	cmn::mat4 model;
+
 	std::vector<cmn::Triangle> tris;
 
-	void updateTransforms() {
-		//combine all transforms
-		Mat4 mat_rot_x=Mat4::makeRotX(rot.x);
-		Mat4 mat_rot_y=Mat4::makeRotY(rot.y);
-		Mat4 mat_rot_z=Mat4::makeRotZ(rot.z);
-		Mat4 mat_rot=mat_rot_x*mat_rot_y*mat_rot_z;
-		Mat4 mat_scale=Mat4::makeScale(scale.x, scale.y, scale.z);
-		Mat4 mat_trans=Mat4::makeTrans(pos.x, pos.y, pos.z);
-		mat_world=mat_rot*mat_scale*mat_trans;
+	//combine all transforms
+	void updateMatrix() {
+		mat4 scl=mat4::makeScale(scale);
+		mat4 rot_x=mat4::makeRotX(rotation.x);
+		mat4 rot_y=mat4::makeRotY(rotation.y);
+		mat4 rot_z=mat4::makeRotZ(rotation.z);
+		mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+		mat4 trans=mat4::makeTranslation(translation);
+		model=mat4::mul(trans, mat4::mul(rot, scl));
 	}
 
 	void updateTriangles(const olc::Pixel& col) {
 		std::vector<vf3d> transformed;
 		for(const auto& v:vertexes) {
-			transformed.push_back(v*mat_world);
+			float w=1;
+			transformed.push_back(matMulVec(model, v, w));
 		}
 		tris.clear();
 		for(const auto& it:index_tris) {
@@ -54,7 +57,8 @@ struct Mesh {
 	cmn::AABB3 getAABB() const {
 		cmn::AABB3 box;
 		for(const auto& v:vertexes) {
-			box.fitToEnclose(v*mat_world);
+			float w=1;
+			box.fitToEnclose(matMulVec(model, v, w));
 		}
 		return box;
 	}
@@ -121,7 +125,7 @@ struct Mesh {
 			}
 		}
 
-		m.updateTransforms();
+		m.updateMatrix();
 		m.updateTriangles(olc::WHITE);
 
 		file.close();

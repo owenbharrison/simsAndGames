@@ -2,11 +2,11 @@
 #ifndef SOLVER_CLASS_H
 #define SOLVER_CLASS_H
 
-#include "common/aabb.h"
-#include "common/utils.h"
+#include "cmn/geom/aabb.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
 }
+#include "cmn/utils.h"
 
 #include "particle.h"
 

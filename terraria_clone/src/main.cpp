@@ -51,7 +51,7 @@
 */
 
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 
 //remaps value in one range to the other
 float remap(float x, float a, float b, float c, float d) {

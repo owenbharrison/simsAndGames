@@ -11,17 +11,17 @@ impl polygon to PixelSet
 
 typedef unsigned char byte;
 
-#include "common/aabb.h"
-#include "common/utils.h"
+#include "cmn/geom/aabb.h"
 namespace cmn {
 	using AABB=AABB_generic<vf2d>;
 }
+#include "cmn/utils.h"
 
 #include <stack>
 
 //this is alr def in the lib
 //but i want it explicitly stated
-vf2d perp(const vf2d& v) {
+static vf2d perp(const vf2d& v) {
 	return {-v.y, v.x};
 }
 

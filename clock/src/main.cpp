@@ -1,9 +1,9 @@
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olc/include/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_SOUNDWAVE
-#include "olcSoundWaveEngine.h"
+#include "olc/include/olcSoundWaveEngine.h"
 
 #include <thread>
 #include <chrono>
