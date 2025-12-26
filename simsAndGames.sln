@@ -41,8 +41,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "marching_cubes", "marching_
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tracking", "tracking\tracking.vcxproj", "{5F8E9802-900A-47B2-A4C6-6E2AAA291827}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rigging", "rigging\rigging.vcxproj", "{0C88551B-FA59-4405-96EE-EA993EEA9A8E}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3d_fx", "3d_fx\3d_fx.vcxproj", "{294F023B-2EC0-4BCC-B81E-652B45E451A0}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minesweeper", "minesweeper\minesweeper.vcxproj", "{8044612D-40C6-49D1-9561-A56206E053AF}"
@@ -229,14 +227,6 @@ Global
 		{5F8E9802-900A-47B2-A4C6-6E2AAA291827}.Release|x64.Build.0 = Release|x64
 		{5F8E9802-900A-47B2-A4C6-6E2AAA291827}.Release|x86.ActiveCfg = Release|Win32
 		{5F8E9802-900A-47B2-A4C6-6E2AAA291827}.Release|x86.Build.0 = Release|Win32
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Debug|x64.ActiveCfg = Debug|x64
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Debug|x64.Build.0 = Debug|x64
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Debug|x86.ActiveCfg = Debug|Win32
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Debug|x86.Build.0 = Debug|Win32
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Release|x64.ActiveCfg = Release|x64
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Release|x64.Build.0 = Release|x64
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Release|x86.ActiveCfg = Release|Win32
-		{0C88551B-FA59-4405-96EE-EA993EEA9A8E}.Release|x86.Build.0 = Release|Win32
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Debug|x64.ActiveCfg = Debug|x64
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Debug|x64.Build.0 = Debug|x64
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Debug|x86.ActiveCfg = Debug|Win32
