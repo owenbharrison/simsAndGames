@@ -49,8 +49,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "flip_fluid", "flip_fluid\fl
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fluid", "fluid\fluid.vcxproj", "{239173C1-28E7-409B-A1F5-A54123F290DD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "imgui", "imgui\imgui.vcxitems", "{C7B5F2E8-F83D-4404-8FA3-7A96AA249946}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "testing", "testing\testing.vcxproj", "{FCC50571-17E8-424A-AC3E-5B8BB94CB762}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "geometrize", "geometrize\geometrize.vcxproj", "{E862E08A-96AB-4637-B7B2-BE98CB662750}"
@@ -331,8 +329,6 @@ Global
 		SolutionGuid = {A3D42CDF-52DC-41C6-8C7C-FF2451E99C08}
 	EndGlobalSection
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
-		imgui\imgui.vcxitems*{63037f6e-a904-4e75-b7a6-e7229e3dff92}*SharedItemsImports = 4
 		imgui\imgui.vcxitems*{b984500b-9ee2-42eb-99fe-e03803f72825}*SharedItemsImports = 4
-		imgui\imgui.vcxitems*{c7b5f2e8-f83d-4404-8fa3-7a96aa249946}*SharedItemsImports = 9
 	EndGlobalSection
 EndGlobal
