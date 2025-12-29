@@ -46,13 +46,22 @@ void main() {
 @vs vs_cube
 
 layout(binding=0) uniform vs_cube_params {
+	mat4 u_model;
 	mat4 u_mvp;
 };
 
 in vec3 v_pos;
+in vec3 v_norm;
+
+out vec3 pos;
+out vec3 norm;
 
 void main() {
 	gl_Position=u_mvp*vec4(v_pos, 1);
+
+	pos=(u_model*vec4(v_pos, 1)).xyz;
+
+	norm=normalize(mat3(u_model)*v_norm);
 }
 
 @end
@@ -60,13 +69,30 @@ void main() {
 @fs fs_cube
 
 layout(binding=1) uniform fs_cube_params {
-	vec4 u_col;
+	vec3 u_col;
+	vec3 u_light_pos;
+	vec3 u_eye_pos;
 };
 
-out vec4 frag_color;
+in vec3 pos;
+in vec3 norm;
+
+out vec4 frag_col;
 
 void main() {
-	frag_color=u_col;
+	vec3 N=normalize(norm);
+	vec3 L=normalize(u_light_pos-pos);
+	vec3 V=normalize(u_eye_pos-pos);
+	vec3 R=reflect(-L, N);
+	
+	float amb_mag=.3;
+	float diff_mag=.7*max(dot(N, L), 0);
+
+	//white specular
+	float spec_mag=.3*pow(max(dot(R, V), 0), 32);
+	vec3 spec=spec_mag*vec3(1, 1, 1);
+
+	frag_col=vec4(u_col*(amb_mag+diff_mag)+spec, 1);
 }
 
 @end

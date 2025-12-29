@@ -8,6 +8,9 @@
 #include "cmn/math/v3d.h"
 #include "cmn/math/mat4.h"
 
+//for srand
+#include <ctime>
+
 #include "cmn/utils.h"
 
 #include "texture_utils.h"
@@ -34,16 +37,7 @@ static void cartesianToPolar(const vf3d& pt, float& yaw, float& pitch) {
 	pitch=std::atan2(pt.y, std::sqrt(pt.x*pt.x+pt.z*pt.z));
 }
 
-//basic model matrix: scale then rotate then translate
-static mat4 makeSRTMatrix(const vf3d& s, const vf3d& r, const vf3d& t) {
-	mat4 scale=mat4::makeScale(s);
-	mat4 rot_x=mat4::makeRotX(r.x);
-	mat4 rot_y=mat4::makeRotY(r.y);
-	mat4 rot_z=mat4::makeRotZ(r.z);
-	mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
-	mat4 trans=mat4::makeTranslation(t);
-	return mat4::mul(trans, mat4::mul(rot, scale));
-}
+#include "rubiks_cube.h"
 
 class RubiksCubeUI : public SokolEngine {
 	sg_sampler sampler{};
@@ -65,30 +59,26 @@ class RubiksCubeUI : public SokolEngine {
 		sg_view tex[6];
 	} skybox;
 
-	struct {
-		const int num=3;
-		const float gap=.1f;
+	sg_pipeline cube_pip{};
 
-		sg_pipeline pip{};
+	sg_buffer cube_vbuf{};
+	sg_buffer cube_ibuf{};
+		
+	const float cube_size=1;
+	const float cube_gap=.1f;
+	
+	RubiksCube* cube;
 
-		struct {
-			sg_buffer vbuf{};
-			sg_buffer ibuf{};
+	mat4 cube_rot[6];
 
-			mat4 rot[6];
-
-			const float size=1;
-			
-			const sg_color cols[6]{
-				{1, 0, 0, 1},//+x red
-				{0, 0, 1, 1},//+y blue
-				{1, 1, 1, 1},//+z white
-				{1, .392f, 0, 1},//-x orange
-				{0, 1, 0, 1},//-y green
-				{1, 1, 0, 1}//-z yellow
-			};
-		} block;
-	} cube;
+	const sg_color cube_cols[6]{
+		{1, 0, 0, 1},//+x red
+		{0, 0, 1, 1},//+y blue
+		{1, 1, 1, 1},//+z white
+		{1, .392f, 0, 1},//-x orange
+		{0, 1, 0, 1},//-y green
+		{1, 1, 0, 1}//-z yellow
+	};
 
 	struct {
 		vf3d pos;
@@ -98,6 +88,8 @@ class RubiksCubeUI : public SokolEngine {
 		//view, then project
 		mat4 view_proj;
 	} cam;
+
+	vf3d light_pos;
 
 public:
 #pragma region SETUP HELPERS
@@ -110,6 +102,8 @@ public:
 	//bog-standard nearest-filter sampler
 	void setupSampler() {
 		sg_sampler_desc sampler_desc{};
+		sampler_desc.min_filter=SG_FILTER_LINEAR;
+		sampler_desc.mag_filter=SG_FILTER_LINEAR;
 		sampler=sg_make_sampler(sampler_desc);
 	}
 
@@ -158,9 +152,12 @@ public:
 			{cmn::Pi*vf3d(.5f, 0, 0), {0, 0, -1}}
 		};
 		for(int i=0; i<6; i++) {
-			vf3d rot=rot_trans[i][0];
-			vf3d trans=rot_trans[i][1];
-			skybox.model[i]=makeSRTMatrix({1, 1, 1}, rot, trans);
+			mat4 rot_x=mat4::makeRotX(rot_trans[i][0].x);
+			mat4 rot_y=mat4::makeRotY(rot_trans[i][0].y);
+			mat4 rot_z=mat4::makeRotZ(rot_trans[i][0].z);
+			mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+			mat4 trans=mat4::makeTranslation(rot_trans[i][1]);
+			skybox.model[i]=mat4::mul(trans, rot);
 		}
 
 		//textures
@@ -183,38 +180,30 @@ public:
 		{
 			sg_pipeline_desc pip_desc{};
 			pip_desc.layout.attrs[ATTR_cube_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cube_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
 			pip_desc.shader=sg_make_shader(cube_shader_desc(sg_query_backend()));
-			pip_desc.index_type=SG_INDEXTYPE_UINT32;
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 			pip_desc.cull_mode=SG_CULLMODE_FRONT;
 			pip_desc.depth.write_enabled=true;
 			pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-			cube.pip=sg_make_pipeline(pip_desc);
+			cube_pip=sg_make_pipeline(pip_desc);
 		}
 		
 		//vertex buffer
 		{
-			float vertexes[4][3]{
-				{-.5f, -.5f, 0},
-				{.5f, -.5f, 0},
-				{-.5f, .5f, 0},
-				{.5f, .5f, 0}
+			float vertexes[4][6]{
+				{-.5f, -.5f, 0, 0, 0, 1},
+				{-.5f, .5f, 0, 0, 0, 1},
+				{.5f, -.5f, 0, 0, 0, 1},
+				{.5f, .5f, 0, 0, 0, 1}
 			};
 			sg_buffer_desc buffer_desc{};
 			buffer_desc.data=SG_RANGE(vertexes);
-			cube.block.vbuf=sg_make_buffer(buffer_desc);
+			cube_vbuf=sg_make_buffer(buffer_desc);
 		}
 
-		//index buffer
-		{
-			std::uint32_t indexes[2][3]{
-				{0, 2, 1},
-				{1, 2, 3}
-			};
-			sg_buffer_desc buffer_desc{};
-			buffer_desc.usage.index_buffer=true;
-			buffer_desc.data=SG_RANGE(indexes);
-			cube.block.ibuf=sg_make_buffer(buffer_desc);
-		}
+		//actual cube
+		cube=new RubiksCube(3);
 
 		//orientations
 		const vf3d fwd_up[6][2]{
@@ -235,13 +224,13 @@ public:
 			m(1, 0)=rgt.y, m(1, 1)=up.y, m(1, 2)=fwd.y;
 			m(2, 0)=rgt.z, m(2, 1)=up.z, m(2, 2)=fwd.z;
 			m(3, 3)=1;
-			cube.block.rot[i]=m;
+			cube_rot[i]=m;
 		}
 	}
 
 	void setupCamera() {
 		//randomize camera placement
-		float rad=cmn::randFloat(3, 5);
+		float rad=cmn::randFloat(5, 8);
 		vf3d dir=vf3d(
 			cmn::randFloat(-1, 1),
 			cmn::randFloat(-1, 1),
@@ -256,6 +245,8 @@ public:
 
 	void userCreate() override {
 		setupEnvironment();
+
+		std::srand(std::time(0));
 
 		setupSampler();
 		setupTextures();
@@ -300,12 +291,31 @@ public:
 		if(getKey(SAPP_KEYCODE_D).held) cam.pos-=4.f*dt*lr_dir;
 	}
 
+	void handleCubeControls() {
+		if(getKey(SAPP_KEYCODE_R).pressed) cube->reset();
+
+		bool ccw=!getKey(SAPP_KEYCODE_LEFT_ALT).held;
+		if(getKey(SAPP_KEYCODE_1).pressed) cube->turnX(0, ccw);
+		if(getKey(SAPP_KEYCODE_2).pressed) cube->turnX(1, ccw);
+		if(getKey(SAPP_KEYCODE_3).pressed) cube->turnX(2, ccw);
+		if(getKey(SAPP_KEYCODE_4).pressed) cube->turnY(0, ccw);
+		if(getKey(SAPP_KEYCODE_5).pressed) cube->turnY(1, ccw);
+		if(getKey(SAPP_KEYCODE_6).pressed) cube->turnY(2, ccw);
+		if(getKey(SAPP_KEYCODE_7).pressed) cube->turnZ(0, ccw);
+		if(getKey(SAPP_KEYCODE_8).pressed) cube->turnZ(1, ccw);
+		if(getKey(SAPP_KEYCODE_9).pressed) cube->turnZ(2, ccw);
+	}
+
 	void handleUserInput(float dt) {
 		handleCameraLooking(dt);
 
 		cam.dir=polarToCartesian(cam.yaw, cam.pitch);
 
 		handleCameraMovement(dt);
+
+		handleCubeControls();
+
+		if(getKey(SAPP_KEYCODE_L).held) light_pos=cam.pos;
 	}
 
 	void updateCameraMatrixes() {
@@ -352,39 +362,45 @@ public:
 	}
 
 	void renderCube() {
-		float total_sz=cube.block.size*cube.num+cube.gap*(cube.num-1);
-		float side_st=.5f*total_sz-.5f*cube.block.size;
+		float total_sz=cube_size*cube->num+cube_gap*(cube->num-1);
+		float side_st=.5f*total_sz-.5f*cube_size;
 		for(int i=0; i<6; i++) {
-			for(int j=0; j<cube.num; j++) {
-				float x=side_st-(cube.block.size+cube.gap)*j;
-				for(int k=0; k<cube.num; k++) {
-					float y=side_st-(cube.block.size+cube.gap)*k;
+			for(int j=0; j<cube->num; j++) {
+				float x=side_st-(cube_size+cube_gap)*j;
+				for(int k=0; k<cube->num; k++) {
+					float y=side_st-(cube_size+cube_gap)*k;
 
-					sg_apply_pipeline(cube.pip);
+					sg_apply_pipeline(cube_pip);
 
 					sg_bindings bind{};
-					bind.vertex_buffers[0]=cube.block.vbuf;
-					bind.index_buffer=cube.block.ibuf;
+					bind.vertex_buffers[0]=cube_vbuf;
+					bind.index_buffer=cube_ibuf;
 					sg_apply_bindings(bind);
 
 					//send model & camera transforms
-					//  NOTE: trans is applied b4 rot ON PURPOSE
 					mat4 trans=mat4::makeTranslation({x, y, .5f*total_sz});
-					mat4 model=mat4::mul(cube.block.rot[i], trans);
+					mat4 model=mat4::mul(cube_rot[i], trans);
 					mat4 mvp=mat4::mul(cam.view_proj, model);
 					vs_cube_params_t vs_cube_params{};
+					std::memcpy(vs_cube_params.u_model, model.m, sizeof(model.m));
 					std::memcpy(vs_cube_params.u_mvp, mvp.m, sizeof(mvp.m));
 					sg_apply_uniforms(UB_vs_cube_params, SG_RANGE(vs_cube_params));
 
 					//send face col
+					int f=cube->grid[i][cube->ix(j, k)];
 					fs_cube_params_t fs_cube_params{};
-					fs_cube_params.u_col[0]=cube.block.cols[i].r;
-					fs_cube_params.u_col[1]=cube.block.cols[i].g;
-					fs_cube_params.u_col[2]=cube.block.cols[i].b;
-					fs_cube_params.u_col[3]=cube.block.cols[i].a;
+					fs_cube_params.u_col[0]=cube_cols[f].r;
+					fs_cube_params.u_col[1]=cube_cols[f].g;
+					fs_cube_params.u_col[2]=cube_cols[f].b;
+					fs_cube_params.u_light_pos[0]=light_pos.x;
+					fs_cube_params.u_light_pos[1]=light_pos.y;
+					fs_cube_params.u_light_pos[2]=light_pos.z;
+					fs_cube_params.u_eye_pos[0]=cam.pos.x;
+					fs_cube_params.u_eye_pos[1]=cam.pos.y;
+					fs_cube_params.u_eye_pos[2]=cam.pos.z;
 					sg_apply_uniforms(UB_fs_cube_params, SG_RANGE(fs_cube_params));
 
-					sg_draw(0, 2*3, 1);
+					sg_draw(0, 4, 1);
 				}
 			}
 		}

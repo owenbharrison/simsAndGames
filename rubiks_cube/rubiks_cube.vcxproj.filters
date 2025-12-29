@@ -32,6 +32,9 @@
     <ClInclude Include="src\return_code.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\rubiks_cube.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />

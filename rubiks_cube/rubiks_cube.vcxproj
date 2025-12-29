@@ -134,6 +134,7 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\rubiks_cube.h" />
     <ClInclude Include="src\rubiks_cube_ui.h" />
     <ClInclude Include="src\return_code.h" />
     <ClInclude Include="src\shd.glsl.h" />
