@@ -45,10 +45,11 @@ void main() {
 
 @vs vs_skybox
 
-@include_block vs_uniforms
+layout(binding=0) uniform vs_skybox_params {
+	mat4 u_mvp;
+};
 
 in vec3 v_pos;
-in vec3 v_norm;
 in vec2 v_uv;
 
 out vec2 uv;

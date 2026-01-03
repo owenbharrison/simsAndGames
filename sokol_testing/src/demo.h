@@ -82,7 +82,11 @@ class Demo : public SokolEngine {
 	struct {
 		sg_pipeline pip{};
 
-		Shape faces[6];
+		sg_buffer vbuf{};
+
+		mat4 model[6];
+
+		sg_view tex[6];
 	} skybox;
 
 	sg_pipeline default_pip{};
@@ -211,35 +215,44 @@ public:
 		//pipeline
 		sg_pipeline_desc pip_desc{};
 		pip_desc.layout.attrs[ATTR_skybox_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_skybox_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
 		pip_desc.layout.attrs[ATTR_skybox_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(skybox_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
+		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 		skybox.pip=sg_make_pipeline(pip_desc);
 
+		//vertex buffer
+		{
+			//xyzuv
+			float vertexes[4][5]{
+				{-1, 0, -1, 0, 0},
+				{1, 0, -1, 1, 0},
+				{-1, 0, 1, 0, 1},
+				{1, 0, 1, 1, 1}
+			};
+			sg_buffer_desc buffer_desc{};
+			buffer_desc.data=SG_RANGE(vertexes);
+			skybox.vbuf=sg_make_buffer(buffer_desc);
+		}
+
+		//orient faces
 		const vf3d rot_trans[6][2]{
-			{cmn::Pi*vf3d(.5f, -.5f, 0), {.5f, 0, 0}},
-			{cmn::Pi*vf3d(.5f, .5f, 0), {-.5f, 0, 0}},
-			{cmn::Pi*vf3d(0, 0, 1), {0, .5f, 0}},
-			{cmn::Pi*vf3d(1, 0, 1), {0, -.5f, 0}},
-			{cmn::Pi*vf3d(.5f, 1, 0), {0, 0, .5f}},
-			{cmn::Pi*vf3d(.5f, 0, 0), {0, 0, -.5f}}
+			{cmn::Pi*vf3d(.5f, -.5f, 0), {1, 0, 0}},
+			{cmn::Pi*vf3d(.5f, .5f, 0), {-1, 0, 0}},
+			{cmn::Pi*vf3d(0, 0, 1), {0, 1, 0}},
+			{cmn::Pi*vf3d(1, 0, 1), {0, -1, 0}},
+			{cmn::Pi*vf3d(.5f, 1, 0), {0, 0, 1}},
+			{cmn::Pi*vf3d(.5f, 0, 0), {0, 0, -1}}
 		};
+		for(int i=0; i<6; i++) {
+			mat4 rot_x=mat4::makeRotX(rot_trans[i][0].x);
+			mat4 rot_y=mat4::makeRotY(rot_trans[i][0].y);
+			mat4 rot_z=mat4::makeRotZ(rot_trans[i][0].z);
+			mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+			mat4 trans=mat4::makeTranslation(rot_trans[i][1]);
+			skybox.model[i]=mat4::mul(trans, rot);
+		}
 
-		Mesh face_mesh;
-		face_mesh.verts={
-			{{-1, 0, -1}, {0, 1, 0}, {0, 0}},
-			{{1, 0, -1}, {0, 1, 0}, {1, 0}},
-			{{-1, 0, 1}, {0, 1, 0}, {0, 1}},
-			{{1, 0, 1}, {0, 1, 0}, {1, 1}}
-		};
-		face_mesh.tris={
-			{0, 2, 1},
-			{1, 2, 3}
-		};
-		face_mesh.updateVertexBuffer();
-		face_mesh.updateIndexBuffer();
-
+		//textures
 		const std::string filenames[6]{
 			"assets/img/skybox/px.png",
 			"assets/img/skybox/nx.png",
@@ -248,18 +261,8 @@ public:
 			"assets/img/skybox/pz.png",
 			"assets/img/skybox/nz.png"
 		};
-
 		for(int i=0; i<6; i++) {
-			auto& shape=skybox.faces[i];
-
-			//orient meshes
-			shape.mesh=face_mesh;
-			shape.scale=.5f*vf3d(1, 1, 1);
-			shape.rotation=rot_trans[i][0];
-			shape.translation=rot_trans[i][1];
-			shape.updateMatrixes();
-
-			sg_view& tex=shape.tex;
+			sg_view& tex=skybox.tex[i];
 			if(!makeTextureFromFile(tex, filenames[i]).valid) tex=tex_uv;
 		}
 	}
@@ -536,29 +539,27 @@ public:
 	}
 
 	void renderSkybox() {
-		//imagine camera at origin!
+		//view from eye at origin + camera projection
 		mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam.dir, {0, 1, 0});
 		mat4 view=mat4::inverse(look_at);
 		mat4 view_proj=mat4::mul(cam.proj, view);
 
 		for(int i=0; i<6; i++) {
-			auto& shp=skybox.faces[i];
-			
 			sg_apply_pipeline(skybox.pip);
 
 			sg_bindings bind{};
+			bind.vertex_buffers[0]=skybox.vbuf;
 			bind.samplers[SMP_skybox_smp]=sampler;
-			bind.vertex_buffers[0]=shp.mesh.vbuf;
-			bind.index_buffer=shp.mesh.ibuf;
-			bind.views[VIEW_skybox_tex]=shp.tex;
+			bind.views[VIEW_skybox_tex]=skybox.tex[i];
 			sg_apply_bindings(bind);
 
-			vs_params_t vs_params{};
-			mat4 mvp=mat4::mul(view_proj, shp.model);
-			std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+			mat4 mvp=mat4::mul(view_proj, skybox.model[i]);
 
-			sg_draw(0, 3*shp.mesh.tris.size(), 1);
+			vs_skybox_params_t vs_skybox_params{};
+			std::memcpy(vs_skybox_params.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_vs_skybox_params, SG_RANGE(vs_skybox_params));
+
+			sg_draw(0, 4, 1);
 		}
 	}
 
