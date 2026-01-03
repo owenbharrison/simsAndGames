@@ -45,6 +45,9 @@ public:
 
 	virtual void userDestroy() {};
 
+	//custom user event handling.
+	virtual void userInput(const sapp_event* e) {}
+
 	virtual void userUpdate(float dt)=0;
 
 	virtual void userRender()=0;
@@ -94,6 +97,8 @@ public:
 				_mouse_dy_new=e->mouse_dy;
 				break;
 		}
+
+		userInput(e);
 	}
 
 	//fun little helpers
