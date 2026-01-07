@@ -1,15 +1,15 @@
-#include "post_process_ui.h"
+#include "terrain_demo.h"
 
-static PostProcessUI* ppui_ptr=nullptr;
+static TerrainDemo* td_ptr=nullptr;
 
-static void init_cb() { ppui_ptr->init(); }
-static void cleanup_cb() { ppui_ptr->cleanup(); }
-static void frame_cb() { ppui_ptr->frame(); }
-static void input_cb(const sapp_event* e) { ppui_ptr->input(e); }
+static void init_cb() { td_ptr->init(); }
+static void cleanup_cb() { td_ptr->cleanup(); }
+static void frame_cb() { td_ptr->frame(); }
+static void input_cb(const sapp_event* e) { td_ptr->input(e); }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
-	static PostProcessUI ppui;
-	ppui_ptr=&ppui;
+	static TerrainDemo td;
+	td_ptr=&td;
 
 	sapp_desc app_desc{};
 	app_desc.init_cb=init_cb;

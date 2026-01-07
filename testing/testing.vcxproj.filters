@@ -20,7 +20,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\post_process_ui.h">
+    <ClInclude Include="src\terrain_demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\shd.glsl.h">
@@ -29,11 +29,43 @@
     <ClInclude Include="src\texture_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\linemesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
     <None Include="compile_shaders.bat">
       <Filter>Source Files</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\pz.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\ny.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\nz.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\px.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\py.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\nx.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\grass_falloff.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\terrain.txt" />
   </ItemGroup>
 </Project>

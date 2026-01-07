@@ -143,13 +143,27 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\post_process_ui.h" />
+    <ClInclude Include="src\linemesh.h" />
+    <ClInclude Include="src\mesh.h" />
+    <ClInclude Include="src\terrain_demo.h" />
     <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\texture_utils.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="compile_shaders.bat" />
     <None Include="src\shd.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\grass_falloff.png" />
+    <Image Include="assets\nx.png" />
+    <Image Include="assets\ny.png" />
+    <Image Include="assets\nz.png" />
+    <Image Include="assets\px.png" />
+    <Image Include="assets\py.png" />
+    <Image Include="assets\pz.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\terrain.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
