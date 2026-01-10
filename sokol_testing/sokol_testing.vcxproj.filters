@@ -44,6 +44,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
+    <None Include="compile_shaders.bat">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\models\bunny.txt" />

@@ -48,10 +48,10 @@ static sg_view makeUVTexture(int width, int height) {
 	return view;
 }
 
-[[nodiscard]] static ReturnCode makeTextureFromFile(sg_view& view, const std::string& filename) {
+[[nodiscard]] static bool makeTextureFromFile(sg_view& view, const std::string& filename) {
 	int width, height, channels;
 	unsigned char* pixels8=stbi_load(filename.c_str(), &width, &height, &channels, 4);
-	if(!pixels8) return {false, "invalid image file"};
+	if(!pixels8) return false;
 
 	std::uint32_t* pixels32=new std::uint32_t[width*height];
 	std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
@@ -60,6 +60,6 @@ static sg_view makeUVTexture(int width, int height) {
 	view=makeTextureFromPixels(pixels32, width, height);
 	delete[] pixels32;
 
-	return {true, "success"};
+	return true;
 }
 #endif

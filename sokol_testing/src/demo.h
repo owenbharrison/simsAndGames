@@ -54,11 +54,11 @@ class Demo : public SokolEngine {
 		vf3d pos;
 
 		struct {
-			sg_view tex_color_attach{};
-			sg_view tex_color_view{};
+			sg_view color_attach{};
+			sg_view color_tex{};
 
-			sg_view tex_depth_attach{};
-			sg_view tex_depth_view{};
+			sg_view depth_attach{};
+			sg_view depth_tex{};
 
 			vf3d dir, up;
 
@@ -71,15 +71,6 @@ class Demo : public SokolEngine {
 	sg_pass_action display_pass_action{};
 
 	struct {
-		vf3d pos;
-		vf3d dir;
-		float yaw=0, pitch=0;
-		mat4 proj, view;
-		//view, then project
-		mat4 view_proj;
-	} cam;
-
-	struct {
 		sg_pipeline pip{};
 
 		sg_buffer vbuf{};
@@ -89,19 +80,29 @@ class Demo : public SokolEngine {
 		sg_view tex[6];
 	} skybox;
 
-	sg_pipeline default_pip{};
+	sg_pipeline mesh_pip{};
 
 	sg_pipeline line_pip{};
 
 	struct {
 		sg_pipeline pip{};
-		sg_bindings bind{};
+
+		sg_buffer vbuf{};
 	} texview;
 
 	bool render_outlines=false;
 	std::list<Shape> shapes;
 
 	bool render_cubemap=false;
+
+	struct {
+		vf3d pos;
+		vf3d dir;
+		float yaw=0, pitch=0;
+		mat4 proj, view;
+		//view, then project
+		mat4 view_proj;
+	} cam;
 
 public:
 #pragma region SETUP HELPERS
@@ -123,8 +124,7 @@ public:
 
 		tex_uv=makeUVTexture(1024, 1024);
 
-		tex_checker=tex_blank;
-		makeTextureFromFile(tex_checker, "assets/img/checker.png");
+		if(!makeTextureFromFile(tex_checker, "assets/img/checker.png")) tex_checker=tex_blank;
 	}
 
 	//make pipeline, make render targets, & orient view matrixes
@@ -134,9 +134,9 @@ public:
 		shadow_map.pass_action.colors[0].clear_value={0, 0, 0, 1};
 
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_shadow_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shadow_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shadow_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_shadow_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shadow_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shadow_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(shadow_shader_desc(sg_query_backend()));
 		pip_desc.index_type=SG_INDEXTYPE_UINT32;
 		pip_desc.cull_mode=SG_CULLMODE_FRONT;
@@ -169,13 +169,13 @@ public:
 				{
 					sg_view_desc view_desc{};
 					view_desc.color_attachment.image=img_color;
-					face.tex_color_attach=sg_make_view(view_desc);
+					face.color_attach=sg_make_view(view_desc);
 				}
 
 				{
 					sg_view_desc view_desc{};
 					view_desc.texture.image=img_color;
-					face.tex_color_view=sg_make_view(view_desc);
+					face.color_tex=sg_make_view(view_desc);
 				}
 			}
 
@@ -191,13 +191,13 @@ public:
 				{
 					sg_view_desc view_desc{};
 					view_desc.depth_stencil_attachment.image=depth_img;
-					face.tex_depth_attach=sg_make_view(view_desc);
+					face.depth_attach=sg_make_view(view_desc);
 				}
 				
 				{
 					sg_view_desc view_desc{};
 					view_desc.texture.image=depth_img;
-					face.tex_depth_view=sg_make_view(view_desc);
+					face.depth_tex=sg_make_view(view_desc);
 				}
 			}
 
@@ -214,8 +214,8 @@ public:
 	void setupSkybox() {
 		//pipeline
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_skybox_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_skybox_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_skybox_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_skybox_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(skybox_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 		skybox.pip=sg_make_pipeline(pip_desc);
@@ -263,7 +263,7 @@ public:
 		};
 		for(int i=0; i<6; i++) {
 			sg_view& tex=skybox.tex[i];
-			if(!makeTextureFromFile(tex, filenames[i]).valid) tex=tex_uv;
+			if(!makeTextureFromFile(tex, filenames[i])) tex=tex_uv;
 		}
 	}
 
@@ -274,24 +274,24 @@ public:
 	}
 
 	//works with mesh
-	void setupDefaultPipeline() {
+	void setupMeshPipeline() {
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_default_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_default_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_default_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(default_shader_desc(sg_query_backend()));
+		pip_desc.layout.attrs[ATTR_mesh_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_mesh_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_mesh_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(mesh_shader_desc(sg_query_backend()));
 		pip_desc.index_type=SG_INDEXTYPE_UINT32;
 		pip_desc.cull_mode=SG_CULLMODE_FRONT;
 		pip_desc.depth.write_enabled=true;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		default_pip=sg_make_pipeline(pip_desc);
+		mesh_pip=sg_make_pipeline(pip_desc);
 	}
 
 	//works with linemesh
 	void setupLinePipeline() {
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_line_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_line_v_col].format=SG_VERTEXFORMAT_FLOAT4;
+		pip_desc.layout.attrs[ATTR_line_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_line_i_col].format=SG_VERTEXFORMAT_FLOAT4;
 		pip_desc.shader=sg_make_shader(line_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_LINES;
 		pip_desc.index_type=SG_INDEXTYPE_UINT32;
@@ -303,8 +303,8 @@ public:
 	void setupTexview() {
 		//2d tristrip pipeline
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_texview_v_pos].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.layout.attrs[ATTR_texview_v_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_texview_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_texview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(texview_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 		texview.pip=sg_make_pipeline(pip_desc);
@@ -319,10 +319,7 @@ public:
 		sg_buffer_desc vbuf_desc{};
 		vbuf_desc.data.ptr=vertexes;
 		vbuf_desc.data.size=sizeof(vertexes);
-		texview.bind.vertex_buffers[0]=sg_make_buffer(vbuf_desc);
-
-		//sampler
-		texview.bind.samplers[SMP_texview_smp]=sampler;
+		texview.vbuf=sg_make_buffer(vbuf_desc);
 	}
 
 	//scaled cube
@@ -410,11 +407,11 @@ public:
 
 		setupSkybox();
 
-		setupLinePipeline();
-
 		setupDisplayPassAction();
 
-		setupDefaultPipeline();
+		setupMeshPipeline();
+
+		setupLinePipeline();
 
 		setupTexview();
 
@@ -472,7 +469,9 @@ public:
 		if(getKey(SAPP_KEYCODE_C).pressed) render_cubemap^=true;
 
 		//set shadow map position with L
-		if(getKey(SAPP_KEYCODE_L).held) shadow_map.pos=cam.pos;
+		if(getKey(SAPP_KEYCODE_L).held) {
+			shadow_map.pos=cam.pos;
+		}
 	}
 
 	void updateCameraMatrixes() {
@@ -496,7 +495,7 @@ public:
 	}
 #pragma endregion
 
-	void userUpdate(float dt) {
+	void userUpdate(float dt) override {
 		handleUserInput(dt);
 
 		updateCameraMatrixes();
@@ -506,18 +505,16 @@ public:
 
 #pragma region RENDER HELPERS
 	void renderShapesIntoShadowMap() {
-		const mat4& proj=shadow_map.face_proj;
-
 		for(int i=0; i<6; i++) {
 			auto& face=shadow_map.faces[i];
 
 			sg_pass pass{};
 			pass.action=shadow_map.pass_action;
-			pass.attachments.colors[0]=face.tex_color_attach;
-			pass.attachments.depth_stencil=face.tex_depth_attach;
+			pass.attachments.colors[0]=face.color_attach;
+			pass.attachments.depth_stencil=face.depth_attach;
 			sg_begin_pass(pass);
 
-			mat4 view_proj=mat4::mul(proj, face.view);
+			mat4 view_proj=mat4::mul(shadow_map.face_proj, face.view);
 			for(const auto& s:shapes) {
 				sg_apply_pipeline(shadow_map.pip);
 
@@ -526,10 +523,11 @@ public:
 				bind.index_buffer=s.mesh.ibuf;
 				sg_apply_bindings(bind);
 
-				vs_params_t vs_params{};
+				vs_shadow_params_t vs_shadow_params{};
+				std::memcpy(vs_shadow_params.u_model, s.model.m, sizeof(s.model.m));
 				mat4 mvp=mat4::mul(view_proj, s.model);
-				std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-				sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+				std::memcpy(vs_shadow_params.u_mvp, mvp.m, sizeof(mvp.m));
+				sg_apply_uniforms(UB_vs_shadow_params, SG_RANGE(vs_shadow_params));
 
 				sg_draw(0, 3*s.mesh.tris.size(), 1);
 			}
@@ -549,8 +547,8 @@ public:
 
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=skybox.vbuf;
-			bind.samplers[SMP_skybox_smp]=sampler;
-			bind.views[VIEW_skybox_tex]=skybox.tex[i];
+			bind.samplers[SMP_u_skybox_smp]=sampler;
+			bind.views[VIEW_u_skybox_tex]=skybox.tex[i];
 			sg_apply_bindings(bind);
 
 			mat4 mvp=mat4::mul(view_proj, skybox.model[i]);
@@ -565,19 +563,29 @@ public:
 
 	void renderShapes() {
 		for(const auto& s:shapes) {
-			sg_apply_pipeline(default_pip);
+			sg_apply_pipeline(mesh_pip);
 
 			sg_bindings bind{};
-			bind.samplers[SMP_default_smp]=sampler;
 			bind.vertex_buffers[0]=s.mesh.vbuf;
 			bind.index_buffer=s.mesh.ibuf;
-			bind.views[VIEW_default_tex]=s.tex;
+			bind.samplers[SMP_u_mesh_smp]=sampler;
+			bind.views[VIEW_u_mesh_tex]=s.tex;
 			sg_apply_bindings(bind);
 
-			vs_params_t vs_params{};
+			vs_mesh_params_t vs_mesh_params{};
+			std::memcpy(vs_mesh_params.u_model, s.model.m, sizeof(s.model.m));
 			mat4 mvp=mat4::mul(cam.view_proj, s.model);
-			std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+			std::memcpy(vs_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_vs_mesh_params, SG_RANGE(vs_mesh_params));
+
+			fs_mesh_params_t fs_mesh_params{};
+			fs_mesh_params.u_eye_pos[0]=cam.pos.x;
+			fs_mesh_params.u_eye_pos[1]=cam.pos.y;
+			fs_mesh_params.u_eye_pos[2]=cam.pos.z;
+			fs_mesh_params.u_light_pos[0]=shadow_map.pos.x;
+			fs_mesh_params.u_light_pos[1]=shadow_map.pos.y;
+			fs_mesh_params.u_light_pos[2]=shadow_map.pos.z;
+			sg_apply_uniforms(UB_fs_mesh_params, SG_RANGE(fs_mesh_params));
 
 			sg_draw(0, 3*s.mesh.tris.size(), 1);
 		}
@@ -592,10 +600,10 @@ public:
 			bind.index_buffer=s.linemesh.ibuf;
 			sg_apply_bindings(bind);
 
-			vs_params_t vs_params{};
+			vs_line_params_t vs_line_params{};
 			mat4 mvp=mat4::mul(cam.view_proj, s.model);
-			std::memcpy(vs_params.u_mvp, mvp.m, sizeof(vs_params.u_mvp));
-			sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+			std::memcpy(vs_line_params.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_vs_line_params, SG_RANGE(vs_line_params));
 
 			sg_draw(0, 2*s.linemesh.lines.size(), 1);
 		}
@@ -611,8 +619,18 @@ public:
 		for(int i=0; i<6; i++) {
 			sg_apply_pipeline(texview.pip);
 
-			texview.bind.views[VIEW_texview_tex]=shadow_map.faces[i].tex_color_view;
-			sg_apply_bindings(texview.bind);
+			sg_bindings bind{};
+			bind.vertex_buffers[0]=texview.vbuf;
+			bind.samplers[SMP_u_texview_smp]=sampler;
+			bind.views[VIEW_u_texview_tex]=shadow_map.faces[i].color_tex;
+			sg_apply_bindings(bind);
+
+			vs_texview_params_t vs_texview_params{};
+			vs_texview_params.u_tl[0]=0;
+			vs_texview_params.u_tl[1]=0;
+			vs_texview_params.u_br[0]=1;
+			vs_texview_params.u_br[1]=1;
+			sg_apply_uniforms(UB_vs_texview_params, SG_RANGE(vs_texview_params));
 
 			int x=tile_size*idx[i][0];
 			int y=tile_size*idx[i][1];
@@ -624,7 +642,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() {
+	void userRender() override {
 		renderShapesIntoShadowMap();
 
 		//start display pass 
