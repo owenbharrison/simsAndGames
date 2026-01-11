@@ -113,6 +113,7 @@ layout(binding=1) uniform fs_mesh_params {
 	vec3 u_eye_pos;
 	vec3 u_light_pos;
 };
+
 layout(binding=0) uniform texture2D u_mesh_tex;
 layout(binding=0) uniform sampler u_mesh_smp;
 
@@ -185,7 +186,7 @@ void main() {
 
 
 
-/*=====DEBUG TEXTURE VIEW SHADER=====*/
+/*=====TEXTURE VIEW SHADER=====*/
 
 @vs vs_texview
 
@@ -208,6 +209,10 @@ void main() {
 
 @fs fs_texview
 
+layout(binding=1) uniform fs_texview_params {
+	vec4 u_tint;
+};
+
 layout(binding=0) uniform texture2D u_texview_tex;
 layout(binding=0) uniform sampler u_texview_smp;
 
@@ -216,7 +221,7 @@ in vec2 uv;
 out vec4 o_frag_col;
 
 void main() {
-	o_frag_col=texture(sampler2D(u_texview_tex, u_texview_smp), uv);
+	o_frag_col=u_tint*texture(sampler2D(u_texview_tex, u_texview_smp), uv);
 }
 
 @end

@@ -112,7 +112,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -133,7 +133,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -150,6 +150,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\demo.h" />
+    <ClInclude Include="src\font.h" />
     <ClInclude Include="src\linemesh.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\return_code.h" />
@@ -175,6 +176,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\img\checker.png" />
+    <Image Include="assets\img\font\fancy_8x16.png" />
+    <Image Include="assets\img\font\monogram_6x9.png" />
+    <Image Include="assets\img\font\round_6x6.png" />
     <Image Include="assets\img\skybox\nx.png" />
     <Image Include="assets\img\skybox\ny.png" />
     <Image Include="assets\img\skybox\nz.png" />

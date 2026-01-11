@@ -36,6 +36,9 @@
     <ClInclude Include="src\return_code.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\font.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -77,6 +80,15 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\img\skybox\py.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\font\round_6x6.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\font\fancy_8x16.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\font\monogram_6x9.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

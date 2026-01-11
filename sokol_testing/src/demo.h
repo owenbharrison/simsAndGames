@@ -18,6 +18,8 @@
 
 #include "texture_utils.h"
 
+#include "font.h"
+
 using cmn::mat4;
 using cmn::vf3d;
 
@@ -89,6 +91,14 @@ class Demo : public SokolEngine {
 
 		sg_buffer vbuf{};
 	} texview;
+	
+	struct {
+		Font fancy;
+		Font monogram;
+		Font round;
+
+		bool render_test=true;
+	} fonts;
 
 	bool render_outlines=false;
 	std::list<Shape> shapes;
@@ -103,6 +113,8 @@ class Demo : public SokolEngine {
 		//view, then project
 		mat4 view_proj;
 	} cam;
+
+	float total_dt=0;
 
 public:
 #pragma region SETUP HELPERS
@@ -307,19 +319,32 @@ public:
 		pip_desc.layout.attrs[ATTR_texview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(texview_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+		//with alpha blending
+		pip_desc.colors[0].blend.enabled=true;
+		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
+		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
+		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
 		texview.pip=sg_make_pipeline(pip_desc);
 
 		//quad vertex buffer: xyuv
+		//flip y
 		float vertexes[4][2][2]{
-			{{-1, -1}, {0, 0}},//tl
-			{{1, -1}, {1, 0}},//tr
-			{{-1, 1}, {0, 1}},//bl
-			{{1, 1}, {1, 1}}//br
+			{{-1, -1}, {0, 1}},//tl
+			{{1, -1}, {1, 1}},//tr
+			{{-1, 1}, {0, 0}},//bl
+			{{1, 1}, {1, 0}}//br
 		};
 		sg_buffer_desc vbuf_desc{};
 		vbuf_desc.data.ptr=vertexes;
 		vbuf_desc.data.size=sizeof(vertexes);
 		texview.vbuf=sg_make_buffer(vbuf_desc);
+	}
+	
+	void setupFonts() {
+		fonts.fancy=Font("assets/img/font/fancy_8x16.png", 8, 16);
+		fonts.monogram=Font("assets/img/font/monogram_6x9.png", 6, 9);
+		fonts.round=Font("assets/img/font/round_6x6.png", 6, 6);
 	}
 
 	//scaled cube
@@ -415,6 +440,8 @@ public:
 
 		setupTexview();
 
+		setupFonts();
+
 		setupPlatform();
 		setupShapes();
 
@@ -469,9 +496,10 @@ public:
 		if(getKey(SAPP_KEYCODE_C).pressed) render_cubemap^=true;
 
 		//set shadow map position with L
-		if(getKey(SAPP_KEYCODE_L).held) {
-			shadow_map.pos=cam.pos;
-		}
+		if(getKey(SAPP_KEYCODE_L).held) shadow_map.pos=cam.pos;
+
+		//toggle font render test
+		if(getKey(SAPP_KEYCODE_F).pressed) fonts.render_test^=true;
 	}
 
 	void updateCameraMatrixes() {
@@ -501,6 +529,8 @@ public:
 		updateCameraMatrixes();
 
 		updateShadowMapMatrixes();
+
+		total_dt+=dt;
 	}
 
 #pragma region RENDER HELPERS
@@ -625,19 +655,99 @@ public:
 			bind.views[VIEW_u_texview_tex]=shadow_map.faces[i].color_tex;
 			sg_apply_bindings(bind);
 
+			//render entire texture
 			vs_texview_params_t vs_texview_params{};
 			vs_texview_params.u_tl[0]=0;
 			vs_texview_params.u_tl[1]=0;
 			vs_texview_params.u_br[0]=1;
 			vs_texview_params.u_br[1]=1;
 			sg_apply_uniforms(UB_vs_texview_params, SG_RANGE(vs_texview_params));
+			
+			//white tint
+			fs_texview_params_t fs_texview_params{};
+			fs_texview_params.u_tint[0]=1;
+			fs_texview_params.u_tint[1]=1;
+			fs_texview_params.u_tint[2]=1;
+			fs_texview_params.u_tint[3]=1;
+			sg_apply_uniforms(UB_fs_texview_params, SG_RANGE(fs_texview_params));
 
+			//render squares at top of screen
 			int x=tile_size*idx[i][0];
 			int y=tile_size*idx[i][1];
 			sg_apply_viewport(x, y, tile_size, tile_size, true);
 
 			//4 verts = 1quad
 			sg_draw(0, 4, 1);
+		}
+	}
+
+	void renderChar(const Font& f, float x, float y, char c, float scl, sg_color tint) {
+		sg_apply_pipeline(texview.pip);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=texview.vbuf;
+		bind.samplers[SMP_u_texview_smp]=sampler;
+		bind.views[VIEW_u_texview_tex]=f.tex;
+		sg_apply_bindings(bind);
+
+		vs_texview_params_t vs_texview_params{};
+		f.getRegion(c,
+			vs_texview_params.u_tl[0],
+			vs_texview_params.u_tl[1],
+			vs_texview_params.u_br[0],
+			vs_texview_params.u_br[1]
+		);
+		sg_apply_uniforms(UB_vs_texview_params, SG_RANGE(vs_texview_params));
+
+		fs_texview_params_t fs_texview_params{};
+		fs_texview_params.u_tint[0]=tint.r;
+		fs_texview_params.u_tint[1]=tint.g;
+		fs_texview_params.u_tint[2]=tint.b;
+		fs_texview_params.u_tint[3]=tint.a;
+		sg_apply_uniforms(UB_fs_texview_params, SG_RANGE(fs_texview_params));
+
+		sg_apply_viewportf(x, y, scl*f.char_w, scl*f.char_h, true);
+
+		sg_draw(0, 4, 1);
+	}
+
+	void renderString(const Font& f, float x, float y, const std::string& str, float scl, sg_color tint) {
+		int ox=0, oy=0;
+		for(const auto& c:str) {
+			if(c=='\n') ox=0, oy+=f.char_h;
+			//tabsize=2
+			else if(c=='\t') ox+=2*f.char_w;
+			else if(c>=32&&c<=127) {
+				renderChar(f, x+scl*ox, y+scl*oy, c, scl, tint);
+				ox+=f.char_w;
+			}
+		}
+	}
+
+	void renderFontTest() {
+		struct {
+			Font* font;
+			std::string str;
+			float scl;
+			sg_color tint;
+		} tests[3]{
+			{&fonts.fancy, "fancy:\n\tsphinx of\n\tblack quartz,\n\tjudge my vow.", 1, {1, 0, 0, 1}},
+			{&fonts.monogram, "monogram:\n\tabcdefghijklm\n\tnopqrstuvwxyz\n\t0123456789", 1.78f, {0, 1, 0, 1}},
+			{&fonts.round, "round:\n\tthe quick\n\tbrown fox\n\tjumps over\n\tthe lazy dog.", 2.67f, {0, 0, 1, 1}}
+		};
+		for(int i=0; i<3; i++) {
+			const auto& t=tests[i];
+			float angle=.2f*total_dt+2*cmn::Pi*i/3;
+			float x01=.5f+.3f*std::cos(angle);
+			float y01=.5f+.3f*std::sin(angle);
+			renderString(
+				*t.font,
+				sapp_widthf()* x01,
+				sapp_heightf()* y01,
+				t.str,
+				t.scl,
+				t.tint
+			);
 		}
 	}
 #pragma endregion
@@ -658,12 +768,14 @@ public:
 
 		if(render_cubemap) renderCubemap();
 
+		if(fonts.render_test) renderFontTest();
+
 		sg_end_pass();
 
 		sg_commit();
 	}
 
 	Demo() {
-		app_title="Cubemap Demo";
+		app_title="Font Demo";
 	}
 };
