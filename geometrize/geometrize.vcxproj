@@ -150,8 +150,12 @@
     <ClInclude Include="src\shapes\triangle.h" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\giraffe.png" />
+    <Image Include="assets\porsche.png" />
+    <Image Include="assets\seagull.png" />
     <Image Include="assets\snoopy.png" />
     <Image Include="assets\tom_and_jerry.png" />
+    <Image Include="assets\white_tiger.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

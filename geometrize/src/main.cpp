@@ -13,6 +13,8 @@ using olc::vf2d;
 //for memset
 #include <string>
 
+#include <random>
+
 class GeometrizeUI : public olc::PixelGameEngine {
 	int image_width=0;
 	int image_height=0;
@@ -35,9 +37,23 @@ public:
 		approx.Create(image_width, image_height);
 		guess.Create(image_width, image_height);
 		
-		//load input & use uvs to resample
 		{
-			const olc::Sprite image("assets/tom_and_jerry.png");
+			//choose random image
+			const std::vector<std::string> filenames{
+				"assets/giraffe.png",
+				"assets/porsche.png",
+				"assets/seagull.png",
+				"assets/snoopy.png",
+				"assets/tom_and_jerry.png",
+				"assets/white_tiger.png"
+			};
+			//wasnt random enough
+			std::random_device dev;
+			std::mt19937 rng(dev());
+			std::uniform_int_distribution<std::mt19937::result_type> dist(0, filenames.size()-1);
+			const olc::Sprite image(filenames[dist(rng)]);
+
+			//resample img
 			const float u_step=1.f/image_width;
 			const float v_step=1.f/image_height;
 			for(int i=0; i<image_width; i++) {
@@ -46,6 +62,8 @@ public:
 					target.Sprite()->SetPixel(i, j, image.SampleBL(u, v));
 				}
 			}
+
+			target.Decal()->Update();
 		}
 
 		return true;
@@ -121,11 +139,26 @@ public:
 		}
 
 		//print cost
-		std::cout<<"cost: "<<prev_cost<<'\n';
+		//std::cout<<"cost: "<<prev_cost<<'\n';
 
-		//show approx image
+		//update approx image
 		approx.Decal()->Update();
 		DrawDecal({0, 0}, approx.Decal());
+
+		//draw target preview
+		if(GetMouse(olc::Mouse::LEFT).bHeld) {
+			float mx=GetMouseX();
+			float u=mx/ScreenWidth();
+			vf2d source_pos(u*target.Sprite()->width, 0);
+			vf2d source_sz(
+				(1-u)*target.Sprite()->width,
+				target.Sprite()->height
+			);
+			DrawPartialDecal({mx, 0}, target.Decal(), source_pos, source_sz);
+			
+			//draw dividing line
+			FillRectDecal({mx-2, 0}, vf2d(4, ScreenHeight()), olc::BLACK);
+		}
 
 		return true;
 	}
@@ -134,7 +167,7 @@ public:
 int main() {
 	GeometrizeUI gui;
 	bool vsync=false;
-	if(gui.Construct(640, 360, 1, 1, false, vsync)) gui.Start();
+	if(gui.Construct(700, 500, 1, 1, false, vsync)) gui.Start();
 
 	return 0;
 }

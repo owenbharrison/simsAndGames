@@ -34,10 +34,22 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\tom_and_jerry.png">
+    <Image Include="assets\giraffe.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\porsche.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\seagull.png">
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\snoopy.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\tom_and_jerry.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\white_tiger.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
