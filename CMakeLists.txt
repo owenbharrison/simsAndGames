@@ -23,7 +23,6 @@ set(PROJECTS
     fruit_ninja
     geometrize
     glitch
-    inverse_kinematics
     jelly_car_clone
     marching_cubes
     minesweeper
@@ -31,14 +30,13 @@ set(PROJECTS
     pixels
     planet_game
     raycasting
-    rigging
     rigid_bodies
     slicer
     smoke
     sokol_testing
     spiders
     steering_behaviors
-    targetting
+    targeting
     terraria_clone
     testing
     tracking
