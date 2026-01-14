@@ -15,24 +15,24 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
+    <ClInclude Include="src\return_code.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\quat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\return_code.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\suzanne.txt" />
     <Text Include="assets\bunny.txt" />
     <Text Include="assets\dragon.txt" />
+    <Text Include="assets\suzanne.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

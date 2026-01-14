@@ -29,8 +29,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "slicer", "slicer\slicer.vcx
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "block_craft", "block_craft\block_craft.vcxproj", "{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "targetting", "targetting\targetting.vcxproj", "{3F47E737-0AB9-4FB1-B8BF-50C60C188620}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cloth", "cloth\cloth.vcxproj", "{73BF86FB-41DB-405C-927E-B2F6737A9BF1}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fracture", "fracture\fracture.vcxproj", "{134F8EC1-508E-4C94-9674-D6B9541D387A}"
@@ -66,6 +64,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "spiders", "spiders\spiders.vcxproj", "{2BC6AC4C-5019-4CF7-B0EC-EDB5B8344473}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rubiks_cube", "rubiks_cube\rubiks_cube.vcxproj", "{753FA3B2-F4A8-4CF0-9236-A96DCAAAC234}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "targeting", "targeting\targeting.vcxproj", "{65433C0F-62DA-4292-9A58-08357BB17856}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -179,14 +179,6 @@ Global
 		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Release|x64.Build.0 = Release|x64
 		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Release|x86.ActiveCfg = Release|Win32
 		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Release|x86.Build.0 = Release|Win32
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Debug|x64.ActiveCfg = Debug|x64
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Debug|x64.Build.0 = Debug|x64
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Debug|x86.ActiveCfg = Debug|Win32
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Debug|x86.Build.0 = Debug|Win32
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Release|x64.ActiveCfg = Release|x64
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Release|x64.Build.0 = Release|x64
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Release|x86.ActiveCfg = Release|Win32
-		{3F47E737-0AB9-4FB1-B8BF-50C60C188620}.Release|x86.Build.0 = Release|Win32
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Debug|x64.ActiveCfg = Debug|x64
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Debug|x64.Build.0 = Debug|x64
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Debug|x86.ActiveCfg = Debug|Win32
@@ -331,6 +323,14 @@ Global
 		{753FA3B2-F4A8-4CF0-9236-A96DCAAAC234}.Release|x64.Build.0 = Release|x64
 		{753FA3B2-F4A8-4CF0-9236-A96DCAAAC234}.Release|x86.ActiveCfg = Release|Win32
 		{753FA3B2-F4A8-4CF0-9236-A96DCAAAC234}.Release|x86.Build.0 = Release|Win32
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Debug|x64.ActiveCfg = Debug|x64
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Debug|x64.Build.0 = Debug|x64
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Debug|x86.ActiveCfg = Debug|Win32
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Debug|x86.Build.0 = Debug|Win32
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Release|x64.ActiveCfg = Release|x64
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Release|x64.Build.0 = Release|x64
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Release|x86.ActiveCfg = Release|Win32
+		{65433C0F-62DA-4292-9A58-08357BB17856}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

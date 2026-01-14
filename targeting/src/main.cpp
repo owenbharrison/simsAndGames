@@ -14,7 +14,7 @@ using cmn::mat4;
 
 struct Example : cmn::Engine3D {
 	Example() {
-		sAppName="targetting system";
+		sAppName="targeting system";
 	}
 
 	//camera positioning
@@ -116,7 +116,7 @@ struct Example : cmn::Engine3D {
 	void handleCameraLooking(float dt) {
 		//cant look while updating
 		if(trans_mesh||rot_mesh||scale_mesh) return;
-		
+
 		//look up, down
 		if(GetKey(olc::Key::UP).bHeld) cam_pitch+=dt;
 		if(cam_pitch>cmn::Pi/2) cam_pitch=cmn::Pi/2-.001f;
@@ -270,7 +270,7 @@ struct Example : cmn::Engine3D {
 				w=1;
 				vf3d ctr_ndc=matMulVec(cam_proj, ctr_view, w);
 				ctr_ndc/=w;
-				scale_ctr.x=(1-ctr_ndc.x)*ScreenWidth()/2;
+				scale_ctr.x=(1+ctr_ndc.x)*ScreenWidth()/2;
 				scale_ctr.y=(1-ctr_ndc.y)*ScreenHeight()/2;
 			}
 		}
@@ -319,7 +319,7 @@ struct Example : cmn::Engine3D {
 				case 2: select=scale_mesh, col=olc::YELLOW; break;
 			}
 			if(!select) continue;
-			
+
 			int id=select->id;
 			for(int i=1; i<ScreenWidth()-1; i++) {
 				for(int j=1; j<ScreenHeight()-1; j++) {
@@ -361,7 +361,7 @@ struct Example : cmn::Engine3D {
 		DrawLine(a, b, olc::GREEN);
 		DrawLine(b, c, olc::GREEN);
 		DrawLine(c, a, olc::GREEN);
-		
+
 		//crosshair
 		DrawLine(rot_start.x-8, rot_start.y, rot_start.x+8, rot_start.y, olc::RED);
 		DrawLine(rot_start.x, rot_start.y-8, rot_start.x, rot_start.y+8, olc::RED);
