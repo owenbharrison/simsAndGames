@@ -14,13 +14,13 @@ namespace cmn {
 		v3d_generic(T x_, T y_, T z_) { x=x_, y=y_, z=z_; }
 		v3d_generic(const v3d_generic& v) { x=v.x, y=v.y, z=v.z; }
 
-		float& operator[](int i) {
+		T& operator[](int i) {
 			if(i==1) return y;
 			if(i==2) return z;
 			return x;
 		}
 
-		const float& operator[](int i) const {
+		const T& operator[](int i) const {
 			if(i==1) return y;
 			if(i==2) return z;
 			return x;
