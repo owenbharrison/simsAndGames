@@ -30,14 +30,26 @@ if not exist "%out%" mkdir "%out%"
 
 if exist assets (
 	echo compiling with assets...
-	call em++ -std=c++17 -O2 -s ALLOW_MEMORY_GROWTH=1 -s MAX_WEBGL_VERSION=2 -s MIN_WEBGL_VERSION=2 -s USE_LIBPNG=1 -I ..\common src\main.cpp -o "%out%\pge.html" --preload-file assets
+	call em++ ^
+		-std=c++17 ^
+		-s USE_WEBGL2=1 ^
+		-s ALLOW_MEMORY_GROWTH=1 ^
+		-I ..\common ^
+		src\main.cpp ^
+		-o "%out%\sokol.html" ^
+		--shell-file "%build%\sokol_shell.html" ^
+		--preload-file assets
 ) else (
 	echo compiling without assets...
-	call em++ -std=c++17 -O2 -s ALLOW_MEMORY_GROWTH=1 -s MAX_WEBGL_VERSION=2 -s MIN_WEBGL_VERSION=2 -s USE_LIBPNG=1 -I ..\common src\main.cpp -o "%out%\pge.html"
+	call em++ ^
+		-std=c++17 ^
+		-s USE_WEBGL2=1 ^
+		-s ALLOW_MEMORY_GROWTH=1 ^
+		-I ..\common ^
+		src\main.cpp ^
+		-o "%out%\sokol_shell.html" ^
+		--shell-file "%build%\shell.html"
 )
-
-:: copy index.html
-copy "%build%\index.html" "%out%"
 
 echo success
 
