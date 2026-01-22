@@ -3,25 +3,20 @@
 #define PARTICLE_STRUCT_H
 
 struct Particle {
-	enum Type {
-		Debris=0,
-		Explode
-	} type=Debris;
-	vf3d pos, vel, acc;
+	cmn::vf3d pos, vel, acc;
 	float size=0;
 	float age=0, lifespan=0;
 
 	Particle() {}
 
-	Particle(Type t, const vf3d& p, const vf3d& v, float s, float l) {
-		type=t;
+	Particle(const cmn::vf3d& p, const cmn::vf3d& v, float s, float l) {
 		pos=p;
 		vel=v;
 		size=s;
 		lifespan=l;
 	}
 
-	void accelerate(const vf3d& a) {
+	void accelerate(const cmn::vf3d& a) {
 		acc+=a;
 	}
 

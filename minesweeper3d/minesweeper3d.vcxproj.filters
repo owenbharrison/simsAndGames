@@ -15,53 +15,30 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\img\bomb.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\flag_tile.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\number_gradient.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\tile.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\fire_gradient.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\flag.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\pause.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\reset.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\img\sweep.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="assets\models\cursor.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\mesh.h">
+    <ClInclude Include="src\minesweeper_ui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\minesweeper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\packing.h">
+    <ClInclude Include="src\shd.glsl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\thread_pool.h">
+    <ClInclude Include="src\texture_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\font.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\return_code.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\particle.h">
@@ -72,22 +49,26 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\fx\crt.glsl" />
-    <None Include="assets\fx\blur.glsl" />
-    <None Include="assets\fx\identity.glsl" />
+    <None Include="src\shd.glsl" />
+    <None Include="compile_shaders.bat">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
-    <Media Include="assets\sound\pop3.wav">
+    <Text Include="assets\model\cursor_obj.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\img\flag.png">
       <Filter>Resource Files</Filter>
-    </Media>
-    <Media Include="assets\sound\pop2.wav">
+    </Image>
+    <Image Include="assets\img\tile.png">
       <Filter>Resource Files</Filter>
-    </Media>
-    <Media Include="assets\sound\pop1.wav">
+    </Image>
+    <Image Include="assets\img\intrepid_8x8.png">
       <Filter>Resource Files</Filter>
-    </Media>
-    <Media Include="assets\sound\explode.wav">
+    </Image>
+    <Image Include="assets\img\bomb.png">
       <Filter>Resource Files</Filter>
-    </Media>
+    </Image>
   </ItemGroup>
 </Project>

@@ -41,8 +41,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tracking", "tracking\tracki
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3d_fx", "3d_fx\3d_fx.vcxproj", "{294F023B-2EC0-4BCC-B81E-652B45E451A0}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minesweeper", "minesweeper\minesweeper.vcxproj", "{8044612D-40C6-49D1-9561-A56206E053AF}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "flip_fluid", "flip_fluid\flip_fluid.vcxproj", "{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fluid", "fluid\fluid.vcxproj", "{239173C1-28E7-409B-A1F5-A54123F290DD}"
@@ -66,6 +64,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rubiks_cube", "rubiks_cube\rubiks_cube.vcxproj", "{753FA3B2-F4A8-4CF0-9236-A96DCAAAC234}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "targeting", "targeting\targeting.vcxproj", "{65433C0F-62DA-4292-9A58-08357BB17856}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minesweeper3d", "minesweeper3d\minesweeper3d.vcxproj", "{268B9639-461A-401B-8DA6-40C01EDA0224}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -227,14 +227,6 @@ Global
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Release|x64.Build.0 = Release|x64
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Release|x86.ActiveCfg = Release|Win32
 		{294F023B-2EC0-4BCC-B81E-652B45E451A0}.Release|x86.Build.0 = Release|Win32
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x64.ActiveCfg = Debug|x64
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x64.Build.0 = Debug|x64
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x86.ActiveCfg = Debug|Win32
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Debug|x86.Build.0 = Debug|Win32
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x64.ActiveCfg = Release|x64
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x64.Build.0 = Release|x64
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x86.ActiveCfg = Release|Win32
-		{8044612D-40C6-49D1-9561-A56206E053AF}.Release|x86.Build.0 = Release|Win32
 		{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}.Debug|x64.ActiveCfg = Debug|x64
 		{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}.Debug|x64.Build.0 = Debug|x64
 		{D7BCAE69-F941-44B6-8254-7DB254B4C8C4}.Debug|x86.ActiveCfg = Debug|Win32
@@ -331,6 +323,14 @@ Global
 		{65433C0F-62DA-4292-9A58-08357BB17856}.Release|x64.Build.0 = Release|x64
 		{65433C0F-62DA-4292-9A58-08357BB17856}.Release|x86.ActiveCfg = Release|Win32
 		{65433C0F-62DA-4292-9A58-08357BB17856}.Release|x86.Build.0 = Release|Win32
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Debug|x64.ActiveCfg = Debug|x64
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Debug|x64.Build.0 = Debug|x64
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Debug|x86.ActiveCfg = Debug|Win32
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Debug|x86.Build.0 = Debug|Win32
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Release|x64.ActiveCfg = Release|x64
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Release|x64.Build.0 = Release|x64
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Release|x86.ActiveCfg = Release|Win32
+		{268B9639-461A-401B-8DA6-40C01EDA0224}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

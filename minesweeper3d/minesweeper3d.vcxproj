@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{8044612d-40c6-49d1-9561-a56206e053af}</ProjectGuid>
-    <RootNamespace>minesweeper</RootNamespace>
+    <ProjectGuid>{268b9639-461a-401b-8da6-40c01eda0224}</ProjectGuid>
+    <RootNamespace>minesweeper3d</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -73,6 +73,9 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)</OutDir>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)</OutDir>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -105,14 +108,17 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PreBuildEvent>
+      <Command>if exist "$(ProjectDir)assets" xcopy /E /Y /I "$(ProjectDir)assets" "$(OutDir)assets\"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -122,7 +128,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
@@ -135,40 +141,36 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Image Include="assets\img\bomb.png" />
-    <Image Include="assets\img\fire_gradient.png" />
-    <Image Include="assets\img\flag.png" />
-    <Image Include="assets\img\flag_tile.png" />
-    <Image Include="assets\img\number_gradient.png" />
-    <Image Include="assets\img\pause.png" />
-    <Image Include="assets\img\reset.png" />
-    <Image Include="assets\img\sweep.png" />
-    <Image Include="assets\img\tile.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="assets\models\cursor.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\billboard.h" />
+    <ClInclude Include="src\font.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\minesweeper.h" />
-    <ClInclude Include="src\packing.h" />
+    <ClInclude Include="src\minesweeper_ui.h" />
     <ClInclude Include="src\particle.h" />
-    <ClInclude Include="src\thread_pool.h" />
+    <ClInclude Include="src\return_code.h" />
+    <ClInclude Include="src\shd.glsl.h" />
+    <ClInclude Include="src\texture_utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\fx\blur.glsl" />
-    <None Include="assets\fx\crt.glsl" />
-    <None Include="assets\fx\identity.glsl" />
+    <None Include="compile_shaders.bat" />
+    <None Include="src\shd.glsl">
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </DeploymentContent>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </DeploymentContent>
+    </None>
   </ItemGroup>
   <ItemGroup>
-    <Media Include="assets\sound\explode.wav" />
-    <Media Include="assets\sound\pop1.wav" />
-    <Media Include="assets\sound\pop2.wav" />
-    <Media Include="assets\sound\pop3.wav" />
+    <Text Include="assets\model\cursor_obj.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\img\bomb.png" />
+    <Image Include="assets\img\intrepid_8x8.png" />
+    <Image Include="assets\img\flag.png" />
+    <Image Include="assets\img\tile.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
