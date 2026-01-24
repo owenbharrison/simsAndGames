@@ -1,4 +1,9 @@
+//todo: make sliders!
+#ifdef __EMSCRIPTEN__
+#define SOKOL_GLES3
+#else
 #define SOKOL_GLCORE
+#endif
 #include "sokol/sokol_engine.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
@@ -16,9 +21,7 @@
 //  b/c vector reallocates
 #include <list>
 
-#include "texture_utils.h"
-
-#include "font.h"
+#include "sokol/font.h"
 
 using cmn::mat4;
 using cmn::vf3d;
@@ -42,33 +45,12 @@ static void cartesianToPolar(const vf3d& pt, float& yaw, float& pitch) {
 	pitch=std::atan2(pt.y, std::sqrt(pt.x*pt.x+pt.z*pt.z));
 }
 
-class Demo : public SokolEngine {
+class Demo : public cmn::SokolEngine {
 	sg_sampler sampler{};
 
 	sg_view tex_blank{};
 	sg_view tex_uv{};
 	sg_view tex_checker{};
-
-	struct {
-		sg_pass_action pass_action{};
-		sg_pipeline pip{};
-
-		vf3d pos;
-
-		struct {
-			sg_view color_attach{};
-			sg_view color_tex{};
-
-			sg_view depth_attach{};
-			sg_view depth_tex{};
-
-			vf3d dir, up;
-
-			mat4 view;
-		} faces[6];
-
-		mat4 face_proj;
-	} shadow_map;
 
 	sg_pass_action display_pass_action{};
 
@@ -86,24 +68,29 @@ class Demo : public SokolEngine {
 
 	sg_pipeline line_pip{};
 
-	struct {
-		sg_pipeline pip{};
+	sg_buffer quad_vbuf{};
+	sg_pipeline colorview_pip{};
 
-		sg_buffer vbuf{};
-	} texview;
-	
 	struct {
-		Font fancy;
-		Font monogram;
-		Font round;
+		cmn::Font fancy;
+		cmn::Font monogram;
+		cmn::Font round;
 
-		bool render_test=true;
+		struct {
+			bool to_render=true;
+
+			//colored positions
+			float kx=0, ky=0;
+			float rx=0, ry=0;
+			float gx=0, gy=0;
+			float bx=0, by=0;
+		} test;
 	} fonts;
 
 	bool render_outlines=false;
 	std::list<Shape> shapes;
 
-	bool render_cubemap=false;
+	vf3d light_pos{0, 2, 0};
 
 	struct {
 		vf3d pos;
@@ -114,8 +101,6 @@ class Demo : public SokolEngine {
 		mat4 view_proj;
 	} cam;
 
-	float total_dt=0;
-
 public:
 #pragma region SETUP HELPERS
 	void setupEnvironment() {
@@ -124,7 +109,6 @@ public:
 		sg_setup(desc);
 	}
 
-	//bog-standard nearest-filter sampler
 	void setupSampler() {
 		sg_sampler_desc sampler_desc{};
 		sampler=sg_make_sampler(sampler_desc);
@@ -132,94 +116,17 @@ public:
 
 	//"primitive" textures to work with
 	void setupTextures() {
-		tex_blank=makeBlankTexture();
+		tex_blank=cmn::makeBlankTexture();
 
-		tex_uv=makeUVTexture(1024, 1024);
+		tex_uv=cmn::makeUVTexture(1024, 1024);
 
-		if(!makeTextureFromFile(tex_checker, "assets/img/checker.png")) tex_checker=tex_blank;
+		if(!cmn::makeTextureFromFile(tex_checker, "assets/img/checker.png")) tex_checker=tex_blank;
 	}
 
-	//make pipeline, make render targets, & orient view matrixes
-	void setupShadowMap() {
-		//clear to black
-		shadow_map.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		shadow_map.pass_action.colors[0].clear_value={0, 0, 0, 1};
-
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_shadow_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shadow_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shadow_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(shadow_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.cull_mode=SG_CULLMODE_FRONT;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-		shadow_map.pip=sg_make_pipeline(pip_desc);
-		
-		const vf3d dir_up[6][2]{
-			{{1, 0, 0}, {0, 1, 0}},
-			{{0, 1, 0}, {0, 0, -1}},
-			{{0, 0, 1}, {0, 1, 0}},
-			{{-1, 0, 0}, {0, 1, 0}},
-			{{0, -1, 0}, {0, 0, 1}},
-			{{0, 0, -1}, {0, 1, 0}}
-		};
-
-		//for each of the 6 faces...
-		for(int i=0; i<6; i++) {
-			auto& face=shadow_map.faces[i];
-
-			//make color texture
-			{
-				sg_image_desc image_desc{};
-				image_desc.usage.color_attachment=true;
-				image_desc.width=1024;
-				image_desc.height=1024;
-				sg_image img_color=sg_make_image(image_desc);
-
-				{
-					sg_view_desc view_desc{};
-					view_desc.color_attachment.image=img_color;
-					face.color_attach=sg_make_view(view_desc);
-				}
-
-				{
-					sg_view_desc view_desc{};
-					view_desc.texture.image=img_color;
-					face.color_tex=sg_make_view(view_desc);
-				}
-			}
-
-			//make depth texture
-			{
-				sg_image_desc image_desc{};
-				image_desc.usage.depth_stencil_attachment=true;
-				image_desc.width=1024;
-				image_desc.height=1024;
-				image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
-				sg_image depth_img=sg_make_image(image_desc);
-				
-				{
-					sg_view_desc view_desc{};
-					view_desc.depth_stencil_attachment.image=depth_img;
-					face.depth_attach=sg_make_view(view_desc);
-				}
-				
-				{
-					sg_view_desc view_desc{};
-					view_desc.texture.image=depth_img;
-					face.depth_tex=sg_make_view(view_desc);
-				}
-			}
-
-			//setup face orientations
-			face.dir=dir_up[i][0];
-			face.up=dir_up[i][1];
-		}
-
-		//make projection matrix
-		shadow_map.face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
+	//clear to black
+	void setupDisplayPassAction() {
+		display_pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		display_pass_action.colors[0].clear_value={0, 0, 0, 1};
 	}
 
 	//make pipeline, orient meshes, & load textures 
@@ -275,14 +182,8 @@ public:
 		};
 		for(int i=0; i<6; i++) {
 			sg_view& tex=skybox.tex[i];
-			if(!makeTextureFromFile(tex, filenames[i])) tex=tex_uv;
+			if(!cmn::makeTextureFromFile(tex, filenames[i])) tex=tex_uv;
 		}
-	}
-
-	//clear to bluish
-	void setupDisplayPassAction() {
-		display_pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		display_pass_action.colors[0].clear_value={.25f, .45f, .65f, 1.f};
 	}
 
 	//works with mesh
@@ -312,12 +213,27 @@ public:
 		line_pip=sg_make_pipeline(pip_desc);
 	}
 
-	void setupTexview() {
+	void setupQuadVertexBuffer() {
+		//xyuv
+		//flip y
+		float vertexes[4][2][2]{
+			{{-1, -1}, {0, 1}},
+			{{1, -1}, {1, 1}},
+			{{-1, 1}, {0, 0}},
+			{{1, 1}, {1, 0}}
+		};
+		sg_buffer_desc vbuf_desc{};
+		vbuf_desc.data.ptr=vertexes;
+		vbuf_desc.data.size=sizeof(vertexes);
+		quad_vbuf=sg_make_buffer(vbuf_desc);
+	}
+
+	void setupColorviewPipeline() {
 		//2d tristrip pipeline
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_texview_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.layout.attrs[ATTR_texview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(texview_shader_desc(sg_query_backend()));
+		pip_desc.layout.attrs[ATTR_colorview_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_colorview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(colorview_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 		//with alpha blending
 		pip_desc.colors[0].blend.enabled=true;
@@ -325,26 +241,19 @@ public:
 		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
 		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
 		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		texview.pip=sg_make_pipeline(pip_desc);
-
-		//quad vertex buffer: xyuv
-		//flip y
-		float vertexes[4][2][2]{
-			{{-1, -1}, {0, 1}},//tl
-			{{1, -1}, {1, 1}},//tr
-			{{-1, 1}, {0, 0}},//bl
-			{{1, 1}, {1, 0}}//br
-		};
-		sg_buffer_desc vbuf_desc{};
-		vbuf_desc.data.ptr=vertexes;
-		vbuf_desc.data.size=sizeof(vertexes);
-		texview.vbuf=sg_make_buffer(vbuf_desc);
+		colorview_pip=sg_make_pipeline(pip_desc);
 	}
-	
+
 	void setupFonts() {
-		fonts.fancy=Font("assets/img/font/fancy_8x16.png", 8, 16);
-		fonts.monogram=Font("assets/img/font/monogram_6x9.png", 6, 9);
-		fonts.round=Font("assets/img/font/round_6x6.png", 6, 6);
+		fonts.fancy=cmn::Font("assets/img/font/fancy_8x16.png", 8, 16);
+		fonts.monogram=cmn::Font("assets/img/font/monogram_6x9.png", 6, 9);
+		fonts.round=cmn::Font("assets/img/font/round_6x6.png", 6, 6);
+
+		float margin=5;
+		fonts.test.kx=margin, fonts.test.ky=margin;
+		fonts.test.rx=margin, fonts.test.ry=margin+fonts.fancy.char_h+fonts.test.ky;
+		fonts.test.gx=margin, fonts.test.gy=margin+fonts.monogram.char_h+fonts.test.ry;
+		fonts.test.bx=margin, fonts.test.by=margin+fonts.monogram.char_h+fonts.test.gy;
 	}
 
 	//scaled cube
@@ -428,8 +337,6 @@ public:
 		setupSampler();
 		setupTextures();
 
-		setupShadowMap();
-
 		setupSkybox();
 
 		setupDisplayPassAction();
@@ -438,7 +345,8 @@ public:
 
 		setupLinePipeline();
 
-		setupTexview();
+		setupQuadVertexBuffer();
+		setupColorviewPipeline();
 
 		setupFonts();
 
@@ -449,7 +357,19 @@ public:
 	}
 
 #pragma region UPDATE HELPERS
+	void handleOrbit(float dt) {
+		const auto action=getMouse(SAPP_MOUSEBUTTON_LEFT);
+		if(action.pressed) sapp_lock_mouse(true);
+		if(action.held) {
+			cam.yaw-=mouse_dx*dt;
+			cam.pitch-=mouse_dy*dt;
+		}
+		if(action.released) sapp_lock_mouse(false);
+	}
+
 	void handleCameraLooking(float dt) {
+		handleOrbit(dt);
+
 		//left/right
 		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
 		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
@@ -479,6 +399,17 @@ public:
 		if(getKey(SAPP_KEYCODE_D).held) cam.pos-=4.f*dt*lr_dir;
 	}
 
+	void handleFonts() {
+		//toggle font test
+		if(getKey(SAPP_KEYCODE_F).pressed) fonts.test.to_render^=true;
+		
+		//set colored font positions
+		if(getKey(SAPP_KEYCODE_K).held) fonts.test.kx=mouse_x, fonts.test.ky=mouse_y;
+		if(getKey(SAPP_KEYCODE_R).held) fonts.test.rx=mouse_x, fonts.test.ry=mouse_y;
+		if(getKey(SAPP_KEYCODE_G).held) fonts.test.gx=mouse_x, fonts.test.gy=mouse_y;
+		if(getKey(SAPP_KEYCODE_B).held) fonts.test.bx=mouse_x, fonts.test.by=mouse_y;
+	}
+
 	void handleUserInput(float dt) {
 		handleCameraLooking(dt);
 
@@ -486,20 +417,16 @@ public:
 
 		handleCameraMovement(dt);
 
+		handleFonts();
+
 		//look at origin
 		if(getKey(SAPP_KEYCODE_HOME).held) cartesianToPolar(-cam.pos, cam.yaw, cam.pitch);
 
+		//set light pos
+		if(getKey(SAPP_KEYCODE_L).pressed) light_pos=cam.pos;
+
 		//toggle shape outlines
 		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
-
-		//toggle cubemap overlay
-		if(getKey(SAPP_KEYCODE_C).pressed) render_cubemap^=true;
-
-		//set shadow map position with L
-		if(getKey(SAPP_KEYCODE_L).held) shadow_map.pos=cam.pos;
-
-		//toggle font render test
-		if(getKey(SAPP_KEYCODE_F).pressed) fonts.render_test^=true;
 	}
 
 	void updateCameraMatrixes() {
@@ -512,60 +439,15 @@ public:
 
 		cam.view_proj=mat4::mul(cam.proj, cam.view);
 	}
-
-	//update faces' view matrix w/ shadow map pos
-	void updateShadowMapMatrixes() {
-		for(int i=0; i<6; i++) {
-			auto& face=shadow_map.faces[i];
-			mat4 look_at=mat4::makeLookAt(shadow_map.pos, shadow_map.pos+face.dir, face.up);
-			face.view=mat4::inverse(look_at);
-		}
-	}
 #pragma endregion
 
 	void userUpdate(float dt) override {
 		handleUserInput(dt);
 
 		updateCameraMatrixes();
-
-		updateShadowMapMatrixes();
-
-		total_dt+=dt;
 	}
 
 #pragma region RENDER HELPERS
-	void renderShapesIntoShadowMap() {
-		for(int i=0; i<6; i++) {
-			auto& face=shadow_map.faces[i];
-
-			sg_pass pass{};
-			pass.action=shadow_map.pass_action;
-			pass.attachments.colors[0]=face.color_attach;
-			pass.attachments.depth_stencil=face.depth_attach;
-			sg_begin_pass(pass);
-
-			mat4 view_proj=mat4::mul(shadow_map.face_proj, face.view);
-			for(const auto& s:shapes) {
-				sg_apply_pipeline(shadow_map.pip);
-
-				sg_bindings bind{};
-				bind.vertex_buffers[0]=s.mesh.vbuf;
-				bind.index_buffer=s.mesh.ibuf;
-				sg_apply_bindings(bind);
-
-				vs_shadow_params_t vs_shadow_params{};
-				std::memcpy(vs_shadow_params.u_model, s.model.m, sizeof(s.model.m));
-				mat4 mvp=mat4::mul(view_proj, s.model);
-				std::memcpy(vs_shadow_params.u_mvp, mvp.m, sizeof(mvp.m));
-				sg_apply_uniforms(UB_vs_shadow_params, SG_RANGE(vs_shadow_params));
-
-				sg_draw(0, 3*s.mesh.tris.size(), 1);
-			}
-
-			sg_end_pass();
-		}
-	}
-
 	void renderSkybox() {
 		//view from eye at origin + camera projection
 		mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam.dir, {0, 1, 0});
@@ -612,9 +494,9 @@ public:
 			fs_mesh_params.u_eye_pos[0]=cam.pos.x;
 			fs_mesh_params.u_eye_pos[1]=cam.pos.y;
 			fs_mesh_params.u_eye_pos[2]=cam.pos.z;
-			fs_mesh_params.u_light_pos[0]=shadow_map.pos.x;
-			fs_mesh_params.u_light_pos[1]=shadow_map.pos.y;
-			fs_mesh_params.u_light_pos[2]=shadow_map.pos.z;
+			fs_mesh_params.u_light_pos[0]=light_pos.x;
+			fs_mesh_params.u_light_pos[1]=light_pos.y;
+			fs_mesh_params.u_light_pos[2]=light_pos.z;
 			sg_apply_uniforms(UB_fs_mesh_params, SG_RANGE(fs_mesh_params));
 
 			sg_draw(0, 3*s.mesh.tris.size(), 1);
@@ -639,79 +521,37 @@ public:
 		}
 	}
 
-	//show cubemap renders on top left
-	void renderCubemap() {
-		const int tile_size=64;
-		const int idx[6][2]{
-			{0, 0}, {1, 0}, {2, 0},
-			{0, 1}, {1, 1}, {2, 1}
-		};
-		for(int i=0; i<6; i++) {
-			sg_apply_pipeline(texview.pip);
-
-			sg_bindings bind{};
-			bind.vertex_buffers[0]=texview.vbuf;
-			bind.samplers[SMP_u_texview_smp]=sampler;
-			bind.views[VIEW_u_texview_tex]=shadow_map.faces[i].color_tex;
-			sg_apply_bindings(bind);
-
-			//render entire texture
-			vs_texview_params_t vs_texview_params{};
-			vs_texview_params.u_tl[0]=0;
-			vs_texview_params.u_tl[1]=0;
-			vs_texview_params.u_br[0]=1;
-			vs_texview_params.u_br[1]=1;
-			sg_apply_uniforms(UB_vs_texview_params, SG_RANGE(vs_texview_params));
-			
-			//white tint
-			fs_texview_params_t fs_texview_params{};
-			fs_texview_params.u_tint[0]=1;
-			fs_texview_params.u_tint[1]=1;
-			fs_texview_params.u_tint[2]=1;
-			fs_texview_params.u_tint[3]=1;
-			sg_apply_uniforms(UB_fs_texview_params, SG_RANGE(fs_texview_params));
-
-			//render squares at top of screen
-			int x=tile_size*idx[i][0];
-			int y=tile_size*idx[i][1];
-			sg_apply_viewport(x, y, tile_size, tile_size, true);
-
-			//4 verts = 1quad
-			sg_draw(0, 4, 1);
-		}
-	}
-
-	void renderChar(const Font& f, float x, float y, char c, float scl, sg_color tint) {
-		sg_apply_pipeline(texview.pip);
+	void renderChar(const cmn::Font& f, float x, float y, char c, float scl=1, sg_color tint={1, 1, 1, 1}) {
+		sg_apply_pipeline(colorview_pip);
 
 		sg_bindings bind{};
-		bind.vertex_buffers[0]=texview.vbuf;
-		bind.samplers[SMP_u_texview_smp]=sampler;
-		bind.views[VIEW_u_texview_tex]=f.tex;
+		bind.vertex_buffers[0]=quad_vbuf;
+		bind.samplers[SMP_u_colorview_smp]=sampler;
+		bind.views[VIEW_u_colorview_tex]=f.tex;
 		sg_apply_bindings(bind);
 
-		vs_texview_params_t vs_texview_params{};
+		vs_colorview_params_t vs_colorview_params{};
 		f.getRegion(c,
-			vs_texview_params.u_tl[0],
-			vs_texview_params.u_tl[1],
-			vs_texview_params.u_br[0],
-			vs_texview_params.u_br[1]
+			vs_colorview_params.u_tl[0],
+			vs_colorview_params.u_tl[1],
+			vs_colorview_params.u_br[0],
+			vs_colorview_params.u_br[1]
 		);
-		sg_apply_uniforms(UB_vs_texview_params, SG_RANGE(vs_texview_params));
+		sg_apply_uniforms(UB_vs_colorview_params, SG_RANGE(vs_colorview_params));
 
-		fs_texview_params_t fs_texview_params{};
-		fs_texview_params.u_tint[0]=tint.r;
-		fs_texview_params.u_tint[1]=tint.g;
-		fs_texview_params.u_tint[2]=tint.b;
-		fs_texview_params.u_tint[3]=tint.a;
-		sg_apply_uniforms(UB_fs_texview_params, SG_RANGE(fs_texview_params));
+		fs_colorview_params_t fs_colorview_params{};
+		fs_colorview_params.u_tint[0]=tint.r;
+		fs_colorview_params.u_tint[1]=tint.g;
+		fs_colorview_params.u_tint[2]=tint.b;
+		fs_colorview_params.u_tint[3]=tint.a;
+		sg_apply_uniforms(UB_fs_colorview_params, SG_RANGE(fs_colorview_params));
 
 		sg_apply_viewportf(x, y, scl*f.char_w, scl*f.char_h, true);
 
 		sg_draw(0, 4, 1);
 	}
 
-	void renderString(const Font& f, float x, float y, const std::string& str, float scl, sg_color tint) {
+	void renderString(const cmn::Font& f, float x, float y, const std::string& str, float scl=1, sg_color tint={1, 1, 1, 1}) {
 		int ox=0, oy=0;
 		for(const auto& c:str) {
 			if(c=='\n') ox=0, oy+=f.char_h;
@@ -724,37 +564,32 @@ public:
 		}
 	}
 
-	void renderFontTest() {
-		struct {
-			Font* font;
-			std::string str;
-			float scl;
-			sg_color tint;
-		} tests[3]{
-			{&fonts.fancy, "fancy:\n\tsphinx of\n\tblack quartz,\n\tjudge my vow.", 1, {1, 0, 0, 1}},
-			{&fonts.monogram, "monogram:\n\tabcdefghijklm\n\tnopqrstuvwxyz\n\t0123456789", 1.78f, {0, 1, 0, 1}},
-			{&fonts.round, "round:\n\tthe quick\n\tbrown fox\n\tjumps over\n\tthe lazy dog.", 2.67f, {0, 0, 1, 1}}
-		};
-		for(int i=0; i<3; i++) {
-			const auto& t=tests[i];
-			float angle=.2f*total_dt+2*cmn::Pi*i/3;
-			float x01=.5f+.3f*std::cos(angle);
-			float y01=.5f+.3f*std::sin(angle);
-			renderString(
-				*t.font,
-				sapp_widthf()* x01,
-				sapp_heightf()* y01,
-				t.str,
-				t.scl,
-				t.tint
-			);
+	void getStringSize(const cmn::Font& f, const std::string& str, int& w, int& h) {
+		w=0, h=0;
+		int ox=0, oy=0;
+		for(const auto& c:str) {
+			if(c==' ') ox++;
+			else if(c=='\n') ox=0, oy++;
+			else if(c>='!'&&c<='~') {
+				ox++;
+				if(ox>w) w=ox;
+				int nh=1+ox;
+				if(nh>h) h=nh;
+			}
 		}
+		w*=f.char_w;
+		h*=f.char_w;
+	};
+
+	void renderFontTest() {
+		renderString(fonts.fancy, fonts.test.kx, fonts.test.ky, "hello, world!", 1, {0, 0, 0, 1});
+		renderString(fonts.monogram, fonts.test.rx, fonts.test.ry, "red", 1, {1, 0, 0, 1});
+		renderString(fonts.monogram, fonts.test.gx, fonts.test.gy, "green", 1, {0, 1, 0, 1});
+		renderString(fonts.monogram, fonts.test.bx, fonts.test.by, "blue", 1, {0, 0, 1, 1});
 	}
 #pragma endregion
 
 	void userRender() override {
-		renderShapesIntoShadowMap();
-
 		//start display pass 
 		sg_pass pass{};
 		pass.action=display_pass_action;
@@ -766,9 +601,7 @@ public:
 		if(render_outlines) renderShapeOutlines();
 		else renderShapes();
 
-		if(render_cubemap) renderCubemap();
-
-		if(fonts.render_test) renderFontTest();
+		if(fonts.test.to_render) renderFontTest();
 
 		sg_end_pass();
 

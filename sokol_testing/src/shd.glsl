@@ -1,43 +1,3 @@
-/*====="SHADOW" SHADER=====*/
-
-@vs vs_shadow
-
-layout(binding=0) uniform vs_shadow_params {
-	mat4 u_model;
-	mat4 u_mvp;
-};
-
-in vec3 i_pos;
-in vec3 i_norm;
-in vec2 i_uv;
-
-out vec3 norm;
-
-void main() {
-	norm=normalize(mat3(u_model)*i_norm);
-	gl_Position=u_mvp*vec4(i_pos, 1);
-}
-
-@end
-
-@fs fs_shadow
-
-in vec3 norm;
-
-out vec4 o_frag_col;
-
-void main() {
-	o_frag_col=vec4(.5+.5*norm, 1);
-}
-
-@end
-
-@program shadow vs_shadow fs_shadow
-
-
-
-
-
 /*=====SKYBOX SHADER=====*/
 
 @vs vs_skybox
@@ -186,11 +146,11 @@ void main() {
 
 
 
-/*=====TEXTURE VIEW SHADER=====*/
+/*=====COLOR VIEW SHADER=====*/
 
-@vs vs_texview
+@vs vs_colorview
 
-layout(binding=0) uniform vs_texview_params {
+layout(binding=0) uniform vs_colorview_params {
 	vec2 u_tl;
 	vec2 u_br;
 };
@@ -207,23 +167,24 @@ void main() {
 
 @end
 
-@fs fs_texview
+@fs fs_colorview
 
-layout(binding=1) uniform fs_texview_params {
+layout(binding=1) uniform fs_colorview_params {
 	vec4 u_tint;
 };
 
-layout(binding=0) uniform texture2D u_texview_tex;
-layout(binding=0) uniform sampler u_texview_smp;
+layout(binding=0) uniform texture2D u_colorview_tex;
+layout(binding=0) uniform sampler u_colorview_smp;
 
 in vec2 uv;
 
 out vec4 o_frag_col;
 
 void main() {
-	o_frag_col=u_tint*texture(sampler2D(u_texview_tex, u_texview_smp), uv);
+	vec4 col=texture(sampler2D(u_colorview_tex, u_colorview_smp), uv);
+	o_frag_col=u_tint*col;
 }
 
 @end
 
-@program texview vs_texview fs_texview
+@program colorview vs_colorview fs_colorview

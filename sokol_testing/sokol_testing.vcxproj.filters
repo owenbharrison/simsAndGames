@@ -21,9 +21,6 @@
     <ClInclude Include="src\shd.glsl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\texture_utils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\shape.h">
       <Filter>Header Files</Filter>
     </ClInclude>
