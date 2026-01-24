@@ -22,12 +22,11 @@
 	</style>
 </head>
 <body>
-
-	<canvas id="canvas"></canvas>
+	<canvas id="canvas" tabindex="0"></canvas>
 
 	<script>
 	var Module = {
-		canvas: document.getElementById('canvas'),
+		canvas: document.getElementById("canvas"),
 	};
 
 	function resizeCanvas() {
@@ -42,7 +41,10 @@
 		}
 	}
 
-	window.addEventListener('resize', resizeCanvas);
+	window.addEventListener("resize", resizeCanvas);
+	Module.canvas.addEventListener("mousedown", () => {
+		Module.canvas.focus();
+	});
 	resizeCanvas();
 	</script>
 
