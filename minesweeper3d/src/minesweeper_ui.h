@@ -16,9 +16,6 @@ sound
 
 //for time
 #include <ctime>
-#include "texture_utils.h"
-
-#include "font.h"
 
 #include "cmn/math/v3d.h"
 #include "cmn/math/mat4.h"
@@ -36,6 +33,8 @@ sound
 #include "particle.h"
 
 #include "billboard.h"
+
+#include "sokol/font.h"
 
 using cmn::vf3d;
 using cmn::mat4;
@@ -86,7 +85,7 @@ void getStringSize(const std::string& str, int& w, int& h) {
 	}
 };
 
-class MinesweeperUI : public SokolEngine {
+class MinesweeperUI : public cmn::SokolEngine {
 	sg_sampler sampler{};
 
 
@@ -140,7 +139,7 @@ class MinesweeperUI : public SokolEngine {
 		sg_buffer vbuf{};
 	} colorview_render;
 
-	Font font;
+	cmn::Font font;
 
 	struct {
 		sg_pass_action pass_action{};
@@ -185,9 +184,9 @@ public:
 
 	//"primitive" textures to work with
 	void setupTextures() {
-		textures.blank=makeBlankTexture();
+		textures.blank=cmn::makeBlankTexture();
 
-		if(!makeTextureFromFile(textures.tile, "assets/img/tile.png")) textures.tile=textures.blank;
+		if(!cmn::makeTextureFromFile(textures.tile, "assets/img/tile.png")) textures.tile=textures.blank;
 
 		{//load flag img
 			int width, height, comp;
@@ -199,7 +198,7 @@ public:
 				stbi_image_free(pixels8);
 
 				//setup flag tex
-				textures.flag=makeTextureFromPixels(pixels32, width, height);
+				textures.flag=cmn::makeTextureFromPixels(pixels32, width, height);
 
 				//set icon to flag tex
 				sapp_icon_desc icon_desc{};
@@ -212,7 +211,7 @@ public:
 			}
 		}
 
-		if(!makeTextureFromFile(textures.bomb, "assets/img/bomb.png")) textures.bomb=textures.blank;
+		if(!cmn::makeTextureFromFile(textures.bomb, "assets/img/bomb.png")) textures.bomb=textures.blank;
 
 		int sz=1024;
 		std::uint32_t* pixels=new std::uint32_t[sz*sz];
@@ -223,7 +222,7 @@ public:
 				pixels[x+sz*y]=in?0xFFFFFFFF:0x00000000;
 			}
 		}
-		textures.circle=makeTextureFromPixels(pixels, sz, sz);
+		textures.circle=cmn::makeTextureFromPixels(pixels, sz, sz);
 		delete[] pixels;
 	}
 
@@ -423,7 +422,7 @@ public:
 	}
 
 	void setupFont() {
-		font=Font("assets/img/intrepid_8x8.png", 8, 8);
+		font=cmn::Font("assets/img/intrepid_8x8.png", 8, 8);
 	}
 
 	void setupProcess() {
@@ -440,7 +439,7 @@ public:
 		//xyuv
 		float vertexes[4][4]{
 			{-1, -1, 0, 0},
-			{1, -1, 1, 0},
+			{1, -1, 1, 0}, 
 			{-1, 1, 0, 1},
 			{1, 1, 1, 1}
 		};
