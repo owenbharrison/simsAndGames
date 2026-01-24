@@ -1,15 +1,15 @@
-#include "terrain_demo.h"
+#include "demo.h"
 
-static TerrainDemo* td_ptr=nullptr;
+static DepthDemo* dd_ptr=nullptr;
 
-static void init_cb() { td_ptr->init(); }
-static void cleanup_cb() { td_ptr->cleanup(); }
-static void frame_cb() { td_ptr->frame(); }
-static void input_cb(const sapp_event* e) { td_ptr->input(e); }
+static void init_cb() { dd_ptr->init(); }
+static void cleanup_cb() { dd_ptr->cleanup(); }
+static void frame_cb() { dd_ptr->frame(); }
+static void input_cb(const sapp_event* e) { dd_ptr->input(e); }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
-	static TerrainDemo td;
-	td_ptr=&td;
+	static DepthDemo dd;
+	dd_ptr=&dd;
 
 	sapp_desc app_desc{};
 	app_desc.init_cb=init_cb;

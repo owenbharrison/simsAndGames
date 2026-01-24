@@ -20,19 +20,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\terrain_demo.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\shd.glsl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\texture_utils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mesh.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\linemesh.h">
+    <ClInclude Include="src\demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -61,7 +52,7 @@
     <Image Include="assets\nx.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\grass_falloff.png">
+    <Image Include="assets\sand.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
