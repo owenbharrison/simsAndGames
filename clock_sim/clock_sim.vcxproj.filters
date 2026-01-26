@@ -15,69 +15,80 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <None Include="src\shd.glsl" />
+    <None Include="compile_shaders.bat">
+      <Filter>Source Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\clock_ui.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\shd.glsl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\mod.png">
+    <Image Include="assets\img\fancy_8x16.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg1.png">
+    <Image Include="assets\img\seg6.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg2.png">
+    <Image Include="assets\img\seg0.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg3.png">
+    <Image Include="assets\img\seg1.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg4.png">
+    <Image Include="assets\img\seg2.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg5.png">
+    <Image Include="assets\img\seg3.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg6.png">
+    <Image Include="assets\img\seg4.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\seg0.png">
+    <Image Include="assets\img\seg5.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <Media Include="assets\click9.wav">
+    <Media Include="assets\sfx\click0.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click0.wav">
+    <Media Include="assets\sfx\click1.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click1.wav">
+    <Media Include="assets\sfx\click2.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click2.wav">
+    <Media Include="assets\sfx\click3.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click3.wav">
+    <Media Include="assets\sfx\click4.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click4.wav">
+    <Media Include="assets\sfx\click5.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click5.wav">
+    <Media Include="assets\sfx\click6.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click6.wav">
+    <Media Include="assets\sfx\click7.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click7.wav">
+    <Media Include="assets\sfx\click8.wav">
       <Filter>Resource Files</Filter>
     </Media>
-    <Media Include="assets\click8.wav">
+    <Media Include="assets\sfx\click9.wav">
       <Filter>Resource Files</Filter>
     </Media>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="assets\mod_states.txt" />
   </ItemGroup>
 </Project>

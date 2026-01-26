@@ -15,8 +15,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rigid_bodies", "rigid_bodie
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "raycasting", "raycasting\raycasting.vcxproj", "{9108DB91-7166-4A96-92ED-195B87A9C28C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "clock", "clock\clock.vcxproj", "{568956BF-94D6-4842-9402-9CF4D487FAB4}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jelly_car_clone", "jelly_car_clone\jelly_car_clone.vcxproj", "{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "eulerian_fluid", "eulerian_fluid\eulerian_fluid.vcxproj", "{BCFD2C26-3DC9-479A-AB79-A7307BD25BEB}"
@@ -66,6 +64,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "targeting", "targeting\targeting.vcxproj", "{65433C0F-62DA-4292-9A58-08357BB17856}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minesweeper3d", "minesweeper3d\minesweeper3d.vcxproj", "{268B9639-461A-401B-8DA6-40C01EDA0224}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "clock_sim", "clock_sim\clock_sim.vcxproj", "{065888E2-6E27-4E84-A3EE-A432D9496B4F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -123,14 +123,6 @@ Global
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Release|x64.Build.0 = Release|x64
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Release|x86.ActiveCfg = Release|Win32
 		{9108DB91-7166-4A96-92ED-195B87A9C28C}.Release|x86.Build.0 = Release|Win32
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x64.ActiveCfg = Debug|x64
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x64.Build.0 = Debug|x64
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x86.ActiveCfg = Debug|Win32
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Debug|x86.Build.0 = Debug|Win32
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x64.ActiveCfg = Release|x64
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x64.Build.0 = Release|x64
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x86.ActiveCfg = Release|Win32
-		{568956BF-94D6-4842-9402-9CF4D487FAB4}.Release|x86.Build.0 = Release|Win32
 		{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}.Debug|x64.ActiveCfg = Debug|x64
 		{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}.Debug|x64.Build.0 = Debug|x64
 		{76C96CB8-D0DA-48CA-AC21-EB0AC9A42B4B}.Debug|x86.ActiveCfg = Debug|Win32
@@ -331,6 +323,14 @@ Global
 		{268B9639-461A-401B-8DA6-40C01EDA0224}.Release|x64.Build.0 = Release|x64
 		{268B9639-461A-401B-8DA6-40C01EDA0224}.Release|x86.ActiveCfg = Release|Win32
 		{268B9639-461A-401B-8DA6-40C01EDA0224}.Release|x86.Build.0 = Release|Win32
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Debug|x64.ActiveCfg = Debug|x64
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Debug|x64.Build.0 = Debug|x64
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Debug|x86.ActiveCfg = Debug|Win32
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Debug|x86.Build.0 = Debug|Win32
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Release|x64.ActiveCfg = Release|x64
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Release|x64.Build.0 = Release|x64
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Release|x86.ActiveCfg = Release|Win32
+		{065888E2-6E27-4E84-A3EE-A432D9496B4F}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
