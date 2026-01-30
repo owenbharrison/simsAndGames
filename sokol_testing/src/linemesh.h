@@ -2,9 +2,7 @@
 #ifndef LINEMESH_STRUCT_H
 #define LINEMESH_STRUCT_H
 
-#include "cmn/math/v3d.h"
-
-#include <vector>
+#include "mesh.h"
 
 //for randFloat
 #include "cmn/utils.h"

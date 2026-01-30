@@ -108,7 +108,7 @@ void main() {
 
 
 
-/*=====LINE SHADER=====*/
+/*=====line SHADER=====*/
 
 @vs vs_line
 
@@ -130,12 +130,16 @@ void main() {
 
 @fs fs_line
 
+layout(binding=1) uniform fs_line_params {
+	vec4 u_tint;
+};
+
 in vec4 col;
 
 out vec4 o_frag_col;
 
 void main() {
-	o_frag_col=col;
+	o_frag_col=u_tint*col;
 }
 
 @end
@@ -188,3 +192,39 @@ void main() {
 @end
 
 @program colorview vs_colorview fs_colorview
+
+
+
+
+
+/*=====BASECOL SHADER=====*/
+
+@vs vs_basecol
+
+layout(binding=0) uniform vs_basecol_params {
+	mat4 u_mvp;
+};
+
+in vec3 i_pos;
+
+void main() {
+	gl_Position=u_mvp*vec4(i_pos, 1);
+}
+
+@end
+
+@fs fs_basecol
+
+layout(binding=1) uniform fs_basecol_params {
+	vec4 u_tint;
+};
+
+out vec4 o_frag_col;
+
+void main() {
+	o_frag_col=u_tint;
+}
+
+@end
+
+@program basecol vs_basecol fs_basecol

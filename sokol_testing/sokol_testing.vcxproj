@@ -70,6 +70,12 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)</OutDir>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -123,8 +129,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
-      <Command>
-      </Command>
+      <Command>if exist "$(ProjectDir)assets" xcopy /E /Y /I "$(ProjectDir)assets" "$(OutDir)assets\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -144,16 +149,14 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
-      <Command>
-      </Command>
+      <Command>if exist "$(ProjectDir)assets" xcopy /E /Y /I "$(ProjectDir)assets" "$(OutDir)assets\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\demo.h" />
-    <ClInclude Include="src\font.h" />
+    <ClInclude Include="src\gizmo.h" />
     <ClInclude Include="src\linemesh.h" />
     <ClInclude Include="src\mesh.h" />
-    <ClInclude Include="src\return_code.h" />
     <ClInclude Include="src\shape.h" />
     <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\texture_utils.h" />

@@ -11,8 +11,6 @@
 
 #include <cmath>
 
-#include "return_code.h"
-
 #include <string>
 
 #include <fstream>
@@ -347,11 +345,17 @@ struct Mesh {
 	}
 #pragma endregion
 
+	enum struct ReturnCode {
+		Ok,
+		Filename,
+		Vertex,
+		Normal
+	};
 	[[nodiscard]] static ReturnCode loadFromOBJ(Mesh& m, const std::string& filename) {
 		m=Mesh{};
 
 		std::ifstream file(filename);
-		if(file.fail()) return {false, "invalid filename"};
+		if(file.fail()) return ReturnCode::Filename;
 
 		std::vector<cmn::vf3d> vertex_pos;
 		std::vector<cmn::vf3d> vertex_norm;
@@ -421,8 +425,8 @@ struct Mesh {
 						if(!(n_ss>>n)) n=-1;
 					}
 
-					if(v==-1) return {false, "invalid face vertex index"};
-					if(n==-1) return {false, "invalid face normal index"};
+					if(v==-1) return ReturnCode::Vertex;
+					if(n==-1) return ReturnCode::Normal;
 
 					//obj 1-based indexing
 					vtns.push_back({v-1, t, n-1});
@@ -464,7 +468,7 @@ struct Mesh {
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
 
-		return {true, "success"};
+		return ReturnCode::Ok;
 	}
 };
 #endif

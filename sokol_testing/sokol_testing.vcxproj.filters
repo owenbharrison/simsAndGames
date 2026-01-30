@@ -30,10 +30,7 @@
     <ClInclude Include="src\mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\return_code.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\font.h">
+    <ClInclude Include="src\texture_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
