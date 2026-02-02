@@ -1,3 +1,45 @@
+/*=====CUBEMAP SHADER=====*/
+
+@vs vs_cubemap
+
+layout(binding=0) uniform vs_cubemap_params {
+	mat4 u_mvp;
+};
+
+in vec3 i_pos;
+in vec3 i_norm;
+in vec2 i_uv;
+
+out vec2 uv;
+
+void main() {
+	uv=i_uv;
+	gl_Position=u_mvp*vec4(i_pos, 1);
+}
+
+@end
+
+@fs fs_cubemap
+
+layout(binding=0) uniform texture2D u_cubemap_tex;
+layout(binding=0) uniform sampler u_cubemap_smp;
+
+in vec2 uv;
+
+out vec4 o_frag_col;
+
+void main() {
+	o_frag_col=texture(sampler2D(u_cubemap_tex, u_cubemap_smp), uv);
+}
+
+@end
+
+@program cubemap vs_cubemap fs_cubemap
+
+
+
+
+
 /*=====SKYBOX SHADER=====*/
 
 @vs vs_skybox
@@ -108,7 +150,7 @@ void main() {
 
 
 
-/*=====line SHADER=====*/
+/*=====LINE SHADER=====*/
 
 @vs vs_line
 
@@ -228,3 +270,45 @@ void main() {
 @end
 
 @program basecol vs_basecol fs_basecol
+
+
+
+
+
+/*=====CUBEMAP DEBUG SHADER=====*/
+
+@vs vs_cubemap_debug
+
+layout(binding=0) uniform vs_cubemap_debug_params {
+	mat4 u_mvp;
+};
+
+in vec3 i_pos;
+in vec3 i_norm;
+in vec2 i_uv;
+
+out vec3 pos;
+
+void main() {
+	pos=i_pos;
+	gl_Position=u_mvp*vec4(i_pos, 1);
+}
+
+@end
+
+@fs fs_cubemap_debug
+
+layout(binding=0) uniform textureCube u_cubemap_debug_tex;
+layout(binding=0) uniform sampler u_cubemap_debug_smp;
+
+in vec3 pos;
+
+out vec4 o_frag_col;
+
+void main() {
+	o_frag_col=texture(samplerCube(u_cubemap_debug_tex, u_cubemap_debug_smp), pos);
+}
+
+@end
+
+@program cubemap_debug vs_cubemap_debug fs_cubemap_debug

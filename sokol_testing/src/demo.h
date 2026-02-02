@@ -56,11 +56,16 @@ static mat4 makeTransformMatrix(const vf3d& x, const vf3d& y, const vf3d& z, con
 }
 
 class Demo : public cmn::SokolEngine {
-	sg_sampler sampler{};
+	struct {
+		sg_sampler linear{};
+		sg_sampler nearest{};
+	} samplers;
 
-	sg_view tex_blank{};
-	sg_view tex_uv{};
-	sg_view tex_checker{};
+	struct {
+		sg_view blank{};
+		sg_view uv{};
+		sg_view checker{};
+	} textures;
 
 	sg_pipeline mesh_pip{};
 
@@ -79,6 +84,35 @@ class Demo : public cmn::SokolEngine {
 	} fonts;
 
 	LineMesh arrow_linemesh;
+
+	struct {
+		sg_pass_action pass_action{};
+		sg_pipeline attach_pip{};
+		
+		sg_view color_attach[6];
+		sg_view depth_attach{};
+		sg_view color_view{};
+
+		vf3d pos;
+
+		//only works for GL...
+		const vf3d face_sys[6][3]{
+			{{0, 0, -1}, {0, -1, 0}, {-1, 0, 0}},//px
+			{{0, 0, 1}, {0, -1, 0}, {1, 0, 0}},//nx
+			{{1, 0, 0}, {0, 0, 1}, {0, -1, 0}},//py
+			{{1, 0, 0}, {0, 0, -1}, {0, 1, 0}},//ny
+			{{1, 0, 0}, {0, -1, 0}, {0, 0, -1}},//px
+			{{-1, 0, 0}, {0, -1, 0}, {0, 0, 1}}//nz
+		};
+
+		mat4 view[6];
+
+		mat4 face_proj;
+
+		sg_pipeline debug_pip{};
+
+		Mesh mesh;
+	} cubemap;
 
 	sg_pass_action display_pass_action{};
 
@@ -128,18 +162,29 @@ public:
 		sg_setup(desc);
 	}
 
-	void setupSampler() {
-		sg_sampler_desc sampler_desc{};
-		sampler=sg_make_sampler(sampler_desc);
+	void setupSamplers() {
+		{
+			sg_sampler_desc sampler_desc{};
+			samplers.linear=sg_make_sampler(sampler_desc);
+		}
+
+		{
+			sg_sampler_desc sampler_desc{};
+			sampler_desc.min_filter=SG_FILTER_NEAREST;
+			sampler_desc.mag_filter=SG_FILTER_NEAREST;
+			samplers.nearest=sg_make_sampler(sampler_desc);
+		}
 	}
 
 	//"primitive" textures to work with
 	void setupTextures() {
-		tex_blank=cmn::makeBlankTexture();
+		auto& b=textures.blank;
+		b=cmn::makeBlankTexture();
 
-		tex_uv=cmn::makeUVTexture(1024, 1024);
+		textures.uv=cmn::makeUVTexture(1024, 1024);
 
-		if(!cmn::makeTextureFromFile(tex_checker, "assets/img/checker.png")) tex_checker=tex_blank;
+		auto& c=textures.checker;
+		if(!cmn::makeTextureFromFile(c, "assets/img/checker.png")) c=b;
 	}
 
 	//works with mesh
@@ -225,6 +270,83 @@ public:
 		arrow_linemesh.updateIndexBuffer();
 	}
 
+	//make pipeline, make render targets, & orient view matrixes
+	void setupCubemap() {
+		//clear to black
+		cubemap.pass_action.depth.load_action=SG_LOADACTION_CLEAR;
+		cubemap.pass_action.depth.clear_value=1;
+		cubemap.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		cubemap.pass_action.colors[0].clear_value={0, 0, 0, 1};
+
+		{
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_cubemap_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cubemap_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cubemap_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(cubemap_shader_desc(sg_query_backend()));
+			pip_desc.index_type=SG_INDEXTYPE_UINT32;
+			pip_desc.face_winding=SG_FACEWINDING_CCW;
+			pip_desc.cull_mode=SG_CULLMODE_BACK;
+			pip_desc.depth.write_enabled=true;
+			pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+			pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
+			cubemap.attach_pip=sg_make_pipeline(pip_desc);
+		}
+
+		//cube attach and view
+		{
+			sg_image_desc image_desc{};
+			image_desc.type=SG_IMAGETYPE_CUBE;
+			image_desc.usage.color_attachment=true;
+			image_desc.width=1024;
+			image_desc.height=1024;
+			sg_image cube_img=sg_make_image(image_desc);
+			
+			for(int i=0; i<6; i++) {
+				sg_view_desc view_desc{};
+				view_desc.color_attachment.image=cube_img;
+				view_desc.color_attachment.slice=i;
+				cubemap.color_attach[i]=sg_make_view(view_desc);
+			}
+
+			sg_view_desc view_desc{};
+			view_desc.texture.image=cube_img;
+			cubemap.color_view=sg_make_view(view_desc);
+		}
+
+		{
+			//make depth attachment
+			sg_image_desc image_desc{};
+			image_desc.usage.depth_stencil_attachment=true;
+			image_desc.width=1024;
+			image_desc.height=1024;
+			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
+			sg_image depth_img=sg_make_image(image_desc);
+			sg_view_desc view_desc{};
+			view_desc.depth_stencil_attachment.image=depth_img;
+			cubemap.depth_attach=sg_make_view(view_desc);
+		}
+
+		//make projection matrix
+		cubemap.face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
+
+		{
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_cubemap_debug_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cubemap_debug_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cubemap_debug_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(cubemap_debug_shader_desc(sg_query_backend()));
+			pip_desc.index_type=SG_INDEXTYPE_UINT32;
+			pip_desc.face_winding=SG_FACEWINDING_CCW;
+			pip_desc.cull_mode=SG_CULLMODE_BACK;
+			pip_desc.depth.write_enabled=true;
+			pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+			cubemap.debug_pip=sg_make_pipeline(pip_desc);
+		}
+
+		cubemap.mesh=Mesh::makeCube();
+	}
+
 	//clear to black
 	void setupDisplayPassAction() {
 		display_pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
@@ -284,13 +406,13 @@ public:
 		};
 		for(int i=0; i<6; i++) {
 			sg_view& tex=skybox.tex[i];
-			if(!cmn::makeTextureFromFile(tex, filenames[i])) tex=tex_uv;
+			if(!cmn::makeTextureFromFile(tex, filenames[i])) tex=textures.blank;
 		}
 	}
 
 	//scaled cube
 	void setupPlatform() {
-		Shape shp(Mesh::makeCube(), tex_uv, false);
+		Shape shp(Mesh::makeCube(), textures.uv, false);
 		shp.scale={4, .5f, 4};
 		shp.translation={0, -1.1f, 0};
 		shp.updateMatrixes();
@@ -314,15 +436,15 @@ public:
 			auto status=Mesh::loadFromOBJ(msh, f);
 			//default to cube
 			if(status!=Mesh::ReturnCode::Ok) msh=Mesh::makeCube();
-			shape_circle.push_back(Shape(msh, tex_blank, true));
+			shape_circle.push_back(Shape(msh, textures.blank, true));
 		}
 
 		//add solids of revolution(i dont like using emplace)
-		shape_circle.push_back(Shape(Mesh::makeCube(), tex_uv, true));
-		shape_circle.push_back(Shape(Mesh::makeTorus(.7f, 25, .3f, 13), tex_checker, true));
-		shape_circle.push_back(Shape(Mesh::makeUVSphere(1, 25, 13), tex_checker, true));
-		shape_circle.push_back(Shape(Mesh::makeCylinder(1, 25, 2), tex_checker, true));
-		shape_circle.push_back(Shape(Mesh::makeCone(1, 25, 2), tex_checker, true));
+		shape_circle.push_back(Shape(Mesh::makeCube(), textures.uv, true));
+		shape_circle.push_back(Shape(Mesh::makeTorus(.7f, 25, .3f, 13), textures.checker, true));
+		shape_circle.push_back(Shape(Mesh::makeUVSphere(1, 25, 13), textures.checker, true));
+		shape_circle.push_back(Shape(Mesh::makeCylinder(1, 25, 2), textures.checker, true));
+		shape_circle.push_back(Shape(Mesh::makeCone(1, 25, 2), textures.checker, true));
 
 		//fisher-yates shuffle
 		for(int i=shape_circle.size()-1; i>=1; i--) {
@@ -384,12 +506,13 @@ public:
 	}
 #pragma endregion
 
-	void userCreate() override {
+	void userCreate() override { 
 		std::srand(std::time(0));
 
 		setupEnvironment();
 
-		setupSampler();
+		setupSamplers();
+
 		setupTextures();
 
 		setupMeshPipeline();
@@ -401,6 +524,8 @@ public:
 
 		setupArrowLinemesh();
 
+		setupCubemap();
+		
 		setupDisplayPassAction();
 
 		setupSkybox();
@@ -414,7 +539,17 @@ public:
 	}
 
 #pragma region UPDATE HELPERS
+	bool isGizmoing() const {
+		for(const auto& sg:gizmo.map) {
+			if(sg.second.mode!=Gizmo::Mode::None) return true;
+		}
+		return false;
+	}
+	
 	void handleCameraLooking(float dt) {
+		//dont look while gizmoing
+		if(isGizmoing()) return;
+		
 		//left/right
 		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
 		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
@@ -429,6 +564,9 @@ public:
 	}
 
 	void handleCameraMovement(float dt) {
+		//dont move while gizmoing
+		if(isGizmoing()) return;
+
 		//move up, down
 		if(getKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4.f*dt;
 		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4.f*dt;
@@ -511,6 +649,9 @@ public:
 
 		//toggle shape outlines
 		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
+		
+		//set cubemap pos
+		if(getKey(SAPP_KEYCODE_C).pressed) cubemap.pos=cam.pos;
 	}
 
 	void updateCameraMatrixes() {
@@ -522,6 +663,17 @@ public:
 		cam.proj=mat4::makePerspective(60, asp, cam.near, cam.far);
 
 		cam.view_proj=mat4::mul(cam.proj, cam.view);
+	}
+
+	//update faces' view matrix w/ cubemap pos
+	void updateCubemapMatrixes() {
+		for(int i=0; i<6; i++) {
+			const auto& x=cubemap.face_sys[i][0];
+			const auto& y=cubemap.face_sys[i][1];
+			const auto& z=cubemap.face_sys[i][2];
+			mat4 sys=makeTransformMatrix(x, y, z, cubemap.pos);
+			cubemap.view[i]=mat4::inverse(sys);
+		}
 	}
 
 	void updateMouseRay() {
@@ -549,6 +701,8 @@ public:
 		updateCameraMatrixes();
 
 		updateMouseRay();
+
+		updateCubemapMatrixes();
 	}
 
 #pragma region RENDER HELPERS
@@ -594,22 +748,23 @@ public:
 		renderLinemesh(arrow_linemesh, model, col);
 	}
 
-	void renderChar(const cmn::Font& f, float x, float y, char c, float scl=1, const sg_color& tint={1, 1, 1, 1}) {
+	void renderTex(float x, float y, float w, float h,
+		const sg_view& tex, float l, float t, float r, float b,
+		const sg_color& tint
+	) {
 		sg_apply_pipeline(colorview.pip);
 
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=colorview.vbuf;
-		bind.samplers[SMP_u_colorview_smp]=sampler;
-		bind.views[VIEW_u_colorview_tex]=f.tex;
+		bind.samplers[SMP_u_colorview_smp]=samplers.nearest;
+		bind.views[VIEW_u_colorview_tex]=tex;
 		sg_apply_bindings(bind);
 
 		vs_colorview_params_t vs_colorview_params{};
-		f.getRegion(c,
-			vs_colorview_params.u_tl[0],
-			vs_colorview_params.u_tl[1],
-			vs_colorview_params.u_br[0],
-			vs_colorview_params.u_br[1]
-		);
+		vs_colorview_params.u_tl[0]=l;
+		vs_colorview_params.u_tl[1]=t,
+		vs_colorview_params.u_br[0]=r;
+		vs_colorview_params.u_br[1]=b;
 		sg_apply_uniforms(UB_vs_colorview_params, SG_RANGE(vs_colorview_params));
 
 		fs_colorview_params_t fs_colorview_params{};
@@ -619,19 +774,29 @@ public:
 		fs_colorview_params.u_tint[3]=tint.a;
 		sg_apply_uniforms(UB_fs_colorview_params, SG_RANGE(fs_colorview_params));
 
-		sg_apply_viewportf(x, y, scl*f.char_w, scl*f.char_h, true);
+		sg_apply_viewportf(x, y, w, h, true);
 
 		sg_draw(0, 4, 1);
 	}
 
-	void renderString(const cmn::Font& f, float x, float y, const std::string& str, float scl=1, const sg_color& tint={1, 1, 1, 1}) {
+	void renderChar(float x, float y, const cmn::Font& f, char c, float scl=1, const sg_color& tint={1, 1, 1, 1}) {
+		float l, t, r, b;
+		f.getRegion(c, l, t, r, b);
+		renderTex(
+			x, y, scl*f.char_w, scl*f.char_h,
+			f.tex, l, t, r, b,
+			tint
+		);
+	}
+
+	void renderString(float x, float y, const cmn::Font& f, const std::string& str, float scl=1, const sg_color& tint={1, 1, 1, 1}) {
 		int ox=0, oy=0;
 		for(const auto& c:str) {
 			if(c=='\n') ox=0, oy+=f.char_h;
 			//tabsize=2
 			else if(c=='\t') ox+=2*f.char_w;
 			else if(c>=32&&c<=127) {
-				renderChar(f, x+scl*ox, y+scl*oy, c, scl, tint);
+				renderChar(x+scl*ox, y+scl*oy, f, c, scl, tint);
 				ox+=f.char_w;
 			}
 		}
@@ -639,6 +804,37 @@ public:
 #pragma endregion
 
 #pragma region RENDERERS
+	void renderShapesIntoCubemap() {
+		for(int i=0; i<6; i++) {
+			sg_pass pass{};
+			pass.action=cubemap.pass_action;
+			pass.attachments.colors[0]=cubemap.color_attach[i];
+			pass.attachments.depth_stencil=cubemap.depth_attach;
+			sg_begin_pass(pass);
+
+			mat4 view_proj=mat4::mul(cubemap.face_proj, cubemap.view[i]);
+			for(const auto& shp:shapes) {
+				sg_apply_pipeline(cubemap.attach_pip);
+
+				sg_bindings bind{};
+				bind.vertex_buffers[0]=shp.mesh.vbuf;
+				bind.index_buffer=shp.mesh.ibuf;
+				bind.samplers[SMP_u_cubemap_smp]=samplers.linear;
+				bind.views[VIEW_u_cubemap_tex]=shp.tex;
+				sg_apply_bindings(bind);
+
+				vs_cubemap_params_t vs_cubemap_params{};
+				mat4 mvp=mat4::mul(view_proj, shp.model);
+				std::memcpy(vs_cubemap_params.u_mvp, mvp.m, sizeof(mvp.m));
+				sg_apply_uniforms(UB_vs_cubemap_params, SG_RANGE(vs_cubemap_params));
+
+				sg_draw(0, 3*shp.mesh.tris.size(), 1);
+			}
+
+			sg_end_pass();
+		}
+	}
+	
 	void renderSkybox() {
 		//view from eye at origin + camera projection
 		mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam.dir, {0, 1, 0});
@@ -650,7 +846,7 @@ public:
 
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=skybox.vbuf;
-			bind.samplers[SMP_u_skybox_smp]=sampler;
+			bind.samplers[SMP_u_skybox_smp]=samplers.linear;
 			bind.views[VIEW_u_skybox_tex]=skybox.tex[i];
 			sg_apply_bindings(bind);
 
@@ -671,7 +867,7 @@ public:
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=s.mesh.vbuf;
 			bind.index_buffer=s.mesh.ibuf;
-			bind.samplers[SMP_u_mesh_smp]=sampler;
+			bind.samplers[SMP_u_mesh_smp]=samplers.linear;
 			bind.views[VIEW_u_mesh_tex]=s.tex;
 			sg_apply_bindings(bind);
 
@@ -698,6 +894,27 @@ public:
 		for(const auto& s:shapes) {
 			renderLinemesh(s.linemesh, s.model, {1, 1, 1, 1});
 		}
+	}
+
+	void renderCubemapDebug() {
+		sg_apply_pipeline(cubemap.debug_pip);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=cubemap.mesh.vbuf;
+		bind.index_buffer=cubemap.mesh.ibuf;
+		bind.samplers[SMP_u_cubemap_smp]=samplers.linear;
+		bind.views[VIEW_u_cubemap_tex]=cubemap.color_view;
+		sg_apply_bindings(bind);
+
+		vs_cubemap_debug_params_t vs_cubemap_debug_params{};
+		mat4 scl=mat4::makeScale({.5f, .5f, .5f});
+		mat4 trans=mat4::makeTranslation(cubemap.pos);
+		mat4 model=mat4::mul(trans, scl);
+		mat4 mvp=mat4::mul(cam.view_proj, model);
+		std::memcpy(vs_cubemap_debug_params.u_mvp, mvp.m, sizeof(mvp.m));
+		sg_apply_uniforms(UB_vs_cubemap_debug_params, SG_RANGE(vs_cubemap_debug_params));
+
+		sg_draw(0, 3*cubemap.mesh.tris.size(), 1);
 	}
 
 	void renderGizmos() {
@@ -746,9 +963,12 @@ public:
 			renderQuad(p+Gizmo::margin*(z+x), z, x, Gizmo::plane_size, {1, 0, 1, 1});
 		}
 	}
+
 #pragma endregion
 
 	void userRender() override {
+		renderShapesIntoCubemap();
+		
 		//start display pass 
 		sg_pass pass{};
 		pass.action=display_pass_action;
@@ -760,6 +980,8 @@ public:
 		if(render_outlines) renderShapeOutlines();
 		else renderShapes();
 
+		renderCubemapDebug();
+
 		renderGizmos();
 
 		sg_end_pass();
@@ -768,6 +990,6 @@ public:
 	}
 
 	Demo() {
-		app_title="Gizmo Demo";
+		app_title="Cubemap Demo";
 	}
 };

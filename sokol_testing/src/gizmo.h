@@ -47,7 +47,7 @@ struct Gizmo {
 	static const float margin;
 	static const float plane_size;
 
-	enum Mode {
+	enum struct Mode {
 		None,
 		XAxis,
 		YAxis,
@@ -55,7 +55,7 @@ struct Gizmo {
 		XYPlane,
 		YZPlane,
 		ZXPlane
-	} mode=None;
+	} mode=Mode::None;
 
 	void beginDrag(const cmn::vf3d& g, const cmn::vf3d& s0, const cmn::vf3d& s1) {
 		endDrag();
@@ -124,11 +124,11 @@ struct Gizmo {
 	}
 
 	void endDrag() {
-		mode=None;
+		mode=Mode::None;
 	}
 };
 
-const float Gizmo::axis_size=1.2f;
+const float Gizmo::axis_size=.8f;
 const float Gizmo::margin=.2f;
-const float Gizmo::plane_size=.8f;
+const float Gizmo::plane_size=.4f;
 #endif
