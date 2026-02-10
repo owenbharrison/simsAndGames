@@ -93,7 +93,7 @@ class Demo : public cmn::SokolEngine {
 		sg_view depth_attach{};
 		sg_view color_view{};
 
-		vf3d pos;
+		vf3d pos{0, 2, 0};
 
 		//only works for GL...
 		const vf3d face_sys[6][3]{
@@ -108,11 +108,7 @@ class Demo : public cmn::SokolEngine {
 		mat4 view[6];
 
 		mat4 face_proj;
-
-		sg_pipeline debug_pip{};
-
-		Mesh mesh;
-	} cubemap;
+	} shadow_map;
 
 	sg_pass_action display_pass_action{};
 
@@ -149,8 +145,6 @@ class Demo : public cmn::SokolEngine {
 		
 		mat4 view_proj;
 	} cam;
-
-	vf3d light_pos{0, 2, 0};
 
 	vf3d mouse_dir;
 	vf3d prev_mouse_dir;
@@ -271,26 +265,26 @@ public:
 	}
 
 	//make pipeline, make render targets, & orient view matrixes
-	void setupCubemap() {
+	void setupShadowMap() {
 		//clear to black
-		cubemap.pass_action.depth.load_action=SG_LOADACTION_CLEAR;
-		cubemap.pass_action.depth.clear_value=1;
-		cubemap.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		cubemap.pass_action.colors[0].clear_value={0, 0, 0, 1};
+		shadow_map.pass_action.depth.load_action=SG_LOADACTION_CLEAR;
+		shadow_map.pass_action.depth.clear_value=1;
+		shadow_map.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		shadow_map.pass_action.colors[0].clear_value={0, 0, 0, 1};
 
 		{
 			sg_pipeline_desc pip_desc{};
-			pip_desc.layout.attrs[ATTR_cubemap_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-			pip_desc.layout.attrs[ATTR_cubemap_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
-			pip_desc.layout.attrs[ATTR_cubemap_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-			pip_desc.shader=sg_make_shader(cubemap_shader_desc(sg_query_backend()));
+			pip_desc.layout.attrs[ATTR_shadow_map_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_shadow_map_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_shadow_map_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(shadow_map_shader_desc(sg_query_backend()));
 			pip_desc.index_type=SG_INDEXTYPE_UINT32;
 			pip_desc.face_winding=SG_FACEWINDING_CCW;
 			pip_desc.cull_mode=SG_CULLMODE_BACK;
 			pip_desc.depth.write_enabled=true;
 			pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 			pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-			cubemap.attach_pip=sg_make_pipeline(pip_desc);
+			shadow_map.attach_pip=sg_make_pipeline(pip_desc);
 		}
 
 		//cube attach and view
@@ -298,53 +292,37 @@ public:
 			sg_image_desc image_desc{};
 			image_desc.type=SG_IMAGETYPE_CUBE;
 			image_desc.usage.color_attachment=true;
-			image_desc.width=1024;
-			image_desc.height=1024;
+			image_desc.width=2048;
+			image_desc.height=2048;
 			sg_image cube_img=sg_make_image(image_desc);
 			
 			for(int i=0; i<6; i++) {
 				sg_view_desc view_desc{};
 				view_desc.color_attachment.image=cube_img;
 				view_desc.color_attachment.slice=i;
-				cubemap.color_attach[i]=sg_make_view(view_desc);
+				shadow_map.color_attach[i]=sg_make_view(view_desc);
 			}
 
 			sg_view_desc view_desc{};
 			view_desc.texture.image=cube_img;
-			cubemap.color_view=sg_make_view(view_desc);
+			shadow_map.color_view=sg_make_view(view_desc);
 		}
 
 		{
 			//make depth attachment
 			sg_image_desc image_desc{};
 			image_desc.usage.depth_stencil_attachment=true;
-			image_desc.width=1024;
-			image_desc.height=1024;
+			image_desc.width=2048;
+			image_desc.height=2048;
 			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
 			sg_image depth_img=sg_make_image(image_desc);
 			sg_view_desc view_desc{};
 			view_desc.depth_stencil_attachment.image=depth_img;
-			cubemap.depth_attach=sg_make_view(view_desc);
+			shadow_map.depth_attach=sg_make_view(view_desc);
 		}
 
 		//make projection matrix
-		cubemap.face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
-
-		{
-			sg_pipeline_desc pip_desc{};
-			pip_desc.layout.attrs[ATTR_cubemap_debug_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-			pip_desc.layout.attrs[ATTR_cubemap_debug_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
-			pip_desc.layout.attrs[ATTR_cubemap_debug_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-			pip_desc.shader=sg_make_shader(cubemap_debug_shader_desc(sg_query_backend()));
-			pip_desc.index_type=SG_INDEXTYPE_UINT32;
-			pip_desc.face_winding=SG_FACEWINDING_CCW;
-			pip_desc.cull_mode=SG_CULLMODE_BACK;
-			pip_desc.depth.write_enabled=true;
-			pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-			cubemap.debug_pip=sg_make_pipeline(pip_desc);
-		}
-
-		cubemap.mesh=Mesh::makeCube();
+		shadow_map.face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
 	}
 
 	//clear to black
@@ -524,7 +502,7 @@ public:
 
 		setupArrowLinemesh();
 
-		setupCubemap();
+		setupShadowMap();
 		
 		setupDisplayPassAction();
 
@@ -645,13 +623,10 @@ public:
 		if(getKey(SAPP_KEYCODE_HOME).held) cartesianToPolar(-cam.pos, cam.yaw, cam.pitch);
 
 		//set light pos
-		if(getKey(SAPP_KEYCODE_L).pressed) light_pos=cam.pos;
+		if(getKey(SAPP_KEYCODE_L).pressed) shadow_map.pos=cam.pos;
 
 		//toggle shape outlines
 		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
-		
-		//set cubemap pos
-		if(getKey(SAPP_KEYCODE_C).pressed) cubemap.pos=cam.pos;
 	}
 
 	void updateCameraMatrixes() {
@@ -665,14 +640,14 @@ public:
 		cam.view_proj=mat4::mul(cam.proj, cam.view);
 	}
 
-	//update faces' view matrix w/ cubemap pos
-	void updateCubemapMatrixes() {
+	//update faces' view matrix w/ shadow_map pos
+	void updateShadowMapMatrixes() {
 		for(int i=0; i<6; i++) {
-			const auto& x=cubemap.face_sys[i][0];
-			const auto& y=cubemap.face_sys[i][1];
-			const auto& z=cubemap.face_sys[i][2];
-			mat4 sys=makeTransformMatrix(x, y, z, cubemap.pos);
-			cubemap.view[i]=mat4::inverse(sys);
+			const auto& x=shadow_map.face_sys[i][0];
+			const auto& y=shadow_map.face_sys[i][1];
+			const auto& z=shadow_map.face_sys[i][2];
+			mat4 sys=makeTransformMatrix(x, y, z, shadow_map.pos);
+			shadow_map.view[i]=mat4::inverse(sys);
 		}
 	}
 
@@ -702,7 +677,7 @@ public:
 
 		updateMouseRay();
 
-		updateCubemapMatrixes();
+		updateShadowMapMatrixes();
 	}
 
 #pragma region RENDER HELPERS
@@ -804,29 +779,36 @@ public:
 #pragma endregion
 
 #pragma region RENDERERS
-	void renderShapesIntoCubemap() {
+	void renderShapesIntoShadowMap() {
 		for(int i=0; i<6; i++) {
 			sg_pass pass{};
-			pass.action=cubemap.pass_action;
-			pass.attachments.colors[0]=cubemap.color_attach[i];
-			pass.attachments.depth_stencil=cubemap.depth_attach;
+			pass.action=shadow_map.pass_action;
+			pass.attachments.colors[0]=shadow_map.color_attach[i];
+			pass.attachments.depth_stencil=shadow_map.depth_attach;
 			sg_begin_pass(pass);
 
-			mat4 view_proj=mat4::mul(cubemap.face_proj, cubemap.view[i]);
+			mat4 view_proj=mat4::mul(shadow_map.face_proj, shadow_map.view[i]);
 			for(const auto& shp:shapes) {
-				sg_apply_pipeline(cubemap.attach_pip);
+				sg_apply_pipeline(shadow_map.attach_pip);
 
 				sg_bindings bind{};
 				bind.vertex_buffers[0]=shp.mesh.vbuf;
 				bind.index_buffer=shp.mesh.ibuf;
-				bind.samplers[SMP_u_cubemap_smp]=samplers.linear;
-				bind.views[VIEW_u_cubemap_tex]=shp.tex;
 				sg_apply_bindings(bind);
 
-				vs_cubemap_params_t vs_cubemap_params{};
 				mat4 mvp=mat4::mul(view_proj, shp.model);
-				std::memcpy(vs_cubemap_params.u_mvp, mvp.m, sizeof(mvp.m));
-				sg_apply_uniforms(UB_vs_cubemap_params, SG_RANGE(vs_cubemap_params));
+
+				vs_shadow_map_params_t vs_shadow_map_params{};
+				std::memcpy(vs_shadow_map_params.u_model, shp.model.m, sizeof(shp.model.m));
+				std::memcpy(vs_shadow_map_params.u_mvp, mvp.m, sizeof(mvp.m));
+				sg_apply_uniforms(UB_vs_shadow_map_params, SG_RANGE(vs_shadow_map_params));
+
+				fs_shadow_map_params_t fs_shadow_map_params{};
+				fs_shadow_map_params.u_light_pos[0]=shadow_map.pos.x;
+				fs_shadow_map_params.u_light_pos[1]=shadow_map.pos.y;
+				fs_shadow_map_params.u_light_pos[2]=shadow_map.pos.z;
+				fs_shadow_map_params.u_cam_far=cam.far;
+				sg_apply_uniforms(UB_fs_shadow_map_params, SG_RANGE(fs_shadow_map_params));
 
 				sg_draw(0, 3*shp.mesh.tris.size(), 1);
 			}
@@ -869,6 +851,8 @@ public:
 			bind.index_buffer=s.mesh.ibuf;
 			bind.samplers[SMP_u_mesh_smp]=samplers.linear;
 			bind.views[VIEW_u_mesh_tex]=s.tex;
+			bind.samplers[SMP_u_mesh_shadow_smp]=samplers.nearest;
+			bind.views[VIEW_u_mesh_shadow_tex]=shadow_map.color_view;
 			sg_apply_bindings(bind);
 
 			vs_mesh_params_t vs_mesh_params{};
@@ -881,9 +865,10 @@ public:
 			fs_mesh_params.u_eye_pos[0]=cam.pos.x;
 			fs_mesh_params.u_eye_pos[1]=cam.pos.y;
 			fs_mesh_params.u_eye_pos[2]=cam.pos.z;
-			fs_mesh_params.u_light_pos[0]=light_pos.x;
-			fs_mesh_params.u_light_pos[1]=light_pos.y;
-			fs_mesh_params.u_light_pos[2]=light_pos.z;
+			fs_mesh_params.u_light_pos[0]=shadow_map.pos.x;
+			fs_mesh_params.u_light_pos[1]=shadow_map.pos.y;
+			fs_mesh_params.u_light_pos[2]=shadow_map.pos.z;
+			fs_mesh_params.u_cam_far=cam.far;
 			sg_apply_uniforms(UB_fs_mesh_params, SG_RANGE(fs_mesh_params));
 
 			sg_draw(0, 3*s.mesh.tris.size(), 1);
@@ -894,27 +879,6 @@ public:
 		for(const auto& s:shapes) {
 			renderLinemesh(s.linemesh, s.model, {1, 1, 1, 1});
 		}
-	}
-
-	void renderCubemapDebug() {
-		sg_apply_pipeline(cubemap.debug_pip);
-
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=cubemap.mesh.vbuf;
-		bind.index_buffer=cubemap.mesh.ibuf;
-		bind.samplers[SMP_u_cubemap_smp]=samplers.linear;
-		bind.views[VIEW_u_cubemap_tex]=cubemap.color_view;
-		sg_apply_bindings(bind);
-
-		vs_cubemap_debug_params_t vs_cubemap_debug_params{};
-		mat4 scl=mat4::makeScale({.5f, .5f, .5f});
-		mat4 trans=mat4::makeTranslation(cubemap.pos);
-		mat4 model=mat4::mul(trans, scl);
-		mat4 mvp=mat4::mul(cam.view_proj, model);
-		std::memcpy(vs_cubemap_debug_params.u_mvp, mvp.m, sizeof(mvp.m));
-		sg_apply_uniforms(UB_vs_cubemap_debug_params, SG_RANGE(vs_cubemap_debug_params));
-
-		sg_draw(0, 3*cubemap.mesh.tris.size(), 1);
 	}
 
 	void renderGizmos() {
@@ -967,7 +931,7 @@ public:
 #pragma endregion
 
 	void userRender() override {
-		renderShapesIntoCubemap();
+		renderShapesIntoShadowMap();
 		
 		//start display pass 
 		sg_pass pass{};
@@ -980,8 +944,6 @@ public:
 		if(render_outlines) renderShapeOutlines();
 		else renderShapes();
 
-		renderCubemapDebug();
-
 		renderGizmos();
 
 		sg_end_pass();
@@ -990,6 +952,6 @@ public:
 	}
 
 	Demo() {
-		app_title="Cubemap Demo";
+		app_title="Shadowmap Demo";
 	}
 };
