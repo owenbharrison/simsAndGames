@@ -322,7 +322,7 @@ public:
 		}
 
 		//make projection matrix
-		shadow_map.face_proj=mat4::makePerspective(90.f, 1, .001f, 1000.f);
+		shadow_map.face_proj=mat4::makePerspective(90.f, 1, cam.near, cam.far);
 	}
 
 	//clear to black
@@ -807,6 +807,7 @@ public:
 				fs_shadow_map_params.u_light_pos[0]=shadow_map.pos.x;
 				fs_shadow_map_params.u_light_pos[1]=shadow_map.pos.y;
 				fs_shadow_map_params.u_light_pos[2]=shadow_map.pos.z;
+				fs_shadow_map_params.u_cam_near=cam.near;
 				fs_shadow_map_params.u_cam_far=cam.far;
 				sg_apply_uniforms(UB_fs_shadow_map_params, SG_RANGE(fs_shadow_map_params));
 
@@ -868,6 +869,7 @@ public:
 			fs_mesh_params.u_light_pos[0]=shadow_map.pos.x;
 			fs_mesh_params.u_light_pos[1]=shadow_map.pos.y;
 			fs_mesh_params.u_light_pos[2]=shadow_map.pos.z;
+			fs_mesh_params.u_cam_near=cam.near;
 			fs_mesh_params.u_cam_far=cam.far;
 			sg_apply_uniforms(UB_fs_mesh_params, SG_RANGE(fs_mesh_params));
 

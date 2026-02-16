@@ -28,6 +28,7 @@ out vec4 o_frag_col;
 
 layout(binding=1) uniform fs_shadow_map_params {
 	vec3 u_light_pos;
+	float u_cam_near;
 	float u_cam_far;
 };
 
@@ -39,7 +40,7 @@ vec4 encodeFloat(float f) {
 
 void main() {
 	float dist=length(u_light_pos-pos);
-	float dist01=dist/u_cam_far;
+	float dist01=(dist-u_cam_near)/(u_cam_far-u_cam_near);
 	o_frag_col=encodeFloat(dist01);
 }
 
@@ -131,6 +132,7 @@ out vec4 o_frag_col;
 layout(binding=1) uniform fs_mesh_params {
 	vec3 u_eye_pos;
 	vec3 u_light_pos;
+	float u_cam_near;
 	float u_cam_far;
 };
 
@@ -158,7 +160,7 @@ void main() {
 	//is in shadow?
 	vec4 rgba=texture(samplerCube(u_mesh_shadow_tex, u_mesh_shadow_smp), -L);
 	float dist01=decodeFloat(rgba);
-	float dist=dist01*u_cam_far;
+	float dist=u_cam_near+dist01*(u_cam_far-u_cam_near);
 	if(length(u_light_pos-pos)>dist+.05) diff_mag=0, spec_mag=0;
 	
 	//base texture color
