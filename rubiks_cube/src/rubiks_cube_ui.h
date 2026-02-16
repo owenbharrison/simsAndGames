@@ -7,7 +7,11 @@ shuffle
 beginner solver
 */
 
+#ifdef __EMSCRIPTEN__
+#define SOKOL_GLES3
+#else
 #define SOKOL_GLCORE
+#endif
 #include "sokol/sokol_engine.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
