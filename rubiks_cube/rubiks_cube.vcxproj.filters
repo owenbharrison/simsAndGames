@@ -26,36 +26,42 @@
     <ClInclude Include="src\shd.glsl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\texture_utils.h">
+    <ClInclude Include="src\rubiks_cube.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\return_code.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\rubiks_cube.h">
+    <ClInclude Include="src\texture_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
+    <None Include="compile_shaders.bat">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\pz.png">
+    <Image Include="assets\skybox\pz.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\px.png">
+    <Image Include="assets\skybox\px.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\ny.png">
+    <Image Include="assets\skybox\ny.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\nz.png">
+    <Image Include="assets\skybox\nz.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\nx.png">
+    <Image Include="assets\skybox\nx.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\py.png">
+    <Image Include="assets\skybox\py.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\monogram_6x9.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

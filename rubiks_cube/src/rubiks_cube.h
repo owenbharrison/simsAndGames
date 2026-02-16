@@ -1,22 +1,25 @@
 #pragma once
-#ifndef RUBIKS_CUBE_STRUCT_H
-#define RUBIKS_CUBE_STRUCT_H
+#ifndef RUBIKS_CUBE_CLASS_H
+#define RUBIKS_CUBE_CLASS_H
 
 //for memcpy
 #include <string>
 
 //reverse pointed-to elements
-static void reverse_ptr(int** a, int l, int r) {
-	int tmp;
+template<typename T>
+static void reverse_ptr(T** a, int l, int r) {
+	T tmp;
 	while(l<r) {
 		tmp=*a[l];
-		*a[l++]=*a[r];
-		*a[r--]=tmp;
+		*a[l]=*a[r];
+		*a[r]=tmp;
+		l++, r--;
 	}
 }
 
 //rotate pointed-to elements
-void rotate_left_ptr(int** a, int n, int k) {
+template<typename T>
+void rotate_left_ptr(T** a, int n, int k) {
 	k%=n;
 	if(k==0) return;
 
@@ -25,9 +28,28 @@ void rotate_left_ptr(int** a, int n, int k) {
 	reverse_ptr(a, 0, n-1);
 }
 
-struct RubiksCube {
-	const int num;
-	int* grid[6];
+class RubiksCube {
+	int num;
+
+	void copyFrom(const RubiksCube&), clear();
+
+	int** slice;
+	int* face;
+
+	void spinFace(int, bool);
+
+public:
+	int* grid;
+
+	enum {
+		Red=0,
+		Yellow,
+		Blue,
+		Orange,
+		White,
+		Green
+	};
+
 	enum {
 		Right=0,
 		Top,
@@ -37,108 +59,153 @@ struct RubiksCube {
 		Back
 	};
 
-	RubiksCube(int n) : num(n) {
-		for(int i=0; i<6; i++) {
-			grid[i]=new int[num*num];
-		}
+	RubiksCube() : RubiksCube(1) {}
+
+	RubiksCube(int n) {
+		num=n;
+		grid=new int[6*num*num];
+		slice=new int* [4*num];
+		face=new int[num*num];
 		reset();
 	}
 
+	//ro3: 1
+	RubiksCube(const RubiksCube& r) {
+		copyFrom(r);
+	}
+
+	//ro3: 2
 	~RubiksCube() {
-		for(int i=0; i<6; i++) {
-			delete[] grid[i];
+		clear();
+	}
+
+	//ro3: 3
+	RubiksCube& operator=(const RubiksCube& r) {
+		if(&r!=this) {
+			clear();
+
+			copyFrom(r);
+		}
+
+		return *this;
+	}
+
+	int getNum() const { return num; }
+
+	int ix(int f, int i, int j) const { return i+num*j+num*num*f; }
+
+	void inv_ix(int f, int i, int j, int& x, int& y, int& z) const {
+		switch(f) {
+			case Right: x=num-1, y=num-1-j, z=num-1-i; break;
+			case Top: x=i, y=num-1, z=j; break;
+			case Front: x=i, y=num-1-j, z=num-1; break;
+			case Left: x=0, y=num-1-j, z=i; break;
+			case Bottom: x=i, y=0, z=num-1-j; break;
+			case Back: x=num-1-i, y=num-1-j, z=0; break; 
 		}
 	}
 
-	int ix(int i, int j) const {
-		return i+num*j;
-	}
-
 	void reset() {
-		for(int i=0; i<6; i++) {
-			for(int j=0; j<num*num; j++) {
-				 grid[i][j]=i;
+		for(int f=0; f<6; f++) {
+			for(int i=0; i<num; i++) {
+				for(int j=0; j<num; j++) {
+					grid[ix(f, i, j)]=f;
+				}
 			}
 		}
 	}
 
 	void turnX(int x, bool ccw) {
-		int slice_num=4*num;
-		int** slice=new int* [slice_num];
 		for(int i=0; i<num; i++) {
-			slice[i]=&grid[Top][ix(x, i)];
-			slice[num+i]=&grid[Front][ix(x, i)];
-			slice[2*num+i]=&grid[Bottom][ix(x, i)];
-			slice[3*num+i]=&grid[Back][ix(num-1-x, num-1-i)];
+			slice[i]=&grid[ix(Top, x, i)];
+			slice[num+i]=&grid[ix(Front, x, i)];
+			slice[2*num+i]=&grid[ix(Bottom, x, i)];
+			slice[3*num+i]=&grid[ix(Back, num-1-x, num-1-i)];
 		}
 
 		int amt=ccw?3*num:num;
-		rotate_left_ptr(slice, slice_num, amt);
+		rotate_left_ptr(slice, 4*num, amt);
 
 		if(x==0) spinFace(Left, ccw);
 		else if(x==num-1) spinFace(Right, !ccw);
-
-		delete[] slice;
 	}
 
 	void turnY(int y, bool ccw) {
-		int slice_num=4*num;
-		int** slice=new int* [slice_num];
 		for(int i=0; i<num; i++) {
-			slice[i]=&grid[Front][ix(i, num-1-y)];
-			slice[num+i]=&grid[Right][ix(i, num-1-y)];
-			slice[2*num+i]=&grid[Back][ix(i, num-1-y)];
-			slice[3*num+i]=&grid[Left][ix(i, num-1-y)];
+			slice[i]=&grid[ix(Front, i, num-1-y)];
+			slice[num+i]=&grid[ix(Right, i, num-1-y)];
+			slice[2*num+i]=&grid[ix(Back, i, num-1-y)];
+			slice[3*num+i]=&grid[ix(Left, i, num-1-y)];
 		}
 
 		int amt=ccw?3*num:num;
-		rotate_left_ptr(slice, slice_num, amt);
+		rotate_left_ptr(slice, 4*num, amt);
 
 		if(y==0) spinFace(Bottom, ccw);
 		if(y==num-1) spinFace(Top, !ccw);
-
-		delete[] slice;
 	}
 
 	void turnZ(int z, bool ccw) {
-		int slice_num=4*num;
-		int** slice=new int* [slice_num];
 		for(int i=0; i<num; i++) {
-			slice[i]=&grid[Top][ix(num-1-i, z)];
-			slice[num+i]=&grid[Left][ix(z, i)];
-			slice[2*num+i]=&grid[Bottom][ix(i, num-1-z)];
-			slice[3*num+i]=&grid[Right][ix(num-1-z, num-1-i)];
+			slice[i]=&grid[ix(Top, num-1-i, z)];
+			slice[num+i]=&grid[ix(Left, z, i)];
+			slice[2*num+i]=&grid[ix(Bottom, i, num-1-z)];
+			slice[3*num+i]=&grid[ix(Right, num-1-z, num-1-i)];
 		}
 
 		int amt=ccw?3*num:num;
-		rotate_left_ptr(slice, slice_num, amt);
+		rotate_left_ptr(slice, 4*num, amt);
 
 		if(z==0) spinFace(Back, ccw);
 		else if(z==num-1) spinFace(Front, !ccw);
-
-		delete[] slice;
 	}
 
-	//helper for the turn methods
-	void spinFace(int f, bool opp) {
-		int* temp=new int[num*num];
-		std::memcpy(temp, grid[f], sizeof(int)*num*num);
-
-		if(opp) {
-			for(int i=0; i<num; i++) {
-				for(int j=0; j<num; j++) {
-					grid[f][ix(num-1-j, i)]=temp[ix(i, j)];
-				}
-			}
-		} else {
-			for(int i=0; i<num; i++) {
-				for(int j=0; j<num; j++) {
-					grid[f][ix(j, num-1-i)]=temp[ix(i, j)];
-				}
+	void scramble() {
+		for(int i=0; i<30; i++) {
+			int s=std::rand()%num;
+			bool p=std::rand()%2;
+			switch(std::rand()%3) {
+				case 0: turnX(s, p); break;
+				case 1: turnY(s, p); break;
+				case 2: turnZ(s, p); break;
 			}
 		}
-
-		delete[] temp;
 	}
 };
+
+void RubiksCube::copyFrom(const RubiksCube& r) {
+	num=r.num;
+
+	grid=new int[6*num*num];
+	std::memcpy(grid, r.grid, sizeof(int)*6*num*num);
+
+	slice=new int* [4*num];
+	std::memcpy(slice, r.slice, sizeof(int*)*4*num);
+
+	face=new int[num*num];
+	std::memcpy(face, r.face, sizeof(int)*num*num);
+}
+
+void RubiksCube::clear() {
+	delete[] grid;
+	delete[] slice;
+	delete[] face;
+}
+
+//helper for the turn methods
+void RubiksCube::spinFace(int f, bool opp) {
+	for(int i=0; i<num; i++) {
+		for(int j=0; j<num; j++) {
+			face[ix(0, i, j)]=grid[ix(f, i, j)];
+		}
+	}
+
+	for(int i=0; i<num; i++) {
+		for(int j=0; j<num; j++) {
+			int ri=opp?num-1-j:j;
+			int rj=opp?i:num-1-i;
+			grid[ix(f, ri, rj)]=face[ix(0, i, j)];
+		}
+	}
+}
 #endif
