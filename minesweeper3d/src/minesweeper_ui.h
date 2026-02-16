@@ -144,11 +144,12 @@ class MinesweeperUI : public cmn::SokolEngine {
 	struct {
 		sg_pass_action pass_action{};
 
-		sg_pipeline pip{};
+		sg_pipeline crt_pip{};
+		sg_pipeline ht_pip{};
+		sg_pipeline dither_pip{};
 
 		sg_buffer vbuf{};
-		sg_buffer ibuf{};
-	} process;
+	} post_process;
 
 	Minesweeper game;
 
@@ -425,31 +426,30 @@ public:
 		font=cmn::Font("assets/img/intrepid_8x8.png", 8, 8);
 	}
 
-	void setupProcess() {
-		process.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		process.pass_action.colors[0].clear_value={0, 0, 0, 1};
+	void setupPostProcess() {
+		post_process.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		post_process.pass_action.colors[0].clear_value={0, 0, 0, 1};
 
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_process_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.layout.attrs[ATTR_process_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(process_shader_desc(sg_query_backend()));
+		pip_desc.layout.attrs[ATTR_crt_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(crt_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-		process.pip=sg_make_pipeline(pip_desc);
+		post_process.crt_pip=sg_make_pipeline(pip_desc);
 
-		//xyuv
-		float vertexes[4][4]{
-			{-1, -1, 0, 0},
-			{1, -1, 1, 0}, 
-			{-1, 1, 0, 1},
-			{1, 1, 1, 1}
+		//xy
+		float vertexes[4][2]{
+			{-1, -1},
+			{1, -1}, 
+			{-1, 1},
+			{1, 1}
 		};
 		sg_buffer_desc buffer_desc{};
 		buffer_desc.data=SG_RANGE(vertexes);
-		process.vbuf=sg_make_buffer(buffer_desc);
+		post_process.vbuf=sg_make_buffer(buffer_desc);
 	}
 
 	void setupGame() {
-		game=Minesweeper(7, 5, 8, 20);
+		game=Minesweeper(5, 4, 6, 8);
 		//game.sweep(0, 0, 0);
 	}
 #pragma endregion
@@ -479,7 +479,7 @@ public:
 
 		setupFont();
 
-		setupProcess();
+		setupPostProcess();
 
 		setupGame();
 	}
@@ -663,6 +663,8 @@ public:
 	}
 #pragma endregion
 
+	float total_dt=0;
+
 	void userUpdate(float dt) override {
 		handleCameraLooking(dt);
 		cam.dir=polarToCartesian(cam.yaw, cam.pitch);
@@ -675,6 +677,8 @@ public:
 		updateParticles(dt);
 
 		updateCameraMatrixes();
+
+		total_dt+=dt;
 	}
 
 #pragma region RENDER HELPERS
@@ -1112,20 +1116,25 @@ public:
 			sg_end_pass();
 		}
 
-		//process
+		//post process
 		{
 			sg_pass pass{};
-			pass.action=process.pass_action;
+			pass.action=post_process.pass_action;
 			pass.swapchain=sglue_swapchain();
 			sg_begin_pass(pass);
 
-			sg_apply_pipeline(process.pip);
+			sg_apply_pipeline(post_process.crt_pip);
 
 			sg_bindings bind{};
-			bind.vertex_buffers[0]=process.vbuf;
-			bind.samplers[SMP_u_process_smp]=sampler;
-			bind.views[VIEW_u_process_tex]=render.color_tex;
+			bind.vertex_buffers[0]=post_process.vbuf;
+			bind.samplers[SMP_u_crt_smp]=sampler;
+			bind.views[VIEW_u_crt_tex]=render.color_tex;
 			sg_apply_bindings(bind);
+
+			fs_crt_params_t fs_crt_params{};
+			fs_crt_params.u_resolution[0]=sapp_widthf();
+			fs_crt_params.u_resolution[1]=sapp_heightf();
+			sg_apply_uniforms(UB_fs_crt_params, SG_RANGE(fs_crt_params));
 
 			sg_draw(0, 4, 1);
 
