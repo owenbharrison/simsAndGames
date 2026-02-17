@@ -116,6 +116,8 @@ public:
 	}
 
 	void turnX(int x, bool ccw) {
+		if(x<0||x>=num) return;
+
 		for(int i=0; i<num; i++) {
 			slice[i]=&grid[ix(Top, x, i)];
 			slice[num+i]=&grid[ix(Front, x, i)];
@@ -131,6 +133,8 @@ public:
 	}
 
 	void turnY(int y, bool ccw) {
+		if(y<0||y>=num) return;
+
 		for(int i=0; i<num; i++) {
 			slice[i]=&grid[ix(Front, i, num-1-y)];
 			slice[num+i]=&grid[ix(Right, i, num-1-y)];
@@ -146,6 +150,8 @@ public:
 	}
 
 	void turnZ(int z, bool ccw) {
+		if(z<0||z>=num) return;
+
 		for(int i=0; i<num; i++) {
 			slice[i]=&grid[ix(Top, num-1-i, z)];
 			slice[num+i]=&grid[ix(Left, z, i)];
@@ -162,12 +168,12 @@ public:
 
 	void scramble() {
 		for(int i=0; i<30; i++) {
-			int s=std::rand()%num;
-			bool p=std::rand()%2;
-			switch(std::rand()%3) {
-				case 0: turnX(s, p); break;
-				case 1: turnY(s, p); break;
-				case 2: turnZ(s, p); break;
+			int slice=std::rand()%num;
+			bool parity=std::rand()%2;
+			switch(std::rand()%3) {//axis
+				case 0: turnX(slice, parity); break;
+				case 1: turnY(slice, parity); break;
+				case 2: turnZ(slice, parity); break;
 			}
 		}
 	}

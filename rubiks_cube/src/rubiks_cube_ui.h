@@ -91,29 +91,28 @@ class RubiksCubeUI : public cmn::SokolEngine {
 		sg_pipeline pip{};
 
 		struct {
-			//posnorm
-			float vertexes[4][6]{
-				{-.5f, -.5f, 0, 0, 0, 1},
-				{.5f, -.5f, 0, 0, 0, 1},
-				{-.5f, .5f, 0, 0, 0, 1},
-				{.5f, .5f, 0, 0, 0, 1}
+			//pos norm tex
+			const float vertexes[4][8]{
+				{-.5f, -.5f, 0, 0, 0, 1, 0, 0},
+				{.5f, -.5f, 0, 0, 0, 1, 1, 0},
+				{-.5f, .5f, 0, 0, 0, 1, 0, 1},
+				{.5f, .5f, 0, 0, 0, 1, 1, 1}
 			};
 			sg_buffer vbuf{};
 
-			std::uint32_t indexes[2][3]{
+			const std::uint32_t indexes[2][3]{
 				{0, 2, 1},
 				{1, 2, 3}
 			};
 			sg_buffer ibuf{};
-		} facelet;
 
-		const float size=1;
-		const float gap=.1f;
+			sg_view tex{};
+		} facelet;
 
 		RubiksCube rubiks;
 
 		std::deque<Turn> turn_queue;
-		const float turn_time=.33f;
+		const float turn_time=.25f;
 		float turn_timer=0;
 		bool render_turn_queue=false;
 
@@ -123,7 +122,7 @@ class RubiksCubeUI : public cmn::SokolEngine {
 			{1, 0, 0, 1},//+x red
 			{1, 1, 0, 1},//+y yellow
 			{0, 0, 1, 1},//+z white
-			{1, .392f, 0, 1},//-x orange
+			{1, .5f, 0, 1},//-x orange
 			{1, 1, 1, 1},//-y white
 			{0, 1, 0, 1}//-z yellow
 		};
@@ -240,8 +239,9 @@ public:
 		//pipeline
 		{
 			sg_pipeline_desc pip_desc{};
-			pip_desc.layout.attrs[ATTR_cube_v_pos].format=SG_VERTEXFORMAT_FLOAT3;
-			pip_desc.layout.attrs[ATTR_cube_v_norm].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cube_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cube_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+			pip_desc.layout.attrs[ATTR_cube_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
 			pip_desc.shader=sg_make_shader(cube_shader_desc(sg_query_backend()));
 			pip_desc.index_type=SG_INDEXTYPE_UINT32;
 			pip_desc.cull_mode=SG_CULLMODE_FRONT;
@@ -265,6 +265,12 @@ public:
 			cube.facelet.ibuf=sg_make_buffer(buffer_desc);
 		}
 
+		//texture
+		{
+			auto& t=cube.facelet.tex;
+			if(!cmn::makeTextureFromFile(t, "assets/facelet.png")) t=tex_blank;
+		}
+		
 		//actual cube
 		cube.rubiks=RubiksCube(3);
 
@@ -324,6 +330,24 @@ public:
 		font=cmn::Font("assets/monogram_6x9.png", 6, 9);
 	}
 
+	void setupIcon() {
+		int width, height, comp;
+		std::uint8_t* pixels8=stbi_load("assets/icon.png", &width, &height, &comp, 4);
+		if(!pixels8) return;
+
+		std::uint32_t* pixels32=new std::uint32_t[width*height];
+		std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
+		stbi_image_free(pixels8);
+		
+		sapp_icon_desc icon_desc{};
+		icon_desc.images[0].width=width;
+		icon_desc.images[0].height=height;
+		icon_desc.images[0].pixels.ptr=pixels32;
+		icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
+		sapp_set_icon(&icon_desc);
+		delete[] pixels32;
+	}
+
 	void setupCamera() {
 		//randomize camera placement
 		float rad=cmn::randFloat(5, 8);
@@ -358,38 +382,35 @@ public:
 
 		setupFont();
 
+		setupIcon();
+
 		setupCamera();
 	}
 
 #pragma region UPDATE HELPERS
 	void handleCameraLooking(float dt) {
+		//orbit
+		if(getMouse(SAPP_MOUSEBUTTON_LEFT).held) {
+			cam.yaw-=mouse_dx*dt;
+			cam.pitch-=mouse_dy*dt;
+		}
+		
 		//left/right
-		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
-		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
+		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=dt;
+		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=dt;
 
 		//up/down
-		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch+=dt;
-		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
+		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch-=dt;
+		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=dt;
 
 		//clamp camera pitch
 		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
 		if(cam.pitch<-cmn::Pi/2) cam.pitch=.001f-cmn::Pi/2;
 	}
 
-	void handleCameraMovement(float dt) {
-		//move up, down
-		if(getKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4.f*dt;
-		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4.f*dt;
-
-		//move forward, backward
-		vf3d fb_dir(std::sin(cam.yaw), 0, std::cos(cam.yaw));
-		if(getKey(SAPP_KEYCODE_W).held) cam.pos+=5.f*dt*fb_dir;
-		if(getKey(SAPP_KEYCODE_S).held) cam.pos-=3.f*dt*fb_dir;
-
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(getKey(SAPP_KEYCODE_A).held) cam.pos+=4.f*dt*lr_dir;
-		if(getKey(SAPP_KEYCODE_D).held) cam.pos-=4.f*dt*lr_dir;
+	void handleCameraPlacement() {
+		float rad=std::sqrt(3)*cube.rubiks.getNum()/2;
+		cam.pos=-(3+rad)*cam.dir;
 	}
 
 	void handleCubeControls() {
@@ -409,7 +430,10 @@ public:
 		if(getKey(SAPP_KEYCODE_8).pressed) cube.turn_queue.push_back({Turn::Axis::Z, 1, ccw});
 		if(getKey(SAPP_KEYCODE_9).pressed) cube.turn_queue.push_back({Turn::Axis::Z, 2, ccw});
 
-		if(getKey(SAPP_KEYCODE_C).pressed) cube.rubiks.scramble();
+		if(getKey(SAPP_KEYCODE_C).pressed) {
+			cube.rubiks.scramble();
+			cube.turn_queue.clear();
+		}
 	}
 
 	void handleUserInput(float dt) {
@@ -417,7 +441,7 @@ public:
 
 		cam.dir=polarToCartesian(cam.yaw, cam.pitch);
 
-		handleCameraMovement(dt);
+		handleCameraPlacement();
 
 		handleCubeControls();
 
@@ -481,15 +505,15 @@ public:
 
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=skybox.vbuf;
-			bind.samplers[SMP_skybox_smp]=smp_linear;
-			bind.views[VIEW_skybox_tex]=skybox.tex[i];
+			bind.samplers[SMP_b_skybox_smp]=smp_linear;
+			bind.views[VIEW_b_skybox_tex]=skybox.tex[i];
 			sg_apply_bindings(bind);
 
 			mat4 mvp=mat4::mul(view_proj, skybox.model[i]);
 
-			vs_skybox_params_t vs_skybox_params{};
-			std::memcpy(vs_skybox_params.u_mvp, mvp.m, sizeof(mvp.m));
-			sg_apply_uniforms(UB_vs_skybox_params, SG_RANGE(vs_skybox_params));
+			p_vs_skybox_t p_vs_skybox{};
+			std::memcpy(p_vs_skybox.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_p_vs_skybox, SG_RANGE(p_vs_skybox));
 
 			sg_draw(0, 4, 1);
 		}
@@ -497,12 +521,13 @@ public:
 
 	void renderCube() {
 		const auto& num=cube.rubiks.getNum();
-		float total_sz=cube.size*num+cube.gap*(num-1);
-		float side_st=.5f*total_sz-.5f*cube.size;
+		float side_st=.5f*(num-1);
 
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=cube.facelet.vbuf;
 		bind.index_buffer=cube.facelet.ibuf;
+		bind.samplers[SMP_b_cube_smp]=smp_linear;
+		bind.views[VIEW_b_cube_tex]=cube.facelet.tex;
 
 		Turn* curr_turn=nullptr;
 		if(cube.turn_queue.size()) curr_turn=&cube.turn_queue.front();
@@ -521,10 +546,10 @@ public:
 		} else rot_axes=mat4::makeIdentity();
 
 		for(int i=0; i<num; i++) {
-			float x=side_st-(cube.size+cube.gap)*i;
+			float x=side_st-i;
 			for(int j=0; j<num; j++) {
-				float y=side_st-(cube.size+cube.gap)*j;
-				mat4 trans=mat4::makeTranslation({x, y, .5f*total_sz});
+				float y=side_st-j;
+				mat4 trans=mat4::makeTranslation({x, y, .5f*num});
 				for(int f=0; f<6; f++) {
 					int x, y, z;
 					cube.rubiks.inv_ix(f, i, j, x, y, z);
@@ -546,25 +571,25 @@ public:
 
 					//send model & camera transforms
 					mat4 mvp=mat4::mul(cam.view_proj, model);
-					vs_cube_params_t vs_cube_params{};
-					std::memcpy(vs_cube_params.u_model, model.m, sizeof(model.m));
-					std::memcpy(vs_cube_params.u_mvp, mvp.m, sizeof(mvp.m));
-					sg_apply_uniforms(UB_vs_cube_params, SG_RANGE(vs_cube_params));
+					p_vs_cube_t p_vs_cube{};
+					std::memcpy(p_vs_cube.u_model, model.m, sizeof(model.m));
+					std::memcpy(p_vs_cube.u_mvp, mvp.m, sizeof(mvp.m));
+					sg_apply_uniforms(UB_p_vs_cube, SG_RANGE(p_vs_cube));
 
 					//send face col
 					int col=cube.rubiks.grid[cube.rubiks.ix(f, i, j)];
-					fs_cube_params_t fs_cube_params{};
-					fs_cube_params.u_col[0]=cube.cols[col].r;
-					fs_cube_params.u_col[1]=cube.cols[col].g;
-					fs_cube_params.u_col[2]=cube.cols[col].b;
+					p_fs_cube_t p_fs_cube{};
 					//light at cam
-					fs_cube_params.u_light_pos[0]=cam.pos.x;
-					fs_cube_params.u_light_pos[1]=cam.pos.y;
-					fs_cube_params.u_light_pos[2]=cam.pos.z;
-					fs_cube_params.u_eye_pos[0]=cam.pos.x;
-					fs_cube_params.u_eye_pos[1]=cam.pos.y;
-					fs_cube_params.u_eye_pos[2]=cam.pos.z;
-					sg_apply_uniforms(UB_fs_cube_params, SG_RANGE(fs_cube_params));
+					p_fs_cube.u_light_pos[0]=cam.pos.x;
+					p_fs_cube.u_light_pos[1]=cam.pos.y;
+					p_fs_cube.u_light_pos[2]=cam.pos.z;
+					p_fs_cube.u_eye_pos[0]=cam.pos.x;
+					p_fs_cube.u_eye_pos[1]=cam.pos.y;
+					p_fs_cube.u_eye_pos[2]=cam.pos.z;
+					p_fs_cube.u_tint[0]=cube.cols[col].r;
+					p_fs_cube.u_tint[1]=cube.cols[col].g;
+					p_fs_cube.u_tint[2]=cube.cols[col].b;
+					sg_apply_uniforms(UB_p_fs_cube, SG_RANGE(p_fs_cube));
 
 					sg_draw(0, 2*3, 1);
 				}
@@ -582,23 +607,23 @@ public:
 
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=colorview_render.vbuf;
-		bind.samplers[SMP_u_colorview_smp]=smp_nearest;
-		bind.views[VIEW_u_colorview_tex]=tex;
+		bind.samplers[SMP_b_colorview_smp]=smp_nearest;
+		bind.views[VIEW_b_colorview_tex]=tex;
 		sg_apply_bindings(bind);
 
-		vs_colorview_params_t vs_colorview_params{};
-		vs_colorview_params.u_tl[0]=l;
-		vs_colorview_params.u_tl[1]=t;
-		vs_colorview_params.u_br[0]=r;
-		vs_colorview_params.u_br[1]=b;
-		sg_apply_uniforms(UB_vs_colorview_params, SG_RANGE(vs_colorview_params));
+		p_vs_colorview_t p_vs_colorview{};
+		p_vs_colorview.u_tl[0]=l;
+		p_vs_colorview.u_tl[1]=t;
+		p_vs_colorview.u_br[0]=r;
+		p_vs_colorview.u_br[1]=b;
+		sg_apply_uniforms(UB_p_vs_colorview, SG_RANGE(p_vs_colorview));
 
-		fs_colorview_params_t fs_colorview_params{};
-		fs_colorview_params.u_tint[0]=tint.r;
-		fs_colorview_params.u_tint[1]=tint.g;
-		fs_colorview_params.u_tint[2]=tint.b;
-		fs_colorview_params.u_tint[3]=tint.a;
-		sg_apply_uniforms(UB_fs_colorview_params, SG_RANGE(fs_colorview_params));
+		p_fs_colorview_t p_fs_colorview{};
+		p_fs_colorview.u_tint[0]=tint.r;
+		p_fs_colorview.u_tint[1]=tint.g;
+		p_fs_colorview.u_tint[2]=tint.b;
+		p_fs_colorview.u_tint[3]=tint.a;
+		sg_apply_uniforms(UB_p_fs_colorview, SG_RANGE(p_fs_colorview));
 
 		sg_apply_viewportf(x, y, w, h, true);
 
