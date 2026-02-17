@@ -158,11 +158,14 @@ namespace cmn {
 			if(x<1/d1) {
 				return n1*x*x;
 			} else if(x<2/d1) {
-				return n1*(x-=1.5f/d1)*x+.75f;
+				float t=x-1.5f/d1;
+				return n1*t*t+.75f;
 			} else if(x<2.5f/d1) {
-				return n1*(x-=2.25f/d1)*x+.9375f;
+				float t=x-2.25f/d1;
+				return n1*t*t+.9375f;
 			} else {
-				return n1*(x-=2.625f/d1)*x+.984375f;
+				float t=x-2.625f/d1;
+				return n1*t*t+.984375f;
 			}
 		}
 
