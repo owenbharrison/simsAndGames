@@ -1,10 +1,11 @@
 /*todo:
-black cube margins
-intuitive controls
-orbit camera
+beginner3x3 solver
+varying turn speeds:
+	fast scramble
+	slow solve
+mouse interaction
 selectable sizes
-shuffle
-beginner solver
+	NxN solver
 */
 
 #ifdef __EMSCRIPTEN__
@@ -57,14 +58,6 @@ static void cartesianToPolar(const vf3d& pt, float& yaw, float& pitch) {
 	//vertical triangle
 	pitch=std::atan2(pt.y, std::sqrt(pt.x*pt.x+pt.z*pt.z));
 }
-
-struct Turn {
-	enum struct Axis {
-		X, Y, Z
-	} axis;
-	int slice;
-	bool parity;
-};
 
 class RubiksCubeUI : public cmn::SokolEngine {
 	sg_sampler smp_linear{};
@@ -395,13 +388,15 @@ public:
 			cam.pitch-=mouse_dy*dt;
 		}
 		
+		const float turn_speed=1.5f*dt;
+
 		//left/right
-		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=dt;
-		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=dt;
+		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=turn_speed;
+		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=turn_speed;
 
 		//up/down
-		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch-=dt;
-		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=dt;
+		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch-=turn_speed;
+		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=turn_speed;
 
 		//clamp camera pitch
 		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
@@ -414,25 +409,28 @@ public:
 	}
 
 	void handleCubeControls() {
-		if(getKey(SAPP_KEYCODE_R).pressed) {
+		if(getKey(SAPP_KEYCODE_HOME).pressed) {
 			cube.rubiks.reset();
 			cube.turn_queue.clear();
 		}
 
-		bool ccw=!getKey(SAPP_KEYCODE_LEFT_ALT).held;
-		if(getKey(SAPP_KEYCODE_1).pressed) cube.turn_queue.push_back({Turn::Axis::X, 0, ccw});
-		if(getKey(SAPP_KEYCODE_2).pressed) cube.turn_queue.push_back({Turn::Axis::X, 1, ccw});
-		if(getKey(SAPP_KEYCODE_3).pressed) cube.turn_queue.push_back({Turn::Axis::X, 2, ccw});
-		if(getKey(SAPP_KEYCODE_4).pressed) cube.turn_queue.push_back({Turn::Axis::Y, 0, ccw});
-		if(getKey(SAPP_KEYCODE_5).pressed) cube.turn_queue.push_back({Turn::Axis::Y, 1, ccw});
-		if(getKey(SAPP_KEYCODE_6).pressed) cube.turn_queue.push_back({Turn::Axis::Y, 2, ccw});
-		if(getKey(SAPP_KEYCODE_7).pressed) cube.turn_queue.push_back({Turn::Axis::Z, 0, ccw});
-		if(getKey(SAPP_KEYCODE_8).pressed) cube.turn_queue.push_back({Turn::Axis::Z, 1, ccw});
-		if(getKey(SAPP_KEYCODE_9).pressed) cube.turn_queue.push_back({Turn::Axis::Z, 2, ccw});
+		bool ccw=getKey(SAPP_KEYCODE_LEFT_SHIFT).held;
+		if(getKey(SAPP_KEYCODE_F).pressed) cube.turn_queue.push_back(ccw?Turn::f:Turn::F);
+		if(getKey(SAPP_KEYCODE_U).pressed) cube.turn_queue.push_back(ccw?Turn::u:Turn::U);
+		if(getKey(SAPP_KEYCODE_L).pressed) cube.turn_queue.push_back(ccw?Turn::l:Turn::L);
+		if(getKey(SAPP_KEYCODE_B).pressed) cube.turn_queue.push_back(ccw?Turn::b:Turn::B);
+		if(getKey(SAPP_KEYCODE_D).pressed) cube.turn_queue.push_back(ccw?Turn::d:Turn::D);
+		if(getKey(SAPP_KEYCODE_R).pressed) cube.turn_queue.push_back(ccw?Turn::r:Turn::R);
+		if(getKey(SAPP_KEYCODE_X).pressed) cube.turn_queue.push_back(ccw?Turn::x:Turn::X);
+		if(getKey(SAPP_KEYCODE_Y).pressed) cube.turn_queue.push_back(ccw?Turn::y:Turn::Y);
+		if(getKey(SAPP_KEYCODE_Z).pressed) cube.turn_queue.push_back(ccw?Turn::z:Turn::Z);
 
-		if(getKey(SAPP_KEYCODE_C).pressed) {
-			cube.rubiks.scramble();
+		if(getKey(SAPP_KEYCODE_S).pressed) {
 			cube.turn_queue.clear();
+			auto scramble=cube.rubiks.getScramble();
+			cube.turn_queue.insert(cube.turn_queue.end(),
+				scramble.begin(), scramble.end()
+			);
 		}
 	}
 
@@ -468,17 +466,7 @@ public:
 			cube.turn_timer=0;
 
 			auto turn=cube.turn_queue.front();
-			switch(turn.axis) {
-				case Turn::Axis::X:
-					cube.rubiks.turnX(turn.slice, turn.parity);
-					break;
-				case Turn::Axis::Y:
-					cube.rubiks.turnY(turn.slice, turn.parity);
-					break;
-				case Turn::Axis::Z:
-					cube.rubiks.turnZ(turn.slice, turn.parity);
-					break;
-			}
+			cube.rubiks.turn(turn);
 
 			cube.turn_queue.pop_front();
 		}
@@ -529,19 +517,19 @@ public:
 		bind.samplers[SMP_b_cube_smp]=smp_linear;
 		bind.views[VIEW_b_cube_tex]=cube.facelet.tex;
 
-		Turn* curr_turn=nullptr;
-		if(cube.turn_queue.size()) curr_turn=&cube.turn_queue.front();
+		Turn* turn=nullptr;
+		if(cube.turn_queue.size()) turn=&cube.turn_queue.front();
 
 		mat4 rot_axes;
-		if(curr_turn) {
+		if(turn) {
 			float t=cube.turn_timer/cube.turn_time;
 			t=cmn::ease::inOutBack(t);
 			float angle=cmn::Pi/2*t;
-			if(!curr_turn->parity) angle=-angle;
-			switch(curr_turn->axis) {
-				case Turn::Axis::X: rot_axes=mat4::makeRotX(angle); break;
-				case Turn::Axis::Y: rot_axes=mat4::makeRotY(angle); break;
-				case Turn::Axis::Z: rot_axes=mat4::makeRotZ(angle); break;
+			if(!turn->ccw) angle=-angle;
+			switch(turn->axis) {
+				case Turn::XAxis: rot_axes=mat4::makeRotX(angle); break;
+				case Turn::YAxis: rot_axes=mat4::makeRotY(angle); break;
+				case Turn::ZAxis: rot_axes=mat4::makeRotZ(angle); break;
 			}
 		} else rot_axes=mat4::makeIdentity();
 
@@ -555,12 +543,16 @@ public:
 					cube.rubiks.inv_ix(f, i, j, x, y, z);
 
 					mat4 model=mat4::mul(cube.rot[f], trans);
-					if(curr_turn) {
+					if(turn) {
 						bool use_rot_axes=false;
-						switch(curr_turn->axis) {
-							case Turn::Axis::X: if(x==curr_turn->slice) use_rot_axes=true; break;
-							case Turn::Axis::Y: if(y==curr_turn->slice) use_rot_axes=true; break;
-							case Turn::Axis::Z: if(z==curr_turn->slice) use_rot_axes=true; break;
+						if(turn->slice==0) use_rot_axes=true;
+						else {
+							int slice=turn->slice<0?num+turn->slice:turn->slice-1;
+							switch(turn->axis) {
+								case Turn::XAxis: if(x==slice) use_rot_axes=true; break;
+								case Turn::YAxis: if(y==slice) use_rot_axes=true; break;
+								case Turn::ZAxis: if(z==slice) use_rot_axes=true; break;
+							}
 						}
 						if(use_rot_axes) model=mat4::mul(rot_axes, model);
 					}
@@ -660,19 +652,19 @@ public:
 		int y=m;
 		int scl=2;
 		for(const auto& t:cube.turn_queue) {
-			std::string parity=t.parity?"CW":"CCW";
+			std::string ccw=t.ccw?"CW":"CCW";
 
 			std::string axis;
 			sg_color col{0, 0, 0, 0};
 			switch(t.axis) {
-				case Turn::Axis::X: axis="X", col={1, 0, 0, 1}; break;
-				case Turn::Axis::Y: axis="Y", col={0, 1, 0, 1}; break;
-				case Turn::Axis::Z: axis="Z", col={0, 0, 1, 1}; break;
+				case Turn::XAxis: axis="X", col={1, 0, 0, 1}; break;
+				case Turn::YAxis: axis="Y", col={0, 1, 0, 1}; break;
+				case Turn::ZAxis: axis="Z", col={0, 0, 1, 1}; break;
 			}
 
 			auto slice=std::to_string(t.slice);
 
-			auto str=parity+" along "+axis+" at "+slice;
+			auto str=ccw+" along "+axis+" at "+slice;
 			renderString(m, y, str, scl, col);
 
 			y+=m+scl*font.char_h;

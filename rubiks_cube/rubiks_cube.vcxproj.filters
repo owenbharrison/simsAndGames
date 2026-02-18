@@ -35,6 +35,9 @@
     <ClInclude Include="src\texture_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\turn.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
@@ -62,6 +65,12 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\monogram_6x9.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\facelet.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\icon.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

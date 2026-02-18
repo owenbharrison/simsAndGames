@@ -139,12 +139,15 @@
     <ClInclude Include="src\return_code.h" />
     <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\texture_utils.h" />
+    <ClInclude Include="src\turn.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="compile_shaders.bat" />
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\facelet.png" />
+    <Image Include="assets\icon.png" />
     <Image Include="assets\monogram_6x9.png" />
     <Image Include="assets\skybox\px.png" />
     <Image Include="assets\skybox\ny.png" />

@@ -1,9 +1,18 @@
+/*TODO:
+slice store index
+	reverse_idx
+	rotate_left_idx
+*/
 #pragma once
 #ifndef RUBIKS_CUBE_CLASS_H
 #define RUBIKS_CUBE_CLASS_H
 
 //for memcpy
 #include <string>
+
+#include <vector>
+
+#include "turn.h"
 
 //reverse pointed-to elements
 template<typename T>
@@ -38,25 +47,16 @@ class RubiksCube {
 
 	void spinFace(int, bool);
 
+	void turnX(int, bool), turnY(int, bool), turnZ(int, bool);
+
+	void rotateX(bool), rotateY(bool), rotateZ(bool);
+
 public:
 	int* grid;
 
-	enum {
-		Red=0,
-		Yellow,
-		Blue,
-		Orange,
-		White,
-		Green
-	};
-
-	enum {
-		Right=0,
-		Top,
-		Front,
-		Left,
-		Bottom,
-		Back
+	enum : int {
+		Right=0, Top, Front,
+		Left, Bottom, Back
 	};
 
 	RubiksCube() : RubiksCube(1) {}
@@ -115,67 +115,29 @@ public:
 		}
 	}
 
-	void turnX(int x, bool ccw) {
-		if(x<0||x>=num) return;
-
-		for(int i=0; i<num; i++) {
-			slice[i]=&grid[ix(Top, x, i)];
-			slice[num+i]=&grid[ix(Front, x, i)];
-			slice[2*num+i]=&grid[ix(Bottom, x, i)];
-			slice[3*num+i]=&grid[ix(Back, num-1-x, num-1-i)];
+	void turn(const Turn& t) {
+		if(t.slice==0) switch(t.axis) {
+			case Turn::XAxis: rotateX(t.ccw); return;
+			case Turn::YAxis: rotateY(t.ccw); return;
+			case Turn::ZAxis: rotateZ(t.ccw); return;
 		}
-
-		int amt=ccw?3*num:num;
-		rotate_left_ptr(slice, 4*num, amt);
-
-		if(x==0) spinFace(Left, ccw);
-		else if(x==num-1) spinFace(Right, !ccw);
+			
+		int slice=t.slice<0?num+t.slice:t.slice-1;
+		switch(t.axis) {
+			case Turn::XAxis: turnX(slice, t.ccw); break;
+			case Turn::YAxis: turnY(slice, t.ccw); break;
+			case Turn::ZAxis: turnZ(slice, t.ccw); break;
+		}
 	}
 
-	void turnY(int y, bool ccw) {
-		if(y<0||y>=num) return;
-
-		for(int i=0; i<num; i++) {
-			slice[i]=&grid[ix(Front, i, num-1-y)];
-			slice[num+i]=&grid[ix(Right, i, num-1-y)];
-			slice[2*num+i]=&grid[ix(Back, i, num-1-y)];
-			slice[3*num+i]=&grid[ix(Left, i, num-1-y)];
-		}
-
-		int amt=ccw?3*num:num;
-		rotate_left_ptr(slice, 4*num, amt);
-
-		if(y==0) spinFace(Bottom, ccw);
-		if(y==num-1) spinFace(Top, !ccw);
-	}
-
-	void turnZ(int z, bool ccw) {
-		if(z<0||z>=num) return;
-
-		for(int i=0; i<num; i++) {
-			slice[i]=&grid[ix(Top, num-1-i, z)];
-			slice[num+i]=&grid[ix(Left, z, i)];
-			slice[2*num+i]=&grid[ix(Bottom, i, num-1-z)];
-			slice[3*num+i]=&grid[ix(Right, num-1-z, num-1-i)];
-		}
-
-		int amt=ccw?3*num:num;
-		rotate_left_ptr(slice, 4*num, amt);
-
-		if(z==0) spinFace(Back, ccw);
-		else if(z==num-1) spinFace(Front, !ccw);
-	}
-
-	void scramble() {
+	std::vector<Turn> getScramble() const {
+		std::vector<Turn> turns;
 		for(int i=0; i<30; i++) {
-			int slice=std::rand()%num;
-			bool parity=std::rand()%2;
-			switch(std::rand()%3) {//axis
-				case 0: turnX(slice, parity); break;
-				case 1: turnY(slice, parity); break;
-				case 2: turnZ(slice, parity); break;
-			}
+			int slice=(std::rand()%2?-1:1)*(1+std::rand()%num);
+			bool ccw=std::rand()%2;
+			turns.push_back({std::rand()%3, slice, ccw});
 		}
+		return turns;
 	}
 };
 
@@ -213,5 +175,68 @@ void RubiksCube::spinFace(int f, bool opp) {
 			grid[ix(f, ri, rj)]=face[ix(0, i, j)];
 		}
 	}
+}
+
+void RubiksCube::turnX(int x, bool ccw) {
+	if(x<0||x>=num) return;
+
+	for(int i=0; i<num; i++) {
+		slice[i]=&grid[ix(Top, x, i)];
+		slice[num+i]=&grid[ix(Front, x, i)];
+		slice[2*num+i]=&grid[ix(Bottom, x, i)];
+		slice[3*num+i]=&grid[ix(Back, num-1-x, num-1-i)];
+	}
+
+	int amt=ccw?3*num:num;
+	rotate_left_ptr(slice, 4*num, amt);
+
+	if(x==0) spinFace(Left, ccw);
+	else if(x==num-1) spinFace(Right, !ccw);
+}
+
+void RubiksCube::turnY(int y, bool ccw) {
+	if(y<0||y>=num) return;
+
+	for(int i=0; i<num; i++) {
+		slice[i]=&grid[ix(Front, i, num-1-y)];
+		slice[num+i]=&grid[ix(Right, i, num-1-y)];
+		slice[2*num+i]=&grid[ix(Back, i, num-1-y)];
+		slice[3*num+i]=&grid[ix(Left, i, num-1-y)];
+	}
+
+	int amt=ccw?3*num:num;
+	rotate_left_ptr(slice, 4*num, amt);
+
+	if(y==0) spinFace(Bottom, ccw);
+	if(y==num-1) spinFace(Top, !ccw);
+}
+
+void RubiksCube::turnZ(int z, bool ccw) {
+	if(z<0||z>=num) return;
+
+	for(int i=0; i<num; i++) {
+		slice[i]=&grid[ix(Top, num-1-i, z)];
+		slice[num+i]=&grid[ix(Left, z, i)];
+		slice[2*num+i]=&grid[ix(Bottom, i, num-1-z)];
+		slice[3*num+i]=&grid[ix(Right, num-1-z, num-1-i)];
+	}
+
+	int amt=ccw?3*num:num;
+	rotate_left_ptr(slice, 4*num, amt);
+
+	if(z==0) spinFace(Back, ccw);
+	else if(z==num-1) spinFace(Front, !ccw);
+}
+
+void RubiksCube::rotateX(bool ccw) {
+	for(int i=0; i<num; i++) turnX(i, ccw);
+}
+
+void RubiksCube::rotateY(bool ccw) {
+	for(int i=0; i<num; i++) turnY(i, ccw);
+}
+
+void RubiksCube::rotateZ(bool ccw) {
+	for(int i=0; i<num; i++) turnZ(i, ccw);
 }
 #endif
