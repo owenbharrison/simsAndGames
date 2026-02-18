@@ -473,7 +473,7 @@ public:
 	}
 #pragma endregion
 
-	void userUpdate(float dt) {
+	void userUpdate(float dt) override {
 		handleUserInput(dt);
 
 		updateCameraMatrixes();
@@ -672,7 +672,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() {
+	void userRender() override {
 		sg_pass pass{};
 		pass.action=display_pass_action;
 		pass.swapchain=sglue_swapchain();
