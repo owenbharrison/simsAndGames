@@ -21,15 +21,15 @@ struct Turn {
 		X, x, Y, y, Z, z;
 };
 
-//looking at +x face:
+//looking at +z face:
 //upper=CW, lower=CCW
 const Turn
-	Turn::F={Turn::XAxis, -1, 0}, Turn::f={Turn::XAxis, -1, 1},
+	Turn::R={Turn::XAxis, -1, 0}, Turn::r={Turn::XAxis, -1, 1},
 	Turn::U={Turn::YAxis, -1, 0}, Turn::u={Turn::YAxis, -1, 1},
-	Turn::L={Turn::ZAxis, -1, 0}, Turn::l={Turn::ZAxis, -1, 1},
-	Turn::B={Turn::XAxis, +1, 0}, Turn::b={Turn::XAxis, +1, 1},
+	Turn::F={Turn::ZAxis, -1, 0}, Turn::f={Turn::ZAxis, -1, 1},
+	Turn::L={Turn::XAxis, +1, 1}, Turn::l={Turn::XAxis, +1, 0},
 	Turn::D={Turn::YAxis, +1, 1}, Turn::d={Turn::YAxis, +1, 0},
-	Turn::R={Turn::ZAxis, +1, 1}, Turn::r={Turn::ZAxis, +1, 0},
+	Turn::B={Turn::ZAxis, +1, 1}, Turn::b={Turn::ZAxis, +1, 0},
 	Turn::X={Turn::XAxis, 0, 0}, Turn::x={Turn::XAxis, 0, 1},
 	Turn::Y={Turn::YAxis, 0, 0}, Turn::y={Turn::YAxis, 0, 1},
 	Turn::Z={Turn::ZAxis, 0, 0}, Turn::z={Turn::ZAxis, 0, 1};

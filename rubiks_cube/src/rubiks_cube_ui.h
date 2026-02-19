@@ -1,5 +1,5 @@
 /*todo:
-beginner3x3 solver
+beginner 3x3 solver
 varying turn speeds:
 	fast scramble
 	slow solve
@@ -105,7 +105,7 @@ class RubiksCubeUI : public cmn::SokolEngine {
 		RubiksCube rubiks;
 
 		std::deque<Turn> turn_queue;
-		const float turn_time=.25f;
+		const float turn_time=.33f;
 		float turn_timer=0;
 		bool render_turn_queue=false;
 
@@ -114,10 +114,10 @@ class RubiksCubeUI : public cmn::SokolEngine {
 		const sg_color cols[6]{
 			{1, 0, 0, 1},//+x red
 			{1, 1, 0, 1},//+y yellow
-			{0, 0, 1, 1},//+z white
+			{0, 0, 1, 1},//+z blue
 			{1, .5f, 0, 1},//-x orange
 			{1, 1, 1, 1},//-y white
-			{0, 1, 0, 1}//-z yellow
+			{0, 1, 0, 1}//-z y green
 		};
 	} cube;
 
@@ -384,19 +384,22 @@ public:
 	void handleCameraLooking(float dt) {
 		//orbit
 		if(getMouse(SAPP_MOUSEBUTTON_LEFT).held) {
-			cam.yaw-=mouse_dx*dt;
-			cam.pitch-=mouse_dy*dt;
+			const float mouse_speed=.75f*dt;
+			cam.yaw-=mouse_dx*mouse_speed;
+			cam.pitch-=mouse_dy*mouse_speed;
 		}
 		
-		const float turn_speed=1.5f*dt;
+		{
+			const float arrow_speed=1.3f*dt;
 
-		//left/right
-		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=turn_speed;
-		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=turn_speed;
+			//left/right
+			if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=arrow_speed;
+			if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=arrow_speed;
 
-		//up/down
-		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch-=turn_speed;
-		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=turn_speed;
+			//up/down
+			if(getKey(SAPP_KEYCODE_UP).held) cam.pitch-=arrow_speed;
+			if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=arrow_speed;
+		}
 
 		//clamp camera pitch
 		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
@@ -404,16 +407,19 @@ public:
 	}
 
 	void handleCameraPlacement() {
+		//somewhat dynamic camera system
 		float rad=std::sqrt(3)*cube.rubiks.getNum()/2;
-		cam.pos=-(3+rad)*cam.dir;
+		cam.pos=-1.8f*rad*cam.dir;
 	}
 
 	void handleCubeControls() {
+		//reset
 		if(getKey(SAPP_KEYCODE_HOME).pressed) {
 			cube.rubiks.reset();
 			cube.turn_queue.clear();
 		}
 
+		//turn cube
 		bool ccw=getKey(SAPP_KEYCODE_LEFT_SHIFT).held;
 		if(getKey(SAPP_KEYCODE_F).pressed) cube.turn_queue.push_back(ccw?Turn::f:Turn::F);
 		if(getKey(SAPP_KEYCODE_U).pressed) cube.turn_queue.push_back(ccw?Turn::u:Turn::U);
@@ -425,12 +431,22 @@ public:
 		if(getKey(SAPP_KEYCODE_Y).pressed) cube.turn_queue.push_back(ccw?Turn::y:Turn::Y);
 		if(getKey(SAPP_KEYCODE_Z).pressed) cube.turn_queue.push_back(ccw?Turn::z:Turn::Z);
 
+		//scramble
 		if(getKey(SAPP_KEYCODE_S).pressed) {
 			cube.turn_queue.clear();
 			auto scramble=cube.rubiks.getScramble();
 			cube.turn_queue.insert(cube.turn_queue.end(),
 				scramble.begin(), scramble.end()
 			);
+		}
+
+		//change cube size
+		for(int i=1; i<=9; i++) {
+			auto key=(sapp_keycode)(i+SAPP_KEYCODE_0);
+			if(getKey(key).pressed) {
+				cube.turn_queue.clear();
+				cube.rubiks=RubiksCube(i);
+			}
 		}
 	}
 
@@ -443,6 +459,7 @@ public:
 
 		handleCubeControls();
 
+		//toggle turn queue render
 		if(getKey(SAPP_KEYCODE_T).pressed) cube.render_turn_queue^=true;
 	}
 
@@ -652,7 +669,7 @@ public:
 		int y=m;
 		int scl=2;
 		for(const auto& t:cube.turn_queue) {
-			std::string ccw=t.ccw?"CW":"CCW";
+			std::string ccw=t.ccw?"CCW":"CW";
 
 			std::string axis;
 			sg_color col{0, 0, 0, 0};
@@ -683,7 +700,7 @@ public:
 		renderCube();
 
 		if(cube.render_turn_queue) renderTurnQueue();
-		
+
 		sg_end_pass();
 
 		sg_commit();

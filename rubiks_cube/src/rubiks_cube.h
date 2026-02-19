@@ -42,8 +42,8 @@ class RubiksCube {
 
 	void copyFrom(const RubiksCube&), clear();
 
-	int** slice;
-	int* face;
+	int** slice=nullptr;
+	int* face=nullptr;
 
 	void spinFace(int, bool);
 
@@ -52,11 +52,16 @@ class RubiksCube {
 	void rotateX(bool), rotateY(bool), rotateZ(bool);
 
 public:
-	int* grid;
+	int* grid=nullptr;
 
 	enum : int {
 		Right=0, Top, Front,
 		Left, Bottom, Back
+	};
+
+	enum : int {
+		Orange=0, Yellow, Blue,
+		Red, White, Green
 	};
 
 	RubiksCube() : RubiksCube(1) {}
@@ -132,7 +137,8 @@ public:
 
 	std::vector<Turn> getScramble() const {
 		std::vector<Turn> turns;
-		for(int i=0; i<30; i++) {
+		int num_turns=(9+std::rand()%5)*num;
+		for(int i=0; i<num_turns; i++) {
 			int slice=(std::rand()%2?-1:1)*(1+std::rand()%num);
 			bool ccw=std::rand()%2;
 			turns.push_back({std::rand()%3, slice, ccw});
