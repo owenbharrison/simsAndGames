@@ -65,6 +65,54 @@ float segIntersectTri(
 	return t;
 }
 
+//which pt on triangle surface which is closest to given pt?
+//https://stackoverflow.com/a/74395029
+cmn::vf3d getClosePt(
+	const cmn::vf3d& pt,
+	const cmn::vf3d& t0, const cmn::vf3d& t1, const cmn::vf3d& t2
+) {
+	cmn::vf3d ab=t1-t0;
+	cmn::vf3d ac=t2-t0;
+
+	cmn::vf3d ap=pt-t0;
+	float d1=ab.dot(ap);
+	float d2=ac.dot(ap);
+	if(d1<=0&&d2<=0) return t0;
+
+	cmn::vf3d bp=pt-t1;
+	float d3=ab.dot(bp);
+	float d4=ac.dot(bp);
+	if(d3>=0&&d4<=d3) return t1;
+
+	cmn::vf3d cp=pt-t2;
+	float d5=ab.dot(cp);
+	float d6=ac.dot(cp);
+	if(d6>=0&&d5<=d6) return t2;
+
+	float vc=d1*d4-d3*d2;
+	if(vc<=0&&d1>=0&&d3<=0) {
+		float v=d1/(d1-d3);
+		return t0+v*ab;
+	}
+
+	float vb=d5*d2-d1*d6;
+	if(vb<=0&&d2>=0&&d6<=0) {
+		float v=d2/(d2-d6);
+		return t0+v*ac;
+	}
+
+	float va=d3*d6-d5*d4;
+	if(va<=0&&(d4-d3)>=0&&(d5-d6)>=0) {
+		float v=(d4-d3)/((d4-d3)+(d5-d6));
+		return t1+v*(t2-t1);
+	}
+
+	float denom=1/(va+vb+vc);
+	float v=vb*denom;
+	float w=vc*denom;
+	return t0+v*ab+w*ac;
+}
+
 struct Shape {
 	Mesh mesh;
 
@@ -141,6 +189,33 @@ struct Shape {
 		w=1;//want translation
 		cmn::vf3d p_world=matMulVec(model, p_local, w);
 		return (p_world-orig_world).mag();
+	}
+
+	//which pt on mesh surface is closest to given pt?
+	cmn::vf3d getClosePt(cmn::vf3d pt) const {
+		//localize pt
+		float w=1;
+		pt=cmn::matMulVec(inv_model, pt, w);
+
+		//which tri has the closest pt?
+		float record=-1;
+		cmn::vf3d closest_pt;
+		for(const auto& t:mesh.tris) {
+			cmn::vf3d close_pt=::getClosePt(pt,
+				mesh.verts[t.a].pos,
+				mesh.verts[t.b].pos,
+				mesh.verts[t.c].pos
+			);
+			float dist_sq=(close_pt-pt).mag_sq();
+			if(record<0||dist_sq<record) {
+				record=dist_sq;
+				closest_pt=close_pt;
+			}
+		}
+
+		//worldize pt
+		w=1;
+		return cmn::matMulVec(model, closest_pt, w);
 	}
 };
 #endif

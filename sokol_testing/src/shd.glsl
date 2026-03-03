@@ -103,11 +103,53 @@ in vec3 i_pos;
 in vec3 i_norm;
 in vec2 i_uv;
 
+out vec2 uv;
+
+layout(binding=0) uniform vs_mesh_params {
+	mat4 u_mvp;
+};
+
+void main() {
+	uv=i_uv;
+	gl_Position=u_mvp*vec4(i_pos, 1);
+}
+
+@end
+
+@fs fs_mesh
+
+in vec2 uv;
+
+out vec4 o_frag_col;
+
+layout(binding=0) uniform texture2D u_mesh_tex;
+layout(binding=0) uniform sampler u_mesh_smp;
+
+void main() {
+	o_frag_col=texture(sampler2D(u_mesh_tex, u_mesh_smp), uv);
+}
+
+@end
+
+@program mesh vs_mesh fs_mesh
+
+
+
+
+
+/*=====SHADED MESH SHADER=====*/
+
+@vs vs_shaded_mesh
+
+in vec3 i_pos;
+in vec3 i_norm;
+in vec2 i_uv;
+
 out vec3 pos;
 out vec3 norm;
 out vec2 uv;
 
-layout(binding=0) uniform vs_mesh_params {
+layout(binding=0) uniform vs_shaded_mesh_params {
 	mat4 u_model;
 	mat4 u_mvp;
 };
@@ -121,7 +163,7 @@ void main() {
 
 @end
 
-@fs fs_mesh
+@fs fs_shaded_mesh
 
 in vec3 pos;
 in vec3 norm;
@@ -129,18 +171,18 @@ in vec2 uv;
 
 out vec4 o_frag_col;
 
-layout(binding=1) uniform fs_mesh_params {
+layout(binding=1) uniform fs_shaded_mesh_params {
 	vec3 u_eye_pos;
 	vec3 u_light_pos;
 	float u_cam_near;
 	float u_cam_far;
 };
 
-layout(binding=0) uniform texture2D u_mesh_tex;
-layout(binding=0) uniform sampler u_mesh_smp;
+layout(binding=0) uniform texture2D u_shaded_mesh_tex;
+layout(binding=0) uniform sampler u_shaded_mesh_smp;
 
-layout(binding=1) uniform textureCube u_mesh_shadow_tex;
-layout(binding=1) uniform sampler u_mesh_shadow_smp;
+layout(binding=1) uniform textureCube u_shaded_mesh_shadow_tex;
+layout(binding=1) uniform sampler u_shaded_mesh_shadow_smp;
 
 //int->float
 float decodeFloat(vec4 enc) {
@@ -158,13 +200,13 @@ void main() {
 	float spec_mag=.3*pow(max(dot(R, V), 0), 32);
 
 	//is in shadow?
-	vec4 rgba=texture(samplerCube(u_mesh_shadow_tex, u_mesh_shadow_smp), -L);
+	vec4 rgba=texture(samplerCube(u_shaded_mesh_shadow_tex, u_shaded_mesh_shadow_smp), -L);
 	float dist01=decodeFloat(rgba);
 	float dist=u_cam_near+dist01*(u_cam_far-u_cam_near);
 	if(length(u_light_pos-pos)>dist+.05) diff_mag=0, spec_mag=0;
 	
 	//base texture color
-	vec4 col=texture(sampler2D(u_mesh_tex, u_mesh_smp), uv);
+	vec4 col=texture(sampler2D(u_shaded_mesh_tex, u_shaded_mesh_smp), uv);
 	//white specular
 	vec3 spec=spec_mag*vec3(1, 1, 1);
 
@@ -173,7 +215,7 @@ void main() {
 
 @end
 
-@program mesh vs_mesh fs_mesh
+@program shaded_mesh vs_shaded_mesh fs_shaded_mesh
 
 
 

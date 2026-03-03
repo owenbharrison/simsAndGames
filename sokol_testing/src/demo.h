@@ -67,6 +67,7 @@ class Demo : public cmn::SokolEngine {
 		sg_view checker{};
 	} textures;
 
+	sg_pipeline shaded_mesh_pip{};
 	sg_pipeline mesh_pip{};
 
 	sg_pipeline line_pip{};
@@ -129,6 +130,7 @@ class Demo : public cmn::SokolEngine {
 		sg_pipeline pip{};
 
 		sg_buffer vbuf{};
+		sg_buffer ibuf{};
 		
 		std::unordered_map<Shape*, Gizmo> map;
 	} gizmo;
@@ -148,6 +150,13 @@ class Demo : public cmn::SokolEngine {
 
 	vf3d mouse_dir;
 	vf3d prev_mouse_dir;
+
+	struct {
+		bool to_render=false;
+
+		Mesh point;
+	} collision;
+
 public:
 #pragma region SETUP HELPERS
 	void setupEnvironment() {
@@ -182,6 +191,19 @@ public:
 	}
 
 	//works with mesh
+	void setupShadedMeshPipeline() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_shaded_mesh_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shaded_mesh_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shaded_mesh_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(shaded_mesh_shader_desc(sg_query_backend()));
+		pip_desc.index_type=SG_INDEXTYPE_UINT32;
+		pip_desc.cull_mode=SG_CULLMODE_FRONT;
+		pip_desc.depth.write_enabled=true;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		shaded_mesh_pip=sg_make_pipeline(pip_desc);
+	}
+
 	void setupMeshPipeline() {
 		sg_pipeline_desc pip_desc{};
 		pip_desc.layout.attrs[ATTR_mesh_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
@@ -454,21 +476,35 @@ public:
 		sg_pipeline_desc pip_desc{};
 		pip_desc.layout.attrs[ATTR_basecol_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
 		pip_desc.shader=sg_make_shader(basecol_shader_desc(sg_query_backend()));
-		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+		pip_desc.index_type=SG_INDEXTYPE_UINT32;
 		pip_desc.depth.write_enabled=true;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		gizmo.pip=sg_make_pipeline(pip_desc);
 
 		//quad vertex buffer
-		float vertexes[4][3]{
-			{0, 0, 0},
-			{1, 0, 0},
-			{0, 0, 1},
-			{1, 0, 1}
-		};
-		sg_buffer_desc buffer_desc{};
-		buffer_desc.data=SG_RANGE(vertexes);
-		gizmo.vbuf=sg_make_buffer(buffer_desc);
+		{
+			//xyz
+			float vertexes[4][3]{
+				{0, 0, 0},
+				{1, 0, 0},
+				{0, 0, 1},
+				{1, 0, 1}
+			};
+			sg_buffer_desc buffer_desc{};
+			buffer_desc.data=SG_RANGE(vertexes);
+			gizmo.vbuf=sg_make_buffer(buffer_desc);
+		}
+
+		//quad index buffer
+		{
+			std::uint32_t indexes[2][3]{{0, 1, 2}, {1, 3, 2}};
+		}
+	}
+
+	void setupCollision() {
+		Mesh& m=collision.point;
+		auto status=Mesh::loadFromOBJ(m, "assets/models/icosphere.txt");
+		if(status!=Mesh::ReturnCode::Ok) m=Mesh::makeCube();
 	}
 
 	void setupCamera() {
@@ -493,6 +529,8 @@ public:
 
 		setupTextures();
 
+		setupShadedMeshPipeline();
+
 		setupMeshPipeline();
 
 		setupLinePipeline();
@@ -512,6 +550,8 @@ public:
 		setupShapes();
 
 		setupGizmo();
+
+		setupCollision();
 
 		setupCamera();
 	}
@@ -627,6 +667,9 @@ public:
 
 		//toggle shape outlines
 		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
+
+		//toggle collision rendering
+		if(getKey(SAPP_KEYCODE_C).pressed) collision.to_render^=true;
 	}
 
 	void updateCameraMatrixes() {
@@ -845,33 +888,33 @@ public:
 
 	void renderShapes() {
 		for(const auto& s:shapes) {
-			sg_apply_pipeline(mesh_pip);
+			sg_apply_pipeline(shaded_mesh_pip);
 
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=s.mesh.vbuf;
 			bind.index_buffer=s.mesh.ibuf;
-			bind.samplers[SMP_u_mesh_smp]=samplers.linear;
-			bind.views[VIEW_u_mesh_tex]=s.tex;
-			bind.samplers[SMP_u_mesh_shadow_smp]=samplers.nearest;
-			bind.views[VIEW_u_mesh_shadow_tex]=shadow_map.color_view;
+			bind.samplers[SMP_u_shaded_mesh_smp]=samplers.linear;
+			bind.views[VIEW_u_shaded_mesh_tex]=s.tex;
+			bind.samplers[SMP_u_shaded_mesh_shadow_smp]=samplers.nearest;
+			bind.views[VIEW_u_shaded_mesh_shadow_tex]=shadow_map.color_view;
 			sg_apply_bindings(bind);
 
-			vs_mesh_params_t vs_mesh_params{};
-			std::memcpy(vs_mesh_params.u_model, s.model.m, sizeof(s.model.m));
+			vs_shaded_mesh_params_t vs_shaded_mesh_params{};
+			std::memcpy(vs_shaded_mesh_params.u_model, s.model.m, sizeof(s.model.m));
 			mat4 mvp=mat4::mul(cam.view_proj, s.model);
-			std::memcpy(vs_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
-			sg_apply_uniforms(UB_vs_mesh_params, SG_RANGE(vs_mesh_params));
+			std::memcpy(vs_shaded_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_vs_shaded_mesh_params, SG_RANGE(vs_shaded_mesh_params));
 
-			fs_mesh_params_t fs_mesh_params{};
-			fs_mesh_params.u_eye_pos[0]=cam.pos.x;
-			fs_mesh_params.u_eye_pos[1]=cam.pos.y;
-			fs_mesh_params.u_eye_pos[2]=cam.pos.z;
-			fs_mesh_params.u_light_pos[0]=shadow_map.pos.x;
-			fs_mesh_params.u_light_pos[1]=shadow_map.pos.y;
-			fs_mesh_params.u_light_pos[2]=shadow_map.pos.z;
-			fs_mesh_params.u_cam_near=cam.near;
-			fs_mesh_params.u_cam_far=cam.far;
-			sg_apply_uniforms(UB_fs_mesh_params, SG_RANGE(fs_mesh_params));
+			fs_shaded_mesh_params_t fs_shaded_mesh_params{};
+			fs_shaded_mesh_params.u_eye_pos[0]=cam.pos.x;
+			fs_shaded_mesh_params.u_eye_pos[1]=cam.pos.y;
+			fs_shaded_mesh_params.u_eye_pos[2]=cam.pos.z;
+			fs_shaded_mesh_params.u_light_pos[0]=shadow_map.pos.x;
+			fs_shaded_mesh_params.u_light_pos[1]=shadow_map.pos.y;
+			fs_shaded_mesh_params.u_light_pos[2]=shadow_map.pos.z;
+			fs_shaded_mesh_params.u_cam_near=cam.near;
+			fs_shaded_mesh_params.u_cam_far=cam.far;
+			sg_apply_uniforms(UB_fs_shaded_mesh_params, SG_RANGE(fs_shaded_mesh_params));
 
 			sg_draw(0, 3*s.mesh.tris.size(), 1);
 		}
@@ -883,12 +926,39 @@ public:
 		}
 	}
 
+	void renderClosePoints() {
+		mat4 scale=mat4::makeScale(.05f*vf3d(1, 1, 1));
+		for(const auto& s:shapes) {
+			vf3d close_pt=s.getClosePt(cam.pos);
+
+			mat4 trans=mat4::makeTranslation(close_pt);
+			mat4 model=mat4::mul(trans, scale);
+
+			sg_apply_pipeline(mesh_pip);
+
+			sg_bindings bind{};
+			bind.vertex_buffers[0]=collision.point.vbuf;
+			bind.index_buffer=collision.point.ibuf;
+			bind.samplers[SMP_u_mesh_smp]=samplers.linear;
+			bind.views[VIEW_u_mesh_tex]=textures.uv;
+			sg_apply_bindings(bind);
+
+			vs_mesh_params_t vs_mesh_params{};
+			mat4 mvp=mat4::mul(cam.view_proj, model);
+			std::memcpy(vs_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_vs_mesh_params, SG_RANGE(vs_mesh_params));
+
+			sg_draw(0, 3*collision.point.tris.size(), 1);
+		}
+	}
+
 	void renderGizmos() {
 		auto renderQuad=[&] (const vf3d& pos, const vf3d& ux, const vf3d& uz, float scl, const sg_color& col) {
 			sg_apply_pipeline(gizmo.pip);
 
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=gizmo.vbuf;
+			bind.index_buffer=gizmo.ibuf;
 			sg_apply_bindings(bind);
 
 			vs_basecol_params_t vs_basecol_params{};
@@ -905,7 +975,7 @@ public:
 			fs_basecol_params.u_tint[3]=col.a;
 			sg_apply_uniforms(UB_fs_basecol_params, SG_RANGE(fs_basecol_params));
 
-			sg_draw(0, 4, 1);
+			sg_draw(0, 3*2, 1);
 		};
 		
 		const vf3d x(1, 0, 0);
@@ -929,7 +999,6 @@ public:
 			renderQuad(p+Gizmo::margin*(z+x), z, x, Gizmo::plane_size, {1, 0, 1, 1});
 		}
 	}
-
 #pragma endregion
 
 	void userRender() override {
@@ -946,6 +1015,8 @@ public:
 		if(render_outlines) renderShapeOutlines();
 		else renderShapes();
 
+		if(collision.to_render) renderClosePoints();
+
 		renderGizmos();
 
 		sg_end_pass();
@@ -954,6 +1025,6 @@ public:
 	}
 
 	Demo() {
-		app_title="Shadowmap Demo";
+		app_title="Collision Considerations Demo";
 	}
 };
