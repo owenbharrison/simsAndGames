@@ -6,8 +6,6 @@ using olc::vf2d;
 
 #include "flip_fluid.h"
 
-#include "cmn/stopwatch.h"
-
 struct FluidUI : olc::PixelGameEngine {
 	FluidUI() {
 		sAppName="Flip Fluid Simulation";
@@ -71,8 +69,10 @@ struct FluidUI : olc::PixelGameEngine {
 		for(int i=0; i<fluid->f_num_x; i++) {
 			for(int j=0; j<fluid->f_num_y; j++) {
 				float s=1;//fluid
-				if(i==0||i==fluid->f_num_x-1||j==0) s=0;//solid
-				fluid->s[j+fluid->f_num_y*i]=s;
+				if(i==0||i==fluid->f_num_x-1||j==0||j==fluid->f_num_y-1) {
+					s=0;//solid
+				}
+				fluid->s[fluid->fIX(i, j)]=s;
 			}
 		}
 
@@ -105,17 +105,18 @@ struct FluidUI : olc::PixelGameEngine {
 
 		for(int i=1; i<fluid->f_num_x-2; i++) {
 			for(int j=1; j<fluid->f_num_y-2; j++) {
-				fluid->s[j+fluid->f_num_y*i]=1;
+				int cell_nr=fluid->fIX(i, j);
+				fluid->s[cell_nr]=1;
 
 				float dx=fluid->h*(.5f+i)-x;
 				float dy=fluid->h*(.5f+j)-y;
 
 				if(dx*dx+dy*dy<obstacle_radius*obstacle_radius) {
-					fluid->s[j+fluid->f_num_y*i]=0;
-					fluid->u[j+fluid->f_num_y*i]=vx;
-					fluid->u[j+fluid->f_num_y*(i+1)]=vx;
-					fluid->v[j+fluid->f_num_y*i]=vy;
-					fluid->v[j+1+fluid->f_num_y*i]=vy;
+					fluid->s[cell_nr]=0;
+					fluid->u[cell_nr]=vx;
+					fluid->u[cell_nr+fluid->fIX(1, 0)]=vx;
+					fluid->v[cell_nr]=vy;
+					fluid->v[cell_nr+fluid->fIX(0, 1)]=vy;
 				}
 			}
 		}
@@ -137,8 +138,6 @@ struct FluidUI : olc::PixelGameEngine {
 	}
 
 	bool OnUserUpdate(float dt) override {
-		cmn::Stopwatch update_watch;
-		update_watch.start();
 		if(GetKey(olc::Key::D).bPressed) show_density^=true;
 		
 		const auto mouse_left=GetMouse(olc::Mouse::LEFT);
@@ -167,11 +166,8 @@ struct FluidUI : olc::PixelGameEngine {
 
 			update_timer-=time_step;
 		}
-		update_watch.stop();
 
 		//render
-		cmn::Stopwatch render_watch;
-		render_watch.start();
 		Clear(olc::BLACK);
 		FillCircleDecal({c_scale*obstacle_x, c_scale*obstacle_y}, c_scale*obstacle_radius, olc::RED);
 		for(int i=0; i<fluid->num_particles; i++) {
@@ -190,7 +186,7 @@ struct FluidUI : olc::PixelGameEngine {
 			for(int i=0; i<fluid->f_num_x; i++) {
 				for(int j=0; j<fluid->f_num_y; j++) {
 					float x=sz_x*i, y=sz_y*j;
-					int cell_nr=j+fluid->f_num_y*i;
+					int cell_nr=fluid->fIX(i, j);
 					float r=fluid->cell_color[3*cell_nr];
 					float g=fluid->cell_color[1+3*cell_nr];
 					float b=fluid->cell_color[2+3*cell_nr];
@@ -198,12 +194,6 @@ struct FluidUI : olc::PixelGameEngine {
 				}
 			}
 		}
-		render_watch.stop();
-
-		auto update_dur=update_watch.getMicros();
-		std::cout<<"update: "<<update_dur<<"us ("<<(update_dur/1000.f)<<"ms)\n";
-		auto render_dur=render_watch.getMicros();
-		std::cout<<"render: "<<render_dur<<"us ("<<(render_dur/1000.f)<<"ms)\n";
 
 		return true;
 	}

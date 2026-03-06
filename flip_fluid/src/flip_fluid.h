@@ -3,8 +3,11 @@
 #ifndef FLIP_FLUID_CLASS_H
 #define FLIP_FLUID_CLASS_H
 
+//for max & clamp
 #include <algorithm>
+//for memset & memcpy
 #include <string>
+//for sqrt
 #include <cmath>
 
 struct FlipFluid {
@@ -141,6 +144,14 @@ struct FlipFluid {
 	//ro3 3
 	FlipFluid& operator=(const FlipFluid&)=delete;
 
+	int fIX(int i, int j) const {
+		return i+f_num_x*j;
+	}
+
+	int pIX(int i, int j) const {
+		return i+p_num_x*j;
+	}
+
 	//143-150
 	void integrateParticles(float dt, float gravity) {
 		for(int i=0; i<num_particles; i++) {
@@ -155,14 +166,14 @@ struct FlipFluid {
 		float color_diffusion_coeff=.001f;
 
 		//count particles per cell
-		memset(num_cell_particles, 0, sizeof(int)*p_num_cells);
+		std::memset(num_cell_particles, 0, sizeof(int)*p_num_cells);
 		for(int i=0; i<num_particles; i++) {
 			float x=particle_pos[2*i];
 			float y=particle_pos[1+2*i];
 
 			int xi=std::clamp(int(x*p_inv_spacing), 0, p_num_x-1);
 			int yi=std::clamp(int(y*p_inv_spacing), 0, p_num_y-1);
-			num_cell_particles[yi+p_num_y*xi]++;
+			num_cell_particles[pIX(xi, yi)]++;
 		}
 
 		//partial sums
@@ -181,7 +192,7 @@ struct FlipFluid {
 
 			int xi=std::clamp(int(x*p_inv_spacing), 0, p_num_x-1);
 			int yi=std::clamp(int(y*p_inv_spacing), 0, p_num_y-1);
-			int cell_nr=yi+p_num_y*xi;
+			int cell_nr=pIX(xi, yi);
 			first_cell_particle[cell_nr]--;
 			cell_particle_ids[first_cell_particle[cell_nr]]=i;
 		}
@@ -191,17 +202,19 @@ struct FlipFluid {
 		float min_dist_sq=min_dist*min_dist;
 		for(int iter=0; iter<num_iter; iter++) {
 			for(int i=0; i<num_particles; i++) {
-				float& px=particle_pos[2*i];
-				float& py=particle_pos[1+2*i];
+				float px=particle_pos[2*i];
+				float py=particle_pos[1+2*i];
+
 				int pxi=px*p_inv_spacing;
 				int pyi=py*p_inv_spacing;
 				int x0=std::max(pxi-1, 0);
 				int y0=std::max(pyi-1, 0);
 				int x1=std::min(pxi+1, p_num_x-1);
 				int y1=std::min(pyi+1, p_num_y-1);
+
 				for(int xi=x0; xi<=x1; xi++) {
 					for(int yi=y0; yi<=y1; yi++) {
-						int cell_nr=yi+p_num_y*xi;
+						int cell_nr=pIX(xi, yi);
 						int first=first_cell_particle[cell_nr];
 						int last=first_cell_particle[1+cell_nr];
 						for(int j=first; j<last; j++) {
@@ -218,14 +231,14 @@ struct FlipFluid {
 							float d=std::sqrt(d_sq);
 							float s=.5f*(min_dist-d)/d;
 							dx*=s, dy*=s;
-							px-=dx, py-=dy;
+							particle_pos[2*i]-=dx;
+							particle_pos[1+2*i]-=dy;
 							qx+=dx, py+=dy;
 
-							//diffuse colors
+							//diffuse colors toward average
 							for(int k=0; k<3; k++) {
 								float& color0=particle_color[k+3*i];
 								float& color1=particle_color[k+3*id];
-								//toward average
 								float color=(color0+color1)/2;
 								color0+=color_diffusion_coeff*(color-color0);
 								color1+=color_diffusion_coeff*(color-color1);
@@ -278,8 +291,8 @@ struct FlipFluid {
 	//313-380
 	void updateParticleDensity() {
 		float h2=.5f*h;
-
-		memset(particle_density, 0.f, sizeof(float)*f_num_cells);
+		
+		for(int i=0; i<f_num_cells; i++) particle_density[i]=0;
 
 		for(int i=0; i<num_particles; i++) {
 			float x=particle_pos[2*i];
@@ -299,10 +312,10 @@ struct FlipFluid {
 			float sx=1-tx;
 			float sy=1-ty;
 
-			if(x0<f_num_x&&y0<f_num_y) particle_density[y0+f_num_y*x0]+=sx*sy;
-			if(x1<f_num_x&&y0<f_num_y) particle_density[y0+f_num_y*x1]+=tx*sy;
-			if(x0<f_num_x&&y1<f_num_y) particle_density[y1+f_num_y*x0]+=sx*ty;
-			if(x1<f_num_x&&y1<f_num_y) particle_density[y1+f_num_y*x1]+=tx*ty;
+			if(x0<f_num_x&&y0<f_num_y) particle_density[fIX(x0, y0)]+=sx*sy;
+			if(x1<f_num_x&&y0<f_num_y) particle_density[fIX(x1, y0)]+=tx*sy;
+			if(x0<f_num_x&&y1<f_num_y) particle_density[fIX(x0, y1)]+=sx*ty;
+			if(x1<f_num_x&&y1<f_num_y) particle_density[fIX(x1, y1)]+=tx*ty;
 		}
 
 		if(particle_rest_density==0) {
@@ -324,13 +337,13 @@ struct FlipFluid {
 		float h2=.5f*h;
 
 		if(to_grid) {
-			memcpy(prev_u, u, sizeof(float)*f_num_cells);
-			memcpy(prev_v, v, sizeof(float)*f_num_cells);
+			std::memcpy(prev_u, u, sizeof(float)*f_num_cells);
+			std::memcpy(prev_v, v, sizeof(float)*f_num_cells);
 
-			memset(du, 0.f, sizeof(float)*f_num_cells);
-			memset(dv, 0.f, sizeof(float)*f_num_cells);
-			memset(u, 0.f, sizeof(float)*f_num_cells);
-			memset(v, 0.f, sizeof(float)*f_num_cells);
+			for(int i=0; i<f_num_cells; i++){
+				du[i]=0, dv[i]=0;
+				u[i]=0, v[i]=0;
+			}
 
 			for(int i=0; i<f_num_cells; i++) {
 				cell_type[i]=s[i]==0?SolidCell:AirCell;
@@ -341,8 +354,8 @@ struct FlipFluid {
 				float y=particle_pos[1+2*i];
 				int xi=std::clamp(int(f_inv_spacing*x), 0, f_num_x-1);
 				int yi=std::clamp(int(f_inv_spacing*y), 0, f_num_y-1);
-				int cell_nr=yi+f_num_y*xi;
-				if(cell_type[cell_nr]==AirCell) cell_type[cell_nr]=FluidCell;
+				auto& cell=cell_type[fIX(xi, yi)];
+				if(cell==AirCell) cell=FluidCell;
 			}
 		}
 
@@ -377,10 +390,10 @@ struct FlipFluid {
 				float d2=tx*ty;
 				float d3=sx*ty;
 
-				int nr0=y0+x0*f_num_y;
-				int nr1=y0+x1*f_num_y;
-				int nr2=y1+x1*f_num_y;
-				int nr3=y1+x0*f_num_y;
+				int nr0=fIX(x0, y0);
+				int nr1=fIX(x1, y0);
+				int nr2=fIX(x1, y1);
+				int nr3=fIX(x0, y1);
 				
 				if(to_grid) {
 					float pv=particle_vel[comp+2*i];
@@ -389,11 +402,11 @@ struct FlipFluid {
 					f[nr2]+=pv*d2, d[nr2]+=d2;
 					f[nr3]+=pv*d3, d[nr3]+=d3;
 				} else {
-					int offset=comp==0?f_num_y:1;
-					bool valid0=cell_type[nr0]!=AirCell||cell_type[nr0-offset]!=AirCell;
-					bool valid1=cell_type[nr1]!=AirCell||cell_type[nr1-offset]!=AirCell;
-					bool valid2=cell_type[nr2]!=AirCell||cell_type[nr2-offset]!=AirCell;
-					bool valid3=cell_type[nr3]!=AirCell||cell_type[nr3-offset]!=AirCell;
+					int offset=comp==0?fIX(1, 0):fIX(0, 1);
+					bool valid0=cell_type[nr0]==FluidCell||cell_type[nr0-offset]==FluidCell;
+					bool valid1=cell_type[nr1]==FluidCell||cell_type[nr1-offset]==FluidCell;
+					bool valid2=cell_type[nr2]==FluidCell||cell_type[nr2-offset]==FluidCell;
+					bool valid3=cell_type[nr3]==FluidCell||cell_type[nr3-offset]==FluidCell;
 					
 					float& v=particle_vel[comp+2*i];
 					float d_sum=valid0*d0+valid1*d1+valid2*d2+valid3*d3;
@@ -424,9 +437,10 @@ struct FlipFluid {
 				//restore solid cells
 				for(int i=0; i<f_num_x; i++) {
 					for(int j=0; j<f_num_y; j++) {
-						bool solid=cell_type[j+f_num_y*i]==SolidCell;
-						if(solid||(i>0&&cell_type[j+f_num_y*(i-1)]==SolidCell)) u[j+f_num_y*i]=prev_u[j+f_num_y*i];
-						if(solid||(j>0&&cell_type[j-1+f_num_y*i]==SolidCell)) v[j+f_num_y*i]=prev_v[j+f_num_y*i];
+						int cell_nr=fIX(i, j);
+						bool solid=cell_type[cell_nr]==SolidCell;
+						if(solid||(i>0&&cell_type[cell_nr-fIX(1, 0)]==SolidCell)) u[cell_nr]=prev_u[cell_nr];
+						if(solid||(j>0&&cell_type[cell_nr-fIX(0, 1)]==SolidCell)) v[cell_nr]=prev_v[cell_nr];
 					}
 				}
 			}
@@ -435,22 +449,22 @@ struct FlipFluid {
 
 	//500-558
 	void solveIncompressibility(int num_iters, float dt, float over_relaxation, bool compensate_drift=true) {
-		memset(p, 0.f, sizeof(float)*f_num_cells);
-		memcpy(prev_u, u, sizeof(float)*f_num_cells);
-		memcpy(prev_v, v, sizeof(float)*f_num_cells);
+		for(int i=0; i<f_num_cells; i++) p[i]=0;
+		std::memcpy(prev_u, u, sizeof(float)*f_num_cells);
+		std::memcpy(prev_v, v, sizeof(float)*f_num_cells);
 		
 		float cp=density*h/dt;
 		 
 		for(int iter=0; iter<num_iters; iter++) {
 			for(int i=1; i<f_num_x-1; i++) {
 				for(int j=1; j<f_num_y-1; j++) {
-					if(cell_type[j+f_num_y*i]!=FluidCell) continue;
+					int center=fIX(i, j);
+					if(cell_type[center]!=FluidCell) continue;
 
-					int center=j+f_num_y*i;
-					int left=j+f_num_y*(i-1);
-					int right=j+f_num_y*(i+1);
-					int bottom=j-1+f_num_y*i;
-					int top=j+1+f_num_y*i;
+					int left=center-fIX(1, 0);
+					int right=center+fIX(1, 0);
+					int bottom=center-fIX(0, 1);
+					int top=center+fIX(0, 1);
 
 					float sx0=s[left];
 					float sx1=s[right];
@@ -463,7 +477,7 @@ struct FlipFluid {
 
 					if(particle_rest_density>0&&compensate_drift) {
 						float k=1;
-						float compression=particle_density[j+f_num_y*i]-particle_rest_density;
+						float compression=particle_density[fIX(i, j)]-particle_rest_density;
 						if(compression>0) div-=k*compression;
 					}
 
@@ -487,14 +501,13 @@ struct FlipFluid {
 			particle_color[1+3*i]=std::clamp(particle_color[1+3*i]-.01f, 0.f, 1.f);
 			particle_color[2+3*i]=std::clamp(particle_color[2+3*i]+.01f, 0.f, 1.f);
 
-			float x=particle_pos[2*i];
-			float y=particle_pos[1+2*i];
-			int xi=std::clamp(int(f_inv_spacing*x), 1, f_num_x-1);
-			int yi=std::clamp(int(f_inv_spacing*y), 1, f_num_y-1);
-			int cell_nr=yi+f_num_y*xi;
-
 			if(particle_rest_density>0) {
-				float rel_density=particle_density[cell_nr]/particle_rest_density;
+				float x=particle_pos[2*i];
+				float y=particle_pos[1+2*i];
+				int xi=std::clamp(int(f_inv_spacing*x), 1, f_num_x-1);
+				int yi=std::clamp(int(f_inv_spacing*y), 1, f_num_y-1);
+				
+				float rel_density=particle_density[fIX(xi, yi)]/particle_rest_density;
 				if(rel_density<.7f) {
 					particle_color[3*i]=.8f;
 					particle_color[1+3*i]=.8f;
@@ -528,7 +541,7 @@ struct FlipFluid {
 
 	//623-641
 	void updateCellColors() {
-		memset(cell_color, 0.f, sizeof(float)*3*f_num_cells);
+		for(int i=0; i<3*f_num_cells; i++) cell_color[i]=0;
 
 		for(int i=0; i<f_num_cells; i++) {
 			if(cell_type[i]==SolidCell) {
