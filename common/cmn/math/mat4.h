@@ -8,10 +8,6 @@
 //for sqrt & trig
 #include <cmath>
 
-//not sure what these macros did :3
-#undef near
-#undef far
-
 #include "v3d.h"
 
 namespace cmn {
@@ -206,14 +202,14 @@ namespace cmn {
 
 		//fov=degrees & asp=width/height
 		//https://gamedev.stackexchange.com/questions/120338
-		static mat4 makePerspective(float fov_deg, float asp, float near, float far) {
+		static mat4 makePerspective(float fov_deg, float asp, float near_plane, float far_plane) {
 			float fov_rad=fov_deg/180*3.1415927f;
 			float inv_tan=1/std::tan(fov_rad/2);
-			float inv_nearfar=1/(near-far);
+			float inv_nearfar=1/(near_plane-far_plane);
 			mat4 a;
 			a(0, 0)=inv_tan/asp;
 			a(1, 1)=inv_tan;
-			a(2, 2)=(far+near)*inv_nearfar, a(2, 3)=2*far*near*inv_nearfar;
+			a(2, 2)=(far_plane+near_plane)*inv_nearfar, a(2, 3)=2*far_plane*near_plane*inv_nearfar;
 			a(3, 2)=-1;
 			return a;
 		}
