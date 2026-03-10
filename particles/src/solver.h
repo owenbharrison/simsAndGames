@@ -36,7 +36,7 @@ public:
 	Solver(int m, cmn::AABB b) {
 		max_particles=m;
 		particles=new Particle[max_particles];
-		
+
 		bounds=b;
 
 		reallocateCells();
@@ -129,7 +129,7 @@ public:
 		for(int i=id; i<num_particles; i++) {
 			particles[i]=particles[1+i];
 		}
-		
+
 		float record=-1;
 		for(int i=0; i<num_particles; i++) {
 			const auto& p=particles[i];
@@ -137,7 +137,7 @@ public:
 			if(p.rad>rad) return;
 			if(p.rad>record) record=p.rad;
 		}
-				
+
 		if(record<0) {
 			//that was last particle
 			cell_size=0;
@@ -149,21 +149,22 @@ public:
 			updateCellNum();
 		}
 		reallocateCells();
-				
+
 		return;
 	}
 
 	int collideCells(int i1, int j1, int i2, int j2) {
 		int checks=0;
-		
-		//nested linked list traversal
-		for(int c1=grid_heads[cellIX(i1, j1)]; c1!=-1; c1=particle_next[c1]) {
-			for(int c2=grid_heads[cellIX(i2, j2)]; c2!=-1; c2=particle_next[c2]) {
-				//dont check self
-				if(c2==c1) continue;
 
-				Particle::checkCollide(particles[c1], particles[c2]);
-				
+		//nested linked list traversal
+		int s1=grid_heads[cellIX(i1, j1)], s2=grid_heads[cellIX(i2, j2)];
+		for(int p1=s1; p1!=-1; p1=particle_next[p1]) {
+			for(int p2=s2; p2!=-1; p2=particle_next[p2]) {
+				//dont check self
+				if(p2==p1) continue;
+
+				Particle::checkCollide(particles[p1], particles[p2]);
+
 				checks++;
 			}
 		}
@@ -187,7 +188,7 @@ public:
 					//skip if out of range
 					int ci=i+di[d], cj=j+dj[d];
 					if(!cellInRangeX(ci)||!cellInRangeY(cj)) continue;
-						
+
 					checks+=collideCells(i, j, ci, cj);
 				}
 			}
