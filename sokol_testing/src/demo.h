@@ -23,6 +23,10 @@
 
 #include "gizmo.h"
 
+#include <sstream>
+//for setprecision
+#include <iomanip>
+
 using cmn::mat4;
 using cmn::vf3d;
 
@@ -89,7 +93,7 @@ class Demo : public cmn::SokolEngine {
 	struct {
 		sg_pass_action pass_action{};
 		sg_pipeline attach_pip{};
-		
+
 		sg_view color_attach[6];
 		sg_view depth_attach{};
 		sg_view color_view{};
@@ -131,7 +135,7 @@ class Demo : public cmn::SokolEngine {
 
 		sg_buffer vbuf{};
 		sg_buffer ibuf{};
-		
+
 		std::unordered_map<Shape*, Gizmo> map;
 	} gizmo;
 
@@ -140,11 +144,11 @@ class Demo : public cmn::SokolEngine {
 		float yaw=0, pitch=0;
 		vf3d dir;
 
-		const float near=.001f, far=1000;
+		const float near_plane=.001f, far_plane=1000;
 		mat4 proj;
-		
+
 		mat4 view;
-		
+
 		mat4 view_proj;
 	} cam;
 
@@ -317,7 +321,7 @@ public:
 			image_desc.width=2048;
 			image_desc.height=2048;
 			sg_image cube_img=sg_make_image(image_desc);
-			
+
 			for(int i=0; i<6; i++) {
 				sg_view_desc view_desc{};
 				view_desc.color_attachment.image=cube_img;
@@ -344,7 +348,7 @@ public:
 		}
 
 		//make projection matrix
-		shadow_map.face_proj=mat4::makePerspective(90.f, 1, cam.near, cam.far);
+		shadow_map.face_proj=mat4::makePerspective(90.f, 1, cam.near_plane, cam.far_plane);
 	}
 
 	//clear to black
@@ -520,7 +524,7 @@ public:
 	}
 #pragma endregion
 
-	void userCreate() override { 
+	void userCreate() override {
 		std::srand(std::time(0));
 
 		setupEnvironment();
@@ -541,7 +545,7 @@ public:
 		setupArrowLinemesh();
 
 		setupShadowMap();
-		
+
 		setupDisplayPassAction();
 
 		setupSkybox();
@@ -563,11 +567,11 @@ public:
 		}
 		return false;
 	}
-	
+
 	void handleCameraLooking(float dt) {
 		//dont look while gizmoing
 		if(isGizmoing()) return;
-		
+
 		//left/right
 		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
 		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
@@ -600,7 +604,7 @@ public:
 		if(getKey(SAPP_KEYCODE_D).held) cam.pos-=4.f*dt*lr_dir;
 	}
 
-	void handleGizmoSelection(){
+	void handleGizmoSelection() {
 		const auto action=getKey(SAPP_KEYCODE_G);
 		if(action.pressed) {
 			//get closest shape
@@ -635,7 +639,7 @@ public:
 			auto& giz=sg.second;
 			if(action.pressed) giz.beginDrag(
 				shp->translation,
-				cam.pos, cam.pos+cam.far*mouse_dir
+				cam.pos, cam.pos+cam.far_plane*mouse_dir
 			);
 			if(action.held) {
 				giz.updateDrag(
@@ -678,7 +682,7 @@ public:
 
 		//cam proj can change with window resize
 		float asp=sapp_widthf()/sapp_heightf();
-		cam.proj=mat4::makePerspective(60, asp, cam.near, cam.far);
+		cam.proj=mat4::makePerspective(60, asp, cam.near_plane, cam.far_plane);
 
 		cam.view_proj=mat4::mul(cam.proj, cam.view);
 	}
@@ -781,7 +785,7 @@ public:
 		vs_colorview_params_t vs_colorview_params{};
 		vs_colorview_params.u_tl[0]=l;
 		vs_colorview_params.u_tl[1]=t,
-		vs_colorview_params.u_br[0]=r;
+			vs_colorview_params.u_br[0]=r;
 		vs_colorview_params.u_br[1]=b;
 		sg_apply_uniforms(UB_vs_colorview_params, SG_RANGE(vs_colorview_params));
 
@@ -850,8 +854,8 @@ public:
 				fs_shadow_map_params.u_light_pos[0]=shadow_map.pos.x;
 				fs_shadow_map_params.u_light_pos[1]=shadow_map.pos.y;
 				fs_shadow_map_params.u_light_pos[2]=shadow_map.pos.z;
-				fs_shadow_map_params.u_cam_near=cam.near;
-				fs_shadow_map_params.u_cam_far=cam.far;
+				fs_shadow_map_params.u_cam_near=cam.near_plane;
+				fs_shadow_map_params.u_cam_far=cam.far_plane;
 				sg_apply_uniforms(UB_fs_shadow_map_params, SG_RANGE(fs_shadow_map_params));
 
 				sg_draw(0, 3*shp.mesh.tris.size(), 1);
@@ -860,7 +864,7 @@ public:
 			sg_end_pass();
 		}
 	}
-	
+
 	void renderSkybox() {
 		//view from eye at origin + camera projection
 		mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam.dir, {0, 1, 0});
@@ -912,8 +916,8 @@ public:
 			fs_shaded_mesh_params.u_light_pos[0]=shadow_map.pos.x;
 			fs_shaded_mesh_params.u_light_pos[1]=shadow_map.pos.y;
 			fs_shaded_mesh_params.u_light_pos[2]=shadow_map.pos.z;
-			fs_shaded_mesh_params.u_cam_near=cam.near;
-			fs_shaded_mesh_params.u_cam_far=cam.far;
+			fs_shaded_mesh_params.u_cam_near=cam.near_plane;
+			fs_shaded_mesh_params.u_cam_far=cam.far_plane;
 			sg_apply_uniforms(UB_fs_shaded_mesh_params, SG_RANGE(fs_shaded_mesh_params));
 
 			sg_draw(0, 3*s.mesh.tris.size(), 1);
@@ -977,7 +981,7 @@ public:
 
 			sg_draw(0, 3*2, 1);
 		};
-		
+
 		const vf3d x(1, 0, 0);
 		const vf3d y(0, 0, 1);
 		const vf3d z(0, 1, 0);
@@ -1003,7 +1007,7 @@ public:
 
 	void userRender() override {
 		renderShapesIntoShadowMap();
-		
+
 		//start display pass 
 		sg_pass pass{};
 		pass.action=display_pass_action;

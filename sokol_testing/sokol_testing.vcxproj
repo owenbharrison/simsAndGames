@@ -175,6 +175,7 @@
     <Text Include="assets\models\dragon.txt" />
     <Text Include="assets\models\horse.txt" />
     <Text Include="assets\icosphere.txt" />
+    <Text Include="assets\models\icosphere.txt" />
     <Text Include="assets\models\monkey.txt" />
   </ItemGroup>
   <ItemGroup>
