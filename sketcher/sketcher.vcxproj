@@ -137,6 +137,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\constraints.h" />
+    <ClInclude Include="src\sketcher_ui.h" />
+    <ClInclude Include="src\render_utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\imgui.ini" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
