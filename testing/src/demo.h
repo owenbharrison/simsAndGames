@@ -1,19 +1,20 @@
+#ifdef __EMSCRIPTEN__
+#define SOKOL_GLES3
+#else
 #define SOKOL_GLCORE
+#endif
 #include "sokol/sokol_engine.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
 
 #include "shd.glsl.h"
 
-#include"cmn/math/v3d.h"
-#include"cmn/math/mat4.h"
-using cmn::vf3d;
+#include "sokol/font.h"
+
+#include "shape.h"
+
 using cmn::mat4;
-
-#include "cmn/utils.h"
-
-//for memcpy
-#include <string>
+using cmn::vf3d;
 
 //y p => x y z
 //0 0 => 0 0 1
@@ -25,206 +26,230 @@ static vf3d polarToCartesian(float yaw, float pitch) {
 	};
 }
 
-class DepthDemo : public cmn::SokolEngine {
-	sg_sampler sampler{};
-	
+class Demo : public cmn::SokolEngine {
 	struct {
-		sg_pass_action pass_action{};
+		sg_sampler linear{};
+		sg_sampler nearest{};
+	} smp;
 
-		sg_sampler sampler{};
+	struct {
+		sg_view blank{};
+		sg_view uv{};
+	} tex;
 
+	struct {
 		sg_pipeline pip{};
 
-		sg_view depth_attach{};
-		sg_view depth_tex{};
+		sg_buffer vbuf{};
+	} colorview;
 
-		mat4 proj;
-	} shadow_map;
+	cmn::Font font;
 
-	sg_pass_action display_pass_action{};
-	
+	struct {
+		sg_pipeline pip{};
+
+		sg_buffer vbuf{};
+
+		mat4 model[6];
+
+		sg_view tex[6];
+	} skybox;
+
 	struct {
 		sg_pipeline pip{};
 		
-		sg_buffer vbuf{};
-		sg_buffer ibuf{};
-	} cube;
+		Shape shp;
 
-	sg_buffer quad_vbuf{};
-	sg_pipeline depthview_pip{};
+		sg_view tex{};
+	} terrain;
+
+	struct {
+		float yaw=0, pitch=0;
+		vf3d dir;
+	} sun;
 
 	struct {
 		vf3d pos;
-		vf3d dir;
 		float yaw=0, pitch=0;
-		
-		const float near=.001f;
-		const float far=100.f;
-		
-		mat4 proj, view;
+		vf3d dir;
+
+		const float near_plane=.001f, far_plane=1000;
+		mat4 proj;
+
+		mat4 view;
+
 		mat4 view_proj;
 	} cam;
 
 public:
+#pragma region SETUP HELPERS
 	void setupEnvironment() {
 		sg_desc desc{};
 		desc.environment=sglue_environment();
 		sg_setup(desc);
 	}
 
-	void setupSampler() {
-		sg_sampler_desc sampler_desc{};
-		sampler_desc.compare=SG_COMPAREFUNC_GREATER;
-		sampler=sg_make_sampler(sampler_desc);
+	void setupSamplers() {
+		{
+			sg_sampler_desc sampler_desc{};
+			smp.linear=sg_make_sampler(sampler_desc);
+		}
+
+		{
+			sg_sampler_desc sampler_desc{};
+			sampler_desc.min_filter=SG_FILTER_NEAREST;
+			sampler_desc.mag_filter=SG_FILTER_NEAREST;
+			smp.nearest=sg_make_sampler(sampler_desc);
+		}
 	}
 
-	//make pipeline, make render targets, & orient view matrixes
-	void setupShadowMap() {
-		shadow_map.pass_action.depth.load_action=SG_LOADACTION_CLEAR;
-		shadow_map.pass_action.depth.store_action=SG_STOREACTION_STORE;
-		shadow_map.pass_action.depth.clear_value=0;
+	//"primitive" textures to work with
+	void setupTextures() {
+		auto& b=tex.blank;
+		b=cmn::makeBlankTexture();
 
+		tex.uv=cmn::makeUVTexture(1024, 1024);
+	}
+
+	void setupColorview() {
+		//2d tristrip pipeline
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_shadow_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shadow_i_col].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.shader=sg_make_shader(shadow_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.cull_mode=SG_CULLMODE_NONE;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_GREATER_EQUAL;
-		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-		pip_desc.colors[0].pixel_format=SG_PIXELFORMAT_NONE;
-		shadow_map.pip=sg_make_pipeline(pip_desc);
+		pip_desc.layout.attrs[ATTR_colorview_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_colorview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(colorview_shader_desc(sg_query_backend()));
+		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+		//with alpha blending
+		pip_desc.colors[0].blend.enabled=true;
+		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
+		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
+		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		colorview.pip=sg_make_pipeline(pip_desc);
 
-		//make depth image
-		sg_image_desc image_desc{};
-		image_desc.usage.depth_stencil_attachment=true;
-		image_desc.width=1024;
-		image_desc.height=1024;
-		image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
-		sg_image depth_img=sg_make_image(image_desc);
-
-		//make depth attachment
-		{
-			sg_view_desc view_desc{};
-			view_desc.depth_stencil_attachment.image=depth_img;
-			shadow_map.depth_attach=sg_make_view(view_desc);
-		}
-
-		//make depth tex
-		{
-			sg_view_desc view_desc{};
-			view_desc.texture.image=depth_img;
-			shadow_map.depth_tex=sg_make_view(view_desc);
-		}
-
-		//make projection matrix
-		shadow_map.proj=mat4::makePerspective(90.f, 1, cam.near, cam.far);
-	}
-
-	void setupDisplayPassAction() {
-		display_pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		display_pass_action.colors[0].clear_value={0, 0, 0, 1};
-	}
-
-	void setupCube() {
-		//pipeline
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_cube_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_cube_i_col].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.shader=sg_make_shader(cube_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.cull_mode=SG_CULLMODE_FRONT;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		cube.pip=sg_make_pipeline(pip_desc);
-		
-		//vertex buffer
-		{
-			//xyzrgb
-			float vertexes[8][6]{
-				{0, 0, 0, 0, 0, 0},
-				{1, 0, 0, 1, 0, 0},
-				{0, 1, 0, 0, 1, 0},
-				{1, 1, 0, 1, 1, 0},
-				{0, 0, 1, 0, 0, 1},
-				{1, 0, 1, 1, 0, 1},
-				{0, 1, 1, 0, 1, 1},
-				{1, 1, 1, 1, 1, 1}
-			};
-			sg_buffer_desc buffer_desc{};
-			buffer_desc.data=SG_RANGE(vertexes);
-			cube.vbuf=sg_make_buffer(buffer_desc);
-		}
-
-		//index buffer
-		{
-			std::uint32_t indexes[12][3]{
-				{0, 2, 1}, {1, 2, 3},
-				{1, 3, 5}, {5, 3, 7},
-				{4, 5, 6}, {5, 7, 6},
-				{0, 4, 2}, {2, 4, 6},
-				{2, 6, 3}, {3, 6, 7},
-				{0, 1, 4}, {1, 5, 4}
-			};
-			sg_buffer_desc buffer_desc{};
-			buffer_desc.usage.index_buffer=true;
-			buffer_desc.data=SG_RANGE(indexes);
-			cube.ibuf=sg_make_buffer(buffer_desc);
-		}
-	}
-
-	void setupQuadVertexBuffer() {
-		//xyuv: flip v
+		//xyuv
+		//flip y
 		float vertexes[4][2][2]{
-			{{-1, -1}, {0, 0}},
-			{{1, -1}, {1, 0}},
-			{{-1, 1}, {0, 1}},
-			{{1, 1}, {1, 1}}
+			{{-1, -1}, {0, 1}},
+			{{1, -1}, {1, 1}},
+			{{-1, 1}, {0, 0}},
+			{{1, 1}, {1, 0}}
 		};
 		sg_buffer_desc vbuf_desc{};
 		vbuf_desc.data.ptr=vertexes;
 		vbuf_desc.data.size=sizeof(vertexes);
-		quad_vbuf=sg_make_buffer(vbuf_desc);
+		colorview.vbuf=sg_make_buffer(vbuf_desc);
 	}
 
-	void setupDepthviewPipeline() {
-		//2d tristrip
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_depthview_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.layout.attrs[ATTR_depthview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(depthview_shader_desc(sg_query_backend()));
-		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-		depthview_pip=sg_make_pipeline(pip_desc);
+	void setupFont() {
+		font=cmn::Font("assets/img/font/fancy_8x16.png", 8, 16);
 	}
+
+	//make pipeline, orient meshes, & load textures 
+	void setupSkybox() {
+		//pipeline
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_skybox_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_skybox_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(skybox_shader_desc(sg_query_backend()));
+		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+		skybox.pip=sg_make_pipeline(pip_desc);
+
+		//vertex buffer
+		{
+			//xyzuv
+			float vertexes[4][5]{
+				{-1, 0, -1, 0, 0},
+				{1, 0, -1, 1, 0},
+				{-1, 0, 1, 0, 1},
+				{1, 0, 1, 1, 1}
+			};
+			sg_buffer_desc buffer_desc{};
+			buffer_desc.data=SG_RANGE(vertexes);
+			skybox.vbuf=sg_make_buffer(buffer_desc);
+		}
+
+		//orient faces
+		const vf3d rot_trans[6][2]{
+			{cmn::Pi*vf3d(.5f, -.5f, 0), {1, 0, 0}},
+			{cmn::Pi*vf3d(.5f, .5f, 0), {-1, 0, 0}},
+			{cmn::Pi*vf3d(0, 0, 1), {0, 1, 0}},
+			{cmn::Pi*vf3d(1, 0, 1), {0, -1, 0}},
+			{cmn::Pi*vf3d(.5f, 1, 0), {0, 0, 1}},
+			{cmn::Pi*vf3d(.5f, 0, 0), {0, 0, -1}}
+		};
+		for(int i=0; i<6; i++) {
+			mat4 rot_x=mat4::makeRotX(rot_trans[i][0].x);
+			mat4 rot_y=mat4::makeRotY(rot_trans[i][0].y);
+			mat4 rot_z=mat4::makeRotZ(rot_trans[i][0].z);
+			mat4 rot=mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+			mat4 trans=mat4::makeTranslation(rot_trans[i][1]);
+			skybox.model[i]=mat4::mul(trans, rot);
+		}
+
+		//textures
+		const std::string filenames[6]{
+			"assets/img/skybox/px.png",
+			"assets/img/skybox/nx.png",
+			"assets/img/skybox/py.png",
+			"assets/img/skybox/ny.png",
+			"assets/img/skybox/pz.png",
+			"assets/img/skybox/nz.png"
+		};
+		for(int i=0; i<6; i++) {
+			sg_view& t=skybox.tex[i];
+			if(!cmn::makeTextureFromFile(t, filenames[i])) t=tex.blank;
+		}
+	}
+
+	void setupTerrain() {
+		auto& s=terrain.shp;
+
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_terrain_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_terrain_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_terrain_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(terrain_shader_desc(sg_query_backend()));
+		pip_desc.index_type=SG_INDEXTYPE_UINT32;
+		pip_desc.cull_mode=SG_CULLMODE_FRONT;
+		pip_desc.depth.write_enabled=true;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		terrain.pip=sg_make_pipeline(pip_desc);
+
+		auto status=Mesh::loadFromOBJ(s.mesh, "assets/models/terrain.txt");
+		if(status!=Mesh::ReturnCode::Ok) s.mesh=Mesh::makeCube();
+
+		s.scale=100.f*vf3d(1, 1, 1);
+		s.updateMatrixes();
+
+		auto& t=terrain.tex;
+		if(!cmn::makeTextureFromFile(t, "assets/img/grass_gradient.png")) t=tex.blank;
+	}
+
+	void setupSun() {
+		sun.yaw=cmn::randFloat(2*cmn::Pi);
+	}
+#pragma endregion
 
 	void userCreate() override {
+		std::srand(std::time(0));
+
 		setupEnvironment();
 
-		setupDepthviewPipeline();
+		setupSamplers();
 
-		setupSampler();
+		setupTextures();
 
-		setupShadowMap();
+		setupColorview();
+		setupFont();
 
-		setupDisplayPassAction();
-		
-		setupQuadVertexBuffer();
+		setupSkybox();
 
-		setupCube();
+		setupTerrain();
+
+		setupSun();
 	}
 
 #pragma region UPDATE HELPERS
-	void handleOrbit(float dt) {
-		const auto action=getMouse(SAPP_MOUSEBUTTON_LEFT);
-		if(action.pressed) sapp_lock_mouse(true);
-		if(action.held) {
-			cam.yaw-=mouse_dx*dt;
-			cam.pitch-=mouse_dy*dt;
-		}
-		if(action.released) sapp_lock_mouse(false);
-	}
-	
 	void handleCameraLooking(float dt) {
 		//left/right
 		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
@@ -234,15 +259,13 @@ public:
 		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch+=dt;
 		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
 
-		handleOrbit(dt);
-
 		//clamp camera pitch
 		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
 		if(cam.pitch<-cmn::Pi/2) cam.pitch=.001f-cmn::Pi/2;
 	}
 
 	void handleCameraMovement(float dt) {
-		//move up, down
+			//move up, down
 		if(getKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4.f*dt;
 		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4.f*dt;
 
@@ -271,9 +294,14 @@ public:
 
 		//cam proj can change with window resize
 		float asp=sapp_widthf()/sapp_heightf();
-		cam.proj=mat4::makePerspective(60, asp, cam.near, cam.far);
+		cam.proj=mat4::makePerspective(60, asp, cam.near_plane, cam.far_plane);
 
 		cam.view_proj=mat4::mul(cam.proj, cam.view);
+	}
+
+	void updateSun(float dt) {
+		sun.pitch+=dt;
+		sun.dir=polarToCartesian(sun.yaw, sun.pitch);
 	}
 #pragma endregion
 
@@ -281,85 +309,140 @@ public:
 		handleUserInput(dt);
 
 		updateCameraMatrixes();
+
+		updateSun(dt);
 	}
 
-	void renderCubeIntoShadowMap() {
-		sg_pass pass{};
-		pass.action=shadow_map.pass_action;
-		pass.attachments.depth_stencil=shadow_map.depth_attach;
-		sg_begin_pass(pass);
-
-		sg_apply_pipeline(shadow_map.pip);
-
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=cube.vbuf;
-		bind.index_buffer=cube.ibuf;
-		sg_apply_bindings(bind);
-
-		vs_shadow_params_t vs_shadow_params{};
-		mat4 mvp=mat4::mul(shadow_map.proj, cam.view);
-		std::memcpy(vs_shadow_params.u_mvp, mvp.m, sizeof(mvp.m));
-		sg_apply_uniforms(UB_vs_shadow_params, SG_RANGE(vs_shadow_params));
-
-		sg_draw(0, 3*12, 1);
-
-		sg_end_pass();
-	}
-
-	void renderCube() {
-		sg_apply_pipeline(cube.pip);
+#pragma region RENDER HELPERS
+	void renderTex(float x, float y, float w, float h,
+		const sg_view& tex, float l, float t, float r, float b,
+		const sg_color& tint
+	) {
+		sg_apply_pipeline(colorview.pip);
 
 		sg_bindings bind{};
-		bind.vertex_buffers[0]=cube.vbuf;
-		bind.index_buffer=cube.ibuf;
+		bind.vertex_buffers[0]=colorview.vbuf;
+		bind.samplers[SMP_b_colorview_smp]=smp.nearest;
+		bind.views[VIEW_b_colorview_tex]=tex;
 		sg_apply_bindings(bind);
 
-		vs_cube_params_t vs_cube_params{};
-		const auto& mvp=cam.view_proj;
-		std::memcpy(vs_cube_params.u_mvp, mvp.m, sizeof(mvp.m));
-		sg_apply_uniforms(UB_vs_cube_params, SG_RANGE(vs_cube_params));
+		p_vs_colorview_t p_vs_colorview{};
+		p_vs_colorview.u_tl[0]=l;
+		p_vs_colorview.u_tl[1]=t;
+		p_vs_colorview.u_br[0]=r;
+		p_vs_colorview.u_br[1]=b;
+		sg_apply_uniforms(UB_p_vs_colorview, SG_RANGE(p_vs_colorview));
 
-		sg_draw(0, 3*12, 1);
-	}
+		p_fs_colorview_t p_fs_colorview{};
+		p_fs_colorview.u_tint[0]=tint.r;
+		p_fs_colorview.u_tint[1]=tint.g;
+		p_fs_colorview.u_tint[2]=tint.b;
+		p_fs_colorview.u_tint[3]=tint.a;
+		sg_apply_uniforms(UB_p_fs_colorview, SG_RANGE(p_fs_colorview));
 
-	void renderShadowMap() {
-		sg_apply_pipeline(depthview_pip);
-
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=quad_vbuf;
-		bind.samplers[SMP_u_depthview_smp]=sampler;
-		bind.views[VIEW_u_depthview_tex]=shadow_map.depth_tex;
-		sg_apply_bindings(bind);
-
-		fs_depthview_params_t fs_depthview_params{};
-		fs_depthview_params.u_near=cam.near;
-		fs_depthview_params.u_far=cam.far;
-		sg_apply_uniforms(UB_fs_depthview_params, SG_RANGE(fs_depthview_params));
-
-		sg_apply_viewport(0, 0, 50, 50, true);
+		sg_apply_viewportf(x, y, w, h, true);
 
 		sg_draw(0, 4, 1);
 	}
 
+	void renderChar(float x, float y, const cmn::Font& f, char c, float scl=1, const sg_color& tint={1, 1, 1, 1}) {
+		float l, t, r, b;
+		f.getRegion(c, l, t, r, b);
+		renderTex(
+			x, y, scl*f.char_w, scl*f.char_h,
+			f.tex, l, t, r, b,
+			tint
+		);
+	}
+
+	void renderString(float x, float y, const cmn::Font& f, const std::string& str, float scl=1, const sg_color& tint={1, 1, 1, 1}) {
+		int ox=0, oy=0;
+		for(const auto& c:str) {
+			if(c=='\n') ox=0, oy+=f.char_h;
+			//tabsize=2
+			else if(c=='\t') ox+=2*f.char_w;
+			else if(c>=32&&c<=127) {
+				renderChar(x+scl*ox, y+scl*oy, f, c, scl, tint);
+				ox+=f.char_w;
+			}
+		}
+	}
+#pragma endregion
+
+#pragma region RENDERERS
+
+	void renderSkybox() {
+		//view from eye at origin + camera projection
+		mat4 look_at=mat4::makeLookAt({0, 0, 0}, cam.dir, {0, 1, 0});
+		mat4 view=mat4::inverse(look_at);
+		mat4 view_proj=mat4::mul(cam.proj, view);
+
+		for(int i=0; i<6; i++) {
+			sg_apply_pipeline(skybox.pip);
+
+			sg_bindings bind{};
+			bind.vertex_buffers[0]=skybox.vbuf;
+			bind.samplers[SMP_b_skybox_smp]=smp.linear;
+			bind.views[VIEW_b_skybox_tex]=skybox.tex[i];
+			sg_apply_bindings(bind);
+
+			mat4 mvp=mat4::mul(view_proj, skybox.model[i]);
+
+			p_vs_skybox_t p_vs_skybox{};
+			std::memcpy(p_vs_skybox.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_p_vs_skybox, SG_RANGE(p_vs_skybox));
+
+			sg_draw(0, 4, 1);
+		}
+	}
+
+	void renderTerrain() {
+		const auto& s=terrain.shp;
+
+		sg_apply_pipeline(terrain.pip);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=s.mesh.vbuf;
+		bind.index_buffer=s.mesh.ibuf;
+		bind.samplers[SMP_b_terrain_smp]=smp.linear;
+		bind.views[VIEW_b_terrain_tex]=terrain.tex;
+		sg_apply_bindings(bind);
+
+		p_vs_terrain_t p_vs_terrain{};
+		std::memcpy(p_vs_terrain.u_model, s.model.m, sizeof(s.model.m));
+		mat4 mvp=mat4::mul(cam.view_proj, s.model);
+		std::memcpy(p_vs_terrain.u_mvp, mvp.m, sizeof(mvp.m));
+		sg_apply_uniforms(UB_p_vs_terrain, SG_RANGE(p_vs_terrain));
+
+		p_fs_terrain_t p_fs_terrain{};
+		p_fs_terrain.u_eye_pos[0]=cam.pos.x;
+		p_fs_terrain.u_eye_pos[1]=cam.pos.y;
+		p_fs_terrain.u_eye_pos[2]=cam.pos.z;
+		p_fs_terrain.u_light_dir[0]=sun.dir.x;
+		p_fs_terrain.u_light_dir[1]=sun.dir.y;
+		p_fs_terrain.u_light_dir[2]=sun.dir.z;
+		sg_apply_uniforms(UB_p_fs_terrain, SG_RANGE(p_fs_terrain));
+
+		sg_draw(0, 3*s.mesh.tris.size(), 1);
+	}
+#pragma endregion
+
 	void userRender() override {
-		renderCubeIntoShadowMap();
-		
 		//start display pass
 		sg_pass pass{};
-		pass.action=display_pass_action;
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
-		renderCube();
+		renderSkybox();
 
-		renderShadowMap();
+		renderTerrain();
 
 		sg_end_pass();
 
 		sg_commit();
 	}
 
-	DepthDemo() {
-		app_title="Depth Demo";
+	Demo() {
+		app_title="Terrain Walking Demo";
 	}
 };

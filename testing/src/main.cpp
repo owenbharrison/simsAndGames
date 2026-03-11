@@ -1,15 +1,15 @@
 #include "demo.h"
 
-static DepthDemo* dd_ptr=nullptr;
+static Demo* demo_ptr=nullptr;
 
-static void init_cb() { dd_ptr->init(); }
-static void cleanup_cb() { dd_ptr->cleanup(); }
-static void frame_cb() { dd_ptr->frame(); }
-static void input_cb(const sapp_event* e) { dd_ptr->input(e); }
+static void init_cb() { demo_ptr->init(); }
+static void cleanup_cb() { demo_ptr->cleanup(); }
+static void frame_cb() { demo_ptr->frame(); }
+static void input_cb(const sapp_event* e) { demo_ptr->input(e); }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
-	static DepthDemo dd;
-	dd_ptr=&dd;
+	static Demo d;
+	demo_ptr=&d;
 
 	sapp_desc app_desc{};
 	app_desc.init_cb=init_cb;

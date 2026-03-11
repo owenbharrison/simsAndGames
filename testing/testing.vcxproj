@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -143,8 +143,10 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\demo.h" />
     <ClInclude Include="src\linemesh.h" />
     <ClInclude Include="src\mesh.h" />
+    <ClInclude Include="src\shape.h" />
     <ClInclude Include="src\terrain_demo.h" />
     <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\texture_utils.h" />
@@ -154,16 +156,18 @@
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="assets\img\font\fancy_8x16.png" />
     <Image Include="assets\grass_falloff.png" />
-    <Image Include="assets\nx.png" />
-    <Image Include="assets\ny.png" />
-    <Image Include="assets\nz.png" />
-    <Image Include="assets\px.png" />
-    <Image Include="assets\py.png" />
-    <Image Include="assets\pz.png" />
+    <Image Include="assets\img\grass_gradient.png" />
+    <Image Include="assets\img\skybox\nx.png" />
+    <Image Include="assets\img\skybox\ny.png" />
+    <Image Include="assets\img\skybox\nz.png" />
+    <Image Include="assets\img\skybox\px.png" />
+    <Image Include="assets\img\skybox\py.png" />
+    <Image Include="assets\img\skybox\pz.png" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\terrain.txt" />
+    <Text Include="assets\models\terrain.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

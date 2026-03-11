@@ -26,6 +26,21 @@
     <ClInclude Include="src\demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\linemesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\shape.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\terrain_demo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\texture_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
@@ -34,29 +49,35 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\pz.png">
+    <Image Include="assets\img\skybox\pz.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\ny.png">
+    <Image Include="assets\img\skybox\ny.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\nz.png">
+    <Image Include="assets\img\skybox\nz.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\px.png">
+    <Image Include="assets\img\skybox\px.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\py.png">
+    <Image Include="assets\img\skybox\py.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\nx.png">
+    <Image Include="assets\img\skybox\nx.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\sand.png">
+    <Image Include="assets\grass_falloff.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\font\fancy_8x16.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\img\grass_gradient.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\terrain.txt" />
+    <Text Include="assets\models\terrain.txt" />
   </ItemGroup>
 </Project>
