@@ -4,7 +4,7 @@
 
 #include "sokol/include/sokol_gl.h"
 
-//for sin, cos, sqrt
+//for cos, sin, sqrt
 #include <cmath>
 
 static void sgl_draw_circle(
@@ -12,6 +12,8 @@ static void sgl_draw_circle(
 	sg_color col
 ) {
 	sgl_begin_line_strip();
+
+	sgl_c4f(col.r, col.g, col.b, col.a);
 
 	const int num=32;
 	float rgb[3];
@@ -21,7 +23,7 @@ static void sgl_draw_circle(
 		float x=cx+rad*std::cos(angle);
 		float y=cy+rad*std::sin(angle);
 
-		sgl_v2f_c4f(x, y, col.r, col.g, col.b, col.a);
+		sgl_v2f(x, y);
 	}
 
 	sgl_end();
@@ -33,6 +35,8 @@ static void sgl_fill_circle(
 ) {
 	sgl_begin_triangle_strip();
 
+	sgl_c4f(col.r, col.g, col.b, col.a);
+	
 	const int num=32;
 	float rgb[3];
 	for(int i=0; i<=num; i++) {
@@ -41,8 +45,8 @@ static void sgl_fill_circle(
 		float x=cx+rad*std::cos(angle);
 		float y=cy+rad*std::sin(angle);
 
-		sgl_v2f_c4f(x, y, col.r, col.g, col.b, col.a);
-		sgl_v2f_c4f(cx, cy, col.r, col.g, col.b, col.a);
+		sgl_v2f(x, y);
+		sgl_v2f(cx, cy);
 	}
 
 	sgl_end();
@@ -53,8 +57,9 @@ static void sgl_draw_line(
 	sg_color col
 ) {
 	sgl_begin_lines();
-	sgl_v2f_c4f(ax, ay, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(bx, by, col.r, col.g, col.b, col.a);
+	sgl_c4f(col.r, col.g, col.b, col.a);
+	sgl_v2f(ax, ay);
+	sgl_v2f(bx, by);
 	sgl_end();
 }
 
@@ -74,10 +79,11 @@ static void sgl_fill_line(
 	float dx=w/2*wx, dy=w/2*wy;
 
 	sgl_begin_triangle_strip();
-	sgl_v2f_c4f(ax+dx, ay+dy, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(bx+dx, by+dy, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(ax-dx, ay-dy, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(bx-dx, by-dy, col.r, col.g, col.b, col.a);
+	sgl_c4f(col.r, col.g, col.b, col.a);
+	sgl_v2f(ax+dx, ay+dy);
+	sgl_v2f(bx+dx, by+dy);
+	sgl_v2f(ax-dx, ay-dy);
+	sgl_v2f(bx-dx, by-dy);
 	sgl_end();
 }
 
@@ -86,23 +92,26 @@ static void sgl_draw_rect(
 	sg_color col
 ) {
 	sgl_begin_line_strip();
-	sgl_v2f_c4f(x, y, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(x+w, y, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(x+w, y+h, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(x, y+h, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(x, y, col.r, col.g, col.b, col.a);
+	sgl_c4f(col.r, col.g, col.b, col.a);
+	sgl_v2f(x, y);
+	sgl_v2f(x+w, y);
+	sgl_v2f(x+w, y+h);
+	sgl_v2f(x, y+h);
+	sgl_v2f(x, y);
 	sgl_end();
 }
 
 static void sgl_fill_rect(
 	float x, float y, float w, float h,
-	sg_color col
+	sg_color col,
+	float l=0, float t=0, float r=1, float b=1
 ) {
 	sgl_begin_triangle_strip();
-	sgl_v2f_c4f(x, y, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(x+w, y, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(x, y+h, col.r, col.g, col.b, col.a);
-	sgl_v2f_c4f(x+w, y+h, col.r, col.g, col.b, col.a);
+	sgl_c4f(col.r, col.g, col.b, col.a);
+	sgl_v2f_t2f(x, y, l, t);
+	sgl_v2f_t2f(x+w, y, r, t);
+	sgl_v2f_t2f(x, y+h, l, b);
+	sgl_v2f_t2f(x+w, y+h, r, b);
 	sgl_end();
 }
 #endif

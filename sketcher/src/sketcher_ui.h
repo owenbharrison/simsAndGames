@@ -9,6 +9,8 @@
 
 #include <list>
 #include <vector>
+#include <string>
+
 //for time
 #include <ctime>
 
@@ -26,28 +28,22 @@
 
 using cmn::vf2d;
 
-static float degToRad(float deg) {
-	return deg/180*cmn::Pi;
-}
-
-static float radToDeg(float rad) {
-	return rad/cmn::Pi*180;
-}
-
-static float fract(float x) {
-	return x-std::floor(x);
-}
-
-//https://www.shadertoy.com/view/4djSRW
-void hash31(float i, float& a, float& b, float& c) {
-	float x=fract(.1031*i);
-	float y=fract(.1030*i);
-	float z=fract(.0973*i);
-	float d=x*(33.33+y)+y*(33.33+z)+z*(33.33+x);
-	x+=d, y+=d, z+=d;
-	a=fract(z*(x+y));
-	b=fract(y*(z+x));
-	c=fract(x*(y+z));
+//hue=color wheel, saturation=whitewash, value=blackwash
+//https://www.rapidtables.com/convert/color/hsv-to-rgb.html
+static sg_color hsv2rgb(int h, float s, float v) {
+	float c=v*s;
+	float x=c*(1-std::abs(1-std::fmod(h/60.f, 2)));
+	float m=v-c;
+	float r=0, g=0, b=0;
+	switch(h/60) {
+		case 0: r=c, g=x, b=0; break;
+		case 1: r=x, g=c, b=0; break;
+		case 2: r=0, g=c, b=x; break;
+		case 3: r=0, g=x, b=c; break;
+		case 4: r=x, g=0, b=c; break;
+		case 5: r=c, g=0, b=x; break;
+	}
+	return {m+r, m+g, m+b, 1};
 }
 
 //fisher-yates shuffle
@@ -62,19 +58,30 @@ void shuffle(std::vector<T>& vec) {
 class SketcherUI : public cmn::SokolEngine {
 	std::list<vf2d> pts;
 	vf2d* held_pt=nullptr;
-	const float pt_rad=11;
+	float pt_rad=7.5f;
+	bool push_pts_apart=true;
 
-	struct Link {
-		vf2d* a, * b, * c;
-		float len, angle;
+	struct DistConstraint {
+		vf2d* a, * b;
+		float len;
+		sg_color col;
 	};
-	std::list<Link> links;
-	float link_edge_col[3]{0, 0, 0};
+	std::list<DistConstraint> dist_constraints;
+	struct AngleConstraint {
+		vf2d* a, * b, * c, * d;
+		float angle;
+	};
+	std::list<AngleConstraint> angle_constraints;
 
-	bool imguiing=false;
+	bool imguiing=true;
 
-	float bg_col[3]{.2f, .2f, .2f};
-	float grid_col[3]{.349f, .349f, .349f};
+	bool render_grid=true;
+	bool render_outlines=true;
+	int hoberman_num=0;
+	float outline_rad=2;
+	float outline_rgb[3]{0, 0, 0};
+	float background_rgb[3]{0.992f, .988f, .847f};
+	float grid_rgb[3]{.580f, .831f, .847f};
 
 public:
 #pragma region SETUP_HELPERS
@@ -87,7 +94,7 @@ public:
 		sgl_desc_t sgl_desc{};
 		sgl_setup(&sgl_desc);
 	}
-	
+
 	void setupImGui() {
 		simgui_desc_t simgui_desc{};
 		simgui_desc.ini_filename="assets/imgui.ini";
@@ -95,8 +102,10 @@ public:
 	}
 
 	//generalized hoberman linkage construction
-	void makeHoberman(int num) {
+	void makeHobermanLinkage(int num) {
 		held_pt=nullptr;
+
+		if(num<3) return;
 
 		const vf2d ctr=vf2d(sapp_width(), sapp_height())/2;
 
@@ -104,9 +113,9 @@ public:
 		auto ix=[] (int i, int j) { return 3*i+j; };
 
 		//asymptotically decrease len w/ increasing num 
-		//starting from minimum num of 4
-		float min_len=60, max_len=125;
-		float t=std::exp(-.4f*(num-4));
+		//starting from minimum num of 3
+		float min_len=40, max_len=150;
+		float t=std::exp(-.1f*(num-3));
 		float len=min_len+t*(max_len-min_len);
 
 		float inc_angle=2*cmn::Pi/num;
@@ -125,30 +134,60 @@ public:
 			}
 		}
 
-		//bottom then top
-		links.clear();
+		dist_constraints.clear();
+		std::list<DistConstraint> dist_other;
+		angle_constraints.clear();
+
+		auto randCol=[&] () {
+			int h=std::rand()%360;
+			float s=cmn::randFloat(.5f, 1);
+			float v=1;
+			return hsv2rgb(h, s, v);
+		};
+
+		//branch out
 		for(int i=0; i<num; i++) {
-			auto& r1=grid[ix(i, 1)], & r2=grid[ix(i, 2)];
-			links.push_back({grid[ix(i, 0)], r1, r2, len, inc_angle});
-		}
-		for(int i=0; i<num; i++) {
-			auto& l1=grid[ix((i+num-1)%num, 1)], & l2=grid[ix((i+num-2)%num, 2)];
-			links.push_back({grid[ix(i, 0)], l1, l2, len, -inc_angle});
+			auto& c=grid[ix(i, 0)];
+			//next 2
+			auto& n1=grid[ix(i, 1)];
+			auto& n2=grid[ix(i, 2)];
+			sg_color col1=randCol();
+			dist_constraints.push_back({c, n1, len, col1});
+			dist_constraints.push_back({n1, n2, len, col1});
+			angle_constraints.push_back({c, n1, n1, n2, inc_angle});
+
+			//previous 2
+			auto& p1=grid[ix((i+num-1)%num, 1)];
+			auto& p2=grid[ix((i+num-2)%num, 2)];
+			sg_color col2=randCol();
+			dist_other.push_back({c, p1, len, col2});
+			dist_other.push_back({p1, p2, len, col2});
+			angle_constraints.push_back({c, p1, p1, p2, -inc_angle});
 		}
 
+		//render as "two layers"
+		dist_constraints.insert(dist_constraints.end(),
+			dist_other.begin(), dist_other.end()
+		);
+
 		delete[] grid;
+	}
+
+	void setupScene() {
+		//dont choose 6.
+		do hoberman_num=cmn::randInt(4, 10);
+		while(hoberman_num==6);
+		makeHobermanLinkage(hoberman_num);
 	}
 #pragma endregion
 
 	void userCreate() override {
+		std::srand(std::time(0));
+
 		setupEnvironment();
 
-		//dont choose 6.
-		int num;
-		do num=cmn::randInt(4, 10);
-		while(num==6);
-		makeHoberman(num);
-		
+		setupScene();
+
 		setupSGL();
 
 		setupImGui();
@@ -157,9 +196,9 @@ public:
 #pragma region UPDATE HELPERS
 	void handlePointMovement() {
 		if(imguiing) return;
-		
+
 		const vf2d mouse_pos(mouse_x, mouse_y);
-		
+
 		const auto action=getMouse(SAPP_MOUSEBUTTON_LEFT);
 		if(action.pressed) {
 			held_pt=nullptr;
@@ -178,17 +217,8 @@ public:
 		if(action.released) held_pt=nullptr;
 	}
 
-	void handleUserInput() {
-		if(getKey(SAPP_KEYCODE_4).pressed) makeHoberman(4);
-		if(getKey(SAPP_KEYCODE_5).pressed) makeHoberman(5);
-		if(getKey(SAPP_KEYCODE_7).pressed) makeHoberman(7);
-		if(getKey(SAPP_KEYCODE_8).pressed) makeHoberman(8);
-		if(getKey(SAPP_KEYCODE_9).pressed) makeHoberman(9);
-		if(getKey(SAPP_KEYCODE_0).pressed) makeHoberman(10);
-	}
-
 	//keep from overlapping
-	void updatePoints() {
+	void pushPointsApart() {
 		//accumulate references
 		std::vector<vf2d*> pts_ref;
 		for(auto& p:pts) pts_ref.push_back(&p);
@@ -211,32 +241,36 @@ public:
 		}
 	}
 
-	void updateLinks() {
-		//accumulate references
-		std::vector<Link*> links_ref;
-		for(auto& l:links) links_ref.push_back(&l);
+	void updateDistConstraints() {
+		//randomize order
+		std::vector<DistConstraint*> dist_refs;
+		for(auto& d:dist_constraints) dist_refs.push_back(&d);
+		shuffle(dist_refs);
 
-		shuffle(links_ref);
+		for(const auto& d:dist_refs) {
+			constrain::dist(*d->a, *d->b, d->len);
+		}
+	}
 
-		//constrain
-		for(auto& l:links_ref) {
-			auto& a=*l->a, & b=*l->b;
-			auto& c=*l->b, & d=*l->c;
-			constrain::dist(a, b, l->len);
-			constrain::dist(c, d, l->len);
-			constrain::angle(a, b, c, d, l->angle);
+	void updateAngleConstraints() {
+		//randomize order
+		std::vector<AngleConstraint*> angle_refs;
+		for(auto& a:angle_constraints) angle_refs.push_back(&a);
+		shuffle(angle_refs);
+
+		for(const auto& a:angle_refs) {
+			constrain::angle(*a->a, *a->b, *a->c, *a->d, a->angle);
 		}
 	}
 #pragma endregion
 
 	void userUpdate(float dt) override {
-		handleUserInput();
-		
 		for(int i=0; i<25; i++) {
 			handlePointMovement();
 
-			updatePoints();
-			updateLinks();
+			if(push_pts_apart) pushPointsApart();
+			updateDistConstraints();
+			updateAngleConstraints();
 		}
 	}
 
@@ -245,7 +279,7 @@ public:
 	}
 
 #pragma region RENDER HELPERS
-	void renderGrid(sg_color col) {
+	void renderGrid(const sg_color& col) {
 		const float res=25;
 		const float w=3;
 		const int ratio=5;
@@ -269,29 +303,35 @@ public:
 		}
 	}
 
-	void renderLinks() {
-		auto renderLink=[&] (const Link& l, float w, sg_color col) {
-			const auto& ax=l.a->x, ay=l.a->y;
-			const auto& bx=l.b->x, by=l.b->y;
-			const auto& cx=l.c->x, cy=l.c->y;
-			sgl_fill_circle(ax, ay, w/2, col);
-			sgl_fill_line(ax, ay, bx, by, w, col);
-			sgl_fill_circle(bx, by, w/2, col);
-			sgl_fill_line(bx, by, cx, cy, w, col);
-			sgl_fill_circle(cx, cy, w/2, col);
+	void renderDistConstraints() {
+		auto renderSlot=[](
+			const cmn::vf2d& a, const cmn::vf2d& b,
+			float r, const sg_color& col
+			) {
+			sgl_fill_circle(a.x, a.y, r, col);
+			sgl_fill_line(a.x, a.y, b.x, b.y, 2*r, col);
+			sgl_fill_circle(b.x, b.y, r, col);
 		};
 
-		int i=0;
-		const float w=2*pt_rad;
-		for(const auto& l:links) {
-			renderLink(l, w, {link_edge_col[0], link_edge_col[1], link_edge_col[2], 1});
+		//outlines
+		if(render_outlines) {
+			const sg_color col{
+				outline_rgb[0],
+				outline_rgb[1],
+				outline_rgb[2],
+				1
+			};
+			for(const auto& d:dist_constraints) {
+				renderSlot(*d.a, *d.b, pt_rad+outline_rad, col);
+			}
+		}
 
-			sg_color col{0, 0, 0, 1};
-			hash31(1000+7*(i++), col.r, col.g, col.b);
-			renderLink(l, .8f*w, col);
+		//insides
+		for(const auto& d:dist_constraints) {
+			renderSlot(*d.a, *d.b, pt_rad, d.col);
 		}
 	}
-	
+
 	void renderImGui() {
 		simgui_frame_desc_t simgui_frame_desc{};
 		simgui_frame_desc.width=sapp_width();
@@ -302,15 +342,27 @@ public:
 
 		imguiing=false;
 
-		ImGui::Begin("Grid Options");
+		ImGui::Begin("Physics Options");
 		imguiing|=ImGui::IsWindowHovered();
-		ImGui::ColorEdit3("bg", bg_col);
-		ImGui::ColorEdit3("grid", grid_col);
+		ImGui::Checkbox("Push Points Apart", &push_pts_apart);
+		ImGui::SliderFloat("Point Radius", &pt_rad, 5, 10);
 		ImGui::End();
 
-		ImGui::Begin("Link Options");
+		ImGui::Begin("Scene Options");
 		imguiing|=ImGui::IsWindowHovered();
-		ImGui::ColorEdit3("edge", link_edge_col);
+		if(ImGui::SliderInt("Make Hoberman", &hoberman_num, 3, 36)) {
+			makeHobermanLinkage(hoberman_num);
+		}
+		ImGui::End();
+
+		ImGui::Begin("Display Options");
+		imguiing|=ImGui::IsWindowHovered();
+		ImGui::Checkbox("Render Grid", &render_grid);
+		ImGui::Checkbox("Render Outlines", &render_outlines);
+		ImGui::SliderFloat("Outline Radius", &outline_rad, 1, 5);
+		ImGui::ColorEdit3("Background", background_rgb);
+		if(render_grid) ImGui::ColorEdit3("Grid", grid_rgb);
+		if(render_outlines) ImGui::ColorEdit3("Outlines", outline_rgb);
 		ImGui::End();
 
 		simgui_render();
@@ -321,23 +373,34 @@ public:
 		sg_pass pass{};
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
-		
+
+		//begin sgl rendering
 		{
 			sgl_defaults();
 
+			//pixel space
 			sgl_matrix_mode_projection();
 			sgl_load_identity();
 			sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
-
 			sgl_matrix_mode_modelview();
 			sgl_load_identity();
 
 			//background
-			sgl_fill_rect(0, 0, sapp_width(), sapp_height(), {bg_col[0], bg_col[1], bg_col[2], 1});
+			sgl_fill_rect(0, 0, sapp_width(), sapp_height(), {
+				background_rgb[0],
+				background_rgb[1],
+				background_rgb[2],
+				1
+				});
 
-			renderGrid({grid_col[0], grid_col[1], grid_col[2], 1});
+			if(render_grid) renderGrid({
+				grid_rgb[0],
+				grid_rgb[1],
+				grid_rgb[2],
+				1
+				});
 
-			renderLinks();
+			renderDistConstraints();
 
 			sgl_draw();
 		}
