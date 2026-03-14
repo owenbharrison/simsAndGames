@@ -88,7 +88,6 @@ void getStringSize(const std::string& str, int& w, int& h) {
 class MinesweeperUI : public cmn::SokolEngine {
 	sg_sampler sampler{};
 
-
 	struct {
 		sg_view blank{};
 		sg_view tile{};
@@ -449,8 +448,7 @@ public:
 	}
 
 	void setupGame() {
-		game=Minesweeper(5, 4, 6, 8);
-		//game.sweep(0, 0, 0);
+		game=Minesweeper(7, 5, 8, 20);
 	}
 #pragma endregion
 
