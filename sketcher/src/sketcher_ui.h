@@ -7,6 +7,8 @@
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
 
+#include "shd.glsl.h"
+
 #include <list>
 #include <vector>
 #include <string>
@@ -20,11 +22,12 @@
 
 #include "cmn/utils.h"
 
-#include "render_utils.h"
+#include "sokol/render_utils.h"
 
 #include "imgui/include/imgui_singleheader.h"
-#define SOKOL_IMGUI_IMPL
 #include "sokol/include/sokol_imgui.h"
+
+#include "sokol/texture_utils.h"
 
 using cmn::vf2d;
 
@@ -56,9 +59,28 @@ void shuffle(std::vector<T>& vec) {
 }
 
 class SketcherUI : public cmn::SokolEngine {
-	std::list<vf2d> pts;
+	sg_sampler sampler{};
+
+	sgl_pipeline sgl_pip{};
+
+	struct {
+		sg_image color_img{SG_INVALID_ID};
+		sg_view color_attach{SG_INVALID_ID};
+		sg_view color_tex{SG_INVALID_ID};
+		sg_image depth_img{SG_INVALID_ID};
+		sg_view depth_attach{SG_INVALID_ID};
+	} render_target;
+
+	struct {
+		sg_pipeline pip{};
+
+		sg_buffer vbuf{};
+	} outline_render;
+
+	//scene stuff
+	std::list<vf2d> points;
 	vf2d* held_pt=nullptr;
-	float pt_rad=7.5f;
+	float point_rad=7.5f;
 	bool push_pts_apart=true;
 
 	struct DistConstraint {
@@ -73,15 +95,17 @@ class SketcherUI : public cmn::SokolEngine {
 	};
 	std::list<AngleConstraint> angle_constraints;
 
-	bool imguiing=true;
-
-	bool render_grid=true;
-	bool render_outlines=true;
 	int hoberman_num=0;
-	float outline_rad=2;
-	float outline_rgb[3]{0, 0, 0};
-	float background_rgb[3]{0.992f, .988f, .847f};
+
+	//graphics stuff
+	bool render_grid=true;
+	float outline_rad=4.5f;
+	float point_rgb[3]{.917f, .917f, .917f};
+	float outline_rgb[3]{.25f, .25f, .25f};
+	float bkgd_rgb[3]{0.992f, .988f, .847f};
 	float grid_rgb[3]{.580f, .831f, .847f};
+
+	bool imguiing=false;
 
 public:
 #pragma region SETUP_HELPERS
@@ -90,15 +114,74 @@ public:
 		sg_setup(desc);
 	}
 
+	void setupSampler() {
+		sg_sampler_desc sampler_desc{};
+		sampler=sg_make_sampler(sampler_desc);
+	}
+
 	void setupSGL() {
 		sgl_desc_t sgl_desc{};
 		sgl_setup(&sgl_desc);
+
+		sg_pipeline_desc pip_desc{};
+		pip_desc.colors[0].write_mask=SG_COLORMASK_RGBA;
+		sgl_pip=sgl_make_pipeline(pip_desc);
 	}
 
-	void setupImGui() {
-		simgui_desc_t simgui_desc{};
-		simgui_desc.ini_filename="assets/imgui.ini";
-		simgui_setup(simgui_desc);
+	void updateRenderTarget() {
+		{
+			sg_destroy_image(render_target.color_img);
+			sg_image_desc image_desc{};
+			image_desc.usage.color_attachment=true;
+			image_desc.width=sapp_width();
+			image_desc.height=sapp_height();
+			render_target.color_img=sg_make_image(image_desc);
+
+			//make attach
+			{
+				sg_destroy_view(render_target.color_attach);
+				sg_view_desc view_desc{};
+				view_desc.color_attachment.image=render_target.color_img;
+				render_target.color_attach=sg_make_view(view_desc);
+			}
+
+			//make tex
+			{
+				sg_destroy_view(render_target.color_tex);
+				sg_view_desc view_desc{};
+				view_desc.texture.image=render_target.color_img;
+				render_target.color_tex=sg_make_view(view_desc);
+			}
+		}
+
+		{
+			sg_destroy_image(render_target.depth_img);
+			sg_image_desc image_desc{};
+			image_desc.usage.depth_stencil_attachment=true;
+			image_desc.width=sapp_width();
+			image_desc.height=sapp_height();
+			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH_STENCIL;//??
+			render_target.depth_img=sg_make_image(image_desc);
+
+			//make attach
+			sg_destroy_view(render_target.depth_attach);
+			sg_view_desc view_desc{};
+			view_desc.depth_stencil_attachment.image=render_target.depth_img;
+			render_target.depth_attach=sg_make_view(view_desc);
+		}
+	}
+
+	void setupOutlineRender() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_outline_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(outline_shader_desc(sg_query_backend()));
+		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+		outline_render.pip=sg_make_pipeline(pip_desc);
+
+		float vertexes[4][2]{{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
+		sg_buffer_desc buffer_desc{};
+		buffer_desc.data=SG_RANGE(vertexes);
+		outline_render.vbuf=sg_make_buffer(buffer_desc);
 	}
 
 	//generalized hoberman linkage construction
@@ -121,7 +204,7 @@ public:
 		float inc_angle=2*cmn::Pi/num;
 
 		//allocate and insert into lookup
-		pts.clear();
+		points.clear();
 		vf2d** grid=new vf2d*[3*num];
 		for(int i=0; i<num; i++) {
 			float base_angle=i*inc_angle;
@@ -129,8 +212,8 @@ public:
 			for(int j=0; j<3; j++) {
 				float angle=base_angle+j*inc_angle;
 				pos+=cmn::polar<vf2d>(len, angle);
-				pts.push_back(pos);
-				grid[ix(i, j)]=&pts.back();
+				points.push_back(pos);
+				grid[ix(i, j)]=&points.back();
 			}
 		}
 
@@ -179,6 +262,30 @@ public:
 		while(hoberman_num==6);
 		makeHobermanLinkage(hoberman_num);
 	}
+
+	void setupImGui() {
+		simgui_desc_t simgui_desc{};
+		simgui_desc.ini_filename="assets/imgui.ini";
+		simgui_setup(simgui_desc);
+	}
+
+	void setupIcon() {
+		int width, height, comp;
+		std::uint8_t* pixels8=stbi_load("assets/icon.png", &width, &height, &comp, 4);
+		if(!pixels8) return;
+
+		std::uint32_t* pixels32=new std::uint32_t[width*height];
+		std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
+		stbi_image_free(pixels8);
+
+		sapp_icon_desc icon_desc{};
+		icon_desc.images[0].width=width;
+		icon_desc.images[0].height=height;
+		icon_desc.images[0].pixels.ptr=pixels32;
+		icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
+		sapp_set_icon(&icon_desc);
+		delete[] pixels32;
+	}
 #pragma endregion
 
 	void userCreate() override {
@@ -186,11 +293,19 @@ public:
 
 		setupEnvironment();
 
-		setupScene();
+		setupSampler();
 
 		setupSGL();
 
+		updateRenderTarget();
+
+		setupOutlineRender();
+
+		setupScene();
+
 		setupImGui();
+
+		setupIcon();
 	}
 
 #pragma region UPDATE HELPERS
@@ -204,7 +319,7 @@ public:
 			held_pt=nullptr;
 
 			float record=-1;
-			for(auto& p:pts) {
+			for(auto& p:points) {
 				float d=(p-mouse_pos).mag();
 				if(d<10) {
 					if(record<0||d<record) {
@@ -221,12 +336,12 @@ public:
 	void pushPointsApart() {
 		//accumulate references
 		std::vector<vf2d*> pts_ref;
-		for(auto& p:pts) pts_ref.push_back(&p);
+		for(auto& p:points) pts_ref.push_back(&p);
 
 		shuffle(pts_ref);
 
 		//check against every other
-		float min_dist=2*pt_rad;
+		float min_dist=2*point_rad;
 		for(int i=0; i<pts_ref.size(); i++) {
 			auto& a=*pts_ref[i];
 			for(int j=1+i; j<pts_ref.size(); j++) {
@@ -275,10 +390,16 @@ public:
 	}
 
 	void userInput(const sapp_event* e) override {
+		switch(e->type) {
+			case SAPP_EVENTTYPE_RESIZED:
+				updateRenderTarget();
+				break;
+		}
+
 		simgui_handle_event(e);
 	}
 
-#pragma region RENDER HELPERS
+#pragma region RENDERERS
 	void renderGrid(const sg_color& col) {
 		const float res=25;
 		const float w=3;
@@ -289,8 +410,8 @@ public:
 		for(int i=0; i<num_x; i++) {
 			float x=res*i;
 			vf2d top(x, 0), btm(x, sapp_heightf());
-			if(i%ratio==0) sgl_fill_line(top.x, top.y, btm.x, btm.y, w, col);
-			else sgl_draw_line(top.x, top.y, btm.x, btm.y, col);
+			if(i%ratio==0) cmn::draw_thick_line(top.x, top.y, btm.x, btm.y, w, col);
+			else cmn::draw_line(top.x, top.y, btm.x, btm.y, col);
 		}
 
 		//horizontal lines
@@ -298,38 +419,75 @@ public:
 		for(int j=0; j<num_y; j++) {
 			float y=res*j;
 			vf2d lft(0, y), rgt(sapp_widthf(), y);
-			if(j%ratio==0) sgl_fill_line(lft.x, lft.y, rgt.x, rgt.y, w, col);
-			else sgl_draw_line(lft.x, lft.y, rgt.x, rgt.y, col);
+			if(j%ratio==0) cmn::draw_thick_line(lft.x, lft.y, rgt.x, rgt.y, w, col);
+			else cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, col);
 		}
 	}
+	
+	void renderIntoTarget() {
+		sg_pass pass{};
+		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		pass.action.colors[0].clear_value={0, 0, 0, 0};
+		pass.attachments.colors[0]=render_target.color_attach;
+		pass.attachments.depth_stencil=render_target.depth_attach;
+		sg_begin_pass(pass);
 
-	void renderDistConstraints() {
-		auto renderSlot=[](
-			const cmn::vf2d& a, const cmn::vf2d& b,
-			float r, const sg_color& col
-			) {
-			sgl_fill_circle(a.x, a.y, r, col);
-			sgl_fill_line(a.x, a.y, b.x, b.y, 2*r, col);
-			sgl_fill_circle(b.x, b.y, r, col);
-		};
+		sgl_defaults();
 
-		//outlines
-		if(render_outlines) {
-			const sg_color col{
-				outline_rgb[0],
-				outline_rgb[1],
-				outline_rgb[2],
-				1
-			};
-			for(const auto& d:dist_constraints) {
-				renderSlot(*d.a, *d.b, pt_rad+outline_rad, col);
+		//pixel space
+		sgl_matrix_mode_projection();
+		sgl_load_identity();
+		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
+		sgl_matrix_mode_modelview();
+		sgl_load_identity();
+
+		sgl_load_pipeline(sgl_pip);
+
+		//alpha=0 = background(no outline)
+		cmn::fill_rect(0, 0, sapp_widthf(), sapp_heightf(),
+			{bkgd_rgb[0], bkgd_rgb[1], bkgd_rgb[2], 0}
+		);
+
+		if(render_grid) renderGrid({grid_rgb[0], grid_rgb[1], grid_rgb[2], 0});
+
+		//alpha=1 = foreground(outlines)
+
+		for(const auto& d:dist_constraints) {
+			cmn::draw_thick_line(d.a->x, d.a->y, d.b->x, d.b->y, 2*point_rad, d.col);
+		}
+
+		//render points
+		{
+			const sg_color point_col{point_rgb[0], point_rgb[1], point_rgb[2], 1};
+			for(const auto& p:points) {
+				cmn::fill_circle(p.x,p.y,point_rad,point_col);
 			}
 		}
 
-		//insides
-		for(const auto& d:dist_constraints) {
-			renderSlot(*d.a, *d.b, pt_rad, d.col);
-		}
+		sgl_draw();
+
+		sg_end_pass();
+	}
+
+	void renderOutlines() {
+		sg_apply_pipeline(outline_render.pip);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=outline_render.vbuf;
+		bind.samplers[SMP_b_outline_smp]=sampler;
+		bind.views[VIEW_b_outline_tex]=render_target.color_tex;
+		sg_apply_bindings(bind);
+
+		p_fs_outline_t p_fs_outline{};
+		p_fs_outline.u_resolution[0]=sapp_widthf();
+		p_fs_outline.u_resolution[1]=sapp_heightf();
+		p_fs_outline.u_rad=outline_rad;
+		p_fs_outline.u_col[0]=outline_rgb[0];
+		p_fs_outline.u_col[1]=outline_rgb[1];
+		p_fs_outline.u_col[2]=outline_rgb[2];
+		sg_apply_uniforms(UB_p_fs_outline, SG_RANGE(p_fs_outline));
+
+		sg_draw(0, 4, 1);
 	}
 
 	void renderImGui() {
@@ -342,27 +500,23 @@ public:
 
 		imguiing=false;
 
-		ImGui::Begin("Physics Options");
-		imguiing|=ImGui::IsWindowHovered();
-		ImGui::Checkbox("Push Points Apart", &push_pts_apart);
-		ImGui::SliderFloat("Point Radius", &pt_rad, 5, 10);
-		ImGui::End();
-
-		ImGui::Begin("Scene Options");
-		imguiing|=ImGui::IsWindowHovered();
-		if(ImGui::SliderInt("Make Hoberman", &hoberman_num, 3, 36)) {
-			makeHobermanLinkage(hoberman_num);
-		}
-		ImGui::End();
-
 		ImGui::Begin("Display Options");
 		imguiing|=ImGui::IsWindowHovered();
 		ImGui::Checkbox("Render Grid", &render_grid);
-		ImGui::Checkbox("Render Outlines", &render_outlines);
-		ImGui::SliderFloat("Outline Radius", &outline_rad, 1, 5);
-		ImGui::ColorEdit3("Background", background_rgb);
-		if(render_grid) ImGui::ColorEdit3("Grid", grid_rgb);
-		if(render_outlines) ImGui::ColorEdit3("Outlines", outline_rgb);
+		ImGui::SliderFloat("Outline Radius", &outline_rad, 0, 6);
+		ImGui::ColorEdit3("Background", bkgd_rgb);
+		ImGui::ColorEdit3("Grid Lines", grid_rgb);
+		ImGui::ColorEdit3("Points", point_rgb);
+		ImGui::ColorEdit3("Outlines", outline_rgb);
+		ImGui::End();
+
+		ImGui::Begin("Physics Options");
+		imguiing|=ImGui::IsWindowHovered();
+		ImGui::Checkbox("Push Points Apart", &push_pts_apart);
+		ImGui::SliderFloat("Point Radius", &point_rad, 5, 15);
+		if(ImGui::SliderInt("Make Hoberman Linkage", &hoberman_num, 3, 48)) {
+			makeHobermanLinkage(hoberman_num);
+		}
 		ImGui::End();
 
 		simgui_render();
@@ -370,40 +524,16 @@ public:
 #pragma endregion
 
 	void userRender() override {
+		renderIntoTarget();
+
+		//display pass
 		sg_pass pass{};
+		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		pass.action.colors[0].clear_value={0, 0, 0, 1};
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
-		//begin sgl rendering
-		{
-			sgl_defaults();
-
-			//pixel space
-			sgl_matrix_mode_projection();
-			sgl_load_identity();
-			sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
-			sgl_matrix_mode_modelview();
-			sgl_load_identity();
-
-			//background
-			sgl_fill_rect(0, 0, sapp_width(), sapp_height(), {
-				background_rgb[0],
-				background_rgb[1],
-				background_rgb[2],
-				1
-				});
-
-			if(render_grid) renderGrid({
-				grid_rgb[0],
-				grid_rgb[1],
-				grid_rgb[2],
-				1
-				});
-
-			renderDistConstraints();
-
-			sgl_draw();
-		}
+		renderOutlines();
 
 		renderImGui();
 
@@ -414,6 +544,7 @@ public:
 
 	void userDestroy() override {
 		simgui_shutdown();
+		sgl_shutdown();
 		sg_shutdown();
 	}
 
