@@ -116,6 +116,8 @@ public:
 
 	void setupSampler() {
 		sg_sampler_desc sampler_desc{};
+		sampler_desc.wrap_u=SG_WRAP_CLAMP_TO_EDGE;
+		sampler_desc.wrap_v=SG_WRAP_CLAMP_TO_EDGE;
 		sampler=sg_make_sampler(sampler_desc);
 	}
 
