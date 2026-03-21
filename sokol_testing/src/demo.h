@@ -502,6 +502,10 @@ public:
 		//quad index buffer
 		{
 			std::uint32_t indexes[2][3]{{0, 1, 2}, {1, 3, 2}};
+			sg_buffer_desc buffer_desc{};
+			buffer_desc.usage.index_buffer=true;
+			buffer_desc.data=SG_RANGE(indexes);
+			gizmo.ibuf=sg_make_buffer(buffer_desc);
 		}
 	}
 
