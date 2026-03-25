@@ -220,6 +220,8 @@ public:
 		}
 
 		//determine sizing
+		int old_num_x=num_x;
+		int old_num_y=num_y;
 		if(max_rad<0) {
 			cell_sz=0;
 			num_x=1;
@@ -229,6 +231,9 @@ public:
 			num_x=1+(max.x-min.x)/cell_sz;
 			num_y=1+(max.y-min.y)/cell_sz;
 		}
+
+		//skip if same
+		if(num_x==old_num_x&&num_y==old_num_y) return;
 
 		//free & reallocate
 		delete[] grid_heads;
