@@ -1,227 +1,309 @@
 #pragma once
-#ifndef SOLVER_CLASS_H
-#define SOLVER_CLASS_H
-
-#include "cmn/geom/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
-}
-#include "cmn/utils.h"
+#ifndef SOLVER_STRUCT_H
+#define SOLVER_STRUCT_H
 
 #include "particle.h"
 
+#include <list>
+
+#include <vector>
+
+//for memset
 #include <string>
 
-class Solver {
-	float cell_size=0;
-	int num_cell_x=1;
-	int num_cell_y=1;
+//for swap
+#include <algorithm>
 
-	cmn::AABB bounds;
+struct Constraint {
+	int a=0, b=0;
+	float len=0;
+};
 
+//fisher-yates shuffle
+template<typename T>
+void shuffle(std::vector<T>& vec) {
+	for(int i=vec.size()-1; i>=1; i--) {
+		int j=std::rand()%(i+1);
+		std::swap(vec[i], vec[j]);
+	}
+}
+
+struct Solver {
 	int max_particles=0;
+
+	cmn::vf2d min, max;
+
 	int num_particles=0;
 
-	void updateCellNum();
-	void reallocateCells();
+	float cell_sz=0;
+	int num_x=0, num_y=0;
+
+	int* grid_heads=nullptr;
+
+	int* particle_next=nullptr;
+
+	void fillCells();
+
+	void collideCells(int, int, int, int);
 
 public:
 	Particle* particles=nullptr;
+	std::list<Constraint> constraints;
 
-	int* grid_heads=nullptr;
-	int* particle_next=nullptr;
-
-	Solver() {}
-
-	Solver(int m, cmn::AABB b) {
+	Solver(int m, const cmn::vf2d& n, const cmn::vf2d& x) {
 		max_particles=m;
 		particles=new Particle[max_particles];
 
-		bounds=b;
-
-		reallocateCells();
+		min=n, max=x;
+		updateSizing();
 
 		particle_next=new int[max_particles];
 	}
 
-	//ro3 1
+	//ro3: 1
 	Solver(const Solver& s)=delete;
 
-	//ro3 2
+	//ro3: 2
 	~Solver() {
 		delete[] particles;
 		delete[] grid_heads;
 		delete[] particle_next;
 	}
 
-	//ro3 3
+	//ro3: 3
 	Solver& operator=(const Solver& s)=delete;
 
-	float getCellSize() const { return cell_size; }
-
-	bool cellInRangeX(int i) const { return i>=0&&i<num_cell_x; }
-	bool cellInRangeY(int j) const { return j>=0&&j<num_cell_y; }
-
-	int getNumCellX() const { return num_cell_x; }
-	int getNumCellY() const { return num_cell_y; }
-
-	int cellIX(int i, int j) const { return i+num_cell_x*j; }
-
-	cmn::AABB getBounds() const { return bounds; }
+	int getMaxParticles() const { return max_particles; }
 
 	int getNumParticles() const { return num_particles; }
 
-	void fillCells() {
-		//reset grid heads
-		std::memset(grid_heads, -1, sizeof(int)*num_cell_x*num_cell_y);
+	float getCellSize() const { return cell_sz; }
 
-		//insert particles into grid
+	int getNumX() const { return num_x; }
+	int getNumY() const { return num_y; }
+
+	bool inRangeX(int i) const { return i>=0&&i<num_x; }
+	bool inRangeY(int j) const { return j>=0&&j<num_y; }
+
+	int ix(int i, int j) const { return i+num_x*j; }
+
+	//index of insertion
+	int addParticle(const Particle& p) {
+		//not enough space?
+		if(num_particles==max_particles) return -1;
+
+		float r=p.getRadius();
+
+		//overlapping wall?
+		if(p.pos.x-r<min.x||
+			p.pos.y-r<min.y||
+			p.pos.x+r>max.x||
+			p.pos.y+r>max.y
+			) return -1;
+
+		//overlapping particle?
 		for(int i=0; i<num_particles; i++) {
-			auto& p=particles[i];
-
-			//skip if out of bounds
-			int xi=(p.pos.x-bounds.min.x)/cell_size;
-			int yi=(p.pos.y-bounds.min.y)/cell_size;
-			if(!cellInRangeX(xi)||!cellInRangeY(yi)) continue;
-
-			//add each particle to front of list
-			int ci=cellIX(xi, yi);
-			particle_next[i]=grid_heads[ci];
-			grid_heads[ci]=i;
-		}
-	}
-
-	void addParticle(const Particle& o) {
-		//return if too many
-		if(num_particles==max_particles) return;
-
-		//return if touching outside
-		cmn::AABB box=bounds;
-		box.min+=o.rad, box.max-=o.rad;
-		if(!box.contains(o.pos)) return;
-
-		//return if overlapping
-		for(int i=0; i<num_particles; i++) {
-			const auto& p=particles[i];
-			if((o.pos-p.pos).mag()<o.rad+p.rad) return;
+			cmn::vf2d sub=particles[i].pos-p.pos;
+			float t_rad=particles[i].getRadius()+r;
+			if(sub.mag_sq()<t_rad*t_rad) return -1;
 		}
 
 		//add at end
-		particles[num_particles]=o;
+		particles[num_particles]=p;
 		num_particles++;
 
-		//if new largest,
-		if(2*o.rad>cell_size) {
-			//update spacing
-			cell_size=2*o.rad;
-			updateCellNum();
-			reallocateCells();
-		}
+		return num_particles-1;
 	}
 
 	void removeParticle(int id) {
+		//outside range
 		if(id<0||id>=num_particles) return;
 
-		float rad=particles[id].rad;
+		//decrease count & swap with last
+		int last=--num_particles;
+		particles[id]=particles[last];
 
-		//decrease count & shift after back
-		num_particles--;
-		for(int i=id; i<num_particles; i++) {
-			particles[i]=particles[1+i];
+		//check constraints
+		for(auto it=constraints.begin(); it!=constraints.end();) {
+			auto& c=*it;
+
+			//remove connected
+			if(c.a==id||c.b==id) {
+				it=constraints.erase(it);
+				continue;
+			}
+
+			//fix moved
+			if(c.a==last) c.a=id;
+			if(c.b==last) c.b=id;
+
+			it++;
 		}
-
-		float record=-1;
-		for(int i=0; i<num_particles; i++) {
-			const auto& p=particles[i];
-			//there is a bigger particle
-			if(p.rad>rad) return;
-			if(p.rad>record) record=p.rad;
-		}
-
-		if(record<0) {
-			//that was last particle
-			cell_size=0;
-			num_cell_x=1;
-			num_cell_y=1;
-		} else {
-			//that was biggest particle
-			cell_size=2*record;
-			updateCellNum();
-		}
-		reallocateCells();
-
-		return;
 	}
 
-	int collideCells(int i1, int j1, int i2, int j2) {
-		int checks=0;
+	void clear() {
+		num_particles=0;
+		constraints.clear();
+	}
 
-		//nested linked list traversal
-		int s1=grid_heads[cellIX(i1, j1)], s2=grid_heads[cellIX(i2, j2)];
-		for(int p1=s1; p1!=-1; p1=particle_next[p1]) {
-			for(int p2=s2; p2!=-1; p2=particle_next[p2]) {
-				//dont check self
-				if(p2==p1) continue;
+	void addSolid(const cmn::vf2d& start, const cmn::vf2d& end, float rad, float m) {
+		//determine spacing
+		float adj=2*rad+m;
+		int w=1+(end.x-start.x)/adj;
+		int h=1+(end.y-start.y)/adj;
 
-				Particle::checkCollide(particles[p1], particles[p2]);
+		//flattened index helper
+		auto gix=[&] (int i, int j) { return i+w*j; };
 
-				checks++;
+		//add particles & store their indexes
+		int* grid=new int[w*h];
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				float x=start.x+adj*i;
+				float y=start.y+adj*j;
+				grid[gix(i, j)]=addParticle(Particle({x, y}, rad));
 			}
 		}
 
-		return checks;
+		//connect grid with diagonals
+		float diag=adj*std::sqrt(2);
+		std::vector<Constraint> new_constraints;
+		for(int i=0; i<w; i++) {
+			for(int j=0; j<h; j++) {
+				int curr=grid[gix(i, j)];
+				int rgt=i<w-1?grid[gix(i+1, j)]:-1;
+				int btm=j<h-1?grid[gix(i, j+1)]:-1;
+				int btm_rgt=(i<w-1)&&(j<h-1)?grid[gix(i+1, j+1)]:-1;
+				if(curr!=-1) {
+					if(rgt!=-1) new_constraints.push_back({curr, rgt, adj});
+					if(btm!=-1) new_constraints.push_back({curr, btm, adj});
+					if(btm_rgt!=-1) new_constraints.push_back({curr, btm_rgt, diag});
+				}
+				if(rgt!=-1&&btm!=-1) new_constraints.push_back({rgt, btm, diag});
+			}
+		}
+
+		delete[] grid;
+
+		//add them in random order
+		shuffle(new_constraints);
+		constraints.insert(constraints.end(),
+			new_constraints.begin(), new_constraints.end()
+		);
 	}
 
-	int solveCollisions() {
-		fillCells();
+	void updateConsraints() {
+		for(const auto& c:constraints) {
+			auto& a=particles[c.a].pos;
+			auto& b=particles[c.b].pos;
 
-		int checks=0;
+			//separating axis
+			cmn::vf2d ab=b-a;
+			float mag=ab.mag();
+
+			//safe norm
+			cmn::vf2d norm=mag==0?cmn::vf2d(1, 0):ab/mag;
+
+			//push apart
+			float diff=(mag-c.len)/2;
+			a+=diff*norm;
+			b-=diff*norm;
+		}
+	}
+
+	void updateSizing() {
+		//find largest particle
+		float max_rad=-1;
+		for(int i=0; i<num_particles; i++) {
+			const auto& r=particles[i].getRadius();
+			if(r>max_rad) max_rad=r;
+		}
+
+		//determine sizing
+		if(max_rad<0) {
+			cell_sz=0;
+			num_x=1;
+			num_y=1;
+		} else {
+			cell_sz=2*max_rad;
+			num_x=1+(max.x-min.x)/cell_sz;
+			num_y=1+(max.y-min.y)/cell_sz;
+		}
+
+		//free & reallocate
+		delete[] grid_heads;
+		grid_heads=new int[num_x*num_y];
+	}
+
+	void solveCollisions() {
+		fillCells();
 
 		//check self & half of neighbors to avoid redundancy
 		const int di[5]{0, 1, -1, 0, 1};
 		const int dj[5]{0, 0, 1, 1, 1};
 
 		//for each cell
-		for(int i=0; i<num_cell_x; i++) {
-			for(int j=0; j<num_cell_y; j++) {
+		for(int i=0; i<num_x; i++) {
+			for(int j=0; j<num_y; j++) {
 				for(int d=0; d<5; d++) {
 					//skip if out of range
 					int ci=i+di[d], cj=j+dj[d];
-					if(!cellInRangeX(ci)||!cellInRangeY(cj)) continue;
+					if(!inRangeX(ci)||!inRangeY(cj)) continue;
 
-					checks+=collideCells(i, j, ci, cj);
+					collideCells(i, j, ci, cj);
 				}
 			}
 		}
-
-		return checks;
 	}
 
-	void accelerate(const vf2d& a) {
+	void accelerate(const cmn::vf2d& a) {
 		for(int i=0; i<num_particles; i++) {
 			auto& p=particles[i];
-			p.applyForce(p.mass*a);
+			p.applyForce(p.getMass()*a);
 		}
 	}
 
-	void updateKinematics(float dt) {
+	void integrateParticles(float dt) {
 		for(int i=0; i<num_particles; i++) {
 			auto& p=particles[i];
 
 			p.update(dt);
 
-			p.keepIn(bounds);
+			p.keepInsideRegion(min, max);
 		}
 	}
 };
 
-void Solver::updateCellNum() {
-	num_cell_x=1+(bounds.max.x-bounds.min.x)/cell_size;
-	num_cell_y=1+(bounds.max.y-bounds.min.y)/cell_size;
+void Solver::fillCells() {
+	//reset grid heads
+	std::memset(grid_heads, -1, sizeof(int)*num_x*num_y);
+
+	//insert particles into grid
+	for(int i=0; i<num_particles; i++) {
+		auto& p=particles[i];
+
+		//skip if out of bounds
+		int xi=(p.pos.x-min.x)/cell_sz;
+		int yi=(p.pos.y-min.y)/cell_sz;
+		if(!inRangeX(xi)||!inRangeY(yi)) continue;
+
+		//add each particle to front of list
+		int ci=ix(xi, yi);
+		particle_next[i]=grid_heads[ci];
+		grid_heads[ci]=i;
+	}
 }
 
-void Solver::reallocateCells() {
-	delete[] grid_heads;
-	grid_heads=new int[num_cell_x*num_cell_y];
+void Solver::collideCells(int i1, int j1, int i2, int j2) {
+	//nested linked list traversal
+	int s1=grid_heads[ix(i1, j1)], s2=grid_heads[ix(i2, j2)];
+	for(int p1=s1; p1!=-1; p1=particle_next[p1]) {
+		for(int p2=s2; p2!=-1; p2=particle_next[p2]) {
+			//dont check self
+			if(p2==p1) continue;
+
+			Particle::checkCollide(particles[p1], particles[p2]);
+		}
+	}
 }
 #endif

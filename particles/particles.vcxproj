@@ -141,7 +141,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -154,14 +154,15 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\chart.h" />
     <ClInclude Include="src\particle.h" />
     <ClInclude Include="src\particles_ui.h" />
+    <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\solver.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\cat.png" />
-    <Image Include="assets\gradient.png" />
+    <None Include="assets\imgui.ini" />
+    <None Include="compile_shaders.bat" />
+    <None Include="src\shd.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

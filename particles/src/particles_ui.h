@@ -1,438 +1,522 @@
-#define OLC_PGE_APPLICATION
-#include "olc/include/olcPixelGameEngine.h"
-using olc::vf2d;
+#ifdef __EMSCRIPTEN__
+#define SOKOL_GLES3
+#else
+#define SOKOL_GLCORE
+#endif
+#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_gfx.h"
+#include "sokol/include/sokol_glue.h"
+
+#include "shd.glsl.h"
 
 #include "solver.h"
 
-#include "chart.h"
+//for uint32_t
+#include <cstdint>
 
-struct ParticlesUI : olc::PixelGameEngine {
-	ParticlesUI() {
-		sAppName="Particles";
+//for time
+#include <ctime>
+
+#include "imgui/include/imgui_singleheader.h"
+#include "sokol/include/sokol_imgui.h"
+
+using cmn::vf2d;
+
+//https://www.rapidtables.com/convert/color/hsv-to-rgb.html
+static void hsv2rgb(
+	int hue, float saturation, float value,
+	float& r, float& g, float& b
+) {
+	float c=value*saturation;
+	float x=c*(1-std::abs(1-std::fmod(hue/60.f, 2)));
+	float m=value-c;
+	r=0, g=0, b=0;
+	switch(hue/60) {
+		case 0: r=c, g=x, b=0; break;
+		case 1: r=x, g=c, b=0; break;
+		case 2: r=0, g=c, b=x; break;
+		case 3: r=0, g=x, b=c; break;
+		case 4: r=x, g=0, b=c; break;
+		case 5: r=c, g=0, b=x; break;
 	}
+	r+=m, g+=m, b+=m;
+}
 
-	//sprite stuff
-	olc::Renderable prim_rect, prim_circ;
+class ParticlesUI : public cmn::SokolEngine {
+	sg_sampler sampler{};
 
-	//ui stuff
-	vf2d mouse_pos;
+	struct inst_data_t {
+		float pos[2];
+		float size[2];
+		float col[3];
+	};
+	struct {
+		sg_pipeline pip{};
 
-	float selection_radius=35;
+		sg_buffer vbuf{};
+		sg_buffer ibuf{};
 
-	bool adding=false, removing=false;
+		sg_view tex{};
 
-	vf2d* bulk_start=nullptr;
+		const int max_num=20000;
+		inst_data_t* instances=nullptr;
+	} particle_render;
 
-	std::list<int> grab_particles;
+	struct {
+		sg_pipeline pip{};
 
-	int num_checks=0;
+		sg_buffer vbuf{};
+	} line_render;
 
-	//simulation
-	bool update_phys=true;
-	Solver* solver=nullptr;
+	vf2d cam;
+	float zoom=1;
+
+	vf2d mouse_scr;
+	vf2d prev_mouse_scr;
+	vf2d mouse_wld;
 
 	const float time_step=1/120.f;
-	const int num_sub_steps=3;
-	float sub_time_step=time_step/num_sub_steps;
+	const int num_sub_steps=6;
 	float update_timer=0;
 
+	Solver solver=Solver(particle_render.max_num, {0, 0}, {720, 400});
 	const vf2d gravity{0, 100};
 
-	//graphics stuff
-	bool show_grid=false;
-	bool show_energy=false;
+	bool imguiing=false;
 
-	bool show_image=true;
-	olc::Sprite* image_spr=nullptr;
-	olc::Sprite* gradient_spr=nullptr;
+	bool adding=false, removing=false;
+	const float selection_radius=30;
 
-	Chart energy_chart;
-	float energy_chart_timer=0;
+	vf2d* solid_st=nullptr;
 
-	bool help_menu=false;
+	int held_ptc=-1;
 
-	bool OnUserCreate() override {
-		//make some "primitives" to draw with
-		prim_rect.Create(1, 1);
-		prim_rect.Sprite()->SetPixel(0, 0, olc::WHITE);
-		prim_rect.Decal()->Update();
-		{
-			int sz=1024;
-			prim_circ.Create(sz, sz);
-			SetDrawTarget(prim_circ.Sprite());
-			Clear(olc::BLANK);
-			FillCircle(sz/2, sz/2, sz/2);
-			SetDrawTarget(nullptr);
-			prim_circ.Decal()->Update();
-		}
+	bool paused=false;
 
-		//initialize solver
-		solver=new Solver(10000, {vf2d(0, 0), vf2d(ScreenWidth(), ScreenHeight())});
-
-		//load background image
-		image_spr=new olc::Sprite("assets/cat.png");
-
-		//density gradient
-		gradient_spr=new olc::Sprite("assets/gradient.png");
-
-		//setup energy chart
-		{
-			float w=200;
-			float h=140;
-			float margin=30;
-			vf2d tl(ScreenWidth()-w-margin, margin);
-			vf2d br(ScreenWidth()-margin, h+margin);
-			energy_chart=Chart(250, {tl, br});
-		}
-
-		return true;
+public:
+#pragma region SETUP_HELPERS
+	void setupEnvironment() {
+		sg_desc desc{};
+		sg_setup(desc);
 	}
 
-	bool OnUserDestroy() override {
-		delete image_spr;
-		delete gradient_spr;
+	void setupSampler() {
+		sg_sampler_desc sampler_desc{};
+		sampler=sg_make_sampler(sampler_desc);
+	}
 
-		delete solver;
+	void setupParticleRender() {
+		//instanced tristrip pipeline
+		sg_pipeline_desc pip_desc{};
+		pip_desc.shader=sg_make_shader(quad_shader_desc(sg_query_backend()));
+		pip_desc.layout.buffers[1].step_func=SG_VERTEXSTEP_PER_INSTANCE;
+		pip_desc.layout.attrs[ATTR_quad_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_quad_i_uv].buffer_index=0;
+		pip_desc.layout.attrs[ATTR_quad_inst_pos].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_quad_inst_pos].buffer_index=1;
+		pip_desc.layout.attrs[ATTR_quad_inst_size].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.layout.attrs[ATTR_quad_inst_size].buffer_index=1;
+		pip_desc.layout.attrs[ATTR_quad_inst_col].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_quad_inst_col].buffer_index=1;
+		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+		//with alpha blending
+		pip_desc.colors[0].blend.enabled=true;
+		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
+		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
+		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		particle_render.pip=sg_make_pipeline(pip_desc);
 
-		return true;
+		//quad vertex buffer
+		float vertexes[4][2]{{0, 0}, {1, 0}, {0, 1}, {1, 1}};
+		sg_buffer_desc vbuf_desc{};
+		vbuf_desc.data=SG_RANGE(vertexes);
+		particle_render.vbuf=sg_make_buffer(vbuf_desc);
+
+		//instance data
+		particle_render.instances=new inst_data_t[particle_render.max_num];
+
+		//instance buffer
+		sg_buffer_desc ibuf_desc{};
+		ibuf_desc.size=sizeof(inst_data_t)*particle_render.max_num;
+		ibuf_desc.usage.stream_update=true;
+		particle_render.ibuf=sg_make_buffer(ibuf_desc);
+
+		//circle texture
+		const int sz=1024;
+		std::uint32_t* pixels=new std::uint32_t[sz*sz];
+		for(int i=0; i<sz; i++) {
+			for(int j=0; j<sz; j++) {
+				int dx=i-sz/2, dy=j-sz/2;
+				bool b=dx*dx+dy*dy<sz*sz/4;
+				pixels[i+j*sz]=b?0xFFFFFFFF:0x00000000;
+			}
+		}
+		sg_image_desc image_desc{};
+		image_desc.width=sz;
+		image_desc.height=sz;
+		image_desc.data.mip_levels[0].ptr=pixels;
+		image_desc.data.mip_levels[0].size=sizeof(std::uint32_t)*sz*sz;
+		sg_image image=sg_make_image(image_desc);
+		delete[] pixels;
+		sg_view_desc view_desc{};
+		view_desc.texture.image=image;
+		particle_render.tex=sg_make_view(view_desc);
+	}
+
+	void setupLineRender() {
+		//instanced tristrip pipeline
+		sg_pipeline_desc pip_desc{};
+		pip_desc.shader=sg_make_shader(line_shader_desc(sg_query_backend()));
+		pip_desc.layout.attrs[ATTR_line_i_t].format=SG_VERTEXFORMAT_FLOAT;
+		pip_desc.primitive_type=SG_PRIMITIVETYPE_LINES;
+		line_render.pip=sg_make_pipeline(pip_desc);
+
+		//line vertex buffer
+		float vertexes[2]{0, 1};
+		sg_buffer_desc vbuf_desc{};
+		vbuf_desc.data=SG_RANGE(vertexes);
+		line_render.vbuf=sg_make_buffer(vbuf_desc);
+	}
+
+	void setupImGui() {
+		simgui_desc_t simgui_desc{};
+		simgui_desc.ini_filename="assets/imgui.ini";
+		simgui_setup(simgui_desc);
+	}
+#pragma endregion
+
+	void userCreate() override {
+		setupEnvironment();
+
+		setupSampler();
+
+		setupParticleRender();
+
+		setupLineRender();
+
+		setupImGui();
+
+		zoomToFit();
+	}
+
+	void userDestroy() override {
+		simgui_shutdown();
+		sg_shutdown();
+	}
+
+	void userInput(const sapp_event* e) override {
+		simgui_handle_event(e);
 	}
 
 #pragma region UPDATE HELPERS
-	void handleAddActionUpdate(float dt) {
-		//add as many as possible(ish)
-		for(int i=0; i<100; i++) {
-			float offset_rad=cmn::randFloat(selection_radius);
-			float offset_angle=cmn::randFloat(2*cmn::Pi);
-			vf2d offset=offset_rad*vf2d(std::cos(offset_angle), std::sin(offset_angle));
-
-			//random size and velocity
-			float rad=cmn::randFloat(3, 11);
-			Particle temp(mouse_pos+offset, rad);
-			float speed=dt*cmn::randFloat(35);
-			float vel_angle=cmn::randFloat(2*cmn::Pi);
-			temp.oldpos-=speed*vf2d(std::cos(vel_angle), std::sin(vel_angle));
-
-			//random color
-			temp.col=olc::Pixel(std::rand()%256, std::rand()%256, std::rand()%256);
-
-			//try to add particle
-			solver->addParticle(temp);
-		}
+	vf2d wld2scr(const vf2d& w) const {
+		vf2d scr_sz(sapp_widthf(), sapp_heightf());
+		return scr_sz/2+zoom*(w-cam);
 	}
 
-	void handleBulkActionBegin() {
-		bulk_start=new vf2d(mouse_pos);
+	vf2d scr2wld(const vf2d& s) const {
+		vf2d scr_sz(sapp_widthf(), sapp_heightf());
+		return cam+(s-scr_sz/2)/zoom;
 	}
 
-	void handleBulkActionEnd() {
-		if(!bulk_start) return;
+	void zoomToFit() {
+		vf2d scr_sz(sapp_widthf(), sapp_heightf());
 
-		//find bounds
-		cmn::AABB box;
-		box.fitToEnclose(*bulk_start);
-		box.fitToEnclose(mouse_pos);
-		vf2d size=box.max-box.min;
+		//scale to fit
+		int margin=10;
+		vf2d sz=solver.max-solver.min;
+		vf2d scl=(scr_sz-2*margin)/sz;
+		zoom=scl.x<scl.y?scl.x:scl.y;
 
-		//determine spacing
-		float max_rad=5.5f;
-		int num_x=1+size.x/max_rad/2;
-		int num_y=1+size.y/max_rad/2;
-
-		//grid of random particles
-		for(int i=0; i<num_x; i++) {
-			float u=i/(num_x-1.f);
-			for(int j=0; j<num_y; j++) {
-				float v=j/(num_y-1.f);
-				Particle temp(box.min+size*vf2d(u, v), cmn::randFloat(2.5f, max_rad));
-
-				//random color
-				temp.col=olc::Pixel(std::rand()%256, std::rand()%256, std::rand()%256);
-
-				solver->addParticle(temp);
-			}
-		}
-
-		delete bulk_start;
-		bulk_start=nullptr;
-	}
-
-	void handleGrabActionBegin() {
-		grab_particles.clear();
-
-		for(int i=0; i<solver->getNumParticles(); i++) {
-			float d_sq=(mouse_pos-solver->particles[i].pos).mag2();
-			if(d_sq<selection_radius*selection_radius) {
-				grab_particles.push_back(i);
-			}
-		}
-	}
-
-	//apply spring force
-	void handleGrabActionUpdate() {
-		for(const auto& i:grab_particles) {
-			auto& p=solver->particles[i];
-			//F=kx
-			float k=13*p.mass;
-			vf2d sub=mouse_pos-p.pos;
-			p.applyForce(k*sub);
-		}
-	}
-
-	void handleGrabActionEnd() {
-		grab_particles.clear();
-	}
-
-	void handleRemoveActionUpdate() {
-		grab_particles.clear();
-
-		for(int i=0; i<solver->getNumParticles(); i++) {
-			const auto& p=solver->particles[i];
-			if((mouse_pos-p.pos).mag()<selection_radius) {
-				solver->removeParticle(i);
-			}
-		}
+		//shift world center to scr center
+		cam+=(solver.min+solver.max)/2-scr2wld(scr_sz/2);
 	}
 
 	void handleUserInput(float dt) {
-		//add random particles in radius around mouse
-		adding=GetKey(olc::Key::A).bHeld;
-		if(adding) handleAddActionUpdate(dt);
+		if(imguiing) return;
 
-		//add grid of particles inside dragged rectangle
-		const auto bulk_action=GetKey(olc::Key::B);
-		if(bulk_action.bPressed) handleBulkActionBegin();
-		if(bulk_action.bReleased) handleBulkActionEnd();
-
-		//remove particles inside selection radius
-		removing=GetKey(olc::Key::X).bHeld;
-		if(removing) handleRemoveActionUpdate();
-
-		//select all particles inside selection radius
-		const auto grab_action=GetMouse(olc::Mouse::LEFT);
-		if(grab_action.bPressed) handleGrabActionBegin();
-		if(grab_action.bHeld) handleGrabActionUpdate();
-		if(grab_action.bReleased) handleGrabActionEnd();
-
-		//debug toggles
-		if(GetKey(olc::Key::G).bPressed) show_grid^=true;
-		if(GetKey(olc::Key::E).bPressed) {
-			show_energy^=true;
-
-			energy_chart.reset();
+		//panning
+		if(getMouse(SAPP_MOUSEBUTTON_MIDDLE).held) {
+			cam-=(mouse_scr-prev_mouse_scr)/zoom;
 		}
-		if(GetKey(olc::Key::I).bPressed) show_image^=true;
-		if(GetKey(olc::Key::P).bPressed) update_phys^=true;
-		if(GetKey(olc::Key::H).bPressed) help_menu^=true;
+
+		//zooming
+		{
+			//wld mouse before zoom
+			vf2d before=scr2wld(mouse_scr);
+
+			//apply zoom
+			float factor=1+dt;
+			if(getKey(SAPP_KEYCODE_Q).held) zoom*=factor;
+			if(getKey(SAPP_KEYCODE_E).held) zoom/=factor;
+
+			//wld mouse after zoom
+			vf2d after=scr2wld(mouse_scr);
+
+			//pan so wld mouse stays fixed
+			cam+=before-after;
+		}
+
+		if(getKey(SAPP_KEYCODE_Z).pressed) zoomToFit();
+
+		//drag particle
+		const auto drag_action=getMouse(SAPP_MOUSEBUTTON_LEFT);
+		if(drag_action.pressed) {
+			for(int i=0; i<solver.getNumParticles(); i++) {
+				const auto& p=solver.particles[i];
+				if((p.pos-mouse_wld).mag()<p.getRadius()) {
+					held_ptc=i;
+					break;
+				}
+			}
+		}
+		if(drag_action.released) held_ptc=-1;
+
+		//add particles in circle
+		adding=getKey(SAPP_KEYCODE_A).held;
+		if(adding) {
+			for(int i=0; i<100; i++) {
+				float dist=cmn::randFloat(selection_radius);
+				float angle=cmn::randFloat(2*cmn::Pi);
+				vf2d offset=cmn::polar<vf2d>(dist, angle);
+				float rad=cmn::randFloat(2, 4);
+				Particle p(scr2wld(mouse_scr+offset), rad);
+				p.r=cmn::randFloat();
+				p.g=cmn::randFloat();
+				p.b=cmn::randFloat();
+				solver.addParticle(p);
+			}
+		}
+
+		//remove particles in circle
+		removing=getKey(SAPP_KEYCODE_X).held;
+		if(removing) {
+			held_ptc=-1;
+
+			for(int i=0; i<solver.getNumParticles(); i++) {
+				const auto& p=wld2scr(solver.particles[i].pos);
+				if((p-mouse_scr).mag()<selection_radius) {
+					solver.removeParticle(i);
+					i=0;
+				}
+			}
+		}
+		
+		//drag solid
+		const auto solid_action=getKey(SAPP_KEYCODE_S);
+		if(solid_action.pressed) solid_st=new vf2d(mouse_wld);
+		if(solid_action.released) {
+			vf2d min=*solid_st;
+			vf2d max=mouse_wld;
+			if(min.x>max.x) std::swap(min.x, max.x);
+			if(min.y>max.y) std::swap(min.y, max.y);
+
+			float rad=cmn::randFloat(6, 7);
+			float m=cmn::randFloat(.5f, 1);
+			solver.addSolid(min, max, rad, m);
+
+			delete solid_st;
+			solid_st=nullptr;
+		}
+
+		//play/pause toggle
+		if(getKey(SAPP_KEYCODE_SPACE).pressed) paused^=true;
 	}
 
 	void handlePhysics(float dt) {
 		//ensure similar update across multiple framerates
 		update_timer+=dt;
 		while(update_timer>time_step) {
-			num_checks=0;
+			solver.updateSizing();
+
+			solver.accelerate(gravity);
+
+			solver.integrateParticles(time_step);
 
 			for(int i=0; i<num_sub_steps; i++) {
-				num_checks+=solver->solveCollisions();
-
-				solver->accelerate(gravity);
-
-				solver->updateKinematics(sub_time_step);
+				if(held_ptc!=-1) {
+					solver.particles[held_ptc].pos=mouse_wld;
+				}
+				solver.updateConsraints();
+				solver.solveCollisions();
 			}
 
 			update_timer-=time_step;
 		}
-
-		//update energy chart
-		if(energy_chart_timer<0) {
-			energy_chart_timer+=.05f;
-
-			if(show_energy) {
-				float total_energy=0;
-				for(int i=0; i<solver->getNumParticles(); i++) {
-					const auto& p=solver->particles[i];
-
-					//mgh
-					float h=solver->getBounds().max.y-p.pos.y;
-					total_energy+=p.mass*gravity.mag()*h;
-
-					//1/2mv^2
-					vf2d vel=p.pos-p.oldpos;
-					total_energy+=.5f*p.mass*vel.dot(vel);
-				}
-				energy_chart.update(total_energy);
-			}
-		}
-		energy_chart_timer-=dt;
 	}
 #pragma endregion
 
-	void update(float dt) {
-		//basic timestep clamping
-		if(dt>1/30.f) dt=1/30.f;
-		mouse_pos=GetMousePos();
+	void userUpdate(float dt) override {
+		prev_mouse_scr=mouse_scr;
+		mouse_scr.x=mouse_x;
+		mouse_scr.y=mouse_y;
+		mouse_wld=scr2wld(mouse_scr);
 
 		handleUserInput(dt);
 
-		if(update_phys) handlePhysics(dt);
+		if(!paused) handlePhysics(dt);
 	}
 
 #pragma region RENDER HELPERS
-	void DrawThickLineDecal(const vf2d& a, const vf2d& b, float w, olc::Pixel col) {
-		vf2d sub=b-a;
-		float len=sub.mag();
-		vf2d tang=sub.perp()/len;
+	void renderParticles() {
+		int num_ptc=solver.getNumParticles();
+		if(!num_ptc) return;
 
-		float angle=std::atan2(sub.y, sub.x);
-		DrawRotatedDecal(a-.5f*w*tang, prim_rect.Decal(), angle, {0, 0}, {len, w}, col);
+		//update instance data
+		for(int i=0; i<num_ptc; i++) {
+			const auto& p=solver.particles[i];
+			const auto& r=p.getRadius();
+			auto& inst_data=particle_render.instances[i];
+			inst_data.pos[0]=p.pos.x-r;
+			inst_data.pos[1]=p.pos.y-r;
+			inst_data.size[0]=2*r;
+			inst_data.size[1]=2*r;
+			inst_data.col[0]=p.r;
+			inst_data.col[1]=p.g;
+			inst_data.col[2]=p.b;
+		}
+		sg_range range{};
+		range.ptr=particle_render.instances;
+		range.size=sizeof(inst_data_t)*num_ptc;
+		sg_update_buffer(particle_render.ibuf, range);
+
+		sg_apply_pipeline(particle_render.pip);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=particle_render.vbuf;
+		bind.vertex_buffers[1]=particle_render.ibuf;
+		bind.samplers[SMP_b_quad_smp]=sampler;
+		bind.views[VIEW_b_quad_tex]=particle_render.tex;
+		sg_apply_bindings(bind);
+
+		p_vs_quad_t p_vs_quad{};
+		p_vs_quad.u_resolution[0]=sapp_widthf();
+		p_vs_quad.u_resolution[1]=sapp_heightf();
+		p_vs_quad.u_cam[0]=cam.x;
+		p_vs_quad.u_cam[1]=cam.y;
+		p_vs_quad.u_zoom=zoom;
+		sg_apply_uniforms(UB_p_vs_quad, SG_RANGE(p_vs_quad));
+
+		sg_draw(0, 4, num_ptc);
 	}
 
-	void FillCircleDecal(const vf2d& pos, float rad, olc::Pixel col) {
-		vf2d offset(rad, rad);
-		vf2d scale{2*rad/prim_circ.Sprite()->width, 2*rad/prim_circ.Sprite()->height};
-		DrawDecal(pos-offset, prim_circ.Decal(), scale, col);
+	//screen space
+	void drawLine(const vf2d& a, const vf2d& b, const sg_color& col) {
+		sg_apply_pipeline(line_render.pip);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=line_render.vbuf;
+		sg_apply_bindings(bind);
+
+		p_vs_line_t p_vs_line{};
+		p_vs_line.u_a[0]=a.x/sapp_widthf();
+		p_vs_line.u_a[1]=a.y/sapp_heightf();
+		p_vs_line.u_b[0]=b.x/sapp_widthf();
+		p_vs_line.u_b[1]=b.y/sapp_heightf();
+		p_vs_line.u_col[0]=col.r;
+		p_vs_line.u_col[1]=col.g;
+		p_vs_line.u_col[2]=col.b;
+		sg_apply_uniforms(UB_p_vs_line, SG_RANGE(p_vs_line));
+
+		sg_draw(0, 2, 1);
 	}
 
-	void DrawThickCircleDecal(const vf2d& pos, float rad, float w, const olc::Pixel& col) {
+	//between two screen space pts
+	void drawRect(const vf2d& v0, const vf2d& v3, const sg_color& col) {
+		vf2d v1(v3.x, v0.y), v2(v0.x, v3.y);
+		drawLine(v0, v1, col);
+		drawLine(v0, v2, col);
+		drawLine(v1, v3, col);
+		drawLine(v2, v3, col);
+	}
+
+	//screen space
+	void drawCircle(const vf2d& ctr, float rad, const sg_color& col) {
 		const int num=32;
 		vf2d first, prev;
 		for(int i=0; i<num; i++) {
 			float angle=2*cmn::Pi*i/num;
-			vf2d curr(pos.x+rad*std::cos(angle), pos.y+rad*std::sin(angle));
-			FillCircleDecal(curr, .5f*w, col);
+			vf2d curr=ctr+cmn::polar<vf2d>(rad, angle);
 			if(i==0) first=curr;
-			else DrawThickLineDecal(prev, curr, w, col);
+			else drawLine(prev, curr, col);
 			prev=curr;
 		}
-		DrawThickLineDecal(first, prev, w, col);
+		drawLine(prev, first, col);
 	}
 
-	//show solver hash grid
-	void renderGrid() {
-		//vertical lines
-		for(int i=0; i<=solver->getNumCellX(); i++) {
-			float x=solver->getCellSize()*i;
-			vf2d top(x, 0), btm(x, ScreenHeight());
-			if(i%5==0) DrawThickLineDecal(top, btm, 2, olc::GREY);
-			else DrawLineDecal(top, btm, olc::GREY);
-		}
+	void renderImGui() {
+		simgui_frame_desc_t simgui_frame_desc{};
+		simgui_frame_desc.width=sapp_width();
+		simgui_frame_desc.height=sapp_height();
+		simgui_frame_desc.delta_time=sapp_frame_duration();
+		simgui_frame_desc.dpi_scale=sapp_dpi_scale();
+		simgui_new_frame(simgui_frame_desc);
 
-		//horizontal lines
-		for(int j=0; j<=solver->getNumCellY(); j++) {
-			float y=solver->getCellSize()*j;
-			vf2d lft(0, y), rgt(ScreenWidth(), y);
-			if(j%5==0) DrawThickLineDecal(lft, rgt, 2, olc::GREY);
-			else DrawLineDecal(lft, rgt, olc::GREY);
-		}
-	}
+		imguiing=false;
 
-	//addition box
-	void renderBulkAction() {
-		cmn::AABB box;
-		box.fitToEnclose(*bulk_start);
-		box.fitToEnclose(mouse_pos);
-		vf2d tr(box.max.x, box.min.y);
-		vf2d bl(box.min.x, box.max.y);
-		DrawLineDecal(box.min, tr, olc::BLUE);
-		DrawLineDecal(tr, box.max, olc::BLUE);
-		DrawLineDecal(box.max, bl, olc::BLUE);
-		DrawLineDecal(bl, box.min, olc::BLUE);
-	}
-
-	//show grab particle links
-	void renderGrabAction() {
-		for(const auto& i:grab_particles) {
-			const auto& p=solver->particles[i];
-			DrawLineDecal(mouse_pos, p.pos, olc::WHITE);
-		}
-	}
-
-	void renderParticles() {
-		for(int i=0; i<solver->getNumParticles(); i++) {
-			const auto& p=solver->particles[i];
-			olc::Pixel col=p.col;
-			if(show_image) {
-				//particle position to sample texture
-				float u=p.pos.x/ScreenWidth();
-				float v=p.pos.y/ScreenHeight();
-				col=image_spr->Sample(u, v);
+		ImGui::Begin("Options");
+		imguiing|=ImGui::IsWindowHovered();
+		ImGui::Text("%d Particles", solver.getNumParticles());
+		if(ImGui::Button("Rainbow Recolor")) {
+			for(int i=0; i<solver.getNumParticles(); i++) {
+				auto& p=solver.particles[i];
+				int hue=360*(p.pos.x-solver.min.x)/(solver.max.x-solver.min.x);
+				float value=(p.pos.y-solver.min.y)/(solver.max.y-solver.min.y);
+				hsv2rgb(hue, 1, value, p.r, p.g, p.b);
 			}
-			FillCircleDecal(p.pos, p.rad, col);
 		}
-	}
+		if(ImGui::Button("Clear")) solver.clear();
+		ImGui::End();
 
-	void renderEnergyChart() {
-		const auto& box=energy_chart.bounds;
-		const vf2d size=box.max-box.min;
-		FillRectDecal(box.min-2, size+4, olc::BLACK);
-		FillRectDecal(box.min, size, olc::GREY);
+		ImGui::Begin("Keybinds");
+		ImGui::Text("A to add particles");
+		ImGui::Text("X to remove particles");
+		ImGui::Text("LMB to drag particles");
+		ImGui::Text("Q/E to zoom in/out");
+		ImGui::Text("Z to reset zoom");
+		ImGui::Text("SPACE to play/pause");
+		ImGui::End();
 
-		//how to draw triangles?
-		float max=energy_chart.getMaxValue();
-		vf2d prev;
-		for(int i=0; i<energy_chart.getNum(); i++) {
-			float u=i/(energy_chart.getNum()-1.f);
-			float v=energy_chart.values[i]/max;
-			vf2d curr=box.min+size*vf2d(u, v);
-			if(i!=0) DrawThickLineDecal(curr, prev, 1, olc::BLUE);
-			prev=curr;
-		}
-		FillRectDecal(box.min-vf2d(1, 1), vf2d(50, 10), olc::BLACK);
-		DrawStringDecal(box.min, "Energy", olc::WHITE);
-	}
-
-	void renderHelpHints() {
-		int cx=ScreenWidth()/2;
-		if(help_menu) {
-			DrawStringDecal(vf2d(8, 8), "General Controls");
-			DrawStringDecal(vf2d(8, 16), "A for addition");
-			DrawStringDecal(vf2d(8, 24), "B for bulk addition");
-			DrawStringDecal(vf2d(8, 32), "X for removal");
-			DrawStringDecal(vf2d(8, 40), "MouseLeft for grabbing");
-
-			DrawStringDecal(vf2d(ScreenWidth()-8*19, 8), "Toggleable Options");
-			DrawStringDecal(vf2d(ScreenWidth()-8*11, 16), "G for grid", show_grid?olc::WHITE:olc::RED);
-			DrawStringDecal(vf2d(ScreenWidth()-8*13, 24), "E for energy", show_energy?olc::WHITE:olc::RED);
-			DrawStringDecal(vf2d(ScreenWidth()-8*12, 32), "I for image", show_image?olc::WHITE:olc::RED);
-			DrawStringDecal(vf2d(ScreenWidth()-8*17, 40), "P for pause/play", update_phys?olc::WHITE:olc::RED);
-
-			DrawStringDecal(vf2d(cx-4*18, ScreenHeight()-8), "[Press H to close]");
-		} else {
-			DrawStringDecal(vf2d(cx-4*18, ScreenHeight()-8), "[Press H for help]");
-		}
+		simgui_render();
 	}
 #pragma endregion
 
-	void render() {
-		Clear(olc::BLACK);
+	void userRender() override {
+		//display pass
+		sg_pass pass{};
+		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		pass.action.colors[0].clear_value={0, 0, 0, 1};
+		pass.swapchain=sglue_swapchain();
+		sg_begin_pass(pass);
 
-		if(show_grid) renderGrid();
-
-		//show addition radius
-		if(adding) {
-			DrawThickCircleDecal(mouse_pos, selection_radius, 2, olc::GREEN);
+		//draw solver bounds
+		{
+			auto col=paused?sg_color{1, 0, 0, 1}:sg_color{.5f, .5f, .5f, 1};
+			drawRect(wld2scr(solver.min), wld2scr(solver.max), col);
 		}
 
-		//show deletion radius
-		if(removing) {
-			DrawThickCircleDecal(mouse_pos, selection_radius, 2, olc::RED);
+		//draw addition circle
+		if(adding) drawCircle(mouse_scr, selection_radius, {0, 1, 0, 1});
+
+		//draw removal circle
+		if(removing) drawCircle(mouse_scr, selection_radius, {1, 0, 0, 1});
+
+		//draw solid rect
+		if(solid_st) {
+			drawRect(wld2scr(*solid_st), mouse_scr, {1, 1, 1, 1});
 		}
-
-		if(bulk_start) renderBulkAction();
-
-		renderGrabAction();
 
 		renderParticles();
 
-		if(show_energy) renderEnergyChart();
+		renderImGui();
 
-		renderHelpHints();
+		sg_end_pass();
+
+		sg_commit();
 	}
 
-	bool OnUserUpdate(float dt) override {
-		update(dt);
-
-		render();
-
-		return true;
+	ParticlesUI() {
+		app_title="Particles UI Demo";
 	}
 };

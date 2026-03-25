@@ -20,25 +20,24 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\particle.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\solver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\particles_ui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\chart.h">
+    <ClInclude Include="src\shd.glsl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\particle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\cat.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="assets\gradient.png">
-      <Filter>Resource Files</Filter>
-    </Image>
+    <None Include="src\shd.glsl" />
+    <None Include="compile_shaders.bat">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="assets\imgui.ini" />
   </ItemGroup>
 </Project>
