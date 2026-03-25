@@ -57,7 +57,7 @@ public:
 
 		points=new PointMass[num_pts];
 		for(int i=0; i<num_pts; i++) {
-			float angle=cmn::map(i, 0, num_pts, 0, 2*cmn::Pi);
+			float angle=2*cmn::Pi*i/num_pts;
 			vf2d off=cmn::polar<vf2d>(rad, angle);
 			points[i]=PointMass(pos+off);
 		}

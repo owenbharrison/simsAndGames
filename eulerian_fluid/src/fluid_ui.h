@@ -136,7 +136,7 @@ struct FluidUI : olc::PixelGameEngine {
 				if(show_pressure) {
 					//scientific coloring for pressure
 					float p=fluid->pressure[fluid->ix(i, j)];
-					float angle=cmn::map(p, p_min, p_max, 0, 2*cmn::Pi);
+					float angle=cmn::map(p, p_min, p_max, 0.f, 2*cmn::Pi);
 					float r=.5f+.5f*std::cos(angle);
 					float g=.5f+.5f*std::cos(angle-2*cmn::Pi/3);
 					float b=.5f+.5f*std::cos(angle+2*cmn::Pi/3);
@@ -166,10 +166,10 @@ struct FluidUI : olc::PixelGameEngine {
 						xh+=dt*u, yh+=dt*v;
 
 						//map h values to screen values...
-						float x=cmn::map(fluid->h1*xh, 0, fluid->getNumX(), 0, ScreenWidth());
-						float y=cmn::map(fluid->h1*yh, 0, fluid->getNumY(), 0, ScreenHeight());
-						float px=cmn::map(fluid->h1*pxh, 0, fluid->getNumX(), 0, ScreenWidth());
-						float py=cmn::map(fluid->h1*pyh, 0, fluid->getNumY(), 0, ScreenHeight());
+						float x=cmn::map(fluid->h1*xh, 0.f, (float)fluid->getNumX(), 0.f, (float)ScreenWidth());
+						float y=cmn::map(fluid->h1*yh, 0.f, (float)fluid->getNumY(), 0.f, (float)ScreenHeight());
+						float px=cmn::map(fluid->h1*pxh, 0.f, (float)fluid->getNumX(), 0.f, (float)ScreenWidth());
+						float py=cmn::map(fluid->h1*pyh, 0.f, (float)fluid->getNumY(), 0.f, (float)ScreenHeight());
 						DrawLineDecal({x, y}, {px, py}, olc::BLUE);
 					}
 				}
