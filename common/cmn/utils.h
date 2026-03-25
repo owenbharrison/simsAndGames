@@ -26,7 +26,7 @@ namespace cmn {
 
 	//clamps x to [a, b]
 	template<typename T>
-	T& clamp(const T& x, const T& a, const T& b) {
+	T clamp(const T& x, const T& a, const T& b) {
 		if(x<a) return a;
 		if(x>b) return b;
 		return x;
