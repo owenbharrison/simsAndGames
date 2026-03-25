@@ -44,6 +44,42 @@ namespace cmn {
 	};
 	inline constexpr int unit_circle_num=sizeof(unit_circle)/sizeof(unit_circle[0]);
 
+	static void draw_line(
+		float ax, float ay, float bx, float by,
+		const sg_color& col
+	) {
+		sgl_begin_lines();
+
+		sgl_c4f(col.r, col.g, col.b, col.a);
+		sgl_v2f(ax, ay);
+		sgl_v2f(bx, by);
+
+		sgl_end();
+	}
+
+	static void draw_triangle(
+		float ax, float ay, float bx, float by, float cx, float cy,
+		const sg_color& col
+	) {
+		draw_line(ax, ay, bx, by, col);
+		draw_line(bx, by, cx, cy, col);
+		draw_line(cx, cy, ax, ay, col);
+	}
+
+	static void fill_triangle(
+		float ax, float ay, float bx, float by, float cx, float cy,
+		const sg_color& col
+	) {
+		sgl_begin_triangles();
+
+		sgl_c4f(col.r, col.g, col.b, col.a);
+		sgl_v2f(ax, ay);
+		sgl_v2f(bx, by);
+		sgl_v2f(cx, cy);
+
+		sgl_end();
+	}
+
 	static void draw_rect(
 		float x, float y, float w, float h,
 		const sg_color& col
@@ -104,19 +140,6 @@ namespace cmn {
 			sgl_v2f(x, y);
 			sgl_v2f(cx, cy);
 		}
-
-		sgl_end();
-	}
-
-	static void draw_line(
-		float ax, float ay, float bx, float by,
-		const sg_color& col
-	) {
-		sgl_begin_lines();
-
-		sgl_c4f(col.r, col.g, col.b, col.a);
-		sgl_v2f(ax, ay);
-		sgl_v2f(bx, by);
 
 		sgl_end();
 	}

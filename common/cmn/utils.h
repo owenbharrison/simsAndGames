@@ -2,7 +2,10 @@
 #ifndef COMMON_UTILS_H
 #define COMMON_UTILS_H
 
+//for rand
 #include <cstdlib>
+
+//for trig
 #include <cmath>
 
 namespace cmn {
@@ -12,7 +15,7 @@ namespace cmn {
 	//random(a, b)=a-b
 	float randFloat(float b=1, float a=0) {
 		static const float rand_max=RAND_MAX;
-		float t=rand()/rand_max;
+		float t=std::rand()/rand_max;
 		return a+t*(b-a);
 	}
 
@@ -23,15 +26,16 @@ namespace cmn {
 
 	//clamps x to [a, b]
 	template<typename T>
-	T clamp(const T& x, const T& a, const T& b) {
+	T& clamp(const T& x, const T& a, const T& b) {
 		if(x<a) return a;
 		if(x>b) return b;
 		return x;
 	}
 
-	//remaps x from [a, b] to [c,d]
-	float map(float x, float a, float b, float c, float d) {
-		float t=(x-a)/(b-a);
+	//remaps x from [a, b] to [c, d]
+	template<typename T>
+	T map(const T& x, const T& a, const T& b, const T& c, const T& d) {
+		float t=float(x-a)/float(b-a);
 		return c+t*(d-c);
 	}
 
