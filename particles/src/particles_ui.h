@@ -43,8 +43,12 @@ static void hsv2rgb(
 }
 
 class ParticlesUI : public cmn::SokolEngine {
-	sg_sampler sampler{};
+	struct {
+		sg_pipeline pip{};
 
+		sg_buffer vbuf{};
+	} line_render;
+	
 	struct inst_data_t {
 		float pos[2];
 		float size[2];
@@ -56,17 +60,12 @@ class ParticlesUI : public cmn::SokolEngine {
 		sg_buffer vbuf{};
 		sg_buffer ibuf{};
 
+		sg_sampler smp{};
 		sg_view tex{};
 
 		const int max_num=20000;
 		inst_data_t* instances=nullptr;
 	} particle_render;
-
-	struct {
-		sg_pipeline pip{};
-
-		sg_buffer vbuf{};
-	} line_render;
 
 	vf2d cam;
 	float zoom=1;
@@ -93,6 +92,8 @@ class ParticlesUI : public cmn::SokolEngine {
 
 	bool paused=false;
 
+	bool render_constraints=false;
+
 public:
 #pragma region SETUP_HELPERS
 	void setupEnvironment() {
@@ -100,9 +101,19 @@ public:
 		sg_setup(desc);
 	}
 
-	void setupSampler() {
-		sg_sampler_desc sampler_desc{};
-		sampler=sg_make_sampler(sampler_desc);
+	void setupLineRender() {
+		//instanced tristrip pipeline
+		sg_pipeline_desc pip_desc{};
+		pip_desc.shader=sg_make_shader(line_shader_desc(sg_query_backend()));
+		pip_desc.layout.attrs[ATTR_line_i_t].format=SG_VERTEXFORMAT_FLOAT;
+		pip_desc.primitive_type=SG_PRIMITIVETYPE_LINES;
+		line_render.pip=sg_make_pipeline(pip_desc);
+
+		//line vertex buffer
+		float vertexes[2]{0, 1};
+		sg_buffer_desc vbuf_desc{};
+		vbuf_desc.data=SG_RANGE(vertexes);
+		line_render.vbuf=sg_make_buffer(vbuf_desc);
 	}
 
 	void setupParticleRender() {
@@ -142,6 +153,9 @@ public:
 		ibuf_desc.usage.stream_update=true;
 		particle_render.ibuf=sg_make_buffer(ibuf_desc);
 
+		sg_sampler_desc sampler_desc{};
+		particle_render.smp=sg_make_sampler(sampler_desc);
+
 		//circle texture
 		const int sz=1024;
 		std::uint32_t* pixels=new std::uint32_t[sz*sz];
@@ -164,21 +178,6 @@ public:
 		particle_render.tex=sg_make_view(view_desc);
 	}
 
-	void setupLineRender() {
-		//instanced tristrip pipeline
-		sg_pipeline_desc pip_desc{};
-		pip_desc.shader=sg_make_shader(line_shader_desc(sg_query_backend()));
-		pip_desc.layout.attrs[ATTR_line_i_t].format=SG_VERTEXFORMAT_FLOAT;
-		pip_desc.primitive_type=SG_PRIMITIVETYPE_LINES;
-		line_render.pip=sg_make_pipeline(pip_desc);
-
-		//line vertex buffer
-		float vertexes[2]{0, 1};
-		sg_buffer_desc vbuf_desc{};
-		vbuf_desc.data=SG_RANGE(vertexes);
-		line_render.vbuf=sg_make_buffer(vbuf_desc);
-	}
-
 	void setupImGui() {
 		simgui_desc_t simgui_desc{};
 		simgui_desc.ini_filename="assets/imgui.ini";
@@ -189,11 +188,9 @@ public:
 	void userCreate() override {
 		setupEnvironment();
 
-		setupSampler();
+		setupLineRender();
 
 		setupParticleRender();
-
-		setupLineRender();
 
 		setupImGui();
 
@@ -322,6 +319,9 @@ public:
 
 		//play/pause toggle
 		if(getKey(SAPP_KEYCODE_SPACE).pressed) paused^=true;
+
+		//constraint render toggle
+		if(getKey(SAPP_KEYCODE_C).pressed) render_constraints^=true;
 	}
 
 	void handlePhysics(float dt) {
@@ -359,48 +359,6 @@ public:
 	}
 
 #pragma region RENDER HELPERS
-	void renderParticles() {
-		int num_ptc=solver.getNumParticles();
-		if(!num_ptc) return;
-
-		//update instance data
-		for(int i=0; i<num_ptc; i++) {
-			const auto& p=solver.particles[i];
-			const auto& r=p.getRadius();
-			auto& inst_data=particle_render.instances[i];
-			inst_data.pos[0]=p.pos.x-r;
-			inst_data.pos[1]=p.pos.y-r;
-			inst_data.size[0]=2*r;
-			inst_data.size[1]=2*r;
-			inst_data.col[0]=p.r;
-			inst_data.col[1]=p.g;
-			inst_data.col[2]=p.b;
-		}
-		sg_range range{};
-		range.ptr=particle_render.instances;
-		range.size=sizeof(inst_data_t)*num_ptc;
-		sg_update_buffer(particle_render.ibuf, range);
-
-		sg_apply_pipeline(particle_render.pip);
-
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=particle_render.vbuf;
-		bind.vertex_buffers[1]=particle_render.ibuf;
-		bind.samplers[SMP_b_quad_smp]=sampler;
-		bind.views[VIEW_b_quad_tex]=particle_render.tex;
-		sg_apply_bindings(bind);
-
-		p_vs_quad_t p_vs_quad{};
-		p_vs_quad.u_resolution[0]=sapp_widthf();
-		p_vs_quad.u_resolution[1]=sapp_heightf();
-		p_vs_quad.u_cam[0]=cam.x;
-		p_vs_quad.u_cam[1]=cam.y;
-		p_vs_quad.u_zoom=zoom;
-		sg_apply_uniforms(UB_p_vs_quad, SG_RANGE(p_vs_quad));
-
-		sg_draw(0, 4, num_ptc);
-	}
-
 	//screen space
 	void drawLine(const vf2d& a, const vf2d& b, const sg_color& col) {
 		sg_apply_pipeline(line_render.pip);
@@ -445,6 +403,59 @@ public:
 		drawLine(prev, first, col);
 	}
 
+	void renderParticles() {
+		int num_ptc=solver.getNumParticles();
+		if(!num_ptc) return;
+
+		//update instance data
+		for(int i=0; i<num_ptc; i++) {
+			const auto& p=solver.particles[i];
+			const auto& r=p.getRadius();
+			auto& inst_data=particle_render.instances[i];
+			inst_data.pos[0]=p.pos.x-r;
+			inst_data.pos[1]=p.pos.y-r;
+			inst_data.size[0]=2*r;
+			inst_data.size[1]=2*r;
+			inst_data.col[0]=p.r;
+			inst_data.col[1]=p.g;
+			inst_data.col[2]=p.b;
+		}
+		sg_range range{};
+		range.ptr=particle_render.instances;
+		range.size=sizeof(inst_data_t)*num_ptc;
+		sg_update_buffer(particle_render.ibuf, range);
+
+		sg_apply_pipeline(particle_render.pip);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=particle_render.vbuf;
+		bind.vertex_buffers[1]=particle_render.ibuf;
+		bind.samplers[SMP_b_quad_smp]=particle_render.smp;
+		bind.views[VIEW_b_quad_tex]=particle_render.tex;
+		sg_apply_bindings(bind);
+
+		p_vs_quad_t p_vs_quad{};
+		p_vs_quad.u_resolution[0]=sapp_widthf();
+		p_vs_quad.u_resolution[1]=sapp_heightf();
+		p_vs_quad.u_cam[0]=cam.x;
+		p_vs_quad.u_cam[1]=cam.y;
+		p_vs_quad.u_zoom=zoom;
+		sg_apply_uniforms(UB_p_vs_quad, SG_RANGE(p_vs_quad));
+
+		sg_draw(0, 4, num_ptc);
+	}
+
+	void renderConstraints() {
+		for(const auto& c:solver.constraints) {
+			const auto& a=solver.particles[c.a];
+			const auto& b=solver.particles[c.b];
+			float ir=1-(a.r+b.r)/2;
+			float ig=1-(a.g+b.g)/2;
+			float ib=1-(a.b+b.b)/2;
+			drawLine(wld2scr(a.pos), wld2scr(b.pos), {ir, ig, ib, 1});
+		}
+	}
+
 	void renderImGui() {
 		simgui_frame_desc_t simgui_frame_desc{};
 		simgui_frame_desc.width=sapp_width();
@@ -455,9 +466,21 @@ public:
 
 		imguiing=false;
 
-		ImGui::Begin("Options");
+		ImGui::Begin("Scene");
 		imguiing|=ImGui::IsWindowHovered();
 		ImGui::Text("%d Particles", solver.getNumParticles());
+		ImGui::SameLine();
+		if(ImGui::Button("Clear")) solver.clear();
+		ImGui::SeparatorText("Keybinds");
+		ImGui::Text("Hold A to add particles");
+		ImGui::Text("Hold X to remove particles");
+		ImGui::Text("Drag S to add a shape");
+		ImGui::Text("Drag LMB to grab particles");
+		ImGui::Text("Use SPACE to play/pause");
+		ImGui::End();
+
+		ImGui::Begin("Graphics");
+		imguiing|=ImGui::IsWindowHovered();
 		if(ImGui::Button("Rainbow Recolor")) {
 			for(int i=0; i<solver.getNumParticles(); i++) {
 				auto& p=solver.particles[i];
@@ -466,16 +489,11 @@ public:
 				hsv2rgb(hue, 1, value, p.r, p.g, p.b);
 			}
 		}
-		if(ImGui::Button("Clear")) solver.clear();
-		ImGui::End();
-
-		ImGui::Begin("Keybinds");
-		ImGui::Text("A to add particles");
-		ImGui::Text("X to remove particles");
-		ImGui::Text("LMB to drag particles");
-		ImGui::Text("Q/E to zoom in/out");
-		ImGui::Text("Z to reset zoom");
-		ImGui::Text("SPACE to play/pause");
+		ImGui::SeparatorText("Keybinds");
+		ImGui::Text("Use Q/E to zoom in/out");
+		ImGui::Text("Drag MMB to pan around");
+		ImGui::Text("Use Z to reset zoom & pan");
+		ImGui::Text("Use C to show/hide constraints");
 		ImGui::End();
 
 		simgui_render();
@@ -508,6 +526,8 @@ public:
 		}
 
 		renderParticles();
+
+		if(render_constraints) renderConstraints();
 
 		renderImGui();
 
