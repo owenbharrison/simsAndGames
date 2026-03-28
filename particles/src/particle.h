@@ -15,7 +15,7 @@ class Particle {
 public:
 	cmn::vf2d pos, oldpos, forces;
 	float r=1, g=1, b=1;
-
+	
 	Particle() {}
 
 	Particle(const cmn::vf2d& p, float r) {

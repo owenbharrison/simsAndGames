@@ -42,13 +42,19 @@ static void hsv2rgb(
 	r+=m, g+=m, b+=m;
 }
 
+vf2d getClosePt(const vf2d& p, const vf2d& a, const vf2d& b) {
+	vf2d ap=p-a, ab=b-a;
+	float t=cmn::clamp(ap.dot(ab)/ab.dot(ab), 0.f, 1.f);
+	return a+t*ab;
+}
+
 class ParticlesUI : public cmn::SokolEngine {
 	struct {
 		sg_pipeline pip{};
 
 		sg_buffer vbuf{};
 	} line_render;
-	
+
 	struct inst_data_t {
 		float pos[2];
 		float size[2];
@@ -87,6 +93,7 @@ class ParticlesUI : public cmn::SokolEngine {
 	const float selection_radius=30;
 
 	vf2d* solid_st=nullptr;
+	vf2d* empty_st=nullptr;
 
 	int held_ptc=-1;
 
@@ -230,34 +237,23 @@ public:
 		cam+=(solver.min+solver.max)/2-scr2wld(scr_sz/2);
 	}
 
-	void handleUserInput(float dt) {
-		if(imguiing) return;
+	void handleZooming(float dt) {
+		//wld mouse before zoom
+		vf2d before=scr2wld(mouse_scr);
 
-		//panning
-		if(getMouse(SAPP_MOUSEBUTTON_MIDDLE).held) {
-			cam-=(mouse_scr-prev_mouse_scr)/zoom;
-		}
+		//apply zoom
+		float factor=1+dt;
+		if(getKey(SAPP_KEYCODE_W).held) zoom*=factor;
+		if(getKey(SAPP_KEYCODE_Q).held) zoom/=factor;
 
-		//zooming
-		{
-			//wld mouse before zoom
-			vf2d before=scr2wld(mouse_scr);
+		//wld mouse after zoom
+		vf2d after=scr2wld(mouse_scr);
 
-			//apply zoom
-			float factor=1+dt;
-			if(getKey(SAPP_KEYCODE_Q).held) zoom*=factor;
-			if(getKey(SAPP_KEYCODE_E).held) zoom/=factor;
+		//pan so wld mouse stays fixed
+		cam+=before-after;
+	}
 
-			//wld mouse after zoom
-			vf2d after=scr2wld(mouse_scr);
-
-			//pan so wld mouse stays fixed
-			cam+=before-after;
-		}
-
-		if(getKey(SAPP_KEYCODE_Z).pressed) zoomToFit();
-
-		//drag particle
+	void handleParticleGrabbing() {
 		const auto drag_action=getMouse(SAPP_MOUSEBUTTON_LEFT);
 		if(drag_action.pressed) {
 			for(int i=0; i<solver.getNumParticles(); i++) {
@@ -269,8 +265,10 @@ public:
 			}
 		}
 		if(drag_action.released) held_ptc=-1;
+	}
 
-		//add particles in circle
+	//add particles in circle
+	void handleParticleAddition() {
 		adding=getKey(SAPP_KEYCODE_A).held;
 		if(adding) {
 			for(int i=0; i<100; i++) {
@@ -285,37 +283,109 @@ public:
 				solver.addParticle(p);
 			}
 		}
+	}
 
-		//remove particles in circle
+	//drag solid rect
+	void handleSolidAddition() {
+		const auto solid_action=getKey(SAPP_KEYCODE_S);
+		if(solid_action.pressed) solid_st=new vf2d(mouse_wld);
+		if(solid_action.released) {
+			//get bounds
+			vf2d min=*solid_st, max=mouse_wld;
+			if(min.x>max.x) std::swap(min.x, max.x);
+			if(min.y>max.y) std::swap(min.y, max.y);
+
+			//random sizing
+			float rad=cmn::randFloat(6, 7);
+			float m=cmn::randFloat(.5f, 1);
+
+			//determine spacing
+			float sz=2*rad+m;
+			int w=1+(max.x-min.x)/sz;
+			int h=1+(max.y-min.y)/sz;
+			solver.addSolidRect(min, rad, m, w, h);
+
+			//free flag
+			delete solid_st;
+			solid_st=nullptr;
+		}
+	}
+
+	//drag empty rect
+	void handleEmptyAddition() {
+		const auto empty_action=getKey(SAPP_KEYCODE_E);
+		if(empty_action.pressed) empty_st=new vf2d(mouse_wld);
+		if(empty_action.released) {
+			//get bounds
+			vf2d min=*empty_st, max=mouse_wld;
+			if(min.x>max.x) std::swap(min.x, max.x);
+			if(min.y>max.y) std::swap(min.y, max.y);
+
+			//random sizing
+			float rad=cmn::randFloat(6, 7);
+			float m=cmn::randFloat(.5f, 1);
+
+			//determine spacing
+			float sz=2*rad+m;
+			int w=1+(max.x-min.x)/sz;
+			int h=1+(max.y-min.y)/sz;
+			solver.addEmptyRect(min, rad, m, w, h);
+
+			//free flag
+			delete empty_st;
+			empty_st=nullptr;
+		}
+	}
+
+	//remove anything touching circle
+	void handleRemoval() {
 		removing=getKey(SAPP_KEYCODE_X).held;
 		if(removing) {
 			held_ptc=-1;
 
+			//check if particles touch circle
 			for(int i=0; i<solver.getNumParticles(); i++) {
-				const auto& p=wld2scr(solver.particles[i].pos);
-				if((p-mouse_scr).mag()<selection_radius) {
+				const auto& p=solver.particles[i];
+				float rad_wld=p.getRadius()+selection_radius/zoom;
+				if((p.pos-mouse_wld).mag()<rad_wld) {
 					solver.removeParticle(i);
-					i=0;
+					i=-1;
 				}
 			}
-		}
-		
-		//drag solid
-		const auto solid_action=getKey(SAPP_KEYCODE_S);
-		if(solid_action.pressed) solid_st=new vf2d(mouse_wld);
-		if(solid_action.released) {
-			vf2d min=*solid_st;
-			vf2d max=mouse_wld;
-			if(min.x>max.x) std::swap(min.x, max.x);
-			if(min.y>max.y) std::swap(min.y, max.y);
 
-			float rad=cmn::randFloat(6, 7);
-			float m=cmn::randFloat(.5f, 1);
-			solver.addSolid(min, max, rad, m);
-
-			delete solid_st;
-			solid_st=nullptr;
+			//check if constraint close pt on inside circle
+			for(auto it=solver.constraints.begin(); it!=solver.constraints.end();) {
+				const auto& a=wld2scr(solver.particles[it->a].pos);
+				const auto& b=wld2scr(solver.particles[it->b].pos);
+				vf2d close_pt=getClosePt(mouse_scr, a, b);
+				if((close_pt-mouse_scr).mag()<selection_radius) {
+					it=solver.constraints.erase(it);
+				} else it++;
+			}
 		}
+	}
+
+	void handleUserInput(float dt) {
+		if(imguiing) return;
+
+		//panning
+		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) {
+			cam-=(mouse_scr-prev_mouse_scr)/zoom;
+		}
+
+		handleZooming(dt);
+
+		if(getKey(SAPP_KEYCODE_Z).pressed) zoomToFit();
+
+		handleParticleGrabbing();
+
+		handleParticleAddition();
+
+		handleSolidAddition();
+
+		handleEmptyAddition();
+
+		handleRemoval();
 
 		//play/pause toggle
 		if(getKey(SAPP_KEYCODE_SPACE).pressed) paused^=true;
@@ -473,8 +543,9 @@ public:
 		if(ImGui::Button("Clear")) solver.clear();
 		ImGui::SeparatorText("Keybinds");
 		ImGui::Text("Hold A to add particles");
-		ImGui::Text("Hold X to remove particles");
-		ImGui::Text("Drag S to add a shape");
+		ImGui::Text("Hold X to remove items");
+		ImGui::Text("Drag S to add a solid rect");
+		ImGui::Text("Drag E to add an empty rect");
 		ImGui::Text("Drag LMB to grab particles");
 		ImGui::Text("Use SPACE to play/pause");
 		ImGui::End();
@@ -490,8 +561,8 @@ public:
 			}
 		}
 		ImGui::SeparatorText("Keybinds");
-		ImGui::Text("Use Q/E to zoom in/out");
-		ImGui::Text("Drag MMB to pan around");
+		ImGui::Text("Use W/Q to zoom in/out");
+		ImGui::Text("Hold Shift to pan around");
 		ImGui::Text("Use Z to reset zoom & pan");
 		ImGui::Text("Use C to show/hide constraints");
 		ImGui::End();
@@ -514,15 +585,20 @@ public:
 			drawRect(wld2scr(solver.min), wld2scr(solver.max), col);
 		}
 
-		//draw addition circle
+		//draw green addition circle
 		if(adding) drawCircle(mouse_scr, selection_radius, {0, 1, 0, 1});
 
-		//draw removal circle
+		//draw red removal circle
 		if(removing) drawCircle(mouse_scr, selection_radius, {1, 0, 0, 1});
 
-		//draw solid rect
+		//draw yellow solid rect
 		if(solid_st) {
-			drawRect(wld2scr(*solid_st), mouse_scr, {1, 1, 1, 1});
+			drawRect(wld2scr(*solid_st), mouse_scr, {1, 1, 0, 1});
+		}
+
+		//draw purple empty rect
+		if(empty_st) {
+			drawRect(wld2scr(*empty_st), mouse_scr, {.565f, 0, 1, 1});
 		}
 
 		renderParticles();

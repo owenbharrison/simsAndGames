@@ -146,50 +146,101 @@ public:
 		constraints.clear();
 	}
 
-	void addSolid(const cmn::vf2d& start, const cmn::vf2d& end, float rad, float m) {
-		//determine spacing
-		float adj=2*rad+m;
-		int w=1+(end.x-start.x)/adj;
-		int h=1+(end.y-start.y)/adj;
+	void addSolidRect(const cmn::vf2d& tl, float rad, float m, int w, int h) {
+		//too small
+		if(w<1||h<1) return;
 
 		//flattened index helper
 		auto gix=[&] (int i, int j) { return i+w*j; };
 
-		//add particles & store their indexes
+		//store new particles
 		int* grid=new int[w*h];
+
+		//determine spacing
+		float step=2*rad+m;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
-				float x=start.x+adj*i;
-				float y=start.y+adj*j;
+				float x=tl.x+step*i;
+				float y=tl.y+step*j;
 				grid[gix(i, j)]=addParticle(Particle({x, y}, rad));
 			}
 		}
 
-		//connect grid with diagonals
-		float diag=adj*std::sqrt(2);
-		std::vector<Constraint> new_constraints;
+		//connect grid on adjacent & diagonals
+		std::vector<Constraint> new_cst;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
 				int curr=grid[gix(i, j)];
 				int rgt=i<w-1?grid[gix(i+1, j)]:-1;
 				int btm=j<h-1?grid[gix(i, j+1)]:-1;
 				int btm_rgt=(i<w-1)&&(j<h-1)?grid[gix(i+1, j+1)]:-1;
-				if(curr!=-1) {
-					if(rgt!=-1) new_constraints.push_back({curr, rgt, adj});
-					if(btm!=-1) new_constraints.push_back({curr, btm, adj});
-					if(btm_rgt!=-1) new_constraints.push_back({curr, btm_rgt, diag});
-				}
-				if(rgt!=-1&&btm!=-1) new_constraints.push_back({rgt, btm, diag});
+				new_cst.push_back({curr, rgt});
+				new_cst.push_back({curr, btm});
+				new_cst.push_back({curr, btm_rgt});
+				new_cst.push_back({rgt, btm});
 			}
 		}
 
+		//free refs
 		delete[] grid;
 
-		//add them in random order
-		shuffle(new_constraints);
-		constraints.insert(constraints.end(),
-			new_constraints.begin(), new_constraints.end()
-		);
+		//randomize, validate, & init len
+		shuffle(new_cst);
+		for(const auto& c:new_cst) {
+			if(c.a==-1||c.b==-1) continue;
+
+			cmn::vf2d sub=particles[c.a].pos-particles[c.b].pos;
+			constraints.push_back({c.a, c.b, sub.mag()});
+		}
+	}
+
+	void addEmptyRect(cmn::vf2d tl, float rad, float m, int w, int h) {
+		//too small
+		if(w<2||h<2) return;
+
+		//store new particles
+		const int num_loop=2*w+2*h-4;
+		int* loop=new int[num_loop];
+
+		//add in CW loop
+		int k=0;
+		float step=2*rad+m;
+		for(int i=0; i<w-1; i++, k++) {
+			loop[k]=addParticle(Particle(tl, rad));
+			tl.x+=step;
+		}
+		for(int j=0; j<h-1; j++, k++) {
+			loop[k]=addParticle(Particle(tl, rad));
+			tl.y+=step;
+		}
+		for(int i=0; i<w-1; i++, k++) {
+			loop[k]=addParticle(Particle(tl, rad));
+			tl.x-=step;
+		}
+		for(int j=0; j<h-1; j++, k++) {
+			loop[k]=addParticle(Particle(tl, rad));
+			tl.y-=step;
+		}
+
+		//connect everything
+		std::vector<Constraint> new_cst;
+		for(int i=0; i<num_loop; i++) {
+			for(int j=1+i; j<num_loop; j++) {
+				new_cst.push_back({loop[i], loop[j]});
+			}
+		}
+
+		//free refs
+		delete[] loop;
+	
+		//randomize, validate, & init len
+		shuffle(new_cst);
+		for(const auto& c:new_cst) {
+			if(c.a==-1||c.b==-1) continue;
+
+			cmn::vf2d sub=particles[c.a].pos-particles[c.b].pos;
+			constraints.push_back({c.a, c.b, sub.mag()});
+		}
 	}
 
 	void updateConsraints() {
