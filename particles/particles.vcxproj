@@ -160,7 +160,12 @@
     <ClInclude Include="src\solver.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="assets\angry_bird.fzx" />
+    <None Include="assets\bridge.fzx" />
+    <None Include="assets\fluid_boxes.fzx" />
     <None Include="assets\imgui.ini" />
+    <None Include="assets\save.fzx" />
+    <None Include="assets\thumbnail.fzx" />
     <None Include="compile_shaders.bat" />
     <None Include="src\shd.glsl" />
   </ItemGroup>

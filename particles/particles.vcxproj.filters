@@ -39,5 +39,10 @@
       <Filter>Source Files</Filter>
     </None>
     <None Include="assets\imgui.ini" />
+    <None Include="assets\thumbnail.fzx" />
+    <None Include="assets\save.fzx" />
+    <None Include="assets\angry_bird.fzx" />
+    <None Include="assets\bridge.fzx" />
+    <None Include="assets\fluid_boxes.fzx" />
   </ItemGroup>
 </Project>

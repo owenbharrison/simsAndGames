@@ -229,12 +229,12 @@ public:
 
 		//scale to fit
 		int margin=10;
-		vf2d sz=solver.max-solver.min;
+		vf2d sz=solver.getMax()-solver.getMin();
 		vf2d scl=(scr_sz-2*margin)/sz;
 		zoom=scl.x<scl.y?scl.x:scl.y;
 
 		//shift world center to scr center
-		cam+=(solver.min+solver.max)/2-scr2wld(scr_sz/2);
+		cam+=(solver.getMin()+solver.getMax())/2-scr2wld(scr_sz/2);
 	}
 
 	void handleZooming(float dt) {
@@ -285,6 +285,15 @@ public:
 		}
 	}
 
+	void handleParticleLocking() {
+		if(getKey(SAPP_KEYCODE_L).pressed) {
+			for(int i=0; i<solver.getNumParticles(); i++) {
+				auto& p=solver.particles[i];
+				if((mouse_wld-p.pos).mag()<p.getRadius()) p.locked^=true;
+			}
+		}
+	}
+
 	//drag solid rect
 	void handleSolidAddition() {
 		const auto solid_action=getKey(SAPP_KEYCODE_S);
@@ -296,8 +305,8 @@ public:
 			if(min.y>max.y) std::swap(min.y, max.y);
 
 			//random sizing
-			float rad=cmn::randFloat(6, 7);
-			float m=cmn::randFloat(.5f, 1);
+			float rad=cmn::randFloat(3, 6);
+			float m=.1f;
 
 			//determine spacing
 			float sz=2*rad+m;
@@ -322,8 +331,8 @@ public:
 			if(min.y>max.y) std::swap(min.y, max.y);
 
 			//random sizing
-			float rad=cmn::randFloat(6, 7);
-			float m=cmn::randFloat(.5f, 1);
+			float rad=cmn::randFloat(3, 6);
+			float m=.1f;
 
 			//determine spacing
 			float sz=2*rad+m;
@@ -378,6 +387,8 @@ public:
 		if(getKey(SAPP_KEYCODE_Z).pressed) zoomToFit();
 
 		handleParticleGrabbing();
+
+		handleParticleLocking();
 
 		handleParticleAddition();
 
@@ -513,6 +524,12 @@ public:
 		sg_apply_uniforms(UB_p_vs_quad, SG_RANGE(p_vs_quad));
 
 		sg_draw(0, 4, num_ptc);
+
+		//not enough locked particles for this to be slow:
+		for(int i=0; i<solver.getNumParticles(); i++) {
+			const auto& p=solver.particles[i];
+			if(p.locked) drawCircle(wld2scr(p.pos), p.getRadius()*zoom, {1, 0, 0, 1});
+		}
 	}
 
 	void renderConstraints() {
@@ -536,14 +553,28 @@ public:
 
 		imguiing=false;
 
-		ImGui::Begin("Scene");
+		ImGui::Begin("Physics");
 		imguiing|=ImGui::IsWindowHovered();
 		ImGui::Text("%d Particles", solver.getNumParticles());
 		ImGui::SameLine();
-		if(ImGui::Button("Clear")) solver.clear();
+		if(ImGui::Button("Clear")) solver.reset();
+		const char* scenes[]={"thumbnail", "fluid_boxes", "bridge", "angry_bird"};
+		const int num_scenes=sizeof(scenes)/sizeof(scenes[0]);
+		static int scene_curr=0;
+		bool changed=ImGui::Combo("Scene", &scene_curr, scenes, num_scenes);
+		if(sapp_frame_count()==0||changed) {
+			std::string str(scenes[scene_curr]);
+			Solver scene;
+			bool ok=Solver::load(scene, "assets/"+str+".fzx");
+			if(ok) {
+				solver=scene;
+				zoomToFit();
+			}
+		}
 		ImGui::SeparatorText("Keybinds");
 		ImGui::Text("Hold A to add particles");
 		ImGui::Text("Hold X to remove items");
+		ImGui::Text("Press L to lock a particle");
 		ImGui::Text("Drag S to add a solid rect");
 		ImGui::Text("Drag E to add an empty rect");
 		ImGui::Text("Drag LMB to grab particles");
@@ -553,10 +584,11 @@ public:
 		ImGui::Begin("Graphics");
 		imguiing|=ImGui::IsWindowHovered();
 		if(ImGui::Button("Rainbow Recolor")) {
+			auto min=solver.getMin(), max=solver.getMax();
 			for(int i=0; i<solver.getNumParticles(); i++) {
 				auto& p=solver.particles[i];
-				int hue=360*(p.pos.x-solver.min.x)/(solver.max.x-solver.min.x);
-				float value=(p.pos.y-solver.min.y)/(solver.max.y-solver.min.y);
+				int hue=360*(p.pos.x-min.x)/(max.x-min.x);
+				float value=(p.pos.y-min.y)/(max.y-min.y);
 				hsv2rgb(hue, 1, value, p.r, p.g, p.b);
 			}
 		}
@@ -582,7 +614,7 @@ public:
 		//draw solver bounds
 		{
 			auto col=paused?sg_color{1, 0, 0, 1}:sg_color{.5f, .5f, .5f, 1};
-			drawRect(wld2scr(solver.min), wld2scr(solver.max), col);
+			drawRect(wld2scr(solver.getMin()), wld2scr(solver.getMax()), col);
 		}
 
 		//draw green addition circle

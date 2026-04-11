@@ -8,11 +8,14 @@
 
 #include <vector>
 
-//for memset
+//for memset & memcpy
 #include <string>
 
 //for swap
 #include <algorithm>
+
+#include <fstream>
+#include <sstream>
 
 struct Constraint {
 	int a=0, b=0;
@@ -28,7 +31,7 @@ void shuffle(std::vector<T>& vec) {
 	}
 }
 
-struct Solver {
+class Solver {
 	int max_particles=0;
 
 	cmn::vf2d min, max;
@@ -42,6 +45,8 @@ struct Solver {
 
 	int* particle_next=nullptr;
 
+	void copyFrom(const Solver&), clear();
+
 	void fillCells();
 
 	void collideCells(int, int, int, int);
@@ -49,6 +54,8 @@ struct Solver {
 public:
 	Particle* particles=nullptr;
 	std::list<Constraint> constraints;
+
+	Solver() {}
 
 	Solver(int m, const cmn::vf2d& n, const cmn::vf2d& x) {
 		max_particles=m;
@@ -61,19 +68,30 @@ public:
 	}
 
 	//ro3: 1
-	Solver(const Solver& s)=delete;
+	Solver(const Solver& s) {
+		copyFrom(s);
+	};
 
 	//ro3: 2
 	~Solver() {
-		delete[] particles;
-		delete[] grid_heads;
-		delete[] particle_next;
+		clear();
 	}
 
 	//ro3: 3
-	Solver& operator=(const Solver& s)=delete;
+	Solver& operator=(const Solver& s) {
+		if(&s!=this) {
+			clear();
+
+			copyFrom(s);
+		}
+
+		return *this;
+	};
 
 	int getMaxParticles() const { return max_particles; }
+
+	cmn::vf2d getMin() const { return min; }
+	cmn::vf2d getMax() const { return max; }
 
 	int getNumParticles() const { return num_particles; }
 
@@ -141,7 +159,7 @@ public:
 		}
 	}
 
-	void clear() {
+	void reset() {
 		num_particles=0;
 		constraints.clear();
 	}
@@ -232,7 +250,7 @@ public:
 
 		//free refs
 		delete[] loop;
-	
+
 		//randomize, validate, & init len
 		shuffle(new_cst);
 		for(const auto& c:new_cst) {
@@ -245,11 +263,11 @@ public:
 
 	void updateConsraints() {
 		for(const auto& c:constraints) {
-			auto& a=particles[c.a].pos;
-			auto& b=particles[c.b].pos;
+			auto& a=particles[c.a];
+			auto& b=particles[c.b];
 
 			//separating axis
-			cmn::vf2d ab=b-a;
+			cmn::vf2d ab=b.pos-a.pos;
 			float mag=ab.mag();
 
 			//safe norm
@@ -257,8 +275,8 @@ public:
 
 			//push apart
 			float diff=(mag-c.len)/2;
-			a+=diff*norm;
-			b-=diff*norm;
+			if(!a.locked) a.pos+=diff*norm;
+			if(!b.locked) b.pos-=diff*norm;
 		}
 	}
 
@@ -328,7 +346,150 @@ public:
 			p.keepInsideRegion(min, max);
 		}
 	}
+
+	bool save(const std::string& filename) const {
+		std::ofstream file(filename);
+		if(file.fail()) return false;
+
+		//bounds
+		file<<"bd "<<
+			min.x<<' '<<
+			min.y<<' '<<
+			max.x<<' '<<
+			max.y<<'\n';
+		//sizing
+		file<<"sz "<<
+			num_x<<' '<<
+			num_y<<'\n';
+		//counts
+		file<<"ct "<<
+			num_particles<<' '<<
+			max_particles<<' '<<
+			constraints.size()<<'\n';
+
+		//particles
+		for(int i=0; i<num_particles; i++) {
+			const auto& p=particles[i];
+			file<<"p "<<
+				p.pos.x<<' '<<
+				p.pos.y<<' '<<
+				p.oldpos.x<<' '<<
+				p.oldpos.y<<' '<<
+				p.getRadius()<<' '<<
+				p.r<<' '<<
+				p.g<<' '<<
+				p.b<<' '<<
+				p.locked<<'\n';
+		}
+
+		//constraints
+		for(const auto& c:constraints) {
+			file<<"c "<<
+				c.a<<' '<<
+				c.b<<' '<<
+				c.len<<'\n';
+		}
+
+		return true;
+	}
+
+	static bool load(Solver& solver, const std::string& filename) {
+		std::ifstream file(filename);
+		if(file.fail()) return false;
+
+		std::string line, type;
+		std::stringstream line_str;
+
+		//bounds
+		std::getline(file, line);
+		line_str.str(line), line_str.clear();
+		line_str>>type;
+		if(type!="bd") return false;
+
+		cmn::vf2d min, max;
+		line_str>>min.x>>min.y>>max.x>>max.y;
+
+		//sizing
+		std::getline(file, line);
+		line_str.str(line), line_str.clear();
+		line_str>>type;
+		if(type!="sz") return false;
+
+		int nx, ny;
+		line_str>>nx>>ny;
+		if(nx<=0||ny<=0) return false;
+
+		//counts
+		std::getline(file, line);
+		line_str.str(line), line_str.clear();
+		line_str>>type;
+		if(type!="ct") return false;
+
+		int num_ptc, max_ptc, num_cst;
+		line_str>>num_ptc>>max_ptc>>num_cst;
+		if(num_ptc<0||max_ptc<=0||num_cst<0) return false;
+
+		//init
+		solver=Solver(max_ptc, min, max);
+		solver.num_particles=num_ptc;
+
+		//particles
+		for(int i=0; i<num_ptc; i++) {
+			std::getline(file, line);
+			line_str.str(line), line_str.clear();
+			line_str>>type;
+			if(type!="p") return false;
+
+			float x, y, ox, oy, rad, r, g, b;
+			bool locked;
+			line_str>>x>>y>>ox>>oy>>rad>>r>>g>>b>>locked;
+			Particle p({x, y}, rad);
+			p.oldpos.x=ox, p.oldpos.y=oy;
+			p.r=r, p.g=g, p.b=b;
+			p.locked=locked;
+			solver.particles[i]=p;
+		}
+
+		solver.updateSizing();
+
+		//constraints
+		for(int i=0; i<num_cst; i++) {
+			std::getline(file, line);
+			line_str.str(line), line_str.clear();
+			line_str>>type;
+			if(type!="c") return false;
+
+			int a, b;
+			float len;
+			line_str>>a>>b>>len;
+			solver.constraints.push_back({a, b, len});
+		}
+
+		return true;
+	}
 };
+
+void Solver::copyFrom(const Solver& s) {
+	max_particles=s.max_particles;
+	min=s.min, max=s.max;
+	num_particles=s.num_particles;
+	cell_sz=s.cell_sz;
+	num_x=s.num_x, num_y=s.num_y;
+	grid_heads=new int[num_x*num_y];
+	std::memcpy(grid_heads, s.grid_heads, sizeof(int)*num_x*num_y);
+	particle_next=new int[max_particles];
+	std::memcpy(particle_next, s.particle_next, sizeof(int)*max_particles);
+	particles=new Particle[max_particles];
+	std::memcpy(particles, s.particles, sizeof(Particle)*num_particles);
+	constraints=s.constraints;
+}
+
+void Solver::clear() {
+	delete[] particles;
+	delete[] grid_heads;
+	delete[] particle_next;
+	constraints.clear();
+}
 
 void Solver::fillCells() {
 	//reset grid heads

@@ -16,6 +16,8 @@ public:
 	cmn::vf2d pos, oldpos, forces;
 	float r=1, g=1, b=1;
 	
+	bool locked=false;
+
 	Particle() {}
 
 	Particle(const cmn::vf2d& p, float r) {
@@ -40,7 +42,7 @@ public:
 
 		//verlet integration
 		cmn::vf2d acc=forces/mass;
-		pos+=vel+acc*dt*dt;
+		if(!locked) pos+=vel+acc*dt*dt;
 
 		//reset forces
 		forces={0, 0};
@@ -78,8 +80,8 @@ public:
 		float pen=t_rad-dist;
 		float iit=1/(a.inv_mass+b.inv_mass);
 		cmn::vf2d corr=pen*norm*iit;
-		a.pos-=a.inv_mass*corr;
-		b.pos+=b.inv_mass*corr;
+		if(!a.locked) a.pos-=a.inv_mass*corr;
+		if(!b.locked) b.pos+=b.inv_mass*corr;
 
 		//velocity correction
 		cmn::vf2d va=a.pos-a.oldpos;
@@ -96,8 +98,8 @@ public:
 			va-=a.inv_mass*impulse;
 			vb+=b.inv_mass*impulse;
 
-			a.oldpos=a.pos-va;
-			b.oldpos=b.pos-vb;
+			if(!a.locked) a.oldpos=a.pos-va;
+			if(!b.locked) b.oldpos=b.pos-vb;
 		}
 	}
 };
