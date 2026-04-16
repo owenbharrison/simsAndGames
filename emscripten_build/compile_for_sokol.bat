@@ -34,6 +34,7 @@ if exist assets (
 		-std=c++17 ^
 		-s USE_WEBGL2=1 ^
 		-s ALLOW_MEMORY_GROWTH=1 ^
+		-O3 -flto -msimd128 ^
 		-I ..\common ^
 		src\main.cpp ^
 		-o "%out%\sokol.html" ^
@@ -45,10 +46,11 @@ if exist assets (
 		-std=c++17 ^
 		-s USE_WEBGL2=1 ^
 		-s ALLOW_MEMORY_GROWTH=1 ^
+		-O3 -flto -msimd128 ^
 		-I ..\common ^
 		src\main.cpp ^
-		-o "%out%\sokol_shell.html" ^
-		--shell-file "%build%\shell.html"
+		-o "%out%\sokol.html" ^
+		--shell-file "%build%\sokol_shell.html"
 )
 
 echo success
