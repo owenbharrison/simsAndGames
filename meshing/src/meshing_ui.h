@@ -73,6 +73,8 @@ public:
 
 	void setupSGL() {
 		sgl_desc_t sgl_desc{};
+		sgl_desc.max_commands=200000;
+		sgl_desc.max_vertices=500000;
 		sgl_setup(&sgl_desc);
 	}
 
