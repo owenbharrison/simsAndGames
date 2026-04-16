@@ -131,7 +131,9 @@ public:
 			mesh_pos.verts.push_back(ix);
 			mesh_neg.verts.push_back(ix);
 
-			SplitIndex is{mesh_pos.verts.size()-1, mesh_neg.verts.size()-1};
+			SplitIndex is;
+			is.pos_ix=mesh_pos.verts.size()-1;
+			is.neg_ix=mesh_neg.verts.size()-1;
 			cache[e]=is;
 			return is;
 		};
