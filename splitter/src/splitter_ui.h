@@ -76,7 +76,7 @@ public:
 		if(getKey(SAPP_KEYCODE_W).pressed) render_wireframes^=true;
 	}
 
-	void renderMesh(const Mesh& m) {
+	void fillMesh(const Mesh& m) {
 		//first transform points
 		std::vector<vf2d> verts;
 		for(const auto& v:m.verts) {
@@ -87,8 +87,21 @@ public:
 		sg_color col{m.r, m.g, m.b, 1};
 		for(const auto& t:m.tris) {
 			const auto& a=verts[t.ix[0]], & b=verts[t.ix[1]], & c=verts[t.ix[2]];
-			if(render_wireframes) cmn::draw_triangle(a.x, a.y, b.x, b.y, c.x, c.y, col);
-			else cmn::fill_triangle(a.x, a.y, b.x, b.y, c.x, c.y, col);
+			cmn::fill_triangle(a.x, a.y, b.x, b.y, c.x, c.y, col);
+		}
+	}
+
+	void drawMesh(const Mesh& m, sg_color col) {
+		//first transform points
+		std::vector<vf2d> verts;
+		for(const auto& v:m.verts) {
+			verts.push_back(m.loc2wld(v));
+		}
+
+		//connect em up
+		for(const auto& t:m.tris) {
+			const auto& a=verts[t.ix[0]], & b=verts[t.ix[1]], & c=verts[t.ix[2]];
+			cmn::draw_triangle(a.x, a.y, b.x, b.y, c.x, c.y, col);
 		}
 	}
 
@@ -109,8 +122,11 @@ public:
 		sgl_matrix_mode_modelview();
 		sgl_load_identity();
 		
+		const sg_color black{0, 0, 0, 1};
+
 		for(const auto& m:meshes) {
-			renderMesh(m);
+			fillMesh(m);
+			if(render_wireframes) drawMesh(m, black);
 		}
 
 		const vf2d mouse_pos(mouse_x, mouse_y);
@@ -121,17 +137,19 @@ public:
 			for(const auto& m:meshes) {
 				auto split=m.split(*split_st, norm);
 				for(const auto& s:split) {
-					renderMesh(s);
+					fillMesh(s);
+					if(render_wireframes) drawMesh(s, black);
 				}
 			}
 
 			//draw plane
+			const sg_color red{1, 0, 0, 1};
 			float rad=10;
 			vf2d top=*split_st+rad*norm, btm=*split_st-rad*norm;
-			cmn::draw_line(top.x, top.y, btm.x, btm.y, {0, 0, 0, 1});
+			cmn::draw_line(top.x, top.y, btm.x, btm.y, red);
 			float len=50;
 			vf2d lft=*split_st-len*tang, rgt=*split_st+len*tang;
-			cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, {0, 0, 0, 1});
+			cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, red);
 		}
 
 		sgl_draw();
