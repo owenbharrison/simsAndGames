@@ -603,6 +603,8 @@ public:
 			pip_desc.shader=sg_make_shader(halftone_shader_desc(sg_query_backend()));
 			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+			//default to this
+			post_process.pip_to_use=&post_process.pips.back();
 		}
 		
 		{//crosshatch
@@ -636,8 +638,6 @@ public:
 			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
 			post_process.pips.push_back(sg_make_pipeline(pip_desc));
 		}
-
-		randomizePostProcess();
 
 		//xy
 		float vertexes[4][2]{
