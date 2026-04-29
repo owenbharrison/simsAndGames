@@ -8,7 +8,13 @@
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
 
-#include "shd.glsl.h"
+#include "shd/shadow_map.glsl.h"
+#include "shd/skybox.glsl.h"
+#include "shd/shaded.glsl.h"
+#include "shd/mesh.glsl.h"
+#include "shd/colorview.glsl.h"
+#include "shd/line.glsl.h"
+#include "shd/post_process.glsl.h"
 
 #include "shape.h"
 
@@ -22,10 +28,6 @@
 #include "sokol/font.h"
 
 #include "gizmo.h"
-
-#include <sstream>
-//for setprecision
-#include <iomanip>
 
 using cmn::mat4;
 using cmn::vf3d;
@@ -59,7 +61,7 @@ static mat4 makeTransformMatrix(const vf3d& x, const vf3d& y, const vf3d& z, con
 	return m;
 }
 
-class Demo : public cmn::SokolEngine {
+class SokolTesting : public cmn::SokolEngine {
 	struct {
 		sg_sampler linear{};
 		sg_sampler nearest{};
@@ -71,8 +73,9 @@ class Demo : public cmn::SokolEngine {
 		sg_view checker{};
 	} textures;
 
-	sg_pipeline shaded_mesh_pip{};
 	sg_pipeline mesh_pip{};
+
+	sg_pipeline shaded_mesh_pip{};
 
 	sg_pipeline line_pip{};
 
@@ -115,7 +118,16 @@ class Demo : public cmn::SokolEngine {
 		mat4 face_proj;
 	} shadow_map;
 
-	sg_pass_action display_pass_action{};
+	struct {
+		sg_pass_action pass_action{};
+
+		sg_image color_img{SG_INVALID_ID};
+		sg_view color_attach{SG_INVALID_ID};
+		sg_view color_tex{SG_INVALID_ID};
+
+		sg_image depth_img{SG_INVALID_ID};
+		sg_view depth_attach{SG_INVALID_ID};
+	} canvas;
 
 	struct {
 		sg_pipeline pip{};
@@ -131,13 +143,22 @@ class Demo : public cmn::SokolEngine {
 	std::list<Shape> shapes;
 
 	struct {
-		sg_pipeline pip{};
-
 		sg_buffer vbuf{};
 		sg_buffer ibuf{};
 
 		std::unordered_map<Shape*, Gizmo> map;
 	} gizmo;
+
+	struct {
+		sg_pass_action pass_action{};
+
+		std::list<sg_pipeline> pips;
+		sg_pipeline* pip_to_use;
+
+		sg_buffer vbuf{};
+
+		float time=0;
+	} post_process;
 
 	struct {
 		vf3d pos;
@@ -155,12 +176,6 @@ class Demo : public cmn::SokolEngine {
 	vf3d mouse_dir;
 	vf3d prev_mouse_dir;
 
-	struct {
-		bool to_render=false;
-
-		Mesh point;
-	} collision;
-
 public:
 #pragma region SETUP HELPERS
 	void setupEnvironment() {
@@ -172,6 +187,8 @@ public:
 	void setupSamplers() {
 		{
 			sg_sampler_desc sampler_desc{};
+			sampler_desc.wrap_u=SG_WRAP_CLAMP_TO_EDGE;
+			sampler_desc.wrap_v=SG_WRAP_CLAMP_TO_EDGE;
 			samplers.linear=sg_make_sampler(sampler_desc);
 		}
 
@@ -194,20 +211,6 @@ public:
 		if(!cmn::makeTextureFromFile(c, "assets/img/checker.png")) c=b;
 	}
 
-	//works with mesh
-	void setupShadedMeshPipeline() {
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_shaded_mesh_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shaded_mesh_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_shaded_mesh_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(shaded_mesh_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.cull_mode=SG_CULLMODE_FRONT;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		shaded_mesh_pip=sg_make_pipeline(pip_desc);
-	}
-
 	void setupMeshPipeline() {
 		sg_pipeline_desc pip_desc{};
 		pip_desc.layout.attrs[ATTR_mesh_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
@@ -218,7 +221,23 @@ public:
 		pip_desc.cull_mode=SG_CULLMODE_FRONT;
 		pip_desc.depth.write_enabled=true;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
 		mesh_pip=sg_make_pipeline(pip_desc);
+	}
+
+	//works with mesh
+	void setupShadedMeshPipeline() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.layout.attrs[ATTR_shaded_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shaded_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
+		pip_desc.layout.attrs[ATTR_shaded_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
+		pip_desc.shader=sg_make_shader(shaded_shader_desc(sg_query_backend()));
+		pip_desc.index_type=SG_INDEXTYPE_UINT32;
+		pip_desc.cull_mode=SG_CULLMODE_FRONT;
+		pip_desc.depth.write_enabled=true;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
+		shaded_mesh_pip=sg_make_pipeline(pip_desc);
 	}
 
 	//works with linemesh
@@ -231,6 +250,7 @@ public:
 		pip_desc.index_type=SG_INDEXTYPE_UINT32;
 		pip_desc.depth.write_enabled=true;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
 		line_pip=sg_make_pipeline(pip_desc);
 	}
 
@@ -351,10 +371,59 @@ public:
 		shadow_map.face_proj=mat4::makePerspective(90.f, 1, cam.near_plane, cam.far_plane);
 	}
 
-	//clear to black
-	void setupDisplayPassAction() {
-		display_pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		display_pass_action.colors[0].clear_value={0, 0, 0, 1};
+	//since will be called on resize,
+	//  this needs to free & remake resources
+	void resizeCanvasTarget() {
+		//make color img
+		{
+			sg_destroy_image(canvas.color_img);
+			sg_image_desc image_desc{};
+			image_desc.usage.color_attachment=true;
+			image_desc.width=sapp_width();
+			image_desc.height=sapp_height();
+			canvas.color_img=sg_make_image(image_desc);
+
+			//make color attach
+			{
+				sg_destroy_view(canvas.color_attach);
+				sg_view_desc view_desc{};
+				view_desc.color_attachment.image=canvas.color_img;
+				canvas.color_attach=sg_make_view(view_desc);
+			}
+
+			//make color tex
+			{
+				sg_destroy_view(canvas.color_tex);
+				sg_view_desc view_desc{};
+				view_desc.texture.image=canvas.color_img;
+				canvas.color_tex=sg_make_view(view_desc);
+			}
+		}
+
+		{
+			//make depth img
+			sg_destroy_image(canvas.depth_img);
+			sg_image_desc image_desc{};
+			image_desc.usage.depth_stencil_attachment=true;
+			image_desc.width=sapp_width();
+			image_desc.height=sapp_height();
+			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
+			canvas.depth_img=sg_make_image(image_desc);
+
+			//make depth attach
+			sg_destroy_view(canvas.depth_attach);
+			sg_view_desc view_desc{};
+			view_desc.depth_stencil_attachment.image=canvas.depth_img;
+			canvas.depth_attach=sg_make_view(view_desc);
+		}
+	}
+
+	void setupCanvas() {
+		resizeCanvasTarget();
+
+		//clear to black
+		canvas.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		canvas.pass_action.colors[0].clear_value={0, 0, 0, 1};
 	}
 
 	//make pipeline, orient meshes, & load textures 
@@ -365,6 +434,9 @@ public:
 		pip_desc.layout.attrs[ATTR_skybox_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(skybox_shader_desc(sg_query_backend()));
 		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+		pip_desc.depth.write_enabled=true;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
 		skybox.pip=sg_make_pipeline(pip_desc);
 
 		//vertex buffer
@@ -476,23 +548,13 @@ public:
 	}
 
 	void setupGizmo() {
-		//basecol pipeline
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_basecol_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.shader=sg_make_shader(basecol_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		gizmo.pip=sg_make_pipeline(pip_desc);
-
 		//quad vertex buffer
 		{
-			//xyz
-			float vertexes[4][3]{
-				{0, 0, 0},
-				{1, 0, 0},
-				{0, 0, 1},
-				{1, 0, 1}
+			Mesh::Vertex vertexes[4]{
+				{{0, 0, 0}, {0, 0, 0}, {0, 0}},
+				{{1, 0, 0}, {0, 0, 0}, {0, 0}},
+				{{0, 0, 1}, {0, 0, 0}, {0, 0}},
+				{{1, 0, 1}, {0, 0, 0}, {0, 0}}
 			};
 			sg_buffer_desc buffer_desc{};
 			buffer_desc.data=SG_RANGE(vertexes);
@@ -509,10 +571,84 @@ public:
 		}
 	}
 
-	void setupCollision() {
-		Mesh& m=collision.point;
-		auto status=Mesh::loadFromOBJ(m, "assets/models/icosphere.txt");
-		if(status!=Mesh::ReturnCode::Ok) m=Mesh::makeCube();
+	void randomizePostProcess() {
+		auto it=post_process.pips.begin();
+		std::advance(it, std::rand()%post_process.pips.size());
+		post_process.pip_to_use=&*it;
+	}
+
+	void setupPostProcess() {
+		post_process.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		post_process.pass_action.colors[0].clear_value={0, 0, 0, 1};
+		
+		{//identity
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_identity_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(identity_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+
+		{//crt
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_crt_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(crt_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+
+		{//halftone
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_halftone_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(halftone_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+		
+		{//crosshatch
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_crosshatch_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(crosshatch_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+
+		{//ascii
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_ascii_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(ascii_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+
+		{//kuwahara
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_kuwahara_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(kuwahara_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+
+		{//mean of least variance
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_mlv_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(mlv_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+
+		randomizePostProcess();
+
+		//xy
+		float vertexes[4][2]{
+			{-1, -1},
+			{1, -1},
+			{-1, 1},
+			{1, 1}
+		};
+		sg_buffer_desc buffer_desc{};
+		buffer_desc.data=SG_RANGE(vertexes);
+		post_process.vbuf=sg_make_buffer(buffer_desc);
 	}
 
 	void setupCamera() {
@@ -550,7 +686,7 @@ public:
 
 		setupShadowMap();
 
-		setupDisplayPassAction();
+		setupCanvas();
 
 		setupSkybox();
 
@@ -559,9 +695,17 @@ public:
 
 		setupGizmo();
 
-		setupCollision();
+		setupPostProcess();
 
 		setupCamera();
+	}
+
+	void userInput(const sapp_event* e) override {
+		switch(e->type) {
+			case SAPP_EVENTTYPE_RESIZED:
+				resizeCanvasTarget();
+				break;
+		}
 	}
 
 #pragma region UPDATE HELPERS
@@ -675,9 +819,6 @@ public:
 
 		//toggle shape outlines
 		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
-
-		//toggle collision rendering
-		if(getKey(SAPP_KEYCODE_C).pressed) collision.to_render^=true;
 	}
 
 	void updateCameraMatrixes() {
@@ -729,6 +870,10 @@ public:
 		updateMouseRay();
 
 		updateShadowMapMatrixes();
+
+		if(getKey(SAPP_KEYCODE_R).pressed) randomizePostProcess();
+
+		post_process.time+=dt;
 	}
 
 #pragma region RENDER HELPERS
@@ -740,17 +885,17 @@ public:
 		bind.index_buffer=l.ibuf;
 		sg_apply_bindings(bind);
 
-		vs_line_params_t vs_line_params{};
+		p_vs_line_t p_vs_line{};
 		mat4 mvp=mat4::mul(cam.view_proj, model);
-		std::memcpy(vs_line_params.u_mvp, mvp.m, sizeof(mvp.m));
-		sg_apply_uniforms(UB_vs_line_params, SG_RANGE(vs_line_params));
+		std::memcpy(p_vs_line.u_mvp, mvp.m, sizeof(mvp.m));
+		sg_apply_uniforms(UB_p_vs_line, SG_RANGE(p_vs_line));
 
-		fs_line_params_t fs_line_params{};
-		fs_line_params.u_tint[0]=col.r;
-		fs_line_params.u_tint[1]=col.g;
-		fs_line_params.u_tint[2]=col.b;
-		fs_line_params.u_tint[3]=col.a;
-		sg_apply_uniforms(UB_fs_line_params, SG_RANGE(fs_line_params));
+		p_fs_line_t p_fs_line{};
+		p_fs_line.u_tint[0]=col.r;
+		p_fs_line.u_tint[1]=col.g;
+		p_fs_line.u_tint[2]=col.b;
+		p_fs_line.u_tint[3]=col.a;
+		sg_apply_uniforms(UB_p_fs_line, SG_RANGE(p_fs_line));
 
 		sg_draw(0, 2*l.lines.size(), 1);
 	}
@@ -782,23 +927,23 @@ public:
 
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=colorview.vbuf;
-		bind.samplers[SMP_u_colorview_smp]=samplers.nearest;
-		bind.views[VIEW_u_colorview_tex]=tex;
+		bind.samplers[SMP_b_colorview_smp]=samplers.nearest;
+		bind.views[VIEW_b_colorview_tex]=tex;
 		sg_apply_bindings(bind);
 
-		vs_colorview_params_t vs_colorview_params{};
-		vs_colorview_params.u_tl[0]=l;
-		vs_colorview_params.u_tl[1]=t,
-			vs_colorview_params.u_br[0]=r;
-		vs_colorview_params.u_br[1]=b;
-		sg_apply_uniforms(UB_vs_colorview_params, SG_RANGE(vs_colorview_params));
+		p_vs_colorview_t p_vs_colorview{};
+		p_vs_colorview.u_tl[0]=l;
+		p_vs_colorview.u_tl[1]=t;
+		p_vs_colorview.u_br[0]=r;
+		p_vs_colorview.u_br[1]=b;
+		sg_apply_uniforms(UB_p_vs_colorview, SG_RANGE(p_vs_colorview));
 
-		fs_colorview_params_t fs_colorview_params{};
-		fs_colorview_params.u_tint[0]=tint.r;
-		fs_colorview_params.u_tint[1]=tint.g;
-		fs_colorview_params.u_tint[2]=tint.b;
-		fs_colorview_params.u_tint[3]=tint.a;
-		sg_apply_uniforms(UB_fs_colorview_params, SG_RANGE(fs_colorview_params));
+		p_fs_colorview_t p_fs_colorview{};
+		p_fs_colorview.u_tint[0]=tint.r;
+		p_fs_colorview.u_tint[1]=tint.g;
+		p_fs_colorview.u_tint[2]=tint.b;
+		p_fs_colorview.u_tint[3]=tint.a;
+		sg_apply_uniforms(UB_p_fs_colorview, SG_RANGE(p_fs_colorview));
 
 		sg_apply_viewportf(x, y, w, h, true);
 
@@ -849,18 +994,18 @@ public:
 
 				mat4 mvp=mat4::mul(view_proj, shp.model);
 
-				vs_shadow_map_params_t vs_shadow_map_params{};
-				std::memcpy(vs_shadow_map_params.u_model, shp.model.m, sizeof(shp.model.m));
-				std::memcpy(vs_shadow_map_params.u_mvp, mvp.m, sizeof(mvp.m));
-				sg_apply_uniforms(UB_vs_shadow_map_params, SG_RANGE(vs_shadow_map_params));
+				p_vs_shadow_map_t p_vs_shadow_map{};
+				std::memcpy(p_vs_shadow_map.u_model, shp.model.m, sizeof(shp.model.m));
+				std::memcpy(p_vs_shadow_map.u_mvp, mvp.m, sizeof(mvp.m));
+				sg_apply_uniforms(UB_p_vs_shadow_map, SG_RANGE(p_vs_shadow_map));
 
-				fs_shadow_map_params_t fs_shadow_map_params{};
-				fs_shadow_map_params.u_light_pos[0]=shadow_map.pos.x;
-				fs_shadow_map_params.u_light_pos[1]=shadow_map.pos.y;
-				fs_shadow_map_params.u_light_pos[2]=shadow_map.pos.z;
-				fs_shadow_map_params.u_cam_near=cam.near_plane;
-				fs_shadow_map_params.u_cam_far=cam.far_plane;
-				sg_apply_uniforms(UB_fs_shadow_map_params, SG_RANGE(fs_shadow_map_params));
+				p_fs_shadow_map_t p_fs_shadow_map{};
+				p_fs_shadow_map.u_light_pos[0]=shadow_map.pos.x;
+				p_fs_shadow_map.u_light_pos[1]=shadow_map.pos.y;
+				p_fs_shadow_map.u_light_pos[2]=shadow_map.pos.z;
+				p_fs_shadow_map.u_cam_near=cam.near_plane;
+				p_fs_shadow_map.u_cam_far=cam.far_plane;
+				sg_apply_uniforms(UB_p_fs_shadow_map, SG_RANGE(p_fs_shadow_map));
 
 				sg_draw(0, 3*shp.mesh.tris.size(), 1);
 			}
@@ -880,15 +1025,15 @@ public:
 
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=skybox.vbuf;
-			bind.samplers[SMP_u_skybox_smp]=samplers.linear;
-			bind.views[VIEW_u_skybox_tex]=skybox.tex[i];
+			bind.samplers[SMP_b_skybox_smp]=samplers.linear;
+			bind.views[VIEW_b_skybox_tex]=skybox.tex[i];
 			sg_apply_bindings(bind);
 
 			mat4 mvp=mat4::mul(view_proj, skybox.model[i]);
 
-			vs_skybox_params_t vs_skybox_params{};
-			std::memcpy(vs_skybox_params.u_mvp, mvp.m, sizeof(mvp.m));
-			sg_apply_uniforms(UB_vs_skybox_params, SG_RANGE(vs_skybox_params));
+			p_vs_skybox_t p_vs_skybox{};
+			std::memcpy(p_vs_skybox.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_p_vs_skybox, SG_RANGE(p_vs_skybox));
 
 			sg_draw(0, 4, 1);
 		}
@@ -901,28 +1046,28 @@ public:
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=s.mesh.vbuf;
 			bind.index_buffer=s.mesh.ibuf;
-			bind.samplers[SMP_u_shaded_mesh_smp]=samplers.linear;
-			bind.views[VIEW_u_shaded_mesh_tex]=s.tex;
-			bind.samplers[SMP_u_shaded_mesh_shadow_smp]=samplers.nearest;
-			bind.views[VIEW_u_shaded_mesh_shadow_tex]=shadow_map.color_view;
+			bind.samplers[SMP_b_shaded_smp]=samplers.linear;
+			bind.views[VIEW_b_shaded_tex]=s.tex;
+			bind.samplers[SMP_b_shaded_shadow_smp]=samplers.nearest;
+			bind.views[VIEW_b_shaded_shadow_tex]=shadow_map.color_view;
 			sg_apply_bindings(bind);
 
-			vs_shaded_mesh_params_t vs_shaded_mesh_params{};
-			std::memcpy(vs_shaded_mesh_params.u_model, s.model.m, sizeof(s.model.m));
+			p_vs_shaded_t p_vs_shaded{};
+			std::memcpy(p_vs_shaded.u_model, s.model.m, sizeof(s.model.m));
 			mat4 mvp=mat4::mul(cam.view_proj, s.model);
-			std::memcpy(vs_shaded_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
-			sg_apply_uniforms(UB_vs_shaded_mesh_params, SG_RANGE(vs_shaded_mesh_params));
+			std::memcpy(p_vs_shaded.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_p_vs_shaded, SG_RANGE(p_vs_shaded));
 
-			fs_shaded_mesh_params_t fs_shaded_mesh_params{};
-			fs_shaded_mesh_params.u_eye_pos[0]=cam.pos.x;
-			fs_shaded_mesh_params.u_eye_pos[1]=cam.pos.y;
-			fs_shaded_mesh_params.u_eye_pos[2]=cam.pos.z;
-			fs_shaded_mesh_params.u_light_pos[0]=shadow_map.pos.x;
-			fs_shaded_mesh_params.u_light_pos[1]=shadow_map.pos.y;
-			fs_shaded_mesh_params.u_light_pos[2]=shadow_map.pos.z;
-			fs_shaded_mesh_params.u_cam_near=cam.near_plane;
-			fs_shaded_mesh_params.u_cam_far=cam.far_plane;
-			sg_apply_uniforms(UB_fs_shaded_mesh_params, SG_RANGE(fs_shaded_mesh_params));
+			p_fs_shaded_t p_fs_shaded{};
+			p_fs_shaded.u_eye_pos[0]=cam.pos.x;
+			p_fs_shaded.u_eye_pos[1]=cam.pos.y;
+			p_fs_shaded.u_eye_pos[2]=cam.pos.z;
+			p_fs_shaded.u_light_pos[0]=shadow_map.pos.x;
+			p_fs_shaded.u_light_pos[1]=shadow_map.pos.y;
+			p_fs_shaded.u_light_pos[2]=shadow_map.pos.z;
+			p_fs_shaded.u_cam_near=cam.near_plane;
+			p_fs_shaded.u_cam_far=cam.far_plane;
+			sg_apply_uniforms(UB_p_fs_shaded, SG_RANGE(p_fs_shaded));
 
 			sg_draw(0, 3*s.mesh.tris.size(), 1);
 		}
@@ -934,54 +1079,28 @@ public:
 		}
 	}
 
-	void renderClosePoints() {
-		mat4 scale=mat4::makeScale(.05f*vf3d(1, 1, 1));
-		for(const auto& s:shapes) {
-			vf3d close_pt=s.getClosePt(cam.pos);
-
-			mat4 trans=mat4::makeTranslation(close_pt);
-			mat4 model=mat4::mul(trans, scale);
-
-			sg_apply_pipeline(mesh_pip);
-
-			sg_bindings bind{};
-			bind.vertex_buffers[0]=collision.point.vbuf;
-			bind.index_buffer=collision.point.ibuf;
-			bind.samplers[SMP_u_mesh_smp]=samplers.linear;
-			bind.views[VIEW_u_mesh_tex]=textures.uv;
-			sg_apply_bindings(bind);
-
-			vs_mesh_params_t vs_mesh_params{};
-			mat4 mvp=mat4::mul(cam.view_proj, model);
-			std::memcpy(vs_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
-			sg_apply_uniforms(UB_vs_mesh_params, SG_RANGE(vs_mesh_params));
-
-			sg_draw(0, 3*collision.point.tris.size(), 1);
-		}
-	}
-
 	void renderGizmos() {
 		auto renderQuad=[&] (const vf3d& pos, const vf3d& ux, const vf3d& uz, float scl, const sg_color& col) {
-			sg_apply_pipeline(gizmo.pip);
+			sg_apply_pipeline(mesh_pip);
 
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=gizmo.vbuf;
 			bind.index_buffer=gizmo.ibuf;
 			sg_apply_bindings(bind);
 
-			vs_basecol_params_t vs_basecol_params{};
+			p_vs_mesh_t p_vs_mesh{};
 			vf3d uy=uz.cross(ux).norm();
 			mat4 model=makeTransformMatrix(scl*ux, scl*uy, scl*uz, pos);
 			mat4 mvp=mat4::mul(cam.view_proj, model);
-			std::memcpy(vs_basecol_params.u_mvp, mvp.m, sizeof(mvp.m));
-			sg_apply_uniforms(UB_vs_basecol_params, SG_RANGE(vs_basecol_params));
+			std::memcpy(p_vs_mesh.u_mvp, mvp.m, sizeof(mvp.m));
+			sg_apply_uniforms(UB_p_vs_mesh, SG_RANGE(p_vs_mesh));
 
-			fs_basecol_params_t fs_basecol_params{};
-			fs_basecol_params.u_tint[0]=col.r;
-			fs_basecol_params.u_tint[1]=col.g;
-			fs_basecol_params.u_tint[2]=col.b;
-			fs_basecol_params.u_tint[3]=col.a;
-			sg_apply_uniforms(UB_fs_basecol_params, SG_RANGE(fs_basecol_params));
+			p_fs_mesh_t p_fs_mesh{};
+			p_fs_mesh.u_tint[0]=col.r;
+			p_fs_mesh.u_tint[1]=col.g;
+			p_fs_mesh.u_tint[2]=col.b;
+			p_fs_mesh.u_tint[3]=col.a;
+			sg_apply_uniforms(UB_p_fs_mesh, SG_RANGE(p_fs_mesh));
 
 			sg_draw(0, 3*2, 1);
 		};
@@ -1007,15 +1126,12 @@ public:
 			renderQuad(p+Gizmo::margin*(z+x), z, x, Gizmo::plane_size, {1, 0, 1, 1});
 		}
 	}
-#pragma endregion
 
-	void userRender() override {
-		renderShapesIntoShadowMap();
-
-		//start display pass 
+	void renderIntoCanvas() {
 		sg_pass pass{};
-		pass.action=display_pass_action;
-		pass.swapchain=sglue_swapchain();
+		pass.action=canvas.pass_action;
+		pass.attachments.colors[0]=canvas.color_attach;
+		pass.attachments.depth_stencil=canvas.depth_attach;
 		sg_begin_pass(pass);
 
 		renderSkybox();
@@ -1023,16 +1139,48 @@ public:
 		if(render_outlines) renderShapeOutlines();
 		else renderShapes();
 
-		if(collision.to_render) renderClosePoints();
-
 		renderGizmos();
 
 		sg_end_pass();
+	}
+
+	void renderPostProcess() {
+		sg_pass pass{};
+		pass.action=post_process.pass_action;
+		pass.swapchain=sglue_swapchain();
+		sg_begin_pass(pass);
+
+		sg_apply_pipeline(*post_process.pip_to_use);
+
+		sg_bindings bind{};
+		bind.vertex_buffers[0]=post_process.vbuf;
+		bind.samplers[SMP_b_crt_smp]=samplers.linear;
+		bind.views[VIEW_b_crt_tex]=canvas.color_tex;
+		sg_apply_bindings(bind);
+
+		p_vs_post_process_t p_vs_post_process{};
+		p_vs_post_process.u_time=post_process.time;
+		p_vs_post_process.u_resolution[0]=sapp_widthf();
+		p_vs_post_process.u_resolution[1]=sapp_heightf();
+		sg_apply_uniforms(UB_p_vs_post_process, SG_RANGE(p_vs_post_process));
+
+		sg_draw(0, 4, 1);
+
+		sg_end_pass();
+	}
+#pragma endregion
+
+	void userRender() override {
+		renderShapesIntoShadowMap();
+
+		renderIntoCanvas();
+
+		renderPostProcess();
 
 		sg_commit();
 	}
 
-	Demo() {
-		app_title="Collision Considerations Demo";
+	SokolTesting() {
+		app_title="Post Processing Demo";
 	}
 };

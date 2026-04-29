@@ -158,15 +158,26 @@
     <ClInclude Include="src\linemesh.h" />
     <ClInclude Include="src\mesh.h" />
     <ClInclude Include="src\shape.h" />
-    <ClInclude Include="src\shd.glsl.h" />
+    <ClInclude Include="src\shd\colorview.glsl.h" />
+    <ClInclude Include="src\shd\line.glsl.h" />
+    <ClInclude Include="src\shd\mesh.glsl.h" />
+    <ClInclude Include="src\shd\post_process.glsl.h" />
+    <ClInclude Include="src\shd\shaded.glsl.h" />
+    <ClInclude Include="src\shd\shadow_map.glsl.h" />
+    <ClInclude Include="src\shd\skybox.glsl.h" />
     <ClInclude Include="src\texture_utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="compile_shaders.bat" />
-    <None Include="src\shd.glsl" />
+    <None Include="src\shd\colorview.glsl" />
+    <None Include="src\shd\line.glsl" />
+    <None Include="src\shd\mesh.glsl" />
+    <None Include="src\shd\post_process.glsl" />
+    <None Include="src\shd\shaded.glsl" />
+    <None Include="src\shd\shadow_map.glsl" />
+    <None Include="src\shd\skybox.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="assets\models\axis.txt" />

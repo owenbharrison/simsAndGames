@@ -1,15 +1,15 @@
 #include "demo.h"
 
-static Demo* demo_ptr=nullptr;
+static SokolTesting* st_ptr=nullptr;
 
-static void init_cb() { demo_ptr->init(); }
-static void cleanup_cb() { demo_ptr->cleanup(); }
-static void frame_cb() { demo_ptr->frame(); }
-static void input_cb(const sapp_event* e) { demo_ptr->input(e); }
+static void init_cb() { st_ptr->init(); }
+static void cleanup_cb() { st_ptr->cleanup(); }
+static void frame_cb() { st_ptr->frame(); }
+static void input_cb(const sapp_event* e) { st_ptr->input(e); }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
-	static Demo demo;
-	demo_ptr=&demo;
+	static SokolTesting st;
+	st_ptr=&st;
 
 	sapp_desc app_desc{};
 	app_desc.init_cb=init_cb;
