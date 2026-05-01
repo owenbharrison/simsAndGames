@@ -497,16 +497,6 @@ layout(binding=0) uniform sampler b_mlv_smp;
 
 const int K=5;//3-7
 
-//stipple
-const int bayer[16]=int[16](
-	0, 8, 2, 10,
-	12, 4, 14, 6,
-	3, 11, 1, 9,
-	15, 7, 13, 5
-);
-
-const int NumLevels=4;
-
 void main() {
 	vec2 uv=gl_FragCoord.xy/resolution;
 	
@@ -541,18 +531,78 @@ void main() {
 			}
 		}
 	}
-	
-	//dithering
-	ivec2 ij=ivec2(gl_FragCoord.xy)%4;
-	float bayer_value=.0625*float(bayer[ij.x+4*ij.y]);
-	float mask=.5-bayer_value;
-	o_frag_col.rgb+=.23*mask;
-	
-	//posterization
-	float N1=float(NumLevels-1);
-	o_frag_col.rgb=floor(.5+N1*o_frag_col.rgb)/N1;
 }
 
 @end
 
 @program mlv vs_post_process fs_mlv
+
+//posterization and dithering
+@fs fs_quantize
+
+in float time;
+in vec2 resolution;
+out vec4 o_frag_col;
+
+layout(binding=0) uniform texture2D b_quantize_tex;
+layout(binding=0) uniform sampler b_quantize_smp;
+
+@include_block utils
+
+const int PixelSize=4;
+
+/*
+const int BayerSize=2;
+const float bayer[]=float[](
+	0, 2,
+	3, 1
+);
+*/
+
+const int BayerSize=4;
+const int bayer[]=int[](
+	0, 8, 2, 10,
+	12, 4, 14, 6,
+	3, 11, 1, 9,
+	15, 7, 13, 5
+);
+
+/*
+const int BayerSize=8;
+const int bayer[]=int[](
+	0, 32, 8, 40, 2, 34, 10, 42,
+	48, 16, 56, 24, 50, 18, 58, 26,
+	12, 44, 4, 36, 14, 46, 6, 38,
+	60, 28, 52, 20, 62, 30, 54, 22,
+	3, 35, 11, 43, 1, 33, 9, 41,
+	51, 19, 59, 27, 49, 17, 57, 25,
+	15, 47, 7, 39, 13, 45, 5, 37,
+	63, 31, 55, 23, 61, 29, 53, 21
+);
+*/
+
+const float Spread=.21;
+
+const int NumLevels=6;
+
+void main() {
+	//snap coord to nearest "pixel"
+	vec2 coord=PixelSize*floor(gl_FragCoord.xy/PixelSize);
+	vec2 uv=coord/resolution;
+	vec3 rgb=texture(sampler2D(b_quantize_tex, b_quantize_smp), uv).rgb;
+
+	//add dither noise
+	ivec2 ij=ivec2(gl_FragCoord.xy)%BayerSize;
+	float b_sz=BayerSize;
+	float noise=bayer[ij.x+BayerSize*ij.y]/b_sz/b_sz-.5;
+	rgb+=Spread*noise;
+	
+	//posterize
+	float n1=NumLevels-1;
+	rgb=floor(.5+n1*rgb)/n1;
+	o_frag_col=vec4(rgb, 1);
+}
+
+@end
+
+@program quantize vs_post_process fs_quantize
