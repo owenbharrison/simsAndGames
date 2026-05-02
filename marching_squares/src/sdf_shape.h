@@ -86,7 +86,7 @@ struct SDFCircle : SDFShape {
 	}
 
 	void render(olc::PixelGameEngine* pge) const override {
-		const int num=32;
+		const int num=48;
 		
 		float rad=(edge-ctr).mag();
 		

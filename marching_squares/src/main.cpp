@@ -8,15 +8,11 @@
 
 #include "sdf_shape.h"
 
-void stressGradient(float t, float& r, float& g, float& b) {
-	static const float cols[4][3]{
-		{0, 1, 1},//cyan
-		{0, 0, 1},//blue
-		{.5f, 0, 1},//purple
-		{0, 0, 0}//black
-	};
-	static const int num=sizeof(cols)/sizeof(cols[0]);
-
+//c friendly!
+void colorGradient(
+	const float cols[][3], int num,
+	float t, float& r, float& g, float& b
+) {
 	//clamp percent
 	if(t<0) t=0;
 	if(t>.999f) t=.999f;
@@ -27,11 +23,35 @@ void stressGradient(float t, float& r, float& g, float& b) {
 	t=x-i;
 
 	//lerp cols
-	const auto& c1=cols[i];
-	const auto& c2=cols[i+1];
-	r=c1[0]+t*(c2[0]-c1[0]);
-	g=c1[1]+t*(c2[1]-c1[1]);
-	b=c1[2]+t*(c2[2]-c1[2]);
+	const auto& c0=cols[i];
+	const auto& c1=cols[1+i];
+	r=c0[0]+t*(c1[0]-c0[0]);
+	g=c0[1]+t*(c1[1]-c0[1]);
+	b=c0[2]+t*(c1[2]-c0[2]);
+}
+
+void insideGradient(float t, float& r, float& g, float& b) {
+	static const float cols[][3]{
+		{0, 1, 0},//green
+		{1, 1, 0},//yellow
+		{1, 0, 0}//red
+	};
+	return colorGradient(
+		cols, sizeof(cols)/sizeof(cols[0]),
+		t, r, g, b
+	);
+}
+
+void outsideGradient(float t, float& r, float& g, float& b) {
+	static const float cols[][3]{
+		{0, 1, 1},//cyan
+		{0, 0, 1},//blue
+		{.5f, 0, 1}//purple
+	};
+	return colorGradient(
+		cols, sizeof(cols)/sizeof(cols[0]),
+		t, r, g, b
+	);
 }
 
 float invLerp(float v, float a, float b) {
@@ -45,7 +65,7 @@ olc::vf2d mix(const olc::vf2d& a, const olc::vf2d& b, float t) {
 using olc::vf2d;
 
 struct MarchingSquares : public olc::PixelGameEngine {
-	const float min_cell_sz=3, max_cell_sz=10;
+	const float min_cell_sz=3, max_cell_sz=25;
 	float cell_sz=5;
 	int width=0, height=0;
 	int ix(int i, int j) { return i+width*j; }
@@ -89,7 +109,7 @@ struct MarchingSquares : public olc::PixelGameEngine {
 			
 		shapes.push_back(rect);
 		auto circ=new SDFCircle{};
-		circ->col={0, 255, 0, 255};
+		circ->col={0, 0, 255, 255};
 		circ->ctr=vf2d(.7f, .5f)*res;
 		circ->edge=vf2d(.9f, .5f)*res;
 		shapes.push_back(circ);
@@ -143,13 +163,15 @@ struct MarchingSquares : public olc::PixelGameEngine {
 			for(int j=0; j<height; j++) {
 				int k=ix(i, j);
 
-				vf2d p{cell_sz*i, cell_sz*j};
+				//center of cell
+				auto p=cell_sz*vf2d(.5f+i, .5f+j);
 				pos_grid[k]=p;
 
 				bool first=true;
 				auto& record=val_grid[k];
 				for(const auto& s:shapes) {
 					float sd=s->signedDist(p);
+
 					//min for union, max for intersection
 					bool more=sd>record;
 					if(first||(combine_union^more)) {
@@ -175,12 +197,13 @@ struct MarchingSquares : public olc::PixelGameEngine {
 			for(int j=0; j<height; j++) {
 				int k=ix(i, j);
 
-				stressGradient(
-					std::abs(val_grid[k]/max),
-					col_grid[3*k],
-					col_grid[3*k+1],
-					col_grid[3*k+2]
-				);
+				//sign predicates in/out
+				float t=val_grid[k]/max;
+				float& r=col_grid[3*k];
+				float& g=col_grid[1+3*k];
+				float& b=col_grid[2+3*k];
+				if(t>0) outsideGradient(t, r, g, b);
+				else insideGradient(-t, r, g, b);
 			}
 		}
 	}
@@ -338,7 +361,8 @@ struct MarchingSquares : public olc::PixelGameEngine {
 		for(int i=0; i<width; i++) {
 			for(int j=0; j<height; j++) {
 				int k=ix(i, j);
-				float x=cell_sz*i, y=cell_sz*j;
+				float x=cell_sz*i;
+				float y=cell_sz*j;
 				auto col=olc::PixelF(
 					col_grid[3*k],
 					col_grid[1+3*k],
@@ -352,11 +376,6 @@ struct MarchingSquares : public olc::PixelGameEngine {
 	void renderShapes() {
 		for(const auto& s:shapes) {
 			s->render(this);
-
-			auto handles=s->getHandles();
-			for(const auto& h:handles) {
-				FillCircleDecal(*h, handle_rad, s->col);
-			}
 		}
 	}
 
@@ -393,6 +412,15 @@ struct MarchingSquares : public olc::PixelGameEngine {
 			}
 		}
 	}
+
+	void renderShapeHandles() {
+		for(const auto& s:shapes) {
+			auto handles=s->getHandles();
+			for(const auto& h:handles) {
+				FillCircleDecal(*h, handle_rad, s->col);
+			}
+		}
+	}
 #pragma endregion
 
 	void render() {
@@ -400,9 +428,13 @@ struct MarchingSquares : public olc::PixelGameEngine {
 
 		if(render_values) renderValues();
 
+		//these look better behind
 		if(render_shapes) renderShapes();
 
 		renderMarchedSquares(0, olc::WHITE);
+
+		//these look better in front
+		if(render_shapes) renderShapeHandles();
 	}
 
 	bool OnUserUpdate(float dt) override {
