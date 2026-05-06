@@ -1,11 +1,14 @@
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 //for time
 #include <ctime>
@@ -51,7 +54,7 @@ float snapTo(float a, float b) {
 	return b*std::round(a/b);
 }
 
-class MeshingUI : public cmn::SokolEngine {
+class Meshing : public cmn::SokolEngine {
 	vf2d mouse_pos;
 
 	const float rad=7;
@@ -66,11 +69,6 @@ class MeshingUI : public cmn::SokolEngine {
 
 public:
 #pragma region SETUP_HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		sg_setup(desc);
-	}
-
 	void setupSGL() {
 		sgl_desc_t sgl_desc{};
 		sgl_desc.max_commands=200000;
@@ -78,16 +76,18 @@ public:
 		sgl_setup(&sgl_desc);
 	}
 
-	void userCreate() override {
+	bool user_create() override {
+		app_title="Meshing";
+		
 		std::srand(std::time(0));
 
-		setupEnvironment();
-
 		setupSGL();
+
+		return true;
 	}
 
 	void handleAddAction() {
-		const auto action=getMouse(SAPP_MOUSEBUTTON_LEFT);
+		const auto action=GetMouse(SAPP_MOUSEBUTTON_LEFT);
 		if(action.pressed) {
 			shell.clear(), verts.clear();
 			constraints.clear();
@@ -171,11 +171,12 @@ public:
 		}
 	}
 
-	void userUpdate(float dt) override {
-		mouse_pos=vf2d(mouse_x, mouse_y);
+	bool user_update(float dt) override {
+		mouse_pos.x=GetMouseX();
+		mouse_pos.y=GetMouseY();
 
 		//snap mouse pos to grid
-		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) {
+		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) {
 			mouse_pos.x=snapTo(mouse_pos.x, grid_sz);
 			mouse_pos.y=snapTo(mouse_pos.y, grid_sz);
 		}
@@ -183,9 +184,11 @@ public:
 		handleAddAction();
 
 		//graphics toggles
-		if(getKey(SAPP_KEYCODE_Q).pressed) show_quality^=true;
-		if(getKey(SAPP_KEYCODE_C).pressed) show_constraints^=true;
-		if(getKey(SAPP_KEYCODE_G).pressed) show_grid^=true;
+		if(GetKey(SAPP_KEYCODE_Q).pressed) show_quality^=true;
+		if(GetKey(SAPP_KEYCODE_C).pressed) show_constraints^=true;
+		if(GetKey(SAPP_KEYCODE_G).pressed) show_grid^=true;
+
+		return true;
 	}
 
 	void renderGrid(const sg_color& col) {
@@ -265,7 +268,7 @@ public:
 		}
 	}
 
-	void userRender() override {
+	bool user_render() override {
 		//display pass
 		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
@@ -297,14 +300,12 @@ public:
 		sg_end_pass();
 
 		sg_commit();
+
+		return true;
 	}
 
-	void userDestroy() override {
+	void user_destroy() override {
 		sgl_shutdown();
 		sg_shutdown();
-	}
-
-	MeshingUI() {
-		app_title="Meshing UI Demo";
 	}
 };

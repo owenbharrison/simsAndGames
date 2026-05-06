@@ -142,7 +142,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\delaunay.h" />
-    <ClInclude Include="src\meshing_ui.h" />
+    <ClInclude Include="src\meshing.h" />
     <ClInclude Include="src\poisson.h" />
   </ItemGroup>
   <ItemGroup>

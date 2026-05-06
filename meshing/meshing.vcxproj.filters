@@ -26,7 +26,7 @@
     <ClInclude Include="src\poisson.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\meshing_ui.h">
+    <ClInclude Include="src\meshing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
