@@ -1,11 +1,14 @@
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 #include "shd.glsl.h"
 
@@ -56,14 +59,14 @@ void formatTime(int hour, int minute, int& hh, int& hl, int& mh, int& ml) {
 	ml=minute%10;
 }
 
-class ClockUI : public cmn::SokolEngine {
+class ClockSim : public cmn::SokolEngine {
 	sg_sampler sampler{};
 
 	struct {
 		sg_view blank{};
 		sg_view seg[7];
 	} textures;
-	
+
 	struct {
 		sg_pipeline pip{};
 
@@ -74,7 +77,7 @@ class ClockUI : public cmn::SokolEngine {
 
 	struct {
 		ma_engine engine;
-		
+
 		ma_sound clicks[9];
 		int num_clicks=sizeof(clicks)/sizeof(clicks[0]);
 	} sound;
@@ -89,7 +92,7 @@ class ClockUI : public cmn::SokolEngine {
 		Module* array=nullptr;
 
 		bool render_gpio=false;
-	
+
 		int ix(int i, int j) const {
 			return i+num_x*j;
 		}
@@ -110,17 +113,11 @@ class ClockUI : public cmn::SokolEngine {
 
 public:
 #pragma region SETUP HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		desc.environment=sglue_environment();
-		sg_setup(desc);
-	}
-
 	void setupSampler() {
 		sg_sampler_desc sampler_desc{};
 		sampler=sg_make_sampler(sampler_desc);
 	}
-	
+
 	void setupTextures() {
 		textures.blank=cmn::makeBlankTexture();
 
@@ -130,7 +127,7 @@ public:
 			if(!cmn::makeTextureFromFile(t, name)) t=textures.blank;
 		}
 	}
-	
+
 	void setupColorviewRendering() {
 		//2d tristrip pipeline
 		sg_pipeline_desc pip_desc{};
@@ -164,11 +161,10 @@ public:
 		font=cmn::Font("assets/img/fancy_8x16.png", 8, 16);
 	}
 
-	void setupSounds() {
+	bool setupSounds() {
 		//setup engine
-		if(ma_engine_init(NULL, &sound.engine)!=MA_SUCCESS) {
-			sapp_request_quit();
-		}
+		auto status=ma_engine_init(NULL, &sound.engine);
+		if(status!=MA_SUCCESS) return false;
 
 		//setup click sounds
 		for(int i=0; i<sound.num_clicks; i++) {
@@ -180,8 +176,10 @@ public:
 				NULL,
 				NULL,
 				&sound.clicks[i]
-			)!=MA_SUCCESS) sapp_request_quit();
+			)!=MA_SUCCESS) return false;
 		}
+
+		return true;
 	}
 
 	void makeClickNoise() {
@@ -241,7 +239,7 @@ public:
 		for(int i=0; i<7; i++) {
 			int s=digits[d][i];
 			if(s==-1) break;
-			
+
 			gpio_t seg_on=(1<<7)|(~(1<<s));
 			tasks.push_back({m, gpio_t(on?seg_on:~seg_on), 20});
 			tasks.push_back({m, 0b00000000, 60});
@@ -281,25 +279,25 @@ public:
 	}
 #pragma endregion
 
-	void userCreate() override {
+	bool user_create() override {
 		std::srand(std::time(0));
-		
-		setupEnvironment();
-		
+
 		setupSampler();
-		
+
 		setupTextures();
 
 		setupColorviewRendering();
 
 		setupFont();
 
-		setupSounds();
+		if(!setupSounds()) return false;
 
 		setupClock();
+
+		return true;
 	}
 
-	void userDestroy() override {
+	void user_destroy() override {
 		for(auto& c:sound.clicks) {
 			ma_sound_uninit(&c);
 		}
@@ -327,7 +325,7 @@ public:
 		if(set_mh) queueDigit(2, clock.minute_high, false);
 		if(set_hl) queueDigit(1, clock.hour_low, false);
 		if(set_hh&&clock.hour_high) queueDigit(0, clock.hour_high, false);
-	
+
 		//set new
 		clock.hour_high=hh;
 		clock.hour_low=hl;
@@ -385,18 +383,20 @@ public:
 		}
 	}
 
-	void userUpdate(float dt) override {
+	bool user_update(float dt) override {
 		//toggle gpio render
-		if(getKey(SAPP_KEYCODE_G).pressed) clock.render_gpio^=true;
-		
+		if(GetKey(SAPP_KEYCODE_G).pressed) clock.render_gpio^=true;
+
 		//toggle task render
-		if(getKey(SAPP_KEYCODE_T).pressed) render_tasks^=true;
+		if(GetKey(SAPP_KEYCODE_T).pressed) render_tasks^=true;
 
 		handleClock();
 
 		handleTasks(dt);
 
 		updateSegs();
+
+		return true;
 	}
 
 #pragma region RENDER HELPERS
@@ -461,7 +461,7 @@ public:
 	void renderModule(const Module& m, float x, float y, float scl) {
 		float w_mod=scl*clock.w_mod_img;
 		float h_mod=scl*clock.h_mod_img;
-		
+
 		//black background
 		renderTex(
 			x, y, w_mod, h_mod,
@@ -488,7 +488,7 @@ public:
 			float y_char=y+h_mod-scl_char*font.char_h;
 
 			//gpio
-			const sg_color red{1, 0, 0,1}, green{0, 1, 0, 1};
+			const sg_color red{1, 0, 0, 1}, green{0, 1, 0, 1};
 			for(int i=0; i<8; i++) {
 				//right to left
 				float x_char=sx_char-i*w_char;
@@ -505,14 +505,14 @@ public:
 		int m_scr=15;
 		int w_scr=sapp_width()-2*m_scr;
 		int h_scr=sapp_height()-2*m_scr;
-		
+
 		//margin between clock
 		int m_mod=8;
 		int w_mod_imgs=clock.num_x*clock.w_mod_img;
 		int h_mod_imgs=clock.num_y*clock.h_mod_img;
 		float scl_x=float(w_scr-(clock.num_x-1)*m_mod)/w_mod_imgs;
 		float scl_y=float(h_scr-(clock.num_y-1)*m_mod)/h_mod_imgs;
-		
+
 		//constraining dimension
 		float scl=scl_x<scl_y?scl_x:scl_y;
 
@@ -549,7 +549,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() override {
+	bool user_render() override {
 		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
 		pass.action.colors[0].clear_value={.5f, .5f, .5f, 1};
@@ -563,9 +563,11 @@ public:
 		sg_end_pass();
 
 		sg_commit();
+
+		return true;
 	}
 
-	ClockUI() {
-		app_title="Electromechanical 7-Segment Clock Simulation";
+	ClockSim() {
+		app_title="7-Segment Clock Simulation";
 	}
 };

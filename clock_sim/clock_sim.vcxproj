@@ -138,7 +138,7 @@
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\clock_ui.h" />
+    <ClInclude Include="src\clock_sim.h" />
     <ClInclude Include="src\shd.glsl.h" />
   </ItemGroup>
   <ItemGroup>

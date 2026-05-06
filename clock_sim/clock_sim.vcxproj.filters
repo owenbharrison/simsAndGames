@@ -18,7 +18,7 @@
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\clock_ui.h">
+    <ClInclude Include="src\clock_sim.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\shd.glsl.h">
