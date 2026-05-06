@@ -144,11 +144,10 @@
   <ItemGroup>
     <ClInclude Include="src\constraints.h" />
     <ClInclude Include="src\shd.glsl.h" />
-    <ClInclude Include="src\sketcher_ui.h" />
+    <ClInclude Include="src\sketcher.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\imgui.ini" />
-    <None Include="compile_shaders.bat" />
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>

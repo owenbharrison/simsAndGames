@@ -1,11 +1,14 @@
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 #include "shd.glsl.h"
 
@@ -58,7 +61,7 @@ void shuffle(std::vector<T>& vec) {
 	}
 }
 
-class SketcherUI : public cmn::SokolEngine {
+class Sketcher : public cmn::SokolEngine {
 	sg_sampler sampler{};
 
 	sgl_pipeline sgl_pip{};
@@ -109,11 +112,6 @@ class SketcherUI : public cmn::SokolEngine {
 
 public:
 #pragma region SETUP_HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		sg_setup(desc);
-	}
-
 	void setupSampler() {
 		sg_sampler_desc sampler_desc{};
 		sampler_desc.wrap_u=SG_WRAP_CLAMP_TO_EDGE;
@@ -271,10 +269,10 @@ public:
 		simgui_setup(simgui_desc);
 	}
 
-	void setupIcon() {
+	bool setupIcon() {
 		int width, height, comp;
 		std::uint8_t* pixels8=stbi_load("assets/icon.png", &width, &height, &comp, 4);
-		if(!pixels8) return;
+		if(!pixels8) return false;
 
 		std::uint32_t* pixels32=new std::uint32_t[width*height];
 		std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
@@ -287,13 +285,15 @@ public:
 		icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
 		sapp_set_icon(&icon_desc);
 		delete[] pixels32;
+
+		return true;
 	}
 #pragma endregion
 
-	void userCreate() override {
+	bool user_create() override {
+		app_title="Sketcher";
+		
 		std::srand(std::time(0));
-
-		setupEnvironment();
 
 		setupSampler();
 
@@ -307,16 +307,18 @@ public:
 
 		setupImGui();
 
-		setupIcon();
+		if(!setupIcon()) return false;
+
+		return true;
 	}
 
 #pragma region UPDATE HELPERS
 	void handlePointMovement() {
 		if(imguiing) return;
 
-		const vf2d mouse_pos(mouse_x, mouse_y);
+		const vf2d mouse_pos(GetMouseX(), GetMouseY());
 
-		const auto action=getMouse(SAPP_MOUSEBUTTON_LEFT);
+		const auto action=GetMouse(SAPP_MOUSEBUTTON_LEFT);
 		if(action.pressed) {
 			held_pt=nullptr;
 
@@ -381,7 +383,7 @@ public:
 	}
 #pragma endregion
 
-	void userUpdate(float dt) override {
+	bool user_update(float dt) override {
 		for(int i=0; i<25; i++) {
 			handlePointMovement();
 
@@ -389,9 +391,11 @@ public:
 			updateDistConstraints();
 			updateAngleConstraints();
 		}
+
+		return true;
 	}
 
-	void userInput(const sapp_event* e) override {
+	void user_input(const sapp_event* e) override {
 		switch(e->type) {
 			case SAPP_EVENTTYPE_RESIZED:
 				updateRenderTarget();
@@ -525,7 +529,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() override {
+	bool user_render() override {
 		renderIntoTarget();
 
 		//display pass
@@ -542,15 +546,12 @@ public:
 		sg_end_pass();
 
 		sg_commit();
+
+		return true;
 	}
 
-	void userDestroy() override {
+	void user_destroy() override {
 		simgui_shutdown();
 		sgl_shutdown();
-		sg_shutdown();
-	}
-
-	SketcherUI() {
-		app_title="Sketcher UI Demo";
 	}
 };

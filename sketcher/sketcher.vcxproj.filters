@@ -23,7 +23,7 @@
     <ClInclude Include="src\constraints.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\sketcher_ui.h">
+    <ClInclude Include="src\sketcher.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\shd.glsl.h">
@@ -33,9 +33,6 @@
   <ItemGroup>
     <None Include="assets\imgui.ini" />
     <None Include="src\shd.glsl" />
-    <None Include="compile_shaders.bat">
-      <Filter>Source Files</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\icon.png">
