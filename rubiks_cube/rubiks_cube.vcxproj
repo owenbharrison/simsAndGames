@@ -142,7 +142,6 @@
     <ClInclude Include="src\turn.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="compile_shaders.bat" />
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>

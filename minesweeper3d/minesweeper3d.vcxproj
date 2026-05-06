@@ -155,7 +155,6 @@
     <ClInclude Include="src\texture_utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="compile_shaders.bat" />
     <None Include="src\shd.glsl">
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </DeploymentContent>

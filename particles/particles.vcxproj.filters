@@ -35,9 +35,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shd.glsl" />
-    <None Include="compile_shaders.bat">
-      <Filter>Source Files</Filter>
-    </None>
     <None Include="assets\imgui.ini" />
     <None Include="assets\thumbnail.fzx" />
     <None Include="assets\save.fzx" />

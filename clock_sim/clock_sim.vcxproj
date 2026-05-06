@@ -135,7 +135,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="compile_shaders.bat" />
     <None Include="src\shd.glsl" />
   </ItemGroup>
   <ItemGroup>
