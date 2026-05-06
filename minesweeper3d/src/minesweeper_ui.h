@@ -470,7 +470,7 @@ public:
 
 		setupFaceMesh();
 
-		setupCursor();
+		if(!setupCursor()) return false;
 
 		setupBillboardRendering();
 
