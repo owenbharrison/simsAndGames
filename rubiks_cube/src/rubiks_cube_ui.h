@@ -8,14 +8,17 @@ selectable sizes
 	NxN solver
 */
 
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 #include "shd.glsl.h"
 
@@ -129,6 +132,9 @@ class RubiksCubeUI : public cmn::SokolEngine {
 
 	cmn::Font font;
 
+	float mouse_x=0, mouse_y=0;
+	float prev_mouse_x=0, prev_mouse_y=0;
+
 	struct {
 		vf3d pos;
 		vf3d dir;
@@ -140,12 +146,6 @@ class RubiksCubeUI : public cmn::SokolEngine {
 
 public:
 #pragma region SETUP HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		desc.environment=sglue_environment();
-		sg_setup(desc);
-	}
-
 	void setupSamplers() {
 		{
 			sg_sampler_desc sampler_desc{};
@@ -323,10 +323,10 @@ public:
 		font=cmn::Font("assets/monogram_6x9.png", 6, 9);
 	}
 
-	void setupIcon() {
+	bool setupIcon() {
 		int width, height, comp;
 		std::uint8_t* pixels8=stbi_load("assets/icon.png", &width, &height, &comp, 4);
-		if(!pixels8) return;
+		if(!pixels8) return false;
 
 		std::uint32_t* pixels32=new std::uint32_t[width*height];
 		std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
@@ -339,6 +339,8 @@ public:
 		icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
 		sapp_set_icon(&icon_desc);
 		delete[] pixels32;
+
+		return true;
 	}
 
 	void setupCamera() {
@@ -356,9 +358,9 @@ public:
 	}
 #pragma endregion
 
-	void userCreate() override {
-		setupEnvironment();
-
+	bool user_create() override {
+		app_title="Rubiks Cube";
+		
 		std::srand(std::time(0));
 
 		setupSamplers();
@@ -375,30 +377,38 @@ public:
 
 		setupFont();
 
-		setupIcon();
+		if(!setupIcon()) return false;
 
 		setupCamera();
+
+		return true;
 	}
 
 #pragma region UPDATE HELPERS
 	void handleCameraLooking(float dt) {
+		prev_mouse_x=mouse_x;
+		prev_mouse_y=mouse_y;
+		mouse_x=GetMouseX();
+		mouse_y=GetMouseY();
+		
 		//orbit
-		if(getMouse(SAPP_MOUSEBUTTON_LEFT).held) {
+		if(GetMouse(SAPP_MOUSEBUTTON_LEFT).held) {
+
 			const float mouse_speed=.75f*dt;
-			cam.yaw-=mouse_dx*mouse_speed;
-			cam.pitch-=mouse_dy*mouse_speed;
+			cam.yaw-=(mouse_x-prev_mouse_x)*mouse_speed;
+			cam.pitch-=(mouse_y-prev_mouse_y)*mouse_speed;
 		}
 		
 		{
 			const float arrow_speed=1.3f*dt;
 
 			//left/right
-			if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=arrow_speed;
-			if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=arrow_speed;
+			if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=arrow_speed;
+			if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=arrow_speed;
 
 			//up/down
-			if(getKey(SAPP_KEYCODE_UP).held) cam.pitch-=arrow_speed;
-			if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=arrow_speed;
+			if(GetKey(SAPP_KEYCODE_UP).held) cam.pitch-=arrow_speed;
+			if(GetKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=arrow_speed;
 		}
 
 		//clamp camera pitch
@@ -414,25 +424,25 @@ public:
 
 	void handleCubeControls() {
 		//reset
-		if(getKey(SAPP_KEYCODE_HOME).pressed) {
+		if(GetKey(SAPP_KEYCODE_HOME).pressed) {
 			cube.rubiks.reset();
 			cube.turn_queue.clear();
 		}
 
 		//turn cube
-		bool ccw=getKey(SAPP_KEYCODE_LEFT_SHIFT).held;
-		if(getKey(SAPP_KEYCODE_F).pressed) cube.turn_queue.push_back(ccw?Turn::f:Turn::F);
-		if(getKey(SAPP_KEYCODE_U).pressed) cube.turn_queue.push_back(ccw?Turn::u:Turn::U);
-		if(getKey(SAPP_KEYCODE_L).pressed) cube.turn_queue.push_back(ccw?Turn::l:Turn::L);
-		if(getKey(SAPP_KEYCODE_B).pressed) cube.turn_queue.push_back(ccw?Turn::b:Turn::B);
-		if(getKey(SAPP_KEYCODE_D).pressed) cube.turn_queue.push_back(ccw?Turn::d:Turn::D);
-		if(getKey(SAPP_KEYCODE_R).pressed) cube.turn_queue.push_back(ccw?Turn::r:Turn::R);
-		if(getKey(SAPP_KEYCODE_X).pressed) cube.turn_queue.push_back(ccw?Turn::x:Turn::X);
-		if(getKey(SAPP_KEYCODE_Y).pressed) cube.turn_queue.push_back(ccw?Turn::y:Turn::Y);
-		if(getKey(SAPP_KEYCODE_Z).pressed) cube.turn_queue.push_back(ccw?Turn::z:Turn::Z);
+		bool ccw=GetKey(SAPP_KEYCODE_LEFT_SHIFT).held;
+		if(GetKey(SAPP_KEYCODE_F).pressed) cube.turn_queue.push_back(ccw?Turn::f:Turn::F);
+		if(GetKey(SAPP_KEYCODE_U).pressed) cube.turn_queue.push_back(ccw?Turn::u:Turn::U);
+		if(GetKey(SAPP_KEYCODE_L).pressed) cube.turn_queue.push_back(ccw?Turn::l:Turn::L);
+		if(GetKey(SAPP_KEYCODE_B).pressed) cube.turn_queue.push_back(ccw?Turn::b:Turn::B);
+		if(GetKey(SAPP_KEYCODE_D).pressed) cube.turn_queue.push_back(ccw?Turn::d:Turn::D);
+		if(GetKey(SAPP_KEYCODE_R).pressed) cube.turn_queue.push_back(ccw?Turn::r:Turn::R);
+		if(GetKey(SAPP_KEYCODE_X).pressed) cube.turn_queue.push_back(ccw?Turn::x:Turn::X);
+		if(GetKey(SAPP_KEYCODE_Y).pressed) cube.turn_queue.push_back(ccw?Turn::y:Turn::Y);
+		if(GetKey(SAPP_KEYCODE_Z).pressed) cube.turn_queue.push_back(ccw?Turn::z:Turn::Z);
 
 		//scramble
-		if(getKey(SAPP_KEYCODE_S).pressed) {
+		if(GetKey(SAPP_KEYCODE_S).pressed) {
 			cube.turn_queue.clear();
 			auto scramble=cube.rubiks.getScramble();
 			cube.turn_queue.insert(cube.turn_queue.end(),
@@ -443,7 +453,7 @@ public:
 		//change cube size
 		for(int i=1; i<=9; i++) {
 			auto key=(sapp_keycode)(i+SAPP_KEYCODE_0);
-			if(getKey(key).pressed) {
+			if(GetKey(key).pressed) {
 				cube.turn_queue.clear();
 				cube.rubiks=RubiksCube(i);
 			}
@@ -460,7 +470,7 @@ public:
 		handleCubeControls();
 
 		//toggle turn queue render
-		if(getKey(SAPP_KEYCODE_T).pressed) cube.render_turn_queue^=true;
+		if(GetKey(SAPP_KEYCODE_T).pressed) cube.render_turn_queue^=true;
 	}
 
 	void updateCameraMatrixes() {
@@ -490,12 +500,14 @@ public:
 	}
 #pragma endregion
 
-	void userUpdate(float dt) override {
+	bool user_update(float dt) override {
 		handleUserInput(dt);
 
 		updateCameraMatrixes();
 
 		handleCube(dt);
+
+		return true;
 	}
 
 #pragma region RENDER HELPERS
@@ -689,7 +701,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() override {
+	bool user_render() override {
 		sg_pass pass{};
 		pass.action=display_pass_action;
 		pass.swapchain=sglue_swapchain();
@@ -704,9 +716,7 @@ public:
 		sg_end_pass();
 
 		sg_commit();
-	}
 
-	RubiksCubeUI() {
-		app_title="Rubiks Cube UI";
+		return true;
 	}
 };
