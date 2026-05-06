@@ -1,11 +1,14 @@
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 #include "mesh.h"
 
@@ -17,7 +20,9 @@
 
 using cmn::vf2d;
 
-class SplitterUI : public cmn::SokolEngine {
+class Splitter : public cmn::SokolEngine {
+	vf2d mouse_pos;
+	
 	std::list<Mesh> meshes;
 
 	bool render_wireframes=true;
@@ -26,20 +31,15 @@ class SplitterUI : public cmn::SokolEngine {
 
 public:
 #pragma region SETUP_HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		sg_setup(desc);
-	}
-
 	void setupSGL() {
 		sgl_desc_t sgl_desc{};
 		sgl_setup(&sgl_desc);
 	}
 #pragma endregion
 
-	void userCreate() override {
-		setupEnvironment();
-
+	bool user_create() override {
+		app_title="Splitter";
+		
 		setupSGL();
 
 		meshes.push_back(Mesh::makeTorus(100, 60, 24, {140, 180}, 1, 0, 0));
@@ -59,21 +59,26 @@ public:
 		m.pos={540, 180};
 		m.r=0, m.g=0, m.b=1;
 		meshes.push_back(m);
+
+		return true;
 	}
 
-	void userUpdate(float dt) override {
-		const vf2d mouse_pos(mouse_x, mouse_y);
+	bool user_update(float dt) override {
+		mouse_pos.x=GetMouseX();
+		mouse_pos.y=GetMouseY();
 		
 		std::srand(std::time(0));
 
-		const auto split_action=getMouse(SAPP_MOUSEBUTTON_LEFT);
+		const auto split_action=GetMouse(SAPP_MOUSEBUTTON_LEFT);
 		if(split_action.pressed) split_st=new vf2d(.1f+mouse_pos);
 		if(split_action.released) {
 			delete split_st;
 			split_st=nullptr;
 		}
 
-		if(getKey(SAPP_KEYCODE_W).pressed) render_wireframes^=true;
+		if(GetKey(SAPP_KEYCODE_W).pressed) render_wireframes^=true;
+
+		return true;
 	}
 
 	void fillMesh(const Mesh& m) {
@@ -105,7 +110,7 @@ public:
 		}
 	}
 
-	void userRender() override {
+	bool user_render() override {
 		//display pass
 		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
@@ -129,7 +134,6 @@ public:
 			if(render_wireframes) drawMesh(m, black);
 		}
 
-		const vf2d mouse_pos(mouse_x, mouse_y);
 		if(split_st) {
 			vf2d tang=(*split_st-mouse_pos).norm();
 			vf2d norm(-tang.y, tang.x);
@@ -157,14 +161,12 @@ public:
 		sg_end_pass();
 
 		sg_commit();
+
+		return true;
 	}
 
-	void userDestroy() override {
+	void user_destroy() override {
 		sgl_shutdown();
 		sg_shutdown();
-	}
-
-	SplitterUI() {
-		app_title="Splitter UI Demo";
 	}
 };
