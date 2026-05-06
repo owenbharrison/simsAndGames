@@ -1,11 +1,14 @@
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 #include "shd.glsl.h"
 
@@ -103,11 +106,6 @@ class ParticlesUI : public cmn::SokolEngine {
 
 public:
 #pragma region SETUP_HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		sg_setup(desc);
-	}
-
 	void setupLineRender() {
 		//instanced tristrip pipeline
 		sg_pipeline_desc pip_desc{};
@@ -192,9 +190,9 @@ public:
 	}
 #pragma endregion
 
-	void userCreate() override {
-		setupEnvironment();
-
+	bool user_create() override {
+		app_title="Particles";
+		
 		setupLineRender();
 
 		setupParticleRender();
@@ -202,14 +200,16 @@ public:
 		setupImGui();
 
 		zoomToFit();
+
+		return true;
 	}
 
-	void userDestroy() override {
+	void user_destroy() override {
 		simgui_shutdown();
 		sg_shutdown();
 	}
 
-	void userInput(const sapp_event* e) override {
+	void user_input(const sapp_event* e) override {
 		simgui_handle_event(e);
 	}
 
@@ -243,8 +243,8 @@ public:
 
 		//apply zoom
 		float factor=1+dt;
-		if(getKey(SAPP_KEYCODE_W).held) zoom*=factor;
-		if(getKey(SAPP_KEYCODE_Q).held) zoom/=factor;
+		if(GetKey(SAPP_KEYCODE_W).held) zoom*=factor;
+		if(GetKey(SAPP_KEYCODE_Q).held) zoom/=factor;
 
 		//wld mouse after zoom
 		vf2d after=scr2wld(mouse_scr);
@@ -254,7 +254,7 @@ public:
 	}
 
 	void handleParticleGrabbing() {
-		const auto drag_action=getMouse(SAPP_MOUSEBUTTON_LEFT);
+		const auto drag_action=GetMouse(SAPP_MOUSEBUTTON_LEFT);
 		if(drag_action.pressed) {
 			for(int i=0; i<solver.getNumParticles(); i++) {
 				const auto& p=solver.particles[i];
@@ -269,7 +269,7 @@ public:
 
 	//add particles in circle
 	void handleParticleAddition() {
-		adding=getKey(SAPP_KEYCODE_A).held;
+		adding=GetKey(SAPP_KEYCODE_A).held;
 		if(adding) {
 			for(int i=0; i<100; i++) {
 				float dist=cmn::randFloat(selection_radius);
@@ -286,7 +286,7 @@ public:
 	}
 
 	void handleParticleLocking() {
-		if(getKey(SAPP_KEYCODE_L).pressed) {
+		if(GetKey(SAPP_KEYCODE_L).pressed) {
 			for(int i=0; i<solver.getNumParticles(); i++) {
 				auto& p=solver.particles[i];
 				if((mouse_wld-p.pos).mag()<p.getRadius()) p.locked^=true;
@@ -296,7 +296,7 @@ public:
 
 	//drag solid rect
 	void handleSolidAddition() {
-		const auto solid_action=getKey(SAPP_KEYCODE_S);
+		const auto solid_action=GetKey(SAPP_KEYCODE_S);
 		if(solid_action.pressed) solid_st=new vf2d(mouse_wld);
 		if(solid_action.released) {
 			//get bounds
@@ -322,7 +322,7 @@ public:
 
 	//drag empty rect
 	void handleEmptyAddition() {
-		const auto empty_action=getKey(SAPP_KEYCODE_E);
+		const auto empty_action=GetKey(SAPP_KEYCODE_E);
 		if(empty_action.pressed) empty_st=new vf2d(mouse_wld);
 		if(empty_action.released) {
 			//get bounds
@@ -348,7 +348,7 @@ public:
 
 	//remove anything touching circle
 	void handleRemoval() {
-		removing=getKey(SAPP_KEYCODE_X).held;
+		removing=GetKey(SAPP_KEYCODE_X).held;
 		if(removing) {
 			held_ptc=-1;
 
@@ -378,13 +378,13 @@ public:
 		if(imguiing) return;
 
 		//panning
-		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) {
+		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) {
 			cam-=(mouse_scr-prev_mouse_scr)/zoom;
 		}
 
 		handleZooming(dt);
 
-		if(getKey(SAPP_KEYCODE_Z).pressed) zoomToFit();
+		if(GetKey(SAPP_KEYCODE_Z).pressed) zoomToFit();
 
 		handleParticleGrabbing();
 
@@ -399,10 +399,10 @@ public:
 		handleRemoval();
 
 		//play/pause toggle
-		if(getKey(SAPP_KEYCODE_SPACE).pressed) paused^=true;
+		if(GetKey(SAPP_KEYCODE_SPACE).pressed) paused^=true;
 
 		//constraint render toggle
-		if(getKey(SAPP_KEYCODE_C).pressed) render_constraints^=true;
+		if(GetKey(SAPP_KEYCODE_C).pressed) render_constraints^=true;
 	}
 
 	void handlePhysics(float dt) {
@@ -428,15 +428,17 @@ public:
 	}
 #pragma endregion
 
-	void userUpdate(float dt) override {
+	bool user_update(float dt) override {
 		prev_mouse_scr=mouse_scr;
-		mouse_scr.x=mouse_x;
-		mouse_scr.y=mouse_y;
+		mouse_scr.x=GetMouseX();
+		mouse_scr.y=GetMouseY();
 		mouse_wld=scr2wld(mouse_scr);
 
 		handleUserInput(dt);
 
 		if(!paused) handlePhysics(dt);
+
+		return true;
 	}
 
 #pragma region RENDER HELPERS
@@ -603,7 +605,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() override {
+	bool user_render() override {
 		//display pass
 		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
@@ -642,9 +644,7 @@ public:
 		sg_end_pass();
 
 		sg_commit();
-	}
 
-	ParticlesUI() {
-		app_title="Particles UI Demo";
+		return true;
 	}
 };
