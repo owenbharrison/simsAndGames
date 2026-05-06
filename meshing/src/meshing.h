@@ -306,6 +306,5 @@ public:
 
 	void user_destroy() override {
 		sgl_shutdown();
-		sg_shutdown();
 	}
 };
