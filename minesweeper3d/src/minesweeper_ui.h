@@ -3,14 +3,17 @@ win/lose particles?
 difficulty modes
 sound
 */
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 #include "shd.glsl.h"
 
@@ -158,6 +161,9 @@ class MinesweeperUI : public cmn::SokolEngine {
 		const vf3d gravity{0, -9.8f, 0};
 	} particles;
 
+	float mouse_x=0, mouse_y=0;
+	float prev_mouse_x=0, prev_mouse_y=0;
+
 	struct {
 		vf3d pos;
 		vf3d dir;
@@ -171,47 +177,40 @@ class MinesweeperUI : public cmn::SokolEngine {
 
 public:
 #pragma region CREATE HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		desc.environment=sglue_environment();
-		sg_setup(desc);
-	}
-
 	void setupSampler() {
 		sg_sampler_desc sampler_desc{};
 		sampler=sg_make_sampler(sampler_desc);
 	}
 
 	//"primitive" textures to work with
-	void setupTextures() {
+	bool setupTextures() {
 		textures.blank=cmn::makeBlankTexture();
 
-		if(!cmn::makeTextureFromFile(textures.tile, "assets/img/tile.png")) textures.tile=textures.blank;
+		if(!cmn::makeTextureFromFile(textures.tile, "assets/img/tile.png")) return false;
 
 		{//load flag img
 			int width, height, comp;
 			unsigned char* pixels8=stbi_load("assets/img/flag.png", &width, &height, &comp, 4);
-			if(!pixels8) textures.flag=textures.blank;
-			else {
-				std::uint32_t* pixels32=new std::uint32_t[width*height];
-				std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
-				stbi_image_free(pixels8);
+			if(!pixels8) return false;
+			
+			std::uint32_t* pixels32=new std::uint32_t[width*height];
+			std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
+			stbi_image_free(pixels8);
 
-				//setup flag tex
-				textures.flag=cmn::makeTextureFromPixels(pixels32, width, height);
+			//setup flag tex
+			textures.flag=cmn::makeTextureFromPixels(pixels32, width, height);
 
-				//set icon to flag tex
-				sapp_icon_desc icon_desc{};
-				icon_desc.images[0].width=width;
-				icon_desc.images[0].height=height;
-				icon_desc.images[0].pixels.ptr=pixels32;
-				icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
-				sapp_set_icon(&icon_desc);
-				delete[] pixels32;
-			}
+			//set icon to flag tex
+			sapp_icon_desc icon_desc{};
+			icon_desc.images[0].width=width;
+			icon_desc.images[0].height=height;
+			icon_desc.images[0].pixels.ptr=pixels32;
+			icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
+			sapp_set_icon(&icon_desc);
+			delete[] pixels32;
 		}
 
-		if(!cmn::makeTextureFromFile(textures.bomb, "assets/img/bomb.png")) textures.bomb=textures.blank;
+		if(!cmn::makeTextureFromFile(textures.bomb, "assets/img/bomb.png")) return false;
 
 		int sz=1024;
 		std::uint32_t* pixels=new std::uint32_t[sz*sz];
@@ -224,6 +223,8 @@ public:
 		}
 		textures.circle=cmn::makeTextureFromPixels(pixels, sz, sz);
 		delete[] pixels;
+
+		return true;
 	}
 
 	//since will be called on resize,
@@ -356,9 +357,9 @@ public:
 		m.updateIndexBuffer();
 	}
 
-	void setupCursor() {
+	bool setupCursor() {
 		Mesh& m=cursor.mesh;
-		if(!Mesh::loadFromOBJ(m, "assets/model/cursor_obj.txt").valid) m=Mesh::makeCube();
+		return Mesh::loadFromOBJ(m, "assets/model/cursor_obj.txt").valid;
 	}
 
 	void setupBillboardRendering() {
@@ -452,14 +453,14 @@ public:
 	}
 #pragma endregion
 
-	void userCreate() override {
+	bool user_create() override {
+		app_title="Minesweeper 3D";
+		
 		std::srand(std::time(0));
-
-		setupEnvironment();
 
 		setupSampler();
 
-		setupTextures();
+		if(!setupTextures()) return false;
 
 		setupRender();
 
@@ -480,9 +481,11 @@ public:
 		setupPostProcess();
 
 		setupGame();
+
+		return true;
 	}
 
-	void userInput(const sapp_event* e) override {
+	void user_input(const sapp_event* e) override {
 		switch(e->type) {
 			case SAPP_EVENTTYPE_RESIZED:
 				setupRenderTarget();
@@ -492,16 +495,21 @@ public:
 
 #pragma region UPDATE HELPERS
 	void handleCameraLooking(float dt) {
-		if(getMouse(SAPP_MOUSEBUTTON_LEFT).held) {
-			cam.yaw-=mouse_dx*dt;
-			cam.pitch-=mouse_dy*dt;
+		prev_mouse_x=mouse_x;
+		prev_mouse_y=mouse_y;
+		mouse_x=GetMouseX();
+		mouse_y=GetMouseY();
+		
+		if(GetMouse(SAPP_MOUSEBUTTON_LEFT).held) {
+			cam.yaw-=(mouse_x-prev_mouse_x)*dt;
+			cam.pitch-=(mouse_y-prev_mouse_y)*dt;
 		}
 
 		//left/right/up/down
-		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=dt;
-		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=dt;
-		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch-=dt;
-		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=dt;
+		if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=dt;
+		if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=dt;
+		if(GetKey(SAPP_KEYCODE_UP).held) cam.pitch-=dt;
+		if(GetKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=dt;
 
 		//clamp camera pitch
 		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
@@ -603,13 +611,13 @@ public:
 	}
 
 	void handleGame(float dt) {
-		if(getKey(SAPP_KEYCODE_R).pressed) game.reset();
+		if(GetKey(SAPP_KEYCODE_R).pressed) game.reset();
 
-		if(getKey(SAPP_KEYCODE_P).pressed) game.pause();
+		if(GetKey(SAPP_KEYCODE_P).pressed) game.pause();
 
-		if(getKey(SAPP_KEYCODE_SPACE).pressed) game.sweep(cursor.i, cursor.j, cursor.k);
+		if(GetKey(SAPP_KEYCODE_SPACE).pressed) game.sweep(cursor.i, cursor.j, cursor.k);
 
-		if(getKey(SAPP_KEYCODE_F).pressed) game.flag(cursor.i, cursor.j, cursor.k);
+		if(GetKey(SAPP_KEYCODE_F).pressed) game.flag(cursor.i, cursor.j, cursor.k);
 
 		//find changes from prev->curr
 		for(int i=0; i<game.getWidth(); i++) {
@@ -663,7 +671,7 @@ public:
 
 	float total_dt=0;
 
-	void userUpdate(float dt) override {
+	bool user_update(float dt) override {
 		handleCameraLooking(dt);
 		cam.dir=polarToCartesian(cam.yaw, cam.pitch);
 		handleCameraPlacement();
@@ -677,6 +685,8 @@ public:
 		updateCameraMatrixes();
 
 		total_dt+=dt;
+
+		return true;
 	}
 
 #pragma region RENDER HELPERS
@@ -1089,7 +1099,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() override {
+	bool user_render() override {
 		//render
 		{
 			sg_pass pass{};
@@ -1140,9 +1150,7 @@ public:
 		}
 
 		sg_commit();
-	}
 
-	MinesweeperUI() {
-		app_title="Minesweeper 3D";
+		return true;
 	}
 };
