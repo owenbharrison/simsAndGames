@@ -2,9 +2,6 @@
 #ifndef CMN_SOKOL_ENGINE_CLASS_H
 #define CMN_SOKOL_ENGINE_CLASS_H
 
-#define SOKOL_IMPL
-#include "sokol/include/sokol_app.h"
-
 //for memset & memcpy
 #include <string>
 
@@ -14,129 +11,82 @@
 namespace cmn {
 	class SokolEngine {
 		static const int _num_keys=512;
-		bool _keys_old[_num_keys],
+		bool _keys_prev[_num_keys],
 			_keys_curr[_num_keys],
-			_keys_new[_num_keys];
+			_keys_next[_num_keys];
 
-		static const int _num_buttons=256;
-		bool _buttons_old[_num_buttons],
-			_buttons_curr[_num_buttons],
-			_buttons_new[_num_buttons];
+		static const int _num_mouse_buttons=8;
+		bool _mouse_buttons_prev[_num_mouse_buttons],
+			_mouse_buttons_curr[_num_mouse_buttons],
+			_mouse_buttons_next[_num_mouse_buttons];
 
-		bool _mouse_moving_new=false;
-		bool _mouse_moving=false;
-
-		float _mouse_x_new=0;
-		float _mouse_y_new=0;
-
-		float _mouse_dx_new=0;
-		float _mouse_dy_new=0;
-
-	protected:
-		float mouse_x=0;
-		float mouse_y=0;
-
-		float mouse_dx=0;
-		float mouse_dy=0;
-
-		std::string app_title="Untitled";
+		float _mouse_x_next=0, _mouse_y_next=0;
+		float _mouse_x_curr=0, _mouse_y_curr=0;
 
 	public:
-		virtual void userCreate()=0;
+		virtual bool user_create()=0;
+		virtual bool user_update(float dt)=0;
+		virtual bool user_render()=0;
+		virtual void user_input(const sapp_event*) {};
+		virtual void user_destroy() {};
 
-		virtual void userDestroy() {};
-
-		//custom user event handling.
-		virtual void userInput(const sapp_event* e) {}
-
-		virtual void userUpdate(float dt)=0;
-
-		virtual void userRender()=0;
+		std::string app_title="[untitled]";
 
 		void init() {
-			std::memset(_keys_old, false, sizeof(bool)*_num_keys);
+			sg_desc desc{};
+			desc.environment=sglue_environment();
+			sg_setup(desc);
+
+			std::memset(_keys_prev, false, sizeof(bool)*_num_keys);
 			std::memset(_keys_curr, false, sizeof(bool)*_num_keys);
-			std::memset(_keys_new, false, sizeof(bool)*_num_keys);
+			std::memset(_keys_next, false, sizeof(bool)*_num_keys);
 
-			std::memset(_buttons_old, false, sizeof(bool)*_num_buttons);
-			std::memset(_buttons_curr, false, sizeof(bool)*_num_buttons);
-			std::memset(_buttons_new, false, sizeof(bool)*_num_buttons);
+			std::memset(_mouse_buttons_prev, false, sizeof(bool)*_num_mouse_buttons);
+			std::memset(_mouse_buttons_curr, false, sizeof(bool)*_num_mouse_buttons);
+			std::memset(_mouse_buttons_next, false, sizeof(bool)*_num_mouse_buttons);
 
-			userCreate();
+			if(!user_create()) sapp_request_quit();
 		}
 
-		void cleanup() {
-			userDestroy();
-		}
-
-		//dont immediately send new key states.
 		void input(const sapp_event* e) {
 			switch(e->type) {
 				case SAPP_EVENTTYPE_KEY_DOWN:
-					_keys_new[e->key_code]=true;
+					_keys_next[e->key_code]=true;
 					break;
 				case SAPP_EVENTTYPE_KEY_UP:
-					_keys_new[e->key_code]=false;
+					_keys_next[e->key_code]=false;
 					break;
 				case SAPP_EVENTTYPE_MOUSE_DOWN:
-					_buttons_new[e->mouse_button]=true;
+					_mouse_buttons_next[e->mouse_button]=true;
 					break;
 				case SAPP_EVENTTYPE_MOUSE_UP:
-					_buttons_new[e->mouse_button]=false;
+					_mouse_buttons_next[e->mouse_button]=false;
 					break;
-				case SAPP_EVENTTYPE_MOUSE_MOVE:
-					_mouse_moving=true;
-
-					//absolute invalid when locked
-					if(!sapp_mouse_locked()) {
-						_mouse_x_new=e->mouse_x;
-						_mouse_y_new=e->mouse_y;
-					}
-
-					//delta always valid
-					_mouse_dx_new=e->mouse_dx;
-					_mouse_dy_new=e->mouse_dy;
+				case SAPP_EVENTTYPE_MOUSE_MOVE: {
+					_mouse_x_next=e->mouse_x;
+					_mouse_y_next=e->mouse_y;
 					break;
+				}
+				default: break;
 			}
 
-			userInput(e);
-		}
-
-		//fun little helpers
-		struct EventState { bool pressed, held, released; };
-		EventState getKey(const sapp_keycode& kc) const {
-			bool curr=_keys_curr[kc], prev=_keys_old[kc];
-			return {curr&&!prev, curr, !curr&&prev};
-		}
-
-		EventState getMouse(const int& mb) const {
-			bool curr=_buttons_curr[mb], prev=_buttons_old[mb];
-			return {curr&&!prev, curr, !curr&&prev};
+			user_input(e);
 		}
 
 		void frame() {
-			//update curr key values
-			std::memcpy(_keys_curr, _keys_new, sizeof(bool)*_num_keys);
+			//update keys
+			std::memcpy(_keys_prev, _keys_curr, sizeof(_keys_curr));
+			std::memcpy(_keys_curr, _keys_next, sizeof(_keys_curr));
 
-			//update curr button values
-			std::memcpy(_buttons_curr, _buttons_new, sizeof(bool)*_num_buttons);
+			//update mouse buttons
+			std::memcpy(_mouse_buttons_prev, _mouse_buttons_curr, sizeof(_mouse_buttons_curr));
+			std::memcpy(_mouse_buttons_curr, _mouse_buttons_next, sizeof(_mouse_buttons_curr));
 
-			//update mouse coords
-			mouse_x=_mouse_x_new;
-			mouse_y=_mouse_y_new;
+			//update mouse pos
+			_mouse_x_curr=_mouse_x_next;
+			_mouse_y_curr=_mouse_y_next;
 
-			//hmm...
-			if(_mouse_moving) {
-				mouse_dx=_mouse_dx_new;
-				mouse_dy=_mouse_dy_new;
-			} else {
-				mouse_dx=0;
-				mouse_dy=0;
-			}
-
-			const float dt=sapp_frame_duration();
-
-			userUpdate(dt);
+			float dt=sapp_frame_duration();
 
 			//update title with fps
 			{
@@ -151,16 +101,52 @@ namespace cmn {
 				sapp_set_window_title(buf);
 			}
 
-			userRender();
+			if(!user_update(dt)) sapp_request_quit();
 
-			_mouse_moving=false;
-
-			//update prev key values
-			std::memcpy(_keys_old, _keys_curr, sizeof(bool)*_num_keys);
-
-			//update prev key values
-			std::memcpy(_buttons_old, _buttons_curr, sizeof(bool)*_num_buttons);
+			if(!user_render()) sapp_request_quit();
 		}
+
+		void cleanup() {
+			user_destroy();
+
+			sg_shutdown();
+		}
+
+		struct ButtonState { bool pressed, held, released; };
+
+		ButtonState GetKey(const sapp_keycode& k) const {
+			bool curr=_keys_curr[k], prev=_keys_prev[k];
+			return {curr&&!prev, curr, !curr&&prev};
+		}
+
+		ButtonState GetMouse(const sapp_mousebutton& m) const {
+			bool curr=_mouse_buttons_curr[m], prev=_mouse_buttons_prev[m];
+			return {curr&&!prev, curr, !curr&&prev};
+		}
+
+		float GetMouseX() const { return _mouse_x_curr; }
+		float GetMouseY() const { return _mouse_y_curr; }
 	};
+}
+
+//convenience macro
+#define CMN_SOKOL_ENGINE_LAUNCH(AppClass, init_w, init_h)\
+static AppClass* app_ptr=nullptr;\
+static void init_cb() { app_ptr->init(); }\
+static void frame_cb() { app_ptr->frame(); }\
+static void input_cb(const sapp_event* e) { app_ptr->input(e); }\
+static void cleanup_cb() { app_ptr->cleanup(); }\
+sapp_desc sokol_main(int argc, char* argv[]) {\
+	static AppClass app;\
+	app_ptr=&app;\
+	sapp_desc app_desc{};\
+	app_desc.init_cb=init_cb;\
+	app_desc.frame_cb=frame_cb;\
+	app_desc.event_cb=input_cb;\
+	app_desc.cleanup_cb=cleanup_cb;\
+	app_desc.width=init_w;\
+	app_desc.height=init_h;\
+	app_desc.icon.sokol_default=true;\
+	return app_desc;\
 }
 #endif
