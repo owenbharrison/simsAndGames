@@ -206,7 +206,6 @@ public:
 
 	void user_destroy() override {
 		simgui_shutdown();
-		sg_shutdown();
 	}
 
 	void user_input(const sapp_event* e) override {
