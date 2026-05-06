@@ -1,12 +1,14 @@
-//todo: make sliders!
+#define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/sokol_engine.h"
+#include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+
+#include "sokol/sokol_engine.h"
 
 #include "shd/shadow_map.glsl.h"
 #include "shd/skybox.glsl.h"
@@ -61,7 +63,7 @@ static mat4 makeTransformMatrix(const vf3d& x, const vf3d& y, const vf3d& z, con
 	return m;
 }
 
-class SokolTesting : public cmn::SokolEngine {
+class Demo : public cmn::SokolEngine {
 	struct {
 		sg_sampler linear{};
 		sg_sampler nearest{};
@@ -178,12 +180,6 @@ class SokolTesting : public cmn::SokolEngine {
 
 public:
 #pragma region SETUP HELPERS
-	void setupEnvironment() {
-		sg_desc desc{};
-		desc.environment=sglue_environment();
-		sg_setup(desc);
-	}
-
 	void setupSamplers() {
 		{
 			sg_sampler_desc sampler_desc{};
@@ -201,14 +197,12 @@ public:
 	}
 
 	//"primitive" textures to work with
-	void setupTextures() {
-		auto& b=textures.blank;
-		b=cmn::makeBlankTexture();
+	bool setupTextures() {
+		textures.blank=cmn::makeBlankTexture();
 
 		textures.uv=cmn::makeUVTexture(1024, 1024);
 
-		auto& c=textures.checker;
-		if(!cmn::makeTextureFromFile(c, "assets/img/checker.png")) c=b;
+		return cmn::makeTextureFromFile(textures.checker, "assets/img/checker.png");
 	}
 
 	void setupMeshPipeline() {
@@ -672,14 +666,14 @@ public:
 	}
 #pragma endregion
 
-	void userCreate() override {
+	bool user_create() override {
+		app_title="Post Processing Demo";
+		
 		std::srand(std::time(0));
-
-		setupEnvironment();
 
 		setupSamplers();
 
-		setupTextures();
+		if(!setupTextures()) return false;
 
 		setupShadedMeshPipeline();
 
@@ -706,9 +700,11 @@ public:
 		setupPostProcess();
 
 		setupCamera();
+
+		return true;
 	}
 
-	void userInput(const sapp_event* e) override {
+	void user_input(const sapp_event* e) override {
 		switch(e->type) {
 			case SAPP_EVENTTYPE_RESIZED:
 				resizeCanvasTarget();
@@ -729,12 +725,12 @@ public:
 		if(isGizmoing()) return;
 
 		//left/right
-		if(getKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
-		if(getKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
+		if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
+		if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
 
 		//up/down
-		if(getKey(SAPP_KEYCODE_UP).held) cam.pitch+=dt;
-		if(getKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
+		if(GetKey(SAPP_KEYCODE_UP).held) cam.pitch+=dt;
+		if(GetKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
 
 		//clamp camera pitch
 		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
@@ -746,22 +742,22 @@ public:
 		if(isGizmoing()) return;
 
 		//move up, down
-		if(getKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4.f*dt;
-		if(getKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4.f*dt;
+		if(GetKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4.f*dt;
+		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4.f*dt;
 
 		//move forward, backward
 		vf3d fb_dir(std::sin(cam.yaw), 0, std::cos(cam.yaw));
-		if(getKey(SAPP_KEYCODE_W).held) cam.pos+=5.f*dt*fb_dir;
-		if(getKey(SAPP_KEYCODE_S).held) cam.pos-=3.f*dt*fb_dir;
+		if(GetKey(SAPP_KEYCODE_W).held) cam.pos+=5.f*dt*fb_dir;
+		if(GetKey(SAPP_KEYCODE_S).held) cam.pos-=3.f*dt*fb_dir;
 
 		//move left, right
 		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(getKey(SAPP_KEYCODE_A).held) cam.pos+=4.f*dt*lr_dir;
-		if(getKey(SAPP_KEYCODE_D).held) cam.pos-=4.f*dt*lr_dir;
+		if(GetKey(SAPP_KEYCODE_A).held) cam.pos+=4.f*dt*lr_dir;
+		if(GetKey(SAPP_KEYCODE_D).held) cam.pos-=4.f*dt*lr_dir;
 	}
 
 	void handleGizmoSelection() {
-		const auto action=getKey(SAPP_KEYCODE_G);
+		const auto action=GetKey(SAPP_KEYCODE_G);
 		if(action.pressed) {
 			//get closest shape
 			float record=-1;
@@ -789,7 +785,7 @@ public:
 	}
 
 	void handleGizmoMovement() {
-		auto action=getMouse(SAPP_MOUSEBUTTON_LEFT);
+		auto action=GetMouse(SAPP_MOUSEBUTTON_LEFT);
 		for(auto& sg:gizmo.map) {
 			auto& shp=sg.first;
 			auto& giz=sg.second;
@@ -820,13 +816,13 @@ public:
 		handleGizmoMovement();
 
 		//look at origin
-		if(getKey(SAPP_KEYCODE_HOME).held) cartesianToPolar(-cam.pos, cam.yaw, cam.pitch);
+		if(GetKey(SAPP_KEYCODE_HOME).held) cartesianToPolar(-cam.pos, cam.yaw, cam.pitch);
 
 		//set light pos
-		if(getKey(SAPP_KEYCODE_L).pressed) shadow_map.pos=cam.pos;
+		if(GetKey(SAPP_KEYCODE_L).pressed) shadow_map.pos=cam.pos;
 
 		//toggle shape outlines
-		if(getKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
+		if(GetKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
 	}
 
 	void updateCameraMatrixes() {
@@ -858,8 +854,8 @@ public:
 		mat4 m_inv_view_proj=mat4::inverse(cam.view_proj);
 
 		//mouse coords from clip -> world
-		float ndc_x=2*mouse_x/sapp_widthf()-1;
-		float ndc_y=1-2*mouse_y/sapp_heightf();
+		float ndc_x=2*GetMouseX()/sapp_widthf()-1;
+		float ndc_y=1-2*GetMouseY()/sapp_heightf();
 		vf3d clip(ndc_x, ndc_y, 1);
 		float w=1;
 		vf3d world=matMulVec(m_inv_view_proj, clip, w);
@@ -870,7 +866,7 @@ public:
 	}
 #pragma endregion
 
-	void userUpdate(float dt) override {
+	bool user_update(float dt) override {
 		handleUserInput(dt);
 
 		updateCameraMatrixes();
@@ -879,9 +875,11 @@ public:
 
 		updateShadowMapMatrixes();
 
-		if(getKey(SAPP_KEYCODE_R).pressed) randomizePostProcess();
+		if(GetKey(SAPP_KEYCODE_R).pressed) randomizePostProcess();
 
 		post_process.time+=dt;
+
+		return true;
 	}
 
 #pragma region RENDER HELPERS
@@ -1178,7 +1176,7 @@ public:
 	}
 #pragma endregion
 
-	void userRender() override {
+	bool user_render() override {
 		renderShapesIntoShadowMap();
 
 		renderIntoCanvas();
@@ -1186,9 +1184,7 @@ public:
 		renderPostProcess();
 
 		sg_commit();
-	}
 
-	SokolTesting() {
-		app_title="Post Processing Demo";
+		return true;
 	}
 };
