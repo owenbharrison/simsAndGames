@@ -386,13 +386,23 @@ const int palette[]=int[](
 
 void main() {
 	//truncate coordinates
-	vec2 coord=6.*(.5+floor(gl_FragCoord.xy/6.));
-	vec2 uv=coord/resolution;
-	
-	//sample col & get luminance
-	vec4 col=texture(sampler2D(b_ascii_tex, b_ascii_smp), uv);
-	float lum=LUM(col.rgb);
-	
+	vec2 bl=6.*floor(gl_FragCoord.xy/6.);
+
+	//max luminance col over region
+	float lum=0.;
+	vec3 rgb;
+	for(int i=0; i<6; i++) {
+		for(int j=0; j<6; j++) {
+			vec2 uv=(bl+vec2(i, j))/resolution;
+			vec3 kern_rgb=texture(sampler2D(b_ascii_tex, b_ascii_smp), uv).rgb;
+			float kern_lum=LUM(kern_rgb);
+			if(kern_lum>lum) {
+				lum=kern_lum;
+				rgb=kern_rgb;
+			}
+		}
+	}
+
 	//find said character from palette
 	int pal_ix=int(float(palette.length())*lum);
 	pal_ix=clamp(pal_ix, 0, palette.length()-1);
@@ -400,20 +410,16 @@ void main() {
 	
 	//repeating character int coords
 	int x=int(gl_FragCoord.x)%6;
-	int y=5-int(gl_FragCoord .y)%6;
+	int y=5-int(gl_FragCoord.y)%6;
 	
-	//find packed bit position, said word, and mask out bit
+	//find packed bit position, said word, and then bit
 	int bit_ix=x+6*y+36*(ltr-32);
 	int word_ix=bit_ix/32;
 	uint word=font[word_ix];
 	bool bit=1u==(1u&(word>>(bit_ix%32)));
 	
-	//use "saturated" color
-	float sat=max(col.r, max(col.g, col.b));
-	if(bit) o_frag_col.rgb=col.rgb/sat;
-	else o_frag_col.rgb=vec3(0);
-	
-	o_frag_col.a=1.;
+	//use bit to mask out rgb
+	o_frag_col=vec4(bit?rgb:vec3(0.), 1.);
 }
 
 @end
