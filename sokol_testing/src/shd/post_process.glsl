@@ -606,3 +606,79 @@ void main() {
 @end
 
 @program quantize vs_post_process fs_quantize
+
+//handwritten?
+@fs fs_squiggle
+
+in float time;
+in vec2 resolution;
+out vec4 o_frag_col;
+
+layout(binding=0) uniform texture2D b_squiggle_tex;
+layout(binding=0) uniform sampler b_squiggle_smp;
+
+const float Speed=2.5;
+const float FPS=8.;
+const float Density=.0075;
+const float Scale=12.;
+
+//https://www.shadertoy.com/view/4djSRW
+float hash13(vec3 p3) {
+	p3=fract(.1031*p3);
+	p3+=dot(p3, 33.33+p3.zyx);
+	return fract(p3.z*(p3.x+p3.y));
+}
+
+float noise13(vec3 p) {
+	vec3 dig=floor(p);
+	vec3 dec=fract(p);
+
+	//smoothstep
+	vec3 u=dec*dec*(3.-2.*dec);
+
+	float a=hash13(dig+vec3(0, 0, 0));
+	float b=hash13(dig+vec3(1, 0, 0));
+	float c=hash13(dig+vec3(0, 1, 0));
+	float d=hash13(dig+vec3(1, 1, 0));
+	float e=hash13(dig+vec3(0, 0, 1));
+	float f=hash13(dig+vec3(1, 0, 1));
+	float g=hash13(dig+vec3(0, 1, 1));
+	float h=hash13(dig+vec3(1, 1, 1));
+
+	float ab=mix(a, b, u.x);
+	float cd=mix(c, d, u.x);
+	float ef=mix(e, f, u.x);
+	float gh=mix(g, h, u.x);
+	float abcd=mix(ab, cd, u.y);
+	float efgh=mix(ef, gh, u.y);
+	return mix(abcd, efgh, u.z);
+}
+
+float fbm13(vec3 p) {
+	float val=0.;
+	float amp=.5;
+	for (int i=0; i<5; i++) {
+		val+=amp*noise13(p);
+		p*=2.;
+		amp*=.5;
+	}
+	return val;
+}
+
+void main() {
+	float anim=Speed/FPS*round(FPS*time);
+	vec3 coord3=vec3(Density*gl_FragCoord.xy, anim);
+	
+	vec2 fbm23=vec2(
+		fbm13(coord3),
+		fbm13(coord3+vec3(17.3, 43.7, 91.1))
+	);
+	
+	vec2 coord2=gl_FragCoord.xy+Scale*(.5-fbm23);
+	vec2 uv=coord2/resolution;
+	o_frag_col=texture(sampler2D(b_squiggle_tex, b_squiggle_smp), uv);
+}
+
+@end
+
+@program squiggle vs_post_process fs_squiggle

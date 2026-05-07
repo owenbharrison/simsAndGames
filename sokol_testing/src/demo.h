@@ -641,6 +641,14 @@ public:
 			post_process.pips.push_back(sg_make_pipeline(pip_desc));
 		}
 
+		{//squiggle
+			sg_pipeline_desc pip_desc{};
+			pip_desc.layout.attrs[ATTR_squiggle_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
+			pip_desc.shader=sg_make_shader(squiggle_shader_desc(sg_query_backend()));
+			pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+			post_process.pips.push_back(sg_make_pipeline(pip_desc));
+		}
+
 		//xy
 		float vertexes[4][2]{
 			{-1, -1},
