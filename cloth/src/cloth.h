@@ -141,6 +141,8 @@ class Cloth : public cmn::SokolEngine {
 	std::vector<sg_view> flags;
 	int flag_ix=0;
 
+	vf3d light_pos=cam.pos;
+
 	bool render_outlines=false;
 	bool render_bounds=false;
 
@@ -381,6 +383,9 @@ public:
 			if(GetKey(key).pressed) flag_ix=i;
 		}
 
+		//place light
+		if(GetKey(SAPP_KEYCODE_L).pressed) light_pos=cam.pos;
+
 		//debug toggles
 		if(GetKey(SAPP_KEYCODE_P).pressed) update_phys^=true;
 		if(GetKey(SAPP_KEYCODE_O).pressed) render_outlines^=true;
@@ -533,12 +538,23 @@ public:
 	void renderFlag() {
 		sgl_enable_texture();
 		sgl_texture(flags[flag_ix], smp);
-
+		
+		//simple shading
 		sgl_begin_triangles();
 		for(const auto& t:triangles) {
-			sgl_v3f_t2f(t.a->pos.x, t.a->pos.y, t.a->pos.z, t.a->tex_u, t.a->tex_v);
-			sgl_v3f_t2f(t.b->pos.x, t.b->pos.y, t.b->pos.z, t.b->tex_u, t.b->tex_v);
-			sgl_v3f_t2f(t.c->pos.x, t.c->pos.y, t.c->pos.z, t.c->tex_u, t.c->tex_v);
+			vf3d ab=t.b->pos-t.a->pos;
+			vf3d ac=t.c->pos-t.a->pos;
+			vf3d norm=ab.cross(ac).norm();
+			vf3d ctr=(t.a->pos+t.b->pos+t.c->pos)/3;
+
+			//if pointing away from cam, use flipped normal
+			if(norm.dot(cam.pos-ctr)<0) norm*=-1;
+
+			vf3d light_dir=(light_pos-ctr).norm();
+			float dp=cmn::clamp(norm.dot(light_dir), .5f, 1.f);
+			sgl_v3f_t2f_c3f(t.a->pos.x, t.a->pos.y, t.a->pos.z, t.a->tex_u, t.a->tex_v, dp, dp, dp);
+			sgl_v3f_t2f_c3f(t.b->pos.x, t.b->pos.y, t.b->pos.z, t.b->tex_u, t.b->tex_v, dp, dp, dp);
+			sgl_v3f_t2f_c3f(t.c->pos.x, t.c->pos.y, t.c->pos.z, t.c->tex_u, t.c->tex_v, dp, dp, dp);
 		}
 		sgl_end();
 
