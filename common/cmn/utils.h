@@ -66,5 +66,27 @@ namespace cmn {
 			ac.x*ab.y-ac.y*ab.x
 		)/denom;
 	}
+
+	//c friendly :3
+	void colorGradient(
+		const float cols[][3], int num,
+		float t, float* r, float* g, float* b
+	) {
+		//clamp percent
+		if(t<0) t=0;
+		if(t>.999f) t=.999f;
+
+		//floor index, fract t
+		float x=t*(num-1);
+		int i=x;
+		t=x-i;
+
+		//lerp cols
+		const auto& c0=cols[i];
+		const auto& c1=cols[1+i];
+		*r=c0[0]+t*(c1[0]-c0[0]);
+		*g=c0[1]+t*(c1[1]-c0[1]);
+		*b=c0[2]+t*(c1[2]-c0[2]);
+	}
 }
 #endif
