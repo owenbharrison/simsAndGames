@@ -2,32 +2,37 @@
 #ifndef PARTICLE_STRUCT_H
 #define PARTICLE_STRUCT_H
 
+#include "cmn/math/v3d.h"
+
 struct Particle {
-	vf3d pos, old_pos, acc;
+	cmn::vf3d pos, old_pos, forces;
+	float mass=1;
 	bool locked=false;
-	vf3d uv;
+	float tex_u=0, tex_v=0;
 
 	Particle() {}
 
-	Particle(vf3d p) {
+	Particle(cmn::vf3d p, float m) {
 		pos=p;
 		old_pos=p;
+		mass=m;
 	}
 
-	void accelerate(const vf3d& f) {
-		acc+=f;
+	void applyForce(const cmn::vf3d& f) {
+		forces+=f;
 	}
 
 	void update(float dt) {
 		//update pos store
-		vf3d vel=pos-old_pos;
+		cmn::vf3d vel=pos-old_pos;
 		old_pos=pos;
 
 		//verlet integration
+		cmn::vf3d acc=forces/mass;
 		if(!locked) pos+=vel+acc*dt*dt;
 
 		//reset forces
-		acc*=0;
+		forces*=0;
 	}
 };
 #endif

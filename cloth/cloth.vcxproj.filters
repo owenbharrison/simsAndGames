@@ -29,11 +29,11 @@
     <ClInclude Include="src\perlin_noise.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\cloth.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\strain_gradient.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\brazil.png">
       <Filter>Resource Files</Filter>
     </Image>
@@ -46,13 +46,19 @@
     <Image Include="assets\barbados.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\new_york_city.png">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\portugal.png">
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="assets\south_korea.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\wales.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\seychelles.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\bhutan.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

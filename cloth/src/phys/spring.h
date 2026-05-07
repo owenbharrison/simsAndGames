@@ -1,6 +1,6 @@
 #pragma once
 #ifndef SPRING_STRUCT_H
-#define SPRING STRUCT_H
+#define SPRING_STRUCT_H
 
 #include "particle.h"
 
@@ -20,28 +20,28 @@ struct Spring {
 		damping=d;
 	}
 
-	vf3d getAccel() const {
-		vf3d sub=b->pos-a->pos;
+	cmn::vf3d getForce() const {
+		cmn::vf3d sub=b->pos-a->pos;
 		float curr_len=sub.mag();
 		float spring=stiffness*(curr_len-rest_len);
 
 		//thanks gonkee
-		vf3d a_vel=a->pos-a->old_pos;
-		vf3d b_vel=b->pos-b->old_pos;
-		vf3d norm=sub/curr_len;
+		cmn::vf3d a_vel=a->pos-a->old_pos;
+		cmn::vf3d b_vel=b->pos-b->old_pos;
+		cmn::vf3d norm=sub/curr_len;
 		float damp=damping*norm.dot(b_vel-a_vel);
 
 		return (spring+damp)*norm;
 	}
 
 	void update() {
-		vf3d force=getAccel();
-		if(!a->locked) a->accelerate(force);
-		if(!b->locked) b->accelerate(-force);
+		cmn::vf3d force=getForce();
+		if(!a->locked) a->applyForce(force);
+		if(!b->locked) b->applyForce(-force);
 
 		//update strain
 		float curr=(a->pos-b->pos).mag();
-		strain=rest_len-curr/rest_len;
+		strain=(curr-rest_len)/rest_len;
 	}
 };
 #endif

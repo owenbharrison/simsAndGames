@@ -115,7 +115,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
@@ -135,7 +135,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -148,19 +148,21 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\cloth.h" />
     <ClInclude Include="src\perlin_noise.h" />
     <ClInclude Include="src\phys\particle.h" />
     <ClInclude Include="src\phys\spring.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\barbados.png" />
+    <Image Include="assets\bhutan.png" />
     <Image Include="assets\brazil.png" />
     <Image Include="assets\colorado.png" />
     <Image Include="assets\djibouti.png" />
-    <Image Include="assets\new_york_city.png" />
     <Image Include="assets\portugal.png" />
+    <Image Include="assets\seychelles.png" />
     <Image Include="assets\south_korea.png" />
-    <Image Include="assets\strain_gradient.png" />
+    <Image Include="assets\wales.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\usa.png" />
