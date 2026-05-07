@@ -8,47 +8,25 @@
 
 #include "sdf_shape.h"
 
-//c friendly!
-void colorGradient(
-	const float cols[][3], int num,
-	float t, float& r, float& g, float& b
-) {
-	//clamp percent
-	if(t<0) t=0;
-	if(t>.999f) t=.999f;
-
-	//floor index, fract t
-	float x=t*(num-1);
-	int i=x;
-	t=x-i;
-
-	//lerp cols
-	const auto& c0=cols[i];
-	const auto& c1=cols[1+i];
-	r=c0[0]+t*(c1[0]-c0[0]);
-	g=c0[1]+t*(c1[1]-c0[1]);
-	b=c0[2]+t*(c1[2]-c0[2]);
-}
-
-void insideGradient(float t, float& r, float& g, float& b) {
+void insideGradient(float t, float* r, float* g, float* b) {
 	static const float cols[][3]{
 		{0, 1, 0},//green
 		{1, 1, 0},//yellow
 		{1, 0, 0}//red
 	};
-	return colorGradient(
+	return cmn::colorGradient(
 		cols, sizeof(cols)/sizeof(cols[0]),
 		t, r, g, b
 	);
 }
 
-void outsideGradient(float t, float& r, float& g, float& b) {
+void outsideGradient(float t, float* r, float* g, float* b) {
 	static const float cols[][3]{
 		{0, 1, 1},//cyan
 		{0, 0, 1},//blue
 		{.5f, 0, 1}//purple
 	};
-	return colorGradient(
+	return cmn::colorGradient(
 		cols, sizeof(cols)/sizeof(cols[0]),
 		t, r, g, b
 	);
@@ -202,8 +180,8 @@ struct MarchingSquares : public olc::PixelGameEngine {
 				float& r=col_grid[3*k];
 				float& g=col_grid[1+3*k];
 				float& b=col_grid[2+3*k];
-				if(t>0) outsideGradient(t, r, g, b);
-				else insideGradient(-t, r, g, b);
+				if(t>0) outsideGradient(t, &r, &g, &b);
+				else insideGradient(-t,& r, &g, &b);
 			}
 		}
 	}

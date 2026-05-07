@@ -24,30 +24,17 @@
 using cmn::vf2d;
 
 void stressGradient(float t, float& r, float& g, float& b) {
-	static const float cols[5][3]{
+	static const float cols[][3]{
 		{0, 0, 1},//blue
 		{0, 1, 1},//cyan
 		{0, 1, 0},//green
 		{1, 1, 0},//yellow
 		{1, 0, 0}//red
 	};
-	static const int num=sizeof(cols)/sizeof(cols[0]);
-
-	//clamp percent
-	if(t<0) t=0;
-	if(t>=1) t=.999f;
-
-	//floor index, fract t
-	float x=t*(num-1);
-	int i=x;
-	t=x-i;
-
-	//lerp cols
-	const auto& c1=cols[i];
-	const auto& c2=cols[i+1];
-	r=c1[0]+t*(c2[0]-c1[0]);
-	g=c1[1]+t*(c2[1]-c1[1]);
-	b=c1[2]+t*(c2[2]-c1[2]);
+	return cmn::colorGradient(
+		cols, sizeof(cols)/sizeof(cols[0]),
+		t, &r, &g, &b
+	);
 }
 
 float snapTo(float a, float b) {

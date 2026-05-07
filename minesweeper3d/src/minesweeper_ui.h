@@ -39,12 +39,9 @@ sound
 
 #include "sokol/font.h"
 
-using cmn::vf3d;
-using cmn::mat4;
-
 //y p => x y z
 //0 0 => 0 0 1
-static vf3d polarToCartesian(float yaw, float pitch) {
+static cmn::vf3d polarToCartesian(float yaw, float pitch) {
 	return {
 		std::sin(yaw)*std::cos(pitch),
 		std::sin(pitch),
@@ -61,8 +58,8 @@ sg_color mixCol(const sg_color& a, const sg_color& b, float t) {
 	};
 }
 
-vf3d randDir() {
-	return vf3d(
+cmn::vf3d randDir() {
+	return cmn::vf3d(
 		.5f-cmn::randFloat(),
 		.5f-cmn::randFloat(),
 		.5f-cmn::randFloat()
@@ -87,6 +84,21 @@ void getStringSize(const std::string& str, int& w, int& h) {
 		}
 	}
 };
+
+void explosionGradient(float t, float* r, float* g, float* b) {
+	static const float cols[][3]{
+		{1, 1, 0},//yellow
+		{1, .369f, 0},//orange
+		{.271f, .271f, .271f}//grey
+	};
+	return cmn::colorGradient(
+		cols, sizeof(cols)/sizeof(cols[0]),
+		t, r, g, b
+	);
+}
+
+using cmn::vf3d;
+using cmn::mat4;
 
 class MinesweeperUI : public cmn::SokolEngine {
 	sg_sampler sampler{};
@@ -825,26 +837,18 @@ public:
 	}
 
 	void realizeParticleBillboards() {
-		//explosion gradient
-		auto sampleGradient=[] (float t) {
-			const vf3d yellow{1, 1, 0};
-			const vf3d orange{1, .369f, 0};
-			const vf3d grey{.271f, .271f, .271f};
-			if(t<.5f) return yellow+2*t*(orange-yellow);
-			else return orange+2*(t-.5f)*(grey-orange);
-		};
-
 		for(int i=0; i<2; i++) {
 			const auto& ptcs=i==0?particles.debris:particles.explosion;
 
 			for(const auto& p:ptcs) {
 				//relative age
 				float t=p.age/p.lifespan;
-				vf3d col=i==1?sampleGradient(t):vf3d(1, 1, 1);
+				float r=1, g=1, b=1;
+				if(i==1) explosionGradient(t, &r, &g, &b);
 				billboard_render.instances.push_back(Billboard(
 					p.pos, p.size, .5f, .5f,
 					textures.circle, 0, 0, 1, 1,
-					{col.x, col.y, col.z, 1-t}
+					{r, g, b, 1-t}
 				));
 			}
 		}
