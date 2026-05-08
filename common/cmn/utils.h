@@ -44,7 +44,7 @@ namespace cmn {
 	//polar to cartesian helper
 	template<typename V2D>
 	V2D polar(float rad, float angle) {
-		return rad*V2D(std::cos(angle), std::sin(angle));
+		return V2D(rad*std::cos(angle), rad*std::sin(angle));
 	}
 
 	//thanks wikipedia + pattern recognition
