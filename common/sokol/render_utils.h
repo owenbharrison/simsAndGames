@@ -42,152 +42,175 @@ namespace cmn {
 		{0.923880f, -0.382683f},
 		{0.980785f, -0.195090f}
 	};
-	inline constexpr int unit_circle_num=sizeof(unit_circle)/sizeof(unit_circle[0]);
+	inline constexpr int num_unit_circle=sizeof(unit_circle)/sizeof(unit_circle[0]);
 
-	static void draw_line(
-		float ax, float ay, float bx, float by,
-		const sg_color& col
+	inline void draw_line(
+		float x1, float y1, float x2, float y2,
+		float r, float g, float b, float a=1
 	) {
 		sgl_begin_lines();
 
-		sgl_c4f(col.r, col.g, col.b, col.a);
-		sgl_v2f(ax, ay);
-		sgl_v2f(bx, by);
+		sgl_c4f(r, g, b, a);
+
+		sgl_v2f(x1, y1);
+		sgl_v2f(x2, y2);
 
 		sgl_end();
 	}
 
-	static void draw_triangle(
-		float ax, float ay, float bx, float by, float cx, float cy,
-		const sg_color& col
+	inline void draw_triangle(
+		float x1, float y1,
+		float x2, float y2,
+		float x3, float y3,
+		float r, float g, float b, float a=1
 	) {
-		draw_line(ax, ay, bx, by, col);
-		draw_line(bx, by, cx, cy, col);
-		draw_line(cx, cy, ax, ay, col);
+		sgl_begin_line_strip();
+
+		sgl_c4f(r, g, b, a);
+		
+		sgl_v2f(x1, y1);
+		sgl_v2f(x2, y2);
+		sgl_v2f(x3, y3);
+		sgl_v2f(x1, y1);
+
+		sgl_end();
 	}
 
-	static void fill_triangle(
-		float ax, float ay, float bx, float by, float cx, float cy,
-		const sg_color& col
+	inline void fill_triangle(
+		float x1, float y1,
+		float x2, float y2,
+		float x3, float y3,
+		float r, float g, float b, float a=1
 	) {
 		sgl_begin_triangles();
 
-		sgl_c4f(col.r, col.g, col.b, col.a);
-		sgl_v2f(ax, ay);
-		sgl_v2f(bx, by);
-		sgl_v2f(cx, cy);
+		sgl_c4f(r, g, b, a);
+
+		sgl_v2f(x1, y1);
+		sgl_v2f(x2, y2);
+		sgl_v2f(x3, y3);
 
 		sgl_end();
 	}
 
-	static void draw_rect(
+	inline void draw_rect(
 		float x, float y, float w, float h,
-		const sg_color& col
+		float r, float g, float b, float a=1
 	) {
 		sgl_begin_line_strip();
-		sgl_c4f(col.r, col.g, col.b, col.a);
+
+		sgl_c4f(r, g, b, a);
+
 		sgl_v2f(x, y);
 		sgl_v2f(x+w, y);
 		sgl_v2f(x+w, y+h);
 		sgl_v2f(x, y+h);
 		sgl_v2f(x, y);
+
 		sgl_end();
 	}
 
-	static void fill_rect(
+	inline void fill_rect(
 		float x, float y, float w, float h,
-		const sg_color& col
+		float r, float g, float b, float a=1
 	) {
-		sgl_begin_triangle_strip();
-		sgl_c4f(col.r, col.g, col.b, col.a);
+		sgl_begin_quads();
+
+		sgl_c4f(r, g, b, a);
+
 		sgl_v2f(x, y);
 		sgl_v2f(x+w, y);
-		sgl_v2f(x, y+h);
 		sgl_v2f(x+w, y+h);
+		sgl_v2f(x, y+h);
+
 		sgl_end();
 	}
 
-	static void draw_circle(
-		float cx, float cy, float rad,
-		const sg_color& col
+	inline void draw_circle(
+		float x, float y, float rad,
+		float r, float g, float b, float a=1
 	) {
 		sgl_begin_line_strip();
 
-		sgl_c4f(col.r, col.g, col.b, col.a);
+		sgl_c4f(r, g, b, a);
 
-		for(int i=0; i<=unit_circle_num; i++) {
-			float x=cx+rad*unit_circle[i%unit_circle_num][0];
-			float y=cy+rad*unit_circle[i%unit_circle_num][1];
-
-			sgl_v2f(x, y);
+		for(int i=0; i<=num_unit_circle; i++) {
+			sgl_v2f(
+				x+rad*unit_circle[i%num_unit_circle][0],
+				y+rad*unit_circle[i%num_unit_circle][1]
+			);
 		}
 
 		sgl_end();
 	}
 
-	static void fill_circle(
-		float cx, float cy, float rad,
-		const sg_color& col
+	inline void fill_circle(
+		float x, float y, float rad,
+		float r, float g, float b, float a=1
 	) {
-		sgl_begin_triangle_strip();
+		sgl_begin_triangles();
 
-		sgl_c4f(col.r, col.g, col.b, col.a);
+		sgl_c4f(r, g, b, a);
 
-		for(int i=0; i<=unit_circle_num; i++) {
-			float x=cx+rad*unit_circle[i%unit_circle_num][0];
-			float y=cy+rad*unit_circle[i%unit_circle_num][1];
-
+		for(int i=0; i<num_unit_circle; i++) {
+			float cx=x+rad*unit_circle[i][0];
+			float cy=y+rad*unit_circle[i][1];
+			float nx=x+rad*unit_circle[(1+i)%num_unit_circle][0];
+			float ny=y+rad*unit_circle[(1+i)%num_unit_circle][1];
 			sgl_v2f(x, y);
 			sgl_v2f(cx, cy);
+			sgl_v2f(nx, ny);
 		}
 
 		sgl_end();
 	}
 
-	static void draw_thick_line(
+	inline void draw_thick_line(
 		float ax, float ay, float bx, float by,
-		float t, const sg_color& col
+		float t,
+		float r, float g, float b, float a=1
 	) {
 		//axis
-		float bax=bx-ax, bay=by-ay;
-		float ba=std::sqrt(bax*bax+bay*bay);
+		float abx=bx-ax, aby=by-ay;
+		float ab_l=std::sqrt(abx*abx+aby*aby);
 
 		//unit vectors
-		float lx=bax/ba, ly=bay/ba;
+		float lx=abx/ab_l, ly=aby/ab_l;
 		float wx=-ly, wy=lx;
 
 		//deltas
 		float dx=t/2*wx, dy=t/2*wy;
 
-		sgl_begin_triangle_strip();
+		sgl_begin_quads();
 
-		sgl_c4f(col.r, col.g, col.b, col.a);
-		sgl_v2f(ax+dx, ay+dy);
-		sgl_v2f(bx+dx, by+dy);
+		sgl_c4f(r, g, b, a);
+
 		sgl_v2f(ax-dx, ay-dy);
 		sgl_v2f(bx-dx, by-dy);
+		sgl_v2f(bx+dx, by+dy);
+		sgl_v2f(ax+dx, ay+dy);
 
 		sgl_end();
 	}
 
-	static void draw_thick_circle(
-		float x, float y, float r, float t,
-		const sg_color& col
+	//thick circle :3
+	inline void fill_torus(
+		float x, float y,
+		float r_in, float r_out,
+		float r, float g, float b, float a=1
 	) {
-		//first, prev
-		float fx, fy, px, py;
-		for(int i=0; i<unit_circle_num; i++) {
-			float cx=x+r*unit_circle[i%unit_circle_num][0];
-			float cy=y+r*unit_circle[i%unit_circle_num][1];
+		sgl_begin_triangle_strip();
 
-			fill_circle(cx, cy, t/2, col);
+		sgl_c4f(r, g, b, a);
 
-			if(i==0) fx=cx, fy=cy;
-			else draw_thick_line(px, py, cx, cy, t, col);
-
-			px=cx, py=cy;
+		for(int i=0; i<=num_unit_circle; i++) {
+			float ux=unit_circle[i%num_unit_circle][0];
+			float uy=unit_circle[i%num_unit_circle][1];
+			sgl_v2f(x+r_in*ux, y+r_in*uy);
+			sgl_v2f(x+r_out*ux, y+r_out*uy);
 		}
-		draw_thick_line(fx, fy, px, py, t, col);
+
+		sgl_end();
 	}
 }
 #endif
