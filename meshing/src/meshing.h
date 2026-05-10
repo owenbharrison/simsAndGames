@@ -178,7 +178,7 @@ public:
 		return true;
 	}
 
-	void renderGrid(const sg_color& col) {
+	void renderGrid(float r, float g, float b) {
 		const float width=sapp_widthf();
 		const float height=sapp_heightf();
 		
@@ -186,14 +186,20 @@ public:
 		int num_x=1+width/grid_sz;
 		for(int i=0; i<=num_x; i++) {
 			float x=grid_sz*i;
-			cmn::draw_line(x, 0, x, height, col);
+			cmn::draw_line(
+				x, 0, x, height,
+				r, g, b
+			);
 		}
 
 		//horizontal lines
 		float num_y=1+height/grid_sz;
 		for(int j=0; j<=num_y; j++) {
 			float y=grid_sz*j;
-			cmn::draw_line(0, y, width, y, col);
+			cmn::draw_line(
+				0, y, width, y,
+				r, g, b
+			);
 		}
 	}
 
@@ -201,7 +207,7 @@ public:
 		for(int i=0; i<shell.size(); i++) {
 			int j=(i+1)%shell.size();
 			const auto& a=shell[i], b=shell[j];
-			cmn::draw_line(a.x, a.y, b.x, b.y, {1, 0, 0, 1});
+			cmn::draw_line(a.x, a.y, b.x, b.y, 1, 0, 0);
 		}
 	}
 
@@ -230,7 +236,7 @@ public:
 				v1.x, v1.y,
 				v2.x, v2.y,
 				v3.x, v3.y,
-				{r, g, b, 1}
+				r, g, b
 			);
 		}
 
@@ -242,7 +248,7 @@ public:
 				a.x, a.y,
 				b.x, b.y,
 				c.x, c.y,
-				{0, 0, 0, 1}
+				0, 0, 0
 			);
 		}
 	}
@@ -251,7 +257,7 @@ public:
 		for(const auto& c:constraints) {
 			const auto& a=verts[c[0]];
 			const auto& b=verts[c[1]];
-			cmn::draw_line(a.x, a.y, b.x, b.y, {1, 1, 1, 1});
+			cmn::draw_line(a.x, a.y, b.x, b.y, 1, 1, 1);
 		}
 	}
 
@@ -267,14 +273,11 @@ public:
 
 		//pixel space
 		sgl_matrix_mode_projection();
-		sgl_load_identity();
 		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
-		sgl_matrix_mode_modelview();
-		sgl_load_identity();
 
-		cmn::fill_rect(0, 0, sapp_widthf(), sapp_heightf(), {.34f, .34f, .34f, 1});
+		cmn::fill_rect(0, 0, sapp_widthf(), sapp_heightf(), .34f, .34f, .34f);
 
-		if(show_grid) renderGrid({.61f, .61f, .61f, 1});
+		if(show_grid) renderGrid(.61f, .61f, .61f);
 
 		renderShell();
 
