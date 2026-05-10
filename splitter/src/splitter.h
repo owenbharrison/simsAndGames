@@ -89,14 +89,20 @@ public:
 		}
 
 		//connect em up
-		sg_color col{m.r, m.g, m.b, 1};
 		for(const auto& t:m.tris) {
-			const auto& a=verts[t.ix[0]], & b=verts[t.ix[1]], & c=verts[t.ix[2]];
-			cmn::fill_triangle(a.x, a.y, b.x, b.y, c.x, c.y, col);
+			const auto& a=verts[t.ix[0]];
+			const auto& b=verts[t.ix[1]];
+			const auto& c=verts[t.ix[2]];
+			cmn::fill_triangle(
+				a.x, a.y,
+				b.x, b.y,
+				c.x, c.y,
+				m.r, m.g, m.b
+			);
 		}
 	}
 
-	void drawMesh(const Mesh& m, sg_color col) {
+	void drawMesh(const Mesh& m, const sg_color& col) {
 		//first transform points
 		std::vector<vf2d> verts;
 		for(const auto& v:m.verts) {
@@ -105,8 +111,15 @@ public:
 
 		//connect em up
 		for(const auto& t:m.tris) {
-			const auto& a=verts[t.ix[0]], & b=verts[t.ix[1]], & c=verts[t.ix[2]];
-			cmn::draw_triangle(a.x, a.y, b.x, b.y, c.x, c.y, col);
+			const auto& p1=verts[t.ix[0]];
+			const auto& p2=verts[t.ix[1]];
+			const auto& p3=verts[t.ix[2]];
+			cmn::draw_triangle(
+				p1.x, p1.y,
+				p2.x, p2.y,
+				p3.x, p3.y,
+				col.r, col.g, col.b
+			);
 		}
 	}
 
@@ -122,10 +135,7 @@ public:
 
 		//pixel space
 		sgl_matrix_mode_projection();
-		sgl_load_identity();
 		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
-		sgl_matrix_mode_modelview();
-		sgl_load_identity();
 		
 		const sg_color black{0, 0, 0, 1};
 
@@ -146,14 +156,13 @@ public:
 				}
 			}
 
-			//draw plane
-			const sg_color red{1, 0, 0, 1};
+			//draw red plane
 			float rad=10;
 			vf2d top=*split_st+rad*norm, btm=*split_st-rad*norm;
-			cmn::draw_line(top.x, top.y, btm.x, btm.y, red);
+			cmn::draw_line(top.x, top.y, btm.x, btm.y, 1, 0, 0);
 			float len=50;
 			vf2d lft=*split_st-len*tang, rgt=*split_st+len*tang;
-			cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, red);
+			cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, 1, 0, 0);
 		}
 
 		sgl_draw();
