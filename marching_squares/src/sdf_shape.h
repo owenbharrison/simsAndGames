@@ -2,6 +2,8 @@
 #ifndef SHAPE_STRUCT_H
 #define SHAPE_STRUCT_H
 
+#include "cmn/math/v2d.h"
+
 #include <list>
 
 //for swap & clamp
@@ -11,51 +13,46 @@ float sign(float x) {
 	return x==0?0:x>0?1:-1;
 }
 
-olc::vf2d polar(float rad, float angle) {
-	return {rad*std::cos(angle), rad*std::sin(angle)};
-}
-
 //QOL element-wise functions
-olc::vf2d abs(const olc::vf2d& a) {
+cmn::vf2d abs(const cmn::vf2d& a) {
 	return {std::abs(a.x), std::abs(a.y)};
 }
 
-olc::vf2d min(const olc::vf2d& a, const olc::vf2d& b) {
+cmn::vf2d min(const cmn::vf2d& a, const cmn::vf2d& b) {
 	return {std::min(a.x, b.x), std::min(a.y, b.y)};
 }
 
-olc::vf2d max(const olc::vf2d& a, const olc::vf2d& b) {
+cmn::vf2d max(const cmn::vf2d& a, const cmn::vf2d& b) {
 	return {std::max(a.x, b.x), std::max(a.y, b.y)};
 }
 
 struct SDFShape {
-	olc::Pixel col;
+	float r=0, g=0, b=0;
 
 	//list of pointers to shape control points
-	virtual std::list<olc::vf2d*> getHandles()=0;
+	virtual std::list<cmn::vf2d*> getHandles()=0;
 
-	virtual float signedDist(const olc::vf2d&)const=0;
+	virtual float signedDist(const cmn::vf2d&)const=0;
 
-	virtual void render(olc::PixelGameEngine*)const=0;
+	virtual void render()const=0;
 };
 
 struct SDFRectangle : SDFShape {
-	olc::vf2d p0, p1;
+	cmn::vf2d p0, p1;
 
-	std::list<olc::vf2d*> getHandles() override {
+	std::list<cmn::vf2d*> getHandles() override {
 		return {&p0, &p1};
 	}
 
 	//https://www.youtube.com/watch?v=62-pRVZuS5c
-	float signedDist(const olc::vf2d& p) const override {
-		//half size
-		auto h=abs(p0-p1)/2;
+	float signedDist(const cmn::vf2d& p) const override {
+		cmn::vf2d sz=abs(p0-p1);
 		//dist to corner
-		auto ctr=(p0+p1)/2;
-		auto d=abs(p-ctr)-h;
+		cmn::vf2d ctr=(p0+p1)/2;
+		cmn::vf2d d=abs(p-ctr)-.5f*sz;
 
 		//0 if inside on any axis
-		auto dmax=max({0, 0}, d);
+		cmn::vf2d dmax=max({0, 0}, d);
 		float outside=dmax.mag();
 
 		//which side is closer
@@ -64,70 +61,68 @@ struct SDFRectangle : SDFShape {
 		return outside+inside;
 	}
 
-	void render(olc::PixelGameEngine* pge) const override {
-		auto h=abs(p0-p1)/2;
-		auto ctr=(p0+p1)/2;
-		pge->DrawRectDecal(ctr-h, 2*h, col);
+	void render() const override {
+		cmn::vf2d sz=abs(p0-p1);
+		cmn::vf2d ctr=.5f*(p0+p1);
+		cmn::vf2d pos=ctr-.5f*sz;
+		cmn::draw_rect(
+			pos.x, pos.y, sz.x, sz.y,
+			r, g, b
+		);
 	}
 };
 
 struct SDFCircle : SDFShape {
-	olc::vf2d ctr, edge;
+	cmn::vf2d ctr, edge;
 	
-	std::list<olc::vf2d*> getHandles() override {
+	std::list<cmn::vf2d*> getHandles() override {
 		return {&ctr, &edge};
 	}
 
-	float signedDist(const olc::vf2d& p) const override {
+	float signedDist(const cmn::vf2d& p) const override {
 		float rad=(edge-ctr).mag();
 		
 		//d=r: 0 away
 		return (p-ctr).mag()-rad;
 	}
 
-	void render(olc::PixelGameEngine* pge) const override {
-		const int num=48;
-		
+	void render() const override {
 		float rad=(edge-ctr).mag();
 		
-		olc::vf2d first, prev;
-		for(int i=0; i<num; i++) {
-			float angle=2*cmn::Pi*i/num;
-			auto curr=ctr+polar(rad, angle);
-			if(i==0) first=curr;
-			else pge->DrawLineDecal(prev, curr, col);
-			prev=curr;
-		}
-		pge->DrawLineDecal(prev, first, col);
+		cmn::draw_circle(
+			ctr.x, ctr.y, rad,
+			r, g, b
+		);
 	}
 };
 
 struct SDFTriangle : SDFShape {
-	olc::vf2d p0, p1, p2;
+	cmn::vf2d p0, p1, p2;
 	
-	std::list<olc::vf2d*> getHandles() override {
+	std::list<cmn::vf2d*> getHandles() override {
 		return {&p0, &p1, &p2};
 	}
 
 	//https://www.shadertoy.com/view/XsXSz4
-	float signedDist(const olc::vf2d& p) const override {
-		auto e0=p1-p0, e1=p2-p1, e2=p0-p2;
-		auto v0=p-p0, v1=p-p1, v2=p-p2;
-		auto pq0=v0-e0*std::clamp(v0.dot(e0)/e0.dot(e0), 0.f, 1.f);
-		auto pq1=v1-e1*std::clamp(v1.dot(e1)/e1.dot(e1), 0.f, 1.f);
-		auto pq2=v2-e2*std::clamp(v2.dot(e2)/e2.dot(e2), 0.f, 1.f);
+	float signedDist(const cmn::vf2d& p) const override {
+		cmn::vf2d e0=p1-p0, e1=p2-p1, e2=p0-p2;
+		cmn::vf2d v0=p-p0, v1=p-p1, v2=p-p2;
+		cmn::vf2d pq0=v0-e0*std::clamp(v0.dot(e0)/e0.dot(e0), 0.f, 1.f);
+		cmn::vf2d pq1=v1-e1*std::clamp(v1.dot(e1)/e1.dot(e1), 0.f, 1.f);
+		cmn::vf2d pq2=v2-e2*std::clamp(v2.dot(e2)/e2.dot(e2), 0.f, 1.f);
 		float s=sign(e0.x*e2.y-e0.y*e2.x);
-		olc::vf2d d0(pq0.dot(pq0), s*(v0.x*e0.y-v0.y*e0.x));
-		olc::vf2d d1(pq1.dot(pq1), s*(v1.x*e1.y-v1.y*e1.x));
-		olc::vf2d d2(pq2.dot(pq2), s*(v2.x*e2.y-v2.y*e2.x));
-		auto d=min(d0, min(d1, d2));
-		return -sqrt(d.x)*sign(d.y);
+		cmn::vf2d d0(pq0.dot(pq0), s*(v0.x*e0.y-v0.y*e0.x));
+		cmn::vf2d d1(pq1.dot(pq1), s*(v1.x*e1.y-v1.y*e1.x));
+		cmn::vf2d d2(pq2.dot(pq2), s*(v2.x*e2.y-v2.y*e2.x));
+		cmn::vf2d d=min(d0, min(d1, d2));
+		return -std::sqrt(d.x)*sign(d.y);
 	}
 
-	void render(olc::PixelGameEngine* pge) const override {
-		pge->DrawLineDecal(p0, p1, col);
-		pge->DrawLineDecal(p1, p2, col);
-		pge->DrawLineDecal(p2, p0, col);
+	void render() const override {
+		cmn::draw_triangle(
+			p0.x, p0.y, p1.x, p1.y, p2.x, p2.y,
+			r, g, b
+		);
 	}
 };
 #endif
