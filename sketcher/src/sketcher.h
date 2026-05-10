@@ -292,7 +292,7 @@ public:
 
 	bool user_create() override {
 		app_title="Sketcher";
-		
+
 		std::srand(std::time(0));
 
 		setupSampler();
@@ -406,9 +406,9 @@ public:
 	}
 
 #pragma region RENDERERS
-	void renderGrid(const sg_color& col) {
+	void renderGrid(float r, float g, float b, float a) {
 		const float res=25;
-		const float w=3;
+		const float width=3;
 		const int ratio=5;
 
 		//vertical lines
@@ -416,8 +416,12 @@ public:
 		for(int i=0; i<num_x; i++) {
 			float x=res*i;
 			vf2d top(x, 0), btm(x, sapp_heightf());
-			if(i%ratio==0) cmn::draw_thick_line(top.x, top.y, btm.x, btm.y, w, col);
-			else cmn::draw_line(top.x, top.y, btm.x, btm.y, col);
+			if(i%ratio==0) cmn::draw_thick_line(
+				top.x, top.y, btm.x, btm.y,
+				width,
+				r, g, b, a
+			);
+			else cmn::draw_line(top.x, top.y, btm.x, btm.y, r, g, b, a);
 		}
 
 		//horizontal lines
@@ -425,11 +429,15 @@ public:
 		for(int j=0; j<num_y; j++) {
 			float y=res*j;
 			vf2d lft(0, y), rgt(sapp_widthf(), y);
-			if(j%ratio==0) cmn::draw_thick_line(lft.x, lft.y, rgt.x, rgt.y, w, col);
-			else cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, col);
+			if(j%ratio==0) cmn::draw_thick_line(
+				lft.x, lft.y, rgt.x, rgt.y,
+				width,
+				r, g, b, a
+			);
+			else cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, r, g, b, a);
 		}
 	}
-	
+
 	void renderIntoTarget() {
 		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
@@ -442,32 +450,34 @@ public:
 
 		//pixel space
 		sgl_matrix_mode_projection();
-		sgl_load_identity();
 		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
-		sgl_matrix_mode_modelview();
-		sgl_load_identity();
 
 		sgl_load_pipeline(sgl_pip);
 
 		//alpha=0 = background(no outline)
-		cmn::fill_rect(0, 0, sapp_widthf(), sapp_heightf(),
-			{bkgd_rgb[0], bkgd_rgb[1], bkgd_rgb[2], 0}
+		cmn::fill_rect(
+			0, 0, sapp_widthf(), sapp_heightf(),
+			bkgd_rgb[0], bkgd_rgb[1], bkgd_rgb[2], 0
 		);
 
-		if(render_grid) renderGrid({grid_rgb[0], grid_rgb[1], grid_rgb[2], 0});
+		if(render_grid) renderGrid(grid_rgb[0], grid_rgb[1], grid_rgb[2], 0);
 
 		//alpha=1 = foreground(outlines)
 
 		for(const auto& d:dist_constraints) {
-			cmn::draw_thick_line(d.a->x, d.a->y, d.b->x, d.b->y, 2*point_rad, d.col);
+			cmn::draw_thick_line(
+				d.a->x, d.a->y, d.b->x, d.b->y,
+				2*point_rad,
+				d.col.r, d.col.g, d.col.b, 1
+			);
 		}
 
 		//render points
-		{
-			const sg_color point_col{point_rgb[0], point_rgb[1], point_rgb[2], 1};
-			for(const auto& p:points) {
-				cmn::fill_circle(p.x,p.y,point_rad,point_col);
-			}
+		for(const auto& p:points) {
+			cmn::fill_circle(
+				p.x, p.y, point_rad,
+				point_rgb[0], point_rgb[1], point_rgb[2]
+			);
 		}
 
 		sgl_draw();
