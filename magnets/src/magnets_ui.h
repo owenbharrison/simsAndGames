@@ -17,12 +17,12 @@
 
 #include "magnet.h"
 
-#include "cmn/utils.h"
-
 #include <list>
 
-//welcome to precise-town!!
+#include "camera.h"
+
 using cmn::vd2d;
+using cmn::vf2d;
 
 class MagnetsUI : public cmn::SokolEngine {
 	//physics
@@ -40,13 +40,12 @@ class MagnetsUI : public cmn::SokolEngine {
 	vd2d bounds_max{.5, .5};
 
 	//user input
-	vd2d wld_offset;
-	double zoom=1;
-
 	vd2d mouse_scr;
-	vd2d prev_mouse_scr;
 	vd2d mouse_wld;
-	vd2d prev_mouse_wld;
+	Camera cam;
+
+	//graphics
+	sgl_pipeline pip{};
 
 public:
 	void setupMagnets() {
@@ -56,6 +55,17 @@ public:
 		magnets.push_back(Magnet(spacing*vd2d(.5, -.5), rad));
 		magnets.push_back(Magnet(spacing*vd2d(-.5, .5), rad));
 		magnets.push_back(Magnet(spacing*vd2d(.5, .5), rad));
+	}
+
+	void setupPipeline() {
+		//alpha blending
+		sg_pipeline_desc pip_desc{};
+		pip_desc.colors[0].blend.enabled=true;
+		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
+		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
+		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip=sgl_make_pipeline(pip_desc);
 	}
 
 	bool user_create() override {
@@ -68,29 +78,25 @@ public:
 
 		setupMagnets();
 
+		cam=Camera({sapp_widthf(), sapp_heightf()});
+
 		zoomToFit();
+
+		setupPipeline();
 
 		return true;
 	}
+
+	void user_input(const sapp_event* e) override {
+		switch(e->type) {
+			case SAPP_EVENTTYPE_RESIZED:
+				cam.scr_sz.x=sapp_widthf();
+				cam.scr_sz.y=sapp_heightf();
+				break;
+		}
+	}
+
 #pragma region UPDATE_HELPERS
-	vd2d wld2scr(const vd2d& w) const {
-		vd2d scr_sz(sapp_widthf(), sapp_heightf());
-		return scr_sz/2+zoom*(w-wld_offset);
-	}
-
-	vd2d scr2wld(const vd2d& s) const {
-		vd2d scr_sz(sapp_widthf(), sapp_heightf());
-		return wld_offset+(s-scr_sz/2)/zoom;
-	}
-
-	double wld2scr(double w) const {
-		return zoom*w;
-	}
-
-	double scr2wld(double s) const {
-		return s/zoom;
-	}
-
 	void zoomToFit() {
 		if(magnets.empty()) return;
 
@@ -105,62 +111,19 @@ public:
 			if(m.pos.y+r>max.y) max.y=m.pos.y+r;
 		}
 
-		//in screen space
-		double w_box=wld2scr(max.x-min.x);
-		double h_box=wld2scr(max.y-min.y);
-
-		//actual screen box
-		const double margin=20;
-		double w_scr=sapp_widthf()-2*margin;
-		double h_scr=sapp_heightf()-2*margin;
-
-		//find aspect ratio
-		double asp_x=w_scr/w_box;
-		double asp_y=h_scr/h_box;
-
-		//combine it with current scale
-		//based on limiting dimension
-		zoom*=asp_x<asp_y?asp_x:asp_y;
-
-		//world space box center
-		vd2d box_ctr=(min+max)/2;
-		//world space screen center
-		vd2d scr_sz(sapp_widthf(), sapp_heightf());
-		vd2d scr_ctr=scr2wld(scr_sz/2);
-
-		//make them overlap
-		vd2d delta=scr_ctr-box_ctr;
-		wld_offset-=delta;
-	}
-
-	void handlePanning() {
-		if(!GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) return;
-
-		//dont use stored, as this makes them change!
-		vd2d delta=scr2wld(mouse_scr)-scr2wld(prev_mouse_scr);
-		wld_offset-=delta;
-	}
-
-	void handleZooming(double dt) {
-		//wld mouse before zoom
-		vd2d before=scr2wld(mouse_scr);
-
-		//apply zoom
-		if(GetKey(SAPP_KEYCODE_W).held) zoom*=1+dt;
-		if(GetKey(SAPP_KEYCODE_Q).held) zoom*=1-dt;
-
-		//wld mouse after zoom
-		vd2d after=scr2wld(mouse_scr);
-
-		//pan back so wld mouse stays fixed
-		vd2d delta=after-before;
-		wld_offset-=delta;
+		cam.zoomToFit(min, max, 30);
 	}
 
 	bool isOverlapping(const Magnet& c) const {
+		auto rad=c.getRad();
+		if(c.pos.x-rad<bounds_min.x) return true;
+		if(c.pos.y-rad<bounds_min.y) return true;
+		if(c.pos.x+rad>bounds_max.x) return true;
+		if(c.pos.y+rad>bounds_max.y) return true;
+
 		for(const auto& m:magnets) {
-			double rad_t=m.getRad()+c.getRad();
-			if((m.pos-c.pos).mag()<rad_t) return true;
+			double rad_t=rad+m.getRad();
+			if((m.pos-c.pos).mag_sq()<rad_t*rad_t) return true;
 		}
 		return false;
 	}
@@ -168,14 +131,30 @@ public:
 	void handleAdditionAction() {
 		if(!GetKey(SAPP_KEYCODE_A).held) return;
 
-		double rad_cm=cmn::randDouble(.3, .5);
-		Magnet cand(mouse_wld, centimeter*rad_cm);
-		if(!isOverlapping(cand)) magnets.push_back(cand);
+		//candidate
+		vd2d pos=mouse_wld;
+		double rad=centimeter*cmn::randDouble(.3, .35);
+
+		//inside bounds?
+		if(pos.x-rad<bounds_min.x) return;
+		if(pos.y-rad<bounds_min.y) return;
+		if(pos.x+rad>bounds_max.x) return;
+		if(pos.y+rad>bounds_max.y) return;
+
+		//overlapping others?
+		for(const auto& m:magnets) {
+			double rad_t=rad+m.getRad();
+			if((m.pos-pos).mag_sq()<rad_t*rad_t) return;
+		}
+
+		//valid
+		double rot=cmn::randDouble(2*Pi);
+		magnets.push_back(Magnet(pos, rad, rot));
 	}
 
 	void handleRemovalAction() {
 		if(!GetKey(SAPP_KEYCODE_X).held) return;
-		
+
 		for(auto it=magnets.begin(); it!=magnets.end(); ) {
 			if((it->pos-mouse_wld).mag()<it->getRad()) {
 				it=magnets.erase(it);
@@ -184,26 +163,19 @@ public:
 	}
 
 	void handleUserInput(double dt) {
-		//update screen mouse
-		prev_mouse_scr=mouse_scr;
-		mouse_scr.x=GetMouseX();
-		mouse_scr.y=GetMouseY(); 
-
-		handlePanning();
-
-		handleZooming(dt);
-
-		if(GetKey(SAPP_KEYCODE_H).held) zoomToFit();
-
-		//update world mouse
-		prev_mouse_wld=scr2wld(prev_mouse_scr);
-		mouse_wld=scr2wld(mouse_scr);
-
 		handleAdditionAction();
 
 		handleRemovalAction();
 
-		if(GetKey(SAPP_KEYCODE_P).pressed) update_phys^=true;
+		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).pressed) cam.begin_pan(mouse_scr);
+		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.update_pan(mouse_scr);
+
+		if(GetKey(SAPP_KEYCODE_W).held) cam.update_zoom(mouse_scr, 1+dt);
+		if(GetKey(SAPP_KEYCODE_Q).held) cam.update_zoom(mouse_scr, 1-dt);
+
+		if(GetKey(SAPP_KEYCODE_Z).held) zoomToFit();
+
+		if(GetKey(SAPP_KEYCODE_SPACE).pressed) update_phys^=true;
 	}
 
 	void handlePhysics(double dt) {
@@ -243,65 +215,122 @@ public:
 #pragma endregion
 
 	bool user_update(float dt) override {
+		//update mice
+		mouse_scr.x=GetMouseX();
+		mouse_scr.y=GetMouseY();
+		mouse_wld=cam.scr2wld(mouse_scr);
+
 		handleUserInput(dt);
 
 		if(update_phys) handlePhysics(dt);
-		
+
 		return true;
 	}
 
 #pragma region RENDER_HELPERS
-	void draw_arc(
-		float cx, float cy, float rad,
+	void fill_arc(
+		float x, float y, float rad,
 		float st, float len,
 		float r, float g, float b
 	) {
-		const int num=32;
-		sgl_begin_line_strip();
+		sgl_begin_triangles();
+
 		sgl_c3f(r, g, b);
-		for(int i=0; i<num; i++) {
-			float angle=st+len*i/(num-1);
-			vd2d o=polar(rad, angle);
-			sgl_v2f(cx+o.x, cy+o.y);
+
+		const int num=32;
+		vf2d ctr(x, y), prev;
+		for(int i=0; i<=num; i++) {
+			float angle=st+len*i/num;
+			vf2d curr=ctr+cmn::polar<vf2d>(rad, angle);
+			if(i!=0) {
+				sgl_v2f(x, y);
+				sgl_v2f(prev.x, prev.y);
+				sgl_v2f(curr.x, curr.y);
+			}
+			prev=curr;
 		}
+
 		sgl_end();
 	}
 
-	void renderBounds() {
-		vd2d min_scr=wld2scr(bounds_min);
-		vd2d max_scr=wld2scr(bounds_max);
+	void renderGrid(float r, float g, float b) {
+		//screen bounds in world space
+		vf2d min=cam.scr2wld({0, 0});
+		vf2d max=cam.scr2wld(cam.scr_sz);
+
+		//how much "world fits horiz on scr
+		float z=max.x-min.x;
+		float l=std::log10(z);
+		float e=std::floor(l)-1;
+		float size=std::pow(10, e);
+		float fade=l-std::floor(l);
+
+		//snap to containment
+		int si=std::floor(min.x/size);
+		int sj=std::floor(min.y/size);
+		int ei=std::ceil(max.x/size);
+		int ej=std::ceil(max.y/size);
+
+		//vertical lines
+		for(int i=si; i<=ei; i++) {
+			float x_wld=size*i;
+			float x_scr=cam.wld2scr({x_wld, 0}).x;
+			if(i%5==0) cmn::draw_thick_line(
+				x_scr, 0, x_scr, sapp_heightf(),
+				2,
+				r, g, b
+			);
+			else cmn::draw_line(
+				x_scr, 0, x_scr, sapp_heightf(),
+				r, g, b, 1-fade
+			);
+		}
+
+		//horizontal lines
+		for(int j=sj; j<=ej; j++) {
+			float y_wld=size*j;
+			float y_scr=cam.wld2scr({0, y_wld}).y;
+			if(j%5==0) cmn::draw_thick_line(
+				0, y_scr, sapp_widthf(), y_scr,
+				2,
+				r, g, b
+			);
+			else cmn::draw_line(
+				0, y_scr, sapp_widthf(), y_scr,
+				r, g, b, 1-fade
+			);
+		}
+	}
+
+	void renderBounds(float r, float g, float b) {
+		vf2d min_scr=cam.wld2scr(bounds_min);
+		vf2d max_scr=cam.wld2scr(bounds_max);
 		float x=min_scr.x;
 		float y=min_scr.y;
 		float w=max_scr.x-x;
 		float h=max_scr.y-y;
-		cmn::draw_rect(x, y, w, h, 1, 0, 0);
-	}
-
-	void renderGrid() {
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
-		//askjhdkljh
+		cmn::draw_thick_rect(
+			x, y, w, h,
+			2,
+			r, g, b
+		);
 	}
 
 	//grey circle w/ red N arc & blue S arc
-	void renderMagnets() {
+	void renderMagnets(float r, float g, float b) {
 		for(const auto& m:magnets) {
-			vd2d pos_scr=wld2scr(m.pos);
-			double rad_scr=wld2scr(m.getRad());
-			cmn::fill_circle(pos_scr.x, pos_scr.y, rad_scr, .5f, .5f, .5f);
+			vf2d pos_scr=cam.wld2scr(m.pos);
+			float rad_scr=cam.wld2scr(m.getRad());
 
-			double st=m.rot-Pi/2;
-			draw_arc(pos_scr.x, pos_scr.y, rad_scr, st, Pi, 1, 0, 0);
-			draw_arc(pos_scr.x, pos_scr.y, rad_scr, st, -Pi, 0, 0, 1);
+			float st=m.rot-Pi/2;
+			fill_arc(pos_scr.x, pos_scr.y, rad_scr, st, Pi, 1, 0, 0);
+			fill_arc(pos_scr.x, pos_scr.y, rad_scr, st, -Pi, 0, 0, 1);
+
+			cmn::fill_torus(
+				pos_scr.x, pos_scr.y,
+				rad_scr-1, rad_scr+1,
+				r, g, b
+			);
 		}
 	}
 #pragma endregion
@@ -314,14 +343,30 @@ public:
 		sg_begin_pass(pass);
 
 		sgl_defaults();
+		sgl_load_pipeline(pip);
 		sgl_matrix_mode_projection();
 		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
 
-		renderBounds();
+		//light blue
+		cmn::fill_rect(
+			0, 0, sapp_widthf(), sapp_heightf(),
+			112/255.f, 207/255.f, 254/255.f
+		);
 
-		renderGrid();
+		//dark grey
+		renderGrid(38/255.f, 38/255.f, 38/255.f);
 
-		renderMagnets();
+		//red
+		renderBounds(1, 0, 0);
+
+		renderMagnets(1, 1, 1);
+		
+		//blue
+		if(!update_phys) cmn::draw_thick_rect(
+			0, 0, sapp_widthf(), sapp_heightf(),
+			5,
+			0, 0, 1
+		);
 
 		sgl_draw();
 

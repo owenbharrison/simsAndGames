@@ -6,14 +6,9 @@
 
 #include "cmn/math/v2d.h"
 
-constexpr double Pi=3.141592653589793;
+#include "cmn/utils.h"
 
-cmn::vd2d polar(double rad, double angle) {
-	return {
-		rad* std::cos(angle),
-		rad* std::sin(angle)
-	};
-}
+constexpr double Pi=3.141592653589793;
 
 class Magnet {
 	double rad=0;
@@ -27,15 +22,18 @@ public:
 	cmn::vd2d pos;
 	double rot=0;
 
-	Magnet(cmn::vd2d p, double r) {
+	Magnet(cmn::vd2d p, double ra, double ro=0) {
 		pos=p;
 		old_pos=p;
 
-		rad=r;
-		double volume=4*Pi/3*r*r*r;
+		rot=ro;
+		old_rot=rot;
+
+		rad=ra;
+		double volume=4*Pi/3*rad*rad*rad;
 		//density of iron
 		mass=7874*volume;
-		inertia=.5*mass*r*r;
+		inertia=.5*mass*rad*rad;
 	}
 
 	double getRad() const { return rad; }
@@ -96,8 +94,8 @@ public:
 
 	static void applyMonopoleForces(Magnet& a, Magnet& b) {
 		//get directions
-		cmn::vd2d a_sn=polar(1, a.rot);
-		cmn::vd2d b_sn=polar(1, b.rot);
+		cmn::vd2d a_sn=cmn::polar<cmn::vd2d>(1., a.rot);
+		cmn::vd2d b_sn=cmn::polar<cmn::vd2d>(1., b.rot);
 
 		//get pole locations(inside magnet?)
 		double a_rad=a.getRad();
