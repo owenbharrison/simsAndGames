@@ -48,8 +48,8 @@ namespace cmn {
 	static constexpr float Pi=3.1415927f;
 
 	//polar to cartesian helper
-	template<typename V2D>
-	V2D polar(float rad, float angle) {
+	template<typename V2D, typename T>
+	V2D polar(T rad, T angle) {
 		return V2D(rad*std::cos(angle), rad*std::sin(angle));
 	}
 
