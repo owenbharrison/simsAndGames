@@ -51,6 +51,15 @@ namespace cmn {
 		v2d_generic& operator*=(const T& v) { *this=*this*v; return*this; }
 		v2d_generic& operator/=(const v2d_generic& v) { *this=*this/v; return*this; }
 		v2d_generic& operator/=(const T& v) { *this=*this/v; return*this; }
+
+		//conversion
+		template<typename O>
+		operator v2d_generic<O>() const {
+			return {
+				static_cast<O>(x),
+				static_cast<O>(y)
+			};
+		}
 	};
 
 	template<typename T> v2d_generic<T> operator+(const T& s, const v2d_generic<T>& v) { return v+s; }
