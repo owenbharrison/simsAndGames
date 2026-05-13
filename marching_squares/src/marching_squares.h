@@ -25,9 +25,10 @@ void insideGradient(float t, float* r, float* g, float* b) {
 		{1, 1, 0},//yellow
 		{1, 0, 0}//red
 	};
-	return cmn::colorGradient(
-		cols, sizeof(cols)/sizeof(cols[0]),
-		t, r, g, b
+	static const int num=sizeof(cols)/sizeof(*cols);
+	cmn::colorGradient(
+		cols, num, t,
+		r, g, b
 	);
 }
 
@@ -37,9 +38,10 @@ void outsideGradient(float t, float* r, float* g, float* b) {
 		{0, 0, 1},//blue
 		{.5f, 0, 1}//purple
 	};
-	return cmn::colorGradient(
-		cols, sizeof(cols)/sizeof(cols[0]),
-		t, r, g, b
+	static const int num=sizeof(cols)/sizeof(*cols);
+	cmn::colorGradient(
+		cols, num, t,
+		r, g, b
 	);
 }
 

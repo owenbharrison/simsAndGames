@@ -91,9 +91,10 @@ void explosionGradient(float t, float* r, float* g, float* b) {
 		{1, .369f, 0},//orange
 		{.271f, .271f, .271f}//grey
 	};
-	return cmn::colorGradient(
-		cols, sizeof(cols)/sizeof(cols[0]),
-		t, r, g, b
+	static const int num=sizeof(cols)/sizeof(*cols);
+	cmn::colorGradient(
+		cols, num, t,
+		r, g, b
 	);
 }
 

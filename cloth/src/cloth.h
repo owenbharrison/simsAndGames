@@ -63,9 +63,10 @@ void compressiveGradient(float t, float* r, float* g, float* b) {
 		{1, 1, 0},//yellow
 		{1, 0, 0}//red
 	};
-	return cmn::colorGradient(
-		cols, sizeof(cols)/sizeof(cols[0]),
-		t, r, g, b
+	static const int num=sizeof(cols)/sizeof(*cols);
+	cmn::colorGradient(
+		cols, num, t,
+		r, g, b
 	);
 }
 
@@ -75,9 +76,10 @@ void tensileGradient(float t, float* r, float* g, float* b) {
 		{0, 1, 1},//cyan
 		{0, 0, 1}//blue
 	};
-	return cmn::colorGradient(
-		cols, sizeof(cols)/sizeof(cols[0]),
-		t, r, g, b
+	static const int num=sizeof(cols)/sizeof(*cols);
+	cmn::colorGradient(
+		cols, num, t,
+		r, g, b
 	);
 }
 
@@ -421,7 +423,7 @@ public:
 
 	//just a lot of fiddling.
 	vf3d getWind(vf3d pos, float time) {
-		const float scl=.1f;
+		const float scl=.32f;
 		vf3d wind(
 			.5f-noise_gen.noise(scl*pos.y, scl*pos.z, time),
 			.5f-noise_gen.noise(100+scl*pos.x, 100+scl*pos.y, 100+time),
@@ -432,7 +434,7 @@ public:
 		wind+={1.46f, .3f, 0};
 
 		//scale z
-		wind.z*=2.5f;
+		wind.z*=2.73f;
 
 		float strength=6.4f;
 		return strength*wind;
@@ -469,7 +471,7 @@ public:
 				vf3d vel_c=(c.pos-c.old_pos)/time_step;
 
 				vf3d ctr=(a.pos+b.pos+c.pos)/3;
-				vf3d wind=getWind(ctr, .1f*total_dt);
+				vf3d wind=getWind(ctr, .2f*total_dt);
 
 				//relative wind vel
 				vf3d vel=(vel_a+vel_b+vel_c)/3;
