@@ -59,5 +59,6 @@ namespace cmn {
 	template<typename T> v2d_generic<T> operator/(const T& s, const v2d_generic<T>& v) { return {s/v.x, s/v.y}; }
 
 	typedef v2d_generic<float> vf2d;
+	typedef v2d_generic<double> vd2d;
 }
 #endif

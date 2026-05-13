@@ -19,6 +19,12 @@ namespace cmn {
 		return a+t*(b-a);
 	}
 
+	double randDouble(double b=1, double a=0) {
+		static const double rand_max=RAND_MAX;
+		double t=std::rand()/rand_max;
+		return a+t*(b-a);
+	}
+
 	//inclusive integer choice [a, b]
 	int randInt(int a, int b) {
 		return a+std::rand()%(1+b-a);
