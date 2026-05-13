@@ -21,8 +21,6 @@
 
 #include "sokol/render_utils.h"
 
-#include <chrono>
-
 using cmn::vf2d;
 
 void stressGradient(float t, float& r, float& g, float& b) {
