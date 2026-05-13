@@ -212,5 +212,25 @@ namespace cmn {
 
 		sgl_end();
 	}
+
+	inline void draw_thick_rect(
+		float x, float y, float w, float h,
+		float t,
+		float r, float g, float b, float a=1
+	) {
+		float x1=x, x2=x1+t, x4=x+w, x3=x4-t;
+		float y1=y, y2=y1+t, y4=y+h, y3=y4-t;
+		
+		sgl_begin_quads();
+
+		sgl_c4f(r, g, b, a);
+
+		sgl_v2f(x1, y1), sgl_v2f(x4, y1), sgl_v2f(x3, y2), sgl_v2f(x2, y2);
+		sgl_v2f(x4, y1), sgl_v2f(x4, y4), sgl_v2f(x3, y3), sgl_v2f(x3, y2);
+		sgl_v2f(x4, y4), sgl_v2f(x1, y4), sgl_v2f(x2, y3), sgl_v2f(x3, y3);
+		sgl_v2f(x1, y4), sgl_v2f(x1, y1), sgl_v2f(x2, y2), sgl_v2f(x2, y3);
+
+		sgl_end();
+	}
 }
 #endif
