@@ -203,7 +203,7 @@ class RaycastingUI : public olc::PixelGameEngine {
 		handleUserInput(dt);
 
 		//player "update"
-		player_dir=cmn::polar<vf2d>(1, player_rot);
+		player_dir=cmn::polar<vf2d>(1.f, player_rot);
 
 		//move towards mouse
 		if(hover_light) light_pos=mouse_pos;
@@ -257,13 +257,16 @@ class RaycastingUI : public olc::PixelGameEngine {
 		}
 	}
 
+	//draw circles of DECREASING brightness eminating from light_pos
 	void renderLight() {
-		//draw circles of decreasing brightness eminating from light_pos
 		const int num=48;
+		const float min_rad=5;
+		const float max_rad=250;
 		for(int i=0; i<num; i++) {
-			float rad=cmn::map(i, 0, num-1, 250, 5);
-			float shade=cmn::map(i, 0, num-1, 0, 1);
-			FillCircleDecal(light_pos, rad, olc::PixelF(shade, shade, shade));
+			float t=i/(num-1.f);
+			float rad=max_rad+t*(min_rad-max_rad);
+			auto col=olc::PixelF(t, t, t);
+			FillCircleDecal(light_pos, rad, col);
 		}
 	}
 
@@ -287,7 +290,7 @@ class RaycastingUI : public olc::PixelGameEngine {
 		const int num_shadows=512;
 		for(int i=0; i<=num_shadows; i++) {
 			const vf2d orig=light_pos/cell_size;
-			vf2d dir=cmn::polar<vf2d>(1, 2*cmn::Pi*i/num_shadows);
+			vf2d dir=cmn::polar<vf2d>(1.f, 2*cmn::Pi*i/num_shadows);
 			float dist=traceRay(orig, dir);
 			if(dist>0) {
 				//point on cell
@@ -317,7 +320,7 @@ class RaycastingUI : public olc::PixelGameEngine {
 			float angle01=i/(num_fov-1.f);
 			float angle55=angle01-.5f;
 			float angle=player_rot+player_fov*angle55;
-			vf2d dir=cmn::polar<vf2d>(1, angle);
+			vf2d dir=cmn::polar<vf2d>(1.f, angle);
 
 			//trace ray
 			float dist=traceRay(player_pos/cell_size, dir);

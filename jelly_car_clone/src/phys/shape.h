@@ -208,7 +208,7 @@ public:
 		if(!getAABB().contains(p)) return false;
 
 		//deterministic, but avoids edge artifacing
-		vf2d dir=cmn::polar<vf2d>(1, cmn::randFloat(2*cmn::Pi));
+		vf2d dir=cmn::polar<vf2d>(1.f, cmn::randFloat(2*cmn::Pi));
 
 		int num_ix=0;
 		for(const auto& c:shell) {
@@ -230,7 +230,7 @@ public:
 
 	void updateAnchors(float dt) {
 		//rotation matrix
-		vf2d cosin=cmn::polar<vf2d>(1, anchor_rot);
+		vf2d cosin=cmn::polar<vf2d>(1.f, anchor_rot);
 		auto rotate=[cosin] (const vf2d& p) {
 			return vf2d(
 				p.x*cosin.x-p.y*cosin.y,

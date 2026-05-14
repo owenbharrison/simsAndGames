@@ -129,7 +129,7 @@ public:
 
 				//deterministic, but less artifacting
 				float angle=cmn::randFloat(2*cmn::Pi);
-				vf2d dir=cmn::polar<vf2d>(1, angle);
+				vf2d dir=cmn::polar<vf2d>(1.f, angle);
 
 				//polygon raycast algorithm
 				int num=0;
@@ -848,7 +848,7 @@ public:
 
 	void updateRot() {
 		//precompute trig
-		cossin=cmn::polar<vf2d>(1, rot);
+		cossin=cmn::polar<vf2d>(1.f, rot);
 	}
 
 	void update(float dt) {

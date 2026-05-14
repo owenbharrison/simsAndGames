@@ -290,7 +290,7 @@ struct FruitNinja : olc::PixelGameEngine {
 			float r_max=cmn::randFloat(40, 60);
 			Fruit f(num);
 			for(int i=0; i<num; i++) {
-				vf2d dir=cmn::polar<vf2d>(1, 2*cmn::Pi*i/num);
+				vf2d dir=cmn::polar<vf2d>(1.f, 2*cmn::Pi*i/num);
 				float r=cmn::randFloat(r_min, r_max);
 				f.pts[i]=r*dir;
 			}
@@ -364,7 +364,7 @@ struct FruitNinja : olc::PixelGameEngine {
 		}
 	}
 
-	bool update(float dt) {
+	void update(float dt) {
 		mouse_pos=GetMousePos();
 
 		total_time+=dt;

@@ -336,7 +336,7 @@ public:
 		//position the vertexes
 		for(int i=0; i<num; i++) {
 			float angle=2*cmn::Pi*i/num;
-			vf2d dir=cmn::polar<vf2d>(1, angle);
+			vf2d dir=cmn::polar<vf2d>(1.f, angle);
 			verts[2*i]=pos+(rad-w/2)*dir;
 			verts[1+2*i]=pos+(rad+w/2)*dir;
 		}

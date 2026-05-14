@@ -103,7 +103,7 @@ public:
 
 		//random direction
 		float angle=2*cmn::Pi*cmn::randFloat();
-		vf2d b=a+cmn::polar<vf2d>(1, angle);
+		vf2d b=a+cmn::polar<vf2d>(1.f, angle);
 
 		//count ray-segment intersections
 		int num=0;
@@ -124,7 +124,7 @@ public:
 		rot+=rot_vel*dt;
 
 		//precompute rotation matrix
-		cossin=cmn::polar<vf2d>(1, rot);
+		cossin=cmn::polar<vf2d>(1.f, rot);
 	}
 
 	//when hit edge spawn on other side: toroidal space?

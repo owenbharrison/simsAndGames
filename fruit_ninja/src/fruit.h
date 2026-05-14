@@ -154,7 +154,7 @@ public:
 
 		//deterministic, but removes artifacting
 		float angle=cmn::randFloat(2*cmn::Pi);
-		vf2d dir=cmn::polar<vf2d>(1, angle);
+		vf2d dir=cmn::polar<vf2d>(1.f, angle);
 
 		//for every edge...
 		int num=0;
@@ -172,7 +172,7 @@ public:
 	//precompute cos and sin
 	//this makes things a lot faster
 	void updateRot() {
-		cossin=cmn::polar<vf2d>(1, rot);
+		cossin=cmn::polar<vf2d>(1.f, rot);
 	}
 
 	void applyForce(const vf2d& f) {

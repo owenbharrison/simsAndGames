@@ -13,7 +13,7 @@ static vf2d safeNorm(vf2d n) {
 	if(mag!=0) return n/mag;
 
 	float angle=2*cmn::Pi*cmn::randFloat();
-	return cmn::polar<vf2d>(1, angle);
+	return cmn::polar<vf2d>(1.f, angle);
 }
 
 struct Leg {
@@ -98,7 +98,7 @@ class SpidersUI : public olc::PixelGameEngine {
 	}
 
 	void handlePlayer() {
-		player_fwd=cmn::polar<vf2d>(1, player_rot);
+		player_fwd=cmn::polar<vf2d>(1.f, player_rot);
 		player_rgt={-player_fwd.y, player_fwd.x};
 
 		for(int i=0; i<num_sections; i++) {

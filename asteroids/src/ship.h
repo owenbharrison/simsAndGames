@@ -42,7 +42,7 @@ struct Ship {
 	}
 
 	Bullet getBullet() const {
-		vf2d dir=cmn::polar<vf2d>(1, rot);
+		vf2d dir=cmn::polar<vf2d>(1.f, rot);
 		return {pos+rad*dir, 63.f*dir};
 	}
 

@@ -120,7 +120,7 @@ public:
 			auto insideShell=[&] (const vf2d& p) {
 				//random direction
 				float angle=cmn::randFloat(2*cmn::Pi);
-				vf2d pr=p+cmn::polar<vf2d>(1, angle);
+				vf2d pr=p+cmn::polar<vf2d>(1.f, angle);
 
 				int num=0;
 				for(const auto& c:constraints) {

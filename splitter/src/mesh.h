@@ -233,7 +233,7 @@ public:
 		Mesh m;
 		for(int i=0; i<n; i++) {
 			float angle=2*cmn::Pi*i/n;
-			cmn::vf2d dir=cmn::polar<cmn::vf2d>(1, angle);
+			cmn::vf2d dir=cmn::polar<cmn::vf2d>(1.f, angle);
 			m.verts.push_back(rad*dir);
 		}
 		for(int i=2; i<n; i++) {
@@ -249,7 +249,7 @@ public:
 		Mesh m;
 		for(int i=0; i<n; i++) {
 			float angle=2*cmn::Pi*i/n;
-			cmn::vf2d dir=cmn::polar<cmn::vf2d>(1, angle);
+			cmn::vf2d dir=cmn::polar<cmn::vf2d>(1.f, angle);
 			m.verts.push_back(small_r*dir);
 			m.verts.push_back(big_r*dir);
 		}
