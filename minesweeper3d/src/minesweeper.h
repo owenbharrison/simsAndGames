@@ -241,14 +241,12 @@ void Minesweeper::clear() {
 
 //returns whether function made a cavity.
 bool Minesweeper::floodsweep(int i, int j, int k) {
-	using vi3d=cmn::v3d_generic<int>;
-
 	bool flood=false;
 
-	std::stack<vi3d> to_sweep;
+	std::stack<cmn::vi3d> to_sweep;
 	to_sweep.push({i, j, k});
 	while(to_sweep.size()) {
-		vi3d top=to_sweep.top();
+		cmn::vi3d top=to_sweep.top();
 		to_sweep.pop();
 		Cell& t=cells[ix(top.x, top.y, top.z)];
 
@@ -262,7 +260,7 @@ bool Minesweeper::floodsweep(int i, int j, int k) {
 				for(int dj=-1; dj<=1; dj++) {
 					for(int dk=-1; dk<=1; dk++) {
 						//skip if out of range
-						vi3d next{top.x+di, top.y+dj, top.z+dk};
+						cmn::vi3d next{top.x+di, top.y+dj, top.z+dk};
 						if(!inRange(next.x, next.y, next.z)) continue;
 
 						//sweep next if unswept and unflagged
