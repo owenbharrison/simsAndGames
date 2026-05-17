@@ -13,231 +13,161 @@
 //for hash
 #include <functional>
 
+cmn::vf3d segIntersectPlane(
+	const cmn::vf3d& a, const cmn::vf3d& b,
+	const cmn::vf3d& ctr, const cmn::vf3d& norm
+) {
+	cmn::vf3d ab=b-a;
+	float t=dot(norm, ctr-a)/dot(norm, ab);
+	return a+t*ab;
+}
+
 struct IndexTriangle {
-	int x=0, y=0, z=0;
-	olc::Pixel col=olc::WHITE;
+	int ix[3];
+	float r=1, g=1, b=1;
+};
 
-	int& operator[](int i) {
-		if(i==1) return y;
-		if(i==2) return z;
-		return x;
+//sorted edges
+struct IndexEdge {
+	int a, b;
+
+	IndexEdge(int v0, int v1) {
+		a=v0, b=v1;
+		if(a>b) std::swap(a, b);
 	}
 
-	const int& operator[](int i) const {
-		if(i==1) return y;
-		if(i==2) return z;
-		return x;
+	bool operator==(const IndexEdge& e) const {
+		return e.a==a&&e.b==b;
 	}
+};
+
+struct IndexEdgeHash {
+	std::uint64_t operator()(const IndexEdge& e) const {
+		std::uint64_t a=e.a, b=e.b;
+		return (a<<32)|b;
+	}
+};
+
+struct SplitIndex {
+	int pos_ix, neg_ix;
 };
 
 struct Mesh {
 	std::vector<cmn::vf3d> verts;
-	std::vector<IndexTriangle> index_tris;
-	std::vector<cmn::Triangle> tris;
-	int id=-1;
+	std::vector<IndexTriangle> tris;
 
-	void updateTriangles() {
-		tris.clear();
-		for(const auto& it:index_tris) {
-			cmn::Triangle t{
-				verts[it.x],
-				verts[it.y],
-				verts[it.z]
-			}; t.col=it.col;
-			tris.push_back(t);
-		}
-	}
-
-	cmn::AABB3 getAABB() const {
-		cmn::AABB3 box;
-		for(const auto& t:tris) {
-			for(int i=0; i<3; i++) {
-				box.fitToEnclose(t.p[i]);
-			}
-		}
-		return box;
-	}
-
-	bool splitByPlane(const cmn::vf3d& ctr, const cmn::vf3d& norm, Mesh& pos, Mesh& neg) const {
-		//classify and populate verts and initialize lookup
-		std::vector<bool> sides;
-		sides.reserve(verts.size());
-		std::unordered_map<int, int> me_pos, me_neg;
-		for(int i=0; i<verts.size(); i++) {
-			bool side=norm.dot(verts[i]-ctr)>0;
-			if(side) {
-				me_pos[i]=me_pos.size();
-				pos.verts.push_back(verts[i]);
+	bool splitByPlane(
+		const cmn::vf3d& ctr, const cmn::vf3d norm,
+		Mesh& ahead, Mesh& behind
+	) const {
+		//classify pts & make lookup
+		std::vector<int> i2pn;
+		auto i2p=[] (int i) { return 1+i; };
+		auto i2n=[] (int i) { return -1-i; };
+		auto p2i=[] (int p) { return p-1; };
+		auto n2i=[] (int n) { return -1-n; };
+		for(const auto& v:verts) {
+			if(norm.dot(v-ctr)>0) {
+				i2pn.push_back(i2p(ahead.verts.size()));
+				ahead.verts.push_back(v);
 			} else {
-				me_neg[i]=me_neg.size();
-				neg.verts.push_back(verts[i]);
+				i2pn.push_back(i2n(behind.verts.size()));
+				behind.verts.push_back(v);
 			}
-			sides.push_back(side);
 		}
 
-		//plane doesnt intersect(all on one side)
-		if(me_pos.empty()||me_neg.empty()) return false;
+		//all on one side
+		if(ahead.verts.empty()||behind.verts.empty()) return false;
 
-		struct edge_t {
-			int a=0, b=0;
+		//store intersections for reuse
+		std::unordered_map<IndexEdge, SplitIndex, IndexEdgeHash> cache;
+		auto getEdgeIndex=[&] (int i0, int i1) {
+			IndexEdge e(i0, i1);
 
-			//sorted edges
-			edge_t(int a_, int b_) {
-				a=a_, b=b_;
-				if(a>b) std::swap(a, b);
-			}
+			auto it=cache.find(e);
+			if(it!=cache.end()) return it->second;
 
-			bool operator==(const edge_t& e) const {
-				return e.a==a&&e.b==b;
-			}
+			cmn::vf3d ix=segIntersectPlane(verts[i0], verts[i1], ctr, norm);
+
+			ahead.verts.push_back(ix);
+			behind.verts.push_back(ix);
+
+			SplitIndex is;
+			is.pos_ix=ahead.verts.size()-1;
+			is.neg_ix=behind.verts.size()-1;
+			cache[e]=is;
+			return is;
 		};
 
-		struct edge_hash_t {
-			std::size_t operator()(const edge_t& e) const {
-				auto hasher=std::hash<int>();
-				return hasher(e.a)^(hasher(e.b)<<1);
-			}
+		//add tri to corresponding mesh & ensure correct winding
+		auto addTriFacing=[] (Mesh& m, IndexTriangle t, const cmn::vf3d& n) {
+			cmn::vf3d ab=m.verts[t.ix[1]]-m.verts[t.ix[0]];
+			cmn::vf3d ac=m.verts[t.ix[2]]-m.verts[t.ix[0]];
+			if(dot(cross(ab, ac), n)<0) std::swap(t.ix[1], t.ix[2]);
+			m.tris.push_back(t);
 		};
 
-		//clip each tri
-		std::unordered_map<edge_t, std::pair<int, int>, edge_hash_t> edge_pn;
-		int pos_pts[3], neg_pts[3];
-		for(const auto& it:index_tris) {
-			cmn::vf3d it_ba=verts[it[1]]-verts[it[0]];
-			cmn::vf3d it_ca=verts[it[2]]-verts[it[0]];
-			cmn::vf3d orig_surf=it_ba.cross(it_ca);
-			//wind pts
-			int pos_ct=0, neg_ct=0;
+		//split each tri
+		int ix_pos[3], ix_neg[3];
+		for(const auto& t:tris) {
+			cmn::vf3d ab=verts[t.ix[1]]-verts[t.ix[0]];
+			cmn::vf3d ac=verts[t.ix[2]]-verts[t.ix[0]];
+			cmn::vf3d norm=normalize(cross(ab, ac));
+			int ct_pos=0, ct_neg=0;
 			for(int i=0; i<3; i++) {
-				const auto& ix=it[i];
-				if(sides[ix]) pos_pts[pos_ct++]=ix;
-				else neg_pts[neg_ct++]=ix;
+				const auto& ix=t.ix[i];
+				if(i2pn[ix]>0) ix_pos[ct_pos++]=ix;
+				else ix_neg[ct_neg++]=ix;
 			}
-			switch(pos_ct) {
-				case 0://send tri to neg
-					neg.index_tris.push_back({
-						me_neg[neg_pts[0]],
-						me_neg[neg_pts[1]],
-						me_neg[neg_pts[2]]
+			switch(ct_pos) {
+				case 0://send entire tri to neg
+					behind.tris.push_back({
+						n2i(i2pn[ix_neg[0]]),
+						n2i(i2pn[ix_neg[1]]),
+						n2i(i2pn[ix_neg[2]]),
 						});
 					break;
-				case 1: {//clip tri
-					std::pair<int, int> pn1;
-					edge_t e1(pos_pts[0], neg_pts[0]);
-					auto pn1it=edge_pn.find(e1);
-					//reuse
-					if(pn1it!=edge_pn.end()) pn1=pn1it->second;
-					else {//make
-						cmn::vf3d pt=cmn::segIntersectPlane(
-							verts[pos_pts[0]], verts[neg_pts[0]],
-							ctr, norm
-						);
-						pn1={pos.verts.size(), neg.verts.size()}, edge_pn[e1]=pn1;
-						pos.verts.push_back(pt), neg.verts.push_back(pt);
-					}
-
-					std::pair<int, int> pn2;
-					edge_t e2(pos_pts[0], neg_pts[1]);
-					auto pn2it=edge_pn.find(e2);
-					//reuse
-					if(pn2it!=edge_pn.end()) pn2=pn2it->second;
-					else {//make
-						cmn::vf3d pt=cmn::segIntersectPlane(
-							verts[pos_pts[0]], verts[neg_pts[1]],
-							ctr, norm
-						);
-						pn2={pos.verts.size(), neg.verts.size()}, edge_pn[e2]=pn2;
-						pos.verts.push_back(pt), neg.verts.push_back(pt);
-					}
-
-					IndexTriangle newp1{me_pos[pos_pts[0]], pn1.first, pn2.first, olc::YELLOW};
-					IndexTriangle newn1{pn1.second, me_neg[neg_pts[0]], me_neg[neg_pts[1]], olc::CYAN};
-					IndexTriangle newn2{pn1.second, me_neg[neg_pts[1]], pn2.second, olc::GREEN};
-
-					cmn::vf3d cl_ba=verts[neg_pts[0]]-verts[pos_pts[0]];
-					cmn::vf3d cl_ca=verts[neg_pts[1]]-verts[pos_pts[0]];
-					cmn::vf3d cl_surf=cl_ba.cross(cl_ca);
-					if(orig_surf.dot(cl_surf)<0) {
-						std::swap(newp1.x, newp1.y);
-						std::swap(newn1.x, newn1.y);
-						std::swap(newn2.x, newn2.y);
-					}
-
-					pos.index_tris.push_back(newp1);
-					neg.index_tris.push_back(newn1);
-					neg.index_tris.push_back(newn2);
-
+				case 1: {//pos tri, neg quad
+					auto p0n0=getEdgeIndex(ix_pos[0], ix_neg[0]);
+					auto p0n1=getEdgeIndex(ix_pos[0], ix_neg[1]);
+					int p0=p2i(i2pn[ix_pos[0]]);
+					int n0=n2i(i2pn[ix_neg[0]]);
+					int n1=n2i(i2pn[ix_neg[1]]);
+					addTriFacing(ahead, {p0, p0n0.pos_ix, p0n1.pos_ix, 1, 0, 0}, norm);//red
+					addTriFacing(behind, {p0n0.neg_ix, n0, n1, 0, 1, 0}, norm);//green
+					addTriFacing(behind, {p0n0.neg_ix, n1, p0n1.neg_ix, 0, 1, 1}, norm);//cyan
 					break;
 				}
-				case 2: {//clip tri
-					std::pair<int, int> pn1;
-					edge_t e1(pos_pts[0], neg_pts[0]);
-					auto pn1it=edge_pn.find(e1);
-					//reuse
-					if(pn1it!=edge_pn.end()) pn1=pn1it->second;
-					else {//make
-						cmn::vf3d pt=cmn::segIntersectPlane(
-							verts[pos_pts[0]], verts[neg_pts[0]],
-							ctr, norm
-						);
-						pn1={pos.verts.size(), neg.verts.size()}, edge_pn[e1]=pn1;
-						pos.verts.push_back(pt), neg.verts.push_back(pt);
-					}
-
-					std::pair<int, int> pn2;
-					edge_t e2(pos_pts[1], neg_pts[0]);
-					auto pn2it=edge_pn.find(e2);
-					//reuse
-					if(pn2it!=edge_pn.end()) pn2=pn2it->second;
-					else {//make
-						cmn::vf3d pt=cmn::segIntersectPlane(
-							verts[pos_pts[1]], verts[neg_pts[0]],
-							ctr, norm
-						);
-						pn2={pos.verts.size(), neg.verts.size()}, edge_pn[e2]=pn2;
-						pos.verts.push_back(pt), neg.verts.push_back(pt);
-					}
-
-					IndexTriangle newp1{me_pos[pos_pts[0]], pn1.first, pn2.first, olc::MAGENTA};
-					IndexTriangle newp2{me_pos[pos_pts[0]], pn2.first, me_pos[pos_pts[1]], olc::RED};
-					IndexTriangle newn1{pn1.second, me_neg[neg_pts[0]], pn2.second, olc::BLUE};
-
-					cmn::vf3d cl_ba=verts[neg_pts[0]]-verts[pos_pts[0]];
-					cmn::vf3d cl_ca=verts[pos_pts[1]]-verts[pos_pts[0]];
-					cmn::vf3d cl_surf=cl_ba.cross(cl_ca);
-					if(orig_surf.dot(cl_surf)<0) {
-						std::swap(newp1.x, newp1.y);
-						std::swap(newp2.x, newp2.y);
-						std::swap(newn1.x, newn1.y);
-					}
-
-					pos.index_tris.push_back(newp1);
-					pos.index_tris.push_back(newp2);
-					neg.index_tris.push_back(newn1);
-
+				case 2: {//pos quad, neg tri
+					auto p0n0=getEdgeIndex(ix_pos[0], ix_neg[0]);
+					auto p1n0=getEdgeIndex(ix_pos[1], ix_neg[0]);
+					int p0=p2i(i2pn[ix_pos[0]]);
+					int p1=p2i(i2pn[ix_pos[1]]);
+					int n0=n2i(i2pn[ix_neg[0]]);
+					addTriFacing(ahead, {p0, p1, p1n0.pos_ix, 1, 1, 0}, norm);//yellow
+					addTriFacing(ahead, {p0, p1n0.pos_ix, p0n0.pos_ix, 1, 0, 1}, norm);//magenta
+					addTriFacing(behind, {p1n0.neg_ix, n0, p0n0.neg_ix, 0, 0, 1}, norm);//blue
 					break;
 				}
-				case 3://send tri to pos
-					pos.index_tris.push_back({
-						me_pos[pos_pts[0]],
-						me_pos[pos_pts[1]],
-						me_pos[pos_pts[2]]
+				case 3://send entire tri to pos
+					ahead.tris.push_back({
+						p2i(i2pn[ix_pos[0]]),
+						p2i(i2pn[ix_pos[1]]),
+						p2i(i2pn[ix_pos[2]]),
 						});
 					break;
 			}
 		}
-
-		pos.updateTriangles();
-		neg.updateTriangles();
 
 		return true;
 	}
 
-	static bool loadFromOBJ(Mesh& m, const std::string& filename) {
-		m={};
 
+	static bool loadFromOBJ(Mesh& m, const std::string& filename) {
 		std::ifstream file(filename);
 		if(file.fail()) return false;
+
+		m={};
 
 		//parse file line by line
 		std::string line;
@@ -261,7 +191,7 @@ struct Mesh {
 
 				//triangulate
 				for(int i=2; i<num; i++) {
-					m.index_tris.push_back({
+					m.tris.push_back({
 						v_ixs[0],
 						v_ixs[i-1],
 						v_ixs[i]
@@ -271,8 +201,6 @@ struct Mesh {
 		}
 
 		file.close();
-
-		m.updateTriangles();
 
 		return true;
 	}
