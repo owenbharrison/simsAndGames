@@ -348,11 +348,11 @@ namespace cmn {
 			float dax_step=0, dbx_step=0,
 				dw1_step=0, dw2_step=0;
 
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
-			if(dy2) dbx_step=dx2/std::fabsf(dy2);
+			if(dy1) dax_step=float(dx1)/std::abs(dy1);
+			if(dy2) dbx_step=float(dx2)/std::abs(dy2);
 
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
-			if(dy2) dw2_step=dw2/std::fabsf(dy2);
+			if(dy1) dw1_step=float(dw1)/std::abs(dy1);
+			if(dy2) dw2_step=float(dw2)/std::abs(dy2);
 
 			float t_step, t;
 
@@ -377,7 +377,7 @@ namespace cmn {
 						t=t_step*(i-ax);
 						tex_w=tex_sw+t*(tex_ew-tex_sw);
 						float& depth=depth_buffer[bufferIX(i, j)];
-						if(tex_w>depth) {//=====HERE=====
+						if(tex_w>depth) {
 							Draw(i, j, col);
 							depth=tex_w;
 							id_buffer[bufferIX(i, j)]=id;
@@ -391,9 +391,9 @@ namespace cmn {
 			dy1=y3-y2;
 			dw1=w3-w2;
 
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
+			if(dy1) dax_step=float(dx1)/std::abs(dy1);
 
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
+			if(dy1) dw1_step=float(dw1)/std::abs(dy1);
 
 			//bottom triangle
 			for(int j=y2; j<=y3; j++) {
@@ -413,7 +413,7 @@ namespace cmn {
 					t=t_step*(i-ax);
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					float& depth=depth_buffer[bufferIX(i, j)];
-					if(tex_w>depth) {//=====HERE=====
+					if(tex_w>depth) {
 						Draw(i, j, col);
 						depth=tex_w;
 						id_buffer[bufferIX(i, j)]=id;
@@ -462,15 +462,15 @@ namespace cmn {
 				du2_step=0, dv2_step=0,
 				dw1_step=0, dw2_step=0;
 
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
-			if(dy2) dbx_step=dx2/std::fabsf(dy2);
+			if(dy1) dax_step=float(dx1)/std::abs(dy1);
+			if(dy2) dbx_step=float(dx2)/std::abs(dy2);
 
-			if(dy1) du1_step=du1/std::fabsf(dy1);
-			if(dy1) dv1_step=dv1/std::fabsf(dy1);
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
-			if(dy2) du2_step=du2/std::fabsf(dy2);
-			if(dy2) dv2_step=dv2/std::fabsf(dy2);
-			if(dy2) dw2_step=dw2/std::fabsf(dy2);
+			if(dy1) du1_step=float(du1)/std::abs(dy1);
+			if(dy1) dv1_step=float(dv1)/std::abs(dy1);
+			if(dy1) dw1_step=float(dw1)/std::abs(dy1);
+			if(dy2) du2_step=float(du2)/std::abs(dy2);
+			if(dy2) dv2_step=float(dv2)/std::abs(dy2);
+			if(dy2) dw2_step=float(dw2)/std::abs(dy2);
 
 			//start scanline filling triangles
 			if(dy1) {
@@ -501,7 +501,7 @@ namespace cmn {
 						tex_v=tex_sv+t*(tex_ev-tex_sv);
 						tex_w=tex_sw+t*(tex_ew-tex_sw);
 						float& depth=depth_buffer[bufferIX(i, j)];
-						if(tex_w>depth) {//=====HERE=====
+						if(tex_w>depth) {
 							olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
 							if(col.a!=0) {
 								Draw(i, j, tint*col);
@@ -520,12 +520,12 @@ namespace cmn {
 			dv1=v3-v2;
 			dw1=w3-w2;
 
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
+			if(dy1) dax_step=float(dx1)/std::abs(dy1);
 
 			du1_step=0, dv1_step=0;
-			if(dy1) du1_step=du1/std::fabsf(dy1);
-			if(dy1) dv1_step=dv1/std::fabsf(dy1);
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
+			if(dy1) du1_step=float(du1)/std::abs(dy1);
+			if(dy1) dv1_step=float(dv1)/std::abs(dy1);
+			if(dy1) dw1_step=float(dw1)/std::abs(dy1);
 
 			for(int j=y2; j<=y3; j++) {
 				if(!inRangeY(j)) continue;
@@ -554,255 +554,7 @@ namespace cmn {
 					tex_v=tex_sv+t*(tex_ev-tex_sv);
 					tex_w=tex_sw+t*(tex_ew-tex_sw);
 					float& depth=depth_buffer[bufferIX(i, j)];
-					if(tex_w>depth) {//=====HERE=====
-						olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
-						if(col.a!=0) {
-							Draw(i, j, tint*col);
-							depth=tex_w;
-							id_buffer[bufferIX(i, j)]=id;
-						}
-					}
-				}
-			}
-		}
-
-		void FillDepthTriangleWithin(
-			int x1, int y1, float w1,
-			int x2, int y2, float w2,
-			int x3, int y3, float w3,
-			olc::Pixel col, int id,
-			int nx, int ny, int mx, int my
-		) {
-			//sort by y
-			if(y2<y1) {
-				std::swap(x1, x2);
-				std::swap(y1, y2);
-				std::swap(w1, w2);
-			}
-			if(y3<y1) {
-				std::swap(x1, x3);
-				std::swap(y1, y3);
-				std::swap(w1, w3);
-			}
-			if(y3<y2) {
-				std::swap(x2, x3);
-				std::swap(y2, y3);
-				std::swap(w2, w3);
-			}
-
-			//calculate slopes
-			int dx1=x2-x1;
-			int dy1=y2-y1;
-			float dw1=w2-w1;
-
-			int dx2=x3-x1;
-			int dy2=y3-y1;
-			float dw2=w3-w1;
-
-			float t;
-
-			float tex_w;
-
-			float dax_step=0, dbx_step=0,
-				dw1_step=0, dw2_step=0;
-
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
-			if(dy2) dbx_step=dx2/std::fabsf(dy2);
-
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
-			if(dy2) dw2_step=dw2/std::fabsf(dy2);
-
-			if(dy1) for(int j=y1; j<=y2; j++) {
-				if(j<ny||j>=my) continue;
-				int ax=x1+dax_step*(j-y1);
-				int bx=x1+dbx_step*(j-y1);
-				float tex_sw=w1+dw1_step*(j-y1);
-				float tex_ew=w1+dw2_step*(j-y1);
-				//sort along x
-				if(ax>bx) {
-					std::swap(ax, bx);
-					std::swap(tex_sw, tex_ew);
-				}
-				float t_step=1.f/(bx-ax);
-				for(int i=ax; i<bx; i++) {
-					if(i<nx||i>=mx) continue;
-					t=t_step*(i-ax);
-					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					float& depth=depth_buffer[bufferIX(i, j)];
-					if(tex_w>depth) {//=====HERE=====
-						Draw(i, j, col);
-						depth=tex_w;
-						id_buffer[bufferIX(i, j)]=id;
-					}
-				}
-			}
-
-			//recalculate slopes
-			dx1=x3-x2;
-			dy1=y3-y2;
-			dw1=w3-w2;
-
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
-
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
-
-			for(int j=y2; j<=y3; j++) {
-				if(j<ny||j>=my) continue;
-				int ax=x2+dax_step*(j-y2);
-				int bx=x1+dbx_step*(j-y1);
-				float tex_sw=w2+dw1_step*(j-y2);
-				float tex_ew=w1+dw2_step*(j-y1);
-				//sort along x
-				if(ax>bx) {
-					std::swap(ax, bx);
-					std::swap(tex_sw, tex_ew);
-				}
-				float t_step=1.f/(bx-ax);
-				for(int i=ax; i<bx; i++) {
-					if(i<nx||i>=mx) continue;
-					t=t_step*(i-ax);
-					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					float& depth=depth_buffer[bufferIX(i, j)];
-					if(tex_w>depth) {//=====HERE=====
-						Draw(i, j, col);
-						depth=tex_w;
-						id_buffer[bufferIX(i, j)]=id;
-					}
-				}
-			}
-		}
-
-		void FillTexturedDepthTriangleWithin(
-			int x1, int y1, float u1, float v1, float w1,
-			int x2, int y2, float u2, float v2, float w2,
-			int x3, int y3, float u3, float v3, float w3,
-			olc::Sprite* spr, olc::Pixel tint, int id,
-			int nx, int ny, int mx, int my
-		) {
-			//sort by y
-			if(y2<y1) {
-				std::swap(x1, x2), std::swap(y1, y2);
-				std::swap(u1, u2), std::swap(v1, v2);
-				std::swap(w1, w2);
-			}
-			if(y3<y1) {
-				std::swap(x1, x3), std::swap(y1, y3);
-				std::swap(u1, u3), std::swap(v1, v3);
-				std::swap(w1, w3);
-			}
-			if(y3<y2) {
-				std::swap(x2, x3), std::swap(y2, y3);
-				std::swap(u2, u3), std::swap(v2, v3);
-				std::swap(w2, w3);
-			}
-
-			//calculate slopes
-			int dx1=x2-x1, dy1=y2-y1;
-			float du1=u2-u1, dv1=v2-v1;
-			float dw1=w2-w1;
-
-			int dx2=x3-x1, dy2=y3-y1;
-			float du2=u3-u1, dv2=v3-v1;
-			float dw2=w3-w1;
-
-			float t_step, t;
-
-			float tex_u, tex_v, tex_w;
-
-			float dax_step=0, dbx_step=0,
-				du1_step=0, dv1_step=0,
-				du2_step=0, dv2_step=0,
-				dw1_step=0, dw2_step=0;
-
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
-			if(dy2) dbx_step=dx2/std::fabsf(dy2);
-
-			if(dy1) du1_step=du1/std::fabsf(dy1);
-			if(dy1) dv1_step=dv1/std::fabsf(dy1);
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
-			if(dy2) du2_step=du2/std::fabsf(dy2);
-			if(dy2) dv2_step=dv2/std::fabsf(dy2);
-			if(dy2) dw2_step=dw2/std::fabsf(dy2);
-
-			//start scanline filling triangles
-			if(dy1) {
-				for(int j=y1; j<=y2; j++) {
-					if(j<ny||j>=my) continue;
-					int ax=x1+dax_step*(j-y1);
-					int bx=x1+dbx_step*(j-y1);
-					float tex_su=u1+du1_step*(j-y1);
-					float tex_sv=v1+dv1_step*(j-y1);
-					float tex_sw=w1+dw1_step*(j-y1);
-					float tex_eu=u1+du2_step*(j-y1);
-					float tex_ev=v1+dv2_step*(j-y1);
-					float tex_ew=w1+dw2_step*(j-y1);
-					//sort along x
-					if(ax>bx) {
-						std::swap(ax, bx);
-						std::swap(tex_su, tex_eu);
-						std::swap(tex_sv, tex_ev);
-						std::swap(tex_sw, tex_ew);
-					}
-					t_step=1.f/(bx-ax);
-					for(int i=ax; i<bx; i++) {
-						if(i<nx||i>=mx) continue;
-						t=t_step*(i-ax);
-						tex_u=tex_su+t*(tex_eu-tex_su);
-						tex_v=tex_sv+t*(tex_ev-tex_sv);
-						tex_w=tex_sw+t*(tex_ew-tex_sw);
-						float& depth=depth_buffer[bufferIX(i, j)];
-						if(tex_w>depth) {//=====HERE=====
-							olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
-							if(col.a!=0) {
-								Draw(i, j, tint*col);
-								depth=tex_w;
-								id_buffer[bufferIX(i, j)]=id;
-							}
-						}
-					}
-				}
-			}
-
-			//recalculate slopes
-			dx1=x3-x2;
-			dy1=y3-y2;
-			du1=u3-u2;
-			dv1=v3-v2;
-			dw1=w3-w2;
-
-			if(dy1) dax_step=dx1/std::fabsf(dy1);
-
-			du1_step=0, dv1_step=0;
-			if(dy1) du1_step=du1/std::fabsf(dy1);
-			if(dy1) dv1_step=dv1/std::fabsf(dy1);
-			if(dy1) dw1_step=dw1/std::fabsf(dy1);
-
-			for(int j=y2; j<=y3; j++) {
-				if(j<ny||j>=my) continue;
-				int ax=x2+dax_step*(j-y2);
-				int bx=x1+dbx_step*(j-y1);
-				float tex_su=u2+du1_step*(j-y2);
-				float tex_sv=v2+dv1_step*(j-y2);
-				float tex_sw=w2+dw1_step*(j-y2);
-				float tex_eu=u1+du2_step*(j-y1);
-				float tex_ev=v1+dv2_step*(j-y1);
-				float tex_ew=w1+dw2_step*(j-y1);
-				//sort along x
-				if(ax>bx) {
-					std::swap(ax, bx);
-					std::swap(tex_su, tex_eu);
-					std::swap(tex_sv, tex_ev);
-					std::swap(tex_sw, tex_ew);
-				}
-				float t_step=1.f/(bx-ax);
-				for(int i=ax; i<bx; i++) {
-					if(i<nx||i>=mx) continue;
-					t=t_step*(i-ax);
-					tex_u=tex_su+t*(tex_eu-tex_su);
-					tex_v=tex_sv+t*(tex_ev-tex_sv);
-					tex_w=tex_sw+t*(tex_ew-tex_sw);
-					float& depth=depth_buffer[bufferIX(i, j)];
-					if(tex_w>depth) {//=====HERE=====
+					if(tex_w>depth) {
 						olc::Pixel col=spr->Sample(tex_u/tex_w, tex_v/tex_w);
 						if(col.a!=0) {
 							Draw(i, j, tint*col);
@@ -824,7 +576,7 @@ namespace cmn {
 
 				float& depth=depth_buffer[bufferIX(i, j)];
 				float w=w1+t*(w2-w1);
-				if(w>depth) {//=====HERE=====
+				if(w>depth) {
 					Draw(i, j, col);
 					depth=w;
 					id_buffer[bufferIX(i, j)]=id;
@@ -832,7 +584,7 @@ namespace cmn {
 			};
 			int x, y, dx, dy, dx1, dy1, px, py, xe, ye, i;
 			dx=x2-x1; dy=y2-y1;
-			dx1=abs(dx), dy1=abs(dy);
+			dx1=std::abs(dx), dy1=std::abs(dy);
 			px=2*dy1-dx1, py=2*dx1-dy1;
 			if(dy1<=dx1) {
 				bool flip=false;
