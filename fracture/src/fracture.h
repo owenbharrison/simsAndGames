@@ -82,6 +82,7 @@ public:
 			"assets/armadillo.txt",
 			"assets/bunny.txt",
 			"assets/cow.txt",
+			"assets/donut.txt",
 			"assets/dragon.txt",
 			"assets/horse.txt",
 			"assets/jeep.txt",

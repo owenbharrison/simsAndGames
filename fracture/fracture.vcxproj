@@ -155,6 +155,7 @@
     <Text Include="assets\armadillo.txt" />
     <Text Include="assets\bunny.txt" />
     <Text Include="assets\cow.txt" />
+    <Text Include="assets\donut.txt" />
     <Text Include="assets\dragon.txt" />
     <Text Include="assets\horse.txt" />
     <Text Include="assets\jeep.txt" />
