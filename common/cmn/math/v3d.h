@@ -7,12 +7,12 @@
 
 namespace cmn {
 	template<typename T>
-	struct v3d_generic {
+	struct v_3d {
 		T x=0, y=0, z=0;
 
-		v3d_generic() {}
-		v3d_generic(T x_, T y_, T z_) { x=x_, y=y_, z=z_; }
-		v3d_generic(const v3d_generic& v) { x=v.x, y=v.y, z=v.z; }
+		v_3d() {}
+		v_3d(T x_, T y_, T z_) { x=x_, y=y_, z=z_; }
+		v_3d(const v_3d& v) { x=v.x, y=v.y, z=v.z; }
 
 		T& operator[](int i) {
 			if(i==1) return y;
@@ -26,14 +26,15 @@ namespace cmn {
 			return x;
 		}
 
-		v3d_generic& operator=(const v3d_generic& v)=default;
+		v_3d& operator=(const v_3d& v)=default;
 
-		T dot(const v3d_generic& v) const { return x*v.x+y*v.y+z*v.z; }
+		//migrate away from these
+		T dot(const v_3d& v) const { return x*v.x+y*v.y+z*v.z; }
 		T mag_sq() const { return dot(*this); }
 		T mag() const { return std::sqrt(mag_sq()); }
 
-		v3d_generic norm() const { T r=1/mag(); return operator*(r); }
-		v3d_generic cross(const v3d_generic& v) const {
+		v_3d norm() const { return operator/(mag()); }
+		v_3d cross(const v_3d& v) const {
 			return {
 				y*v.z-z*v.y,
 				z*v.x-x*v.z,
@@ -41,32 +42,60 @@ namespace cmn {
 			};
 		}
 
-		v3d_generic operator-() const { return {-x, -y, -z}; }
-		v3d_generic operator+(const v3d_generic& v) const { return {x+v.x, y+v.y, z+v.z}; }
-		v3d_generic operator+(const T& s) const { return operator+({s, s, s}); }
-		v3d_generic operator-(const v3d_generic& v) const { return {x-v.x, y-v.y, z-v.z}; }
-		v3d_generic operator-(const T& s) const { return operator-({s, s, s}); }
-		v3d_generic operator*(const v3d_generic& v) const { return {x*v.x, y*v.y, z*v.z}; }
-		v3d_generic operator*(const T& s) const { return operator*({s, s, s}); }
-		v3d_generic operator/(const v3d_generic& v) const { return {x/v.x, y/v.y, z/v.z}; }
-		v3d_generic operator/(const T& s) const { return operator/({s, s, s}); }
+		v_3d operator-() const { return {-x, -y, -z}; }
+		v_3d operator+(const v_3d& v) const { return {x+v.x, y+v.y, z+v.z}; }
+		v_3d operator+(const T& s) const { return operator+({s, s, s}); }
+		v_3d operator-(const v_3d& v) const { return {x-v.x, y-v.y, z-v.z}; }
+		v_3d operator-(const T& s) const { return operator-({s, s, s}); }
+		v_3d operator*(const v_3d& v) const { return {x*v.x, y*v.y, z*v.z}; }
+		v_3d operator*(const T& s) const { return operator*({s, s, s}); }
+		v_3d operator/(const v_3d& v) const { return {x/v.x, y/v.y, z/v.z}; }
+		v_3d operator/(const T& s) const { return operator/({s, s, s}); }
 
 		//i never really use these, but whatever
-		v3d_generic& operator+=(const v3d_generic& v) { *this=*this+v; return*this; }
-		v3d_generic& operator+=(const T& v) { *this=*this+v; return*this; }
-		v3d_generic& operator-=(const v3d_generic& v) { *this=*this-v; return*this; }
-		v3d_generic& operator-=(const T& v) { *this=*this-v; return*this; }
-		v3d_generic& operator*=(const v3d_generic& v) { *this=*this*v; return*this; }
-		v3d_generic& operator*=(const T& v) { *this=*this*v; return*this; }
-		v3d_generic& operator/=(const v3d_generic& v) { *this=*this/v; return*this; }
-		v3d_generic& operator/=(const T& v) { *this=*this/v; return*this; }
+		v_3d& operator+=(const v_3d& v) { *this=*this+v; return*this; }
+		v_3d& operator+=(const T& v) { *this=*this+v; return*this; }
+		v_3d& operator-=(const v_3d& v) { *this=*this-v; return*this; }
+		v_3d& operator-=(const T& v) { *this=*this-v; return*this; }
+		v_3d& operator*=(const v_3d& v) { *this=*this*v; return*this; }
+		v_3d& operator*=(const T& v) { *this=*this*v; return*this; }
+		v_3d& operator/=(const v_3d& v) { *this=*this/v; return*this; }
+		v_3d& operator/=(const T& v) { *this=*this/v; return*this; }
 	};
 
-	template<typename T> v3d_generic<T> operator+(const T& s, const v3d_generic<T>& v) { return v+s; }
-	template<typename T> v3d_generic<T> operator-(const T& s, const v3d_generic<T>& v) { return -v+s; }
-	template<typename T> v3d_generic<T> operator*(const T& s, const v3d_generic<T>& v) { return v*s; }
-	template<typename T> v3d_generic<T> operator/(const T& s, const v3d_generic<T>& v) { return {s/v.x, s/v.y, s/v.z}; }
+	//i like this syntax more
 
-	typedef v3d_generic<float> vf3d;
+	template<typename T>
+	T dot(const v_3d<T>& a, const v_3d<T>& b) {
+		return a.x*b.x+a.y*b.y+a.z*b.z;
+	}
+
+	template<typename T>
+	T length(const v_3d<T>& a) {
+		return std::sqrt(dot(a, a));
+	}
+
+	template<typename T>
+	v_3d<T> normalize(const v_3d<T>& a) {
+		return a/length(a);
+	}
+
+	template<typename T>
+	v_3d<T> cross(const v_3d<T>& a, const v_3d<T>& b) {
+		return {
+			a.y*b.z-a.z*b.y,
+			a.z*b.x-a.x*b.z,
+			a.x*b.y-a.y*b.x
+		};
+	}
+
+	template<typename T> v_3d<T> operator+(const T& s, const v_3d<T>& v) { return v+s; }
+	template<typename T> v_3d<T> operator-(const T& s, const v_3d<T>& v) { return -v+s; }
+	template<typename T> v_3d<T> operator*(const T& s, const v_3d<T>& v) { return v*s; }
+	template<typename T> v_3d<T> operator/(const T& s, const v_3d<T>& v) { return {s/v.x, s/v.y, s/v.z}; }
+
+	typedef v_3d<float> vf3d;
+	typedef v_3d<double> vd3d;
+	typedef v_3d<int> vi3d;
 }
 #endif
