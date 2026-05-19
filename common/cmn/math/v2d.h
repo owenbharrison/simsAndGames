@@ -2,17 +2,17 @@
 #ifndef CMN_V2D_STRUCT_H
 #define CMN_V2D_STRUCT_H
 
-//for sqrt
+//for sqrt & atan2
 #include <cmath>
 
 namespace cmn {
 	template<typename T>
-	struct v2d_generic {
+	struct v_2d {
 		T x=0, y=0;
 
-		v2d_generic() {}
-		v2d_generic(T x_, T y_) { x=x_, y=y_; }
-		v2d_generic(const v2d_generic& v) { x=v.x, y=v.y; }
+		v_2d() {}
+		v_2d(T x_, T y_) { x=x_, y=y_; }
+		v_2d(const v_2d& v) { x=v.x, y=v.y; }
 
 		T& operator[](int i) {
 			if(i==1) return y;
@@ -24,50 +24,80 @@ namespace cmn {
 			return x;
 		}
 
-		v2d_generic& operator=(const v2d_generic& v)=default;
+		v_2d& operator=(const v_2d& v)=default;
 
-		T dot(const v2d_generic& v) const { return x*v.x+y*v.y; }
-		T mag_sq() const { return dot(*this); }
-		T mag() const { return std::sqrt(mag_sq()); }
+		T dot(const v_2d& v) const { return dot(*this, v); }
+		T mag_sq() const { return dot(*this, *this); }
+		T mag() const { return length(*this); }
 
-		v2d_generic norm() const { T r=1/mag(); return operator*(r); }
+		v_2d norm() const { return normalize(*this); }
 
-		v2d_generic operator-() const { return {-x, -y}; }
-		v2d_generic operator+(const v2d_generic& v) const { return {x+v.x, y+v.y}; }
-		v2d_generic operator+(const T& s) const { return operator+({s, s}); }
-		v2d_generic operator-(const v2d_generic& v) const { return {x-v.x, y-v.y}; }
-		v2d_generic operator-(const T& s) const { return operator-({s, s}); }
-		v2d_generic operator*(const v2d_generic& v) const { return {x*v.x, y*v.y}; }
-		v2d_generic operator*(const T& s) const { return operator*({s, s}); }
-		v2d_generic operator/(const v2d_generic& v) const { return {x/v.x, y/v.y}; }
-		v2d_generic operator/(const T& s) const { return operator/({s, s}); }
+		v_2d operator-() const { return {-x, -y}; }
+		v_2d operator+(const v_2d& v) const { return {x+v.x, y+v.y}; }
+		v_2d operator+(const T& s) const { return operator+({s, s}); }
+		v_2d operator-(const v_2d& v) const { return {x-v.x, y-v.y}; }
+		v_2d operator-(const T& s) const { return operator-({s, s}); }
+		v_2d operator*(const v_2d& v) const { return {x*v.x, y*v.y}; }
+		v_2d operator*(const T& s) const { return operator*({s, s}); }
+		v_2d operator/(const v_2d& v) const { return {x/v.x, y/v.y}; }
+		v_2d operator/(const T& s) const { return operator/({s, s}); }
 
 		//i never really use these, but whatever
-		v2d_generic& operator+=(const v2d_generic& v) { *this=*this+v; return*this; }
-		v2d_generic& operator+=(const T& v) { *this=*this+v; return*this; }
-		v2d_generic& operator-=(const v2d_generic& v) { *this=*this-v; return*this; }
-		v2d_generic& operator-=(const T& v) { *this=*this-v; return*this; }
-		v2d_generic& operator*=(const v2d_generic& v) { *this=*this*v; return*this; }
-		v2d_generic& operator*=(const T& v) { *this=*this*v; return*this; }
-		v2d_generic& operator/=(const v2d_generic& v) { *this=*this/v; return*this; }
-		v2d_generic& operator/=(const T& v) { *this=*this/v; return*this; }
+		v_2d& operator+=(const v_2d& v) { *this=*this+v; return*this; }
+		v_2d& operator+=(const T& v) { *this=*this+v; return*this; }
+		v_2d& operator-=(const v_2d& v) { *this=*this-v; return*this; }
+		v_2d& operator-=(const T& v) { *this=*this-v; return*this; }
+		v_2d& operator*=(const v_2d& v) { *this=*this*v; return*this; }
+		v_2d& operator*=(const T& v) { *this=*this*v; return*this; }
+		v_2d& operator/=(const v_2d& v) { *this=*this/v; return*this; }
+		v_2d& operator/=(const T& v) { *this=*this/v; return*this; }
 
 		//conversion
 		template<typename O>
-		operator v2d_generic<O>() const {
-			return {
-				static_cast<O>(x),
-				static_cast<O>(y)
-			};
+		operator v_2d<O>() const {
+			return v_2d<O>(x, y);
+		}
+
+		//convert polar to cartesian
+		static v_2d polar(const v_2d& rt) {
+			return v_2d(
+				rt.x*std::cos(rt.y),
+				rt.x*std::sin(rt.y)
+			);
+		}
+
+		//convert cartesian to polar
+		static v_2d cartesian(const v_2d& xy) {
+			auto rad=length(xy);
+			auto theta=std::atan2(xy.y, xy.x);
+			return v_2d(rad, theta);
 		}
 	};
 
-	template<typename T> v2d_generic<T> operator+(const T& s, const v2d_generic<T>& v) { return v+s; }
-	template<typename T> v2d_generic<T> operator-(const T& s, const v2d_generic<T>& v) { return -v+s; }
-	template<typename T> v2d_generic<T> operator*(const T& s, const v2d_generic<T>& v) { return v*s; }
-	template<typename T> v2d_generic<T> operator/(const T& s, const v2d_generic<T>& v) { return {s/v.x, s/v.y}; }
+	//i like this syntax more
 
-	typedef v2d_generic<float> vf2d;
-	typedef v2d_generic<double> vd2d;
+	template<typename T>
+	T dot(const v_2d<T>& a, const v_2d<T>& b) {
+		return a.x*b.x+a.y*b.y;
+	}
+
+	template<typename T>
+	T length(const v_2d<T>& a) {
+		return std::sqrt(dot(a, a));
+	}
+
+	template<typename T>
+	v_2d<T> normalize(const v_2d<T>& a) {
+		return a/length(a);
+	}
+
+	template<typename T> v_2d<T> operator+(const T& s, const v_2d<T>& v) { return v+s; }
+	template<typename T> v_2d<T> operator-(const T& s, const v_2d<T>& v) { return -v+s; }
+	template<typename T> v_2d<T> operator*(const T& s, const v_2d<T>& v) { return v*s; }
+	template<typename T> v_2d<T> operator/(const T& s, const v_2d<T>& v) { return {s/v.x, s/v.y}; }
+
+	typedef v_2d<float> vf2d;
+	typedef v_2d<double> vd2d;
+	typedef v_2d<int> vi2d;
 }
 #endif

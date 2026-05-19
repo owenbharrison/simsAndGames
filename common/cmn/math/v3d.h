@@ -2,7 +2,7 @@
 #ifndef CMN_V3D_STRUCT_H
 #define CMN_V3D_STRUCT_H
 
-//for sqrt
+//for sqrt & atan2
 #include <cmath>
 
 namespace cmn {
@@ -29,19 +29,14 @@ namespace cmn {
 		v_3d& operator=(const v_3d& v)=default;
 
 		//migrate away from these
-		T dot(const v_3d& v) const { return x*v.x+y*v.y+z*v.z; }
-		T mag_sq() const { return dot(*this); }
-		T mag() const { return std::sqrt(mag_sq()); }
+		T dot(const v_3d& v) const { return dot(*this, v); }
+		T mag_sq() const { return dot(*this, *this); }
+		T mag() const { return length(*this); }
 
-		v_3d norm() const { return operator/(mag()); }
-		v_3d cross(const v_3d& v) const {
-			return {
-				y*v.z-z*v.y,
-				z*v.x-x*v.z,
-				x*v.y-y*v.x
-			};
-		}
+		v_3d norm() const { return normalize(*this); }
+		v_3d cross(const v_3d& v) const { return cross(*this, v); }
 
+		//the basics.
 		v_3d operator-() const { return {-x, -y, -z}; }
 		v_3d operator+(const v_3d& v) const { return {x+v.x, y+v.y, z+v.z}; }
 		v_3d operator+(const T& s) const { return operator+({s, s, s}); }
@@ -61,6 +56,36 @@ namespace cmn {
 		v_3d& operator*=(const T& v) { *this=*this*v; return*this; }
 		v_3d& operator/=(const v_3d& v) { *this=*this/v; return*this; }
 		v_3d& operator/=(const T& v) { *this=*this/v; return*this; }
+
+		//conversion
+		template<typename O>
+		operator v_3d<O>() const {
+			return v_3d<O>(x, y, z);
+		}
+
+		//convert polar to cartesian
+		//r y p => x y z
+		//1 0 0 => 1 0 0
+		static v_3d polar(const v_3d& ryp) {
+			return v_3d(
+				ryp.x*std::cos(ryp.y)*std::cos(ryp.z),
+				ryp.x*std::sin(ryp.z),
+				ryp.x*std::sin(ryp.y)*std::cos(ryp.z)
+			);
+		}
+
+		//convert cartesian to polar
+		//x y z => r y p
+		//1 0 0 => 1 0 0
+		static v_3d cartesian(const v_3d& xyz) {
+			auto rad=length(xyz);
+			//project onto xz
+			auto yaw=std::atan2(xyz.z, xyz.x);
+			//vertical triangle
+			auto base=std::sqrt(xyz.x*xyz.x+xyz.z*xyz.z);
+			auto pitch=std::atan2(xyz.y, base);
+			return v_3d(rad, yaw, pitch);
+		}
 	};
 
 	//i like this syntax more
