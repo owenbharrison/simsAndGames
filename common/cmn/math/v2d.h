@@ -6,6 +6,18 @@
 #include <cmath>
 
 namespace cmn {
+	//forward decl. b.s.
+	template<typename T> struct v_2d;
+
+	template<typename T>
+	T dot(const v_2d<T>&, const v_2d<T>&);
+
+	template<typename T>
+	T length(const v_2d<T>&);
+
+	template<typename T>
+	v_2d<T> normalize(const v_2d<T>&);
+	
 	template<typename T>
 	struct v_2d {
 		T x=0, y=0;
@@ -26,12 +38,13 @@ namespace cmn {
 
 		v_2d& operator=(const v_2d& v)=default;
 
-		T dot(const v_2d& v) const { return dot(*this, v); }
-		T mag_sq() const { return dot(*this, *this); }
-		T mag() const { return length(*this); }
+		//member wrappers...
+		T dot(const v_2d& v) const { return cmn::dot(*this, v); }
+		T mag_sq() const { return cmn::dot(*this, *this); }
+		T mag() const { return cmn::length(*this); }
+		v_2d norm() const { return cmn::normalize(*this); }
 
-		v_2d norm() const { return normalize(*this); }
-
+		//binary operators
 		v_2d operator-() const { return {-x, -y}; }
 		v_2d operator+(const v_2d& v) const { return {x+v.x, y+v.y}; }
 		v_2d operator+(const T& s) const { return operator+({s, s}); }
@@ -68,14 +81,13 @@ namespace cmn {
 
 		//convert cartesian to polar
 		static v_2d cartesian(const v_2d& xy) {
-			auto rad=length(xy);
+			auto rad=cmn::length(xy);
 			auto theta=std::atan2(xy.y, xy.x);
 			return v_2d(rad, theta);
 		}
 	};
 
 	//i like this syntax more
-
 	template<typename T>
 	T dot(const v_2d<T>& a, const v_2d<T>& b) {
 		return a.x*b.x+a.y*b.y;
@@ -91,10 +103,15 @@ namespace cmn {
 		return a/length(a);
 	}
 
-	template<typename T> v_2d<T> operator+(const T& s, const v_2d<T>& v) { return v+s; }
-	template<typename T> v_2d<T> operator-(const T& s, const v_2d<T>& v) { return -v+s; }
-	template<typename T> v_2d<T> operator*(const T& s, const v_2d<T>& v) { return v*s; }
-	template<typename T> v_2d<T> operator/(const T& s, const v_2d<T>& v) { return {s/v.x, s/v.y}; }
+	//more binary operators
+	template<typename T>
+	v_2d<T> operator+(const T& s, const v_2d<T>& v) { return v+s; }
+	template<typename T>
+	v_2d<T> operator-(const T& s, const v_2d<T>& v) { return -v+s; }
+	template<typename T>
+	v_2d<T> operator*(const T& s, const v_2d<T>& v) { return v*s; }
+	template<typename T>
+	v_2d<T> operator/(const T& s, const v_2d<T>& v) { return {s/v.x, s/v.y}; }
 
 	typedef v_2d<float> vf2d;
 	typedef v_2d<double> vd2d;
