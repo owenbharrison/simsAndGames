@@ -28,5 +28,8 @@
     <ClInclude Include="src\smoke.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\smoke_ui.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
