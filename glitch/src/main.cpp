@@ -55,10 +55,7 @@ struct Shape {
 	}
 };
 
-#include "cmn/geom/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
-}
+#include "cmn/geom/aabb2.h"
 
 class Example : public olc::PixelGameEngine {
 	//"primitive" render helpers
@@ -81,7 +78,7 @@ class Example : public olc::PixelGameEngine {
 
 	std::vector<Shape> shapes;
 	const vf2d gravity{0, 100};
-	cmn::AABB screen_bounds;
+	cmn::AABBf2 screen_bounds;
 
 	//some delay for things to load??
 	float timer=.5f;
@@ -195,7 +192,7 @@ public:
 		}
 
 		//initialize screen_bounds
-		screen_bounds={vf2d(0, 0), GetScreenSize()};
+		screen_bounds={{0, 0}, cmn::vf2d(ScreenWidth(), ScreenHeight())};
 
 		return true;
 	}
@@ -277,7 +274,8 @@ public:
 						s.update(dt);
 					
 						//remove if offscreen
-						if(!screen_bounds.overlaps({s.pos-s.rad, s.pos+s.rad})) {
+						vf2d tl=s.pos-s.rad, br=s.pos+s.rad;
+						if(!screen_bounds.overlaps({{tl.x, tl.y}, {br.x, br.y}})) {
 							it=shapes.erase(it);
 						} else it++;
 					}

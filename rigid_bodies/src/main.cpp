@@ -21,7 +21,7 @@ struct RigidBodyUI : olc::PixelGameEngine {
 
 	//physics stuff
 	std::list<Shape*> shapes;
-	cmn::AABB phys_bounds;
+	cmn::AABBf2 phys_bounds;
 
 	//user input stuff
 	vf2d scr_mouse_pos;
@@ -49,7 +49,7 @@ struct RigidBodyUI : olc::PixelGameEngine {
 	olc::Decal* prim_circ_dec=nullptr;
 
 	//place shapes s.t. their bounds lie in box
-	void placeShapesWithin(const cmn::AABB& box) {
+	void placeShapesWithin(const cmn::AABBf2& box) {
 		//start by avoiding locked shapes
 		std::list<Shape*> to_check_against;
 		for(const auto& s:shapes) {
@@ -66,18 +66,18 @@ struct RigidBodyUI : olc::PixelGameEngine {
 			s->old_rot=s->rot;
 
 			//get shape bounds
-			cmn::AABB s_box=s->getAABB();
+			cmn::AABBf2 s_box=s->getAABB();
 
 			//try a finite number of times...
 			for(int i=0; i<100; i++) {
 				//which way can we move it so its in box
-				vf2d delta_min=box.min-s_box.min;
-				vf2d delta_max=box.max-s_box.max;
-				vf2d delta(
+				cmn::vf2d delta_min=box.min-s_box.min;
+				cmn::vf2d delta_max=box.max-s_box.max;
+				cmn::vf2d delta(
 					cmn::randFloat(delta_min.x, delta_max.x),
 					cmn::randFloat(delta_min.y, delta_max.y)
 				);
-				s->pos+=delta;
+				s->pos+=vf2d(delta.x, delta.y);
 				s_box.min+=delta, s_box.max+=delta;
 
 				//don't place ontop of other shapes
@@ -99,10 +99,10 @@ struct RigidBodyUI : olc::PixelGameEngine {
 		}
 	}
 
-	void zoomToFit(const cmn::AABB& box) {
+	void zoomToFit(const cmn::AABBf2& box) {
 		//zoom into view
 		const auto margin=15;
-		vf2d box_sz=box.max-box.min;
+		cmn::vf2d box_sz=box.max-box.min;
 		float num_x=ScreenWidth()/box_sz.x;
 		float num_y=ScreenHeight()/box_sz.y;
 		float scale;
@@ -115,7 +115,9 @@ struct RigidBodyUI : olc::PixelGameEngine {
 		//pan into view
 		vf2d mid_scr=GetScreenSize()/2;
 		vf2d mid_wld=tv.ScreenToWorld(mid_scr);
-		tv.MoveWorldOffset(box.getCenter()-mid_wld);
+		cmn::vf2d box_ctr=box.getCenter();
+		vf2d delta=vf2d(box_ctr.x, box_ctr.y)-mid_wld;
+		tv.MoveWorldOffset(delta);
 	}
 
 	bool OnUserCreate() override {
@@ -127,21 +129,21 @@ struct RigidBodyUI : olc::PixelGameEngine {
 		//add walls
 		{
 			const float margin=.1f;
-			Shape* top=new Shape(cmn::AABB{
-				vf2d(phys_bounds.min.x-margin, phys_bounds.min.y-margin),
-				vf2d(phys_bounds.max.x+margin, phys_bounds.min.y+margin)
+			Shape* top=new Shape(cmn::AABBf2{
+				cmn::vf2d(phys_bounds.min.x-margin, phys_bounds.min.y-margin),
+				cmn::vf2d(phys_bounds.max.x+margin, phys_bounds.min.y+margin)
 				}); top->locked=true;
-			Shape* right=new Shape(cmn::AABB{
-				vf2d(phys_bounds.max.x-margin, phys_bounds.min.y-margin),
-				vf2d(phys_bounds.max.x+margin, phys_bounds.max.y+margin)
+			Shape* right=new Shape(cmn::AABBf2{
+				cmn::vf2d(phys_bounds.max.x-margin, phys_bounds.min.y-margin),
+				cmn::vf2d(phys_bounds.max.x+margin, phys_bounds.max.y+margin)
 				}); right->locked=true;
-			Shape* bottom=new Shape(cmn::AABB{
-				vf2d(phys_bounds.min.x-margin, phys_bounds.max.y-margin),
-				vf2d(phys_bounds.max.x+margin, phys_bounds.max.y+margin)
+			Shape* bottom=new Shape(cmn::AABBf2{
+				cmn::vf2d(phys_bounds.min.x-margin, phys_bounds.max.y-margin),
+				cmn::vf2d(phys_bounds.max.x+margin, phys_bounds.max.y+margin)
 				}); bottom->locked=true;
-			Shape* left=new Shape(cmn::AABB{
-				vf2d(phys_bounds.min.x-margin, phys_bounds.min.y-margin),
-				vf2d(phys_bounds.min.x+margin, phys_bounds.max.y+margin)
+			Shape* left=new Shape(cmn::AABBf2{
+				cmn::vf2d(phys_bounds.min.x-margin, phys_bounds.min.y-margin),
+				cmn::vf2d(phys_bounds.min.x+margin, phys_bounds.max.y+margin)
 				}); left->locked=true;
 			shapes.push_back(top);
 			shapes.push_back(right);
@@ -370,12 +372,13 @@ struct RigidBodyUI : olc::PixelGameEngine {
 			}
 		}
 
+		vf2d tl(box.min.x, box.min.y), br(box.max.x, box.max.y);
 		vf2d tr(box.max.x, box.min.y), bl(box.min.x, box.max.y);
 		olc::Pixel col=overlaps?olc::RED:olc::GREEN;
-		tv.DrawLineDecal(box.min, tr, col);
-		tv.DrawLineDecal(tr, box.max, col);
-		tv.DrawLineDecal(box.max, bl, col);
-		tv.DrawLineDecal(bl, box.min, col);
+		tv.DrawLineDecal(tl, tr, col);
+		tv.DrawLineDecal(tr, br, col);
+		tv.DrawLineDecal(br, bl, col);
+		tv.DrawLineDecal(bl, tl, col);
 	}
 
 	void renderShapeFill(const Shape& shp) {
@@ -509,7 +512,9 @@ struct RigidBodyUI : olc::PixelGameEngine {
 
 		//show phys_bounds
 		if(show_bounds) {
-			tv.DrawRectDecal(phys_bounds.min, phys_bounds.max-phys_bounds.min, olc::RED);
+			vf2d tl{phys_bounds.min.x, phys_bounds.min.y};
+			vf2d br{phys_bounds.max.x, phys_bounds.max.y};
+			tv.DrawRectDecal(tl, br-tl, olc::RED);
 		}
 
 		return;

@@ -73,9 +73,10 @@ namespace delaunay {
 		std::vector<olc::vf2d> pts=pts_ref;
 		int st_a=pts.size();
 		{//make super triangle
-			cmn::AABB box;
+			const cmn::vf2d inf(1e300, 1e300);
+			cmn::AABBf2 box{inf, -inf};
 			for(const auto& p:pts_ref) {
-				box.fitToEnclose(p);
+				box.fitToEnclose({p.x, p.y});
 			}
 			box.min-=1, box.max+=1;
 			float x=box.min.x, y=box.min.y;

@@ -11,10 +11,7 @@ impl polygon to PixelSet
 
 typedef unsigned char byte;
 
-#include "cmn/geom/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
-}
+#include "cmn/geom/aabb2.h"
 #include "cmn/utils.h"
 
 #include <stack>
@@ -111,16 +108,20 @@ public:
 	//could make this faster with scanline rasterization...
 	static PixelSet fromPolygon(const std::vector<vf2d>& polygon, float scale) {
 		//get bounds of polygon
-		cmn::AABB box;
-		for(const auto& p:polygon) box.fitToEnclose(p);
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box{inf, -inf};
+		for(const auto& p:polygon) box.fitToEnclose({p.x, p.y});
 
 		//determine spacing
-		vf2d size=box.max-box.min;
+		vf2d size(
+			box.max.x-box.min.x,
+			box.max.y-box.min.y
+		);
 		int w=1+size.x/scale, h=1+size.y/scale;
 
 		//for every point
 		PixelSet p(w, h);
-		p.pos=box.min;
+		p.pos={box.min.x, box.min.y};
 		p.scale=scale;
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
@@ -150,7 +151,8 @@ public:
 		p.updateOutlines();
 
 		p.updateMass();
-		p.pos+=box.min-p.getAABB().min;
+		cmn::vf2d delta=box.min-p.getAABB().min;
+		p.pos+=vf2d(delta.x, delta.y);
 		p.old_pos=p.pos;
 		p.updateInertia();
 
@@ -179,12 +181,17 @@ public:
 		return true;
 	}
 
-	[[nodiscard]] cmn::AABB getAABB() const {
-		cmn::AABB box;
-		box.fitToEnclose(localToWorld(vf2d(0, 0)));
-		box.fitToEnclose(localToWorld(vf2d(w, 0)));
-		box.fitToEnclose(localToWorld(vf2d(w, h)));
-		box.fitToEnclose(localToWorld(vf2d(0, h)));
+	[[nodiscard]] cmn::AABBf2 getAABB() const {
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box{inf, -inf};
+		vf2d tl=localToWorld(vf2d(0, 0));
+		vf2d tr=localToWorld(vf2d(w, 0));
+		vf2d br=localToWorld(vf2d(w, h));
+		vf2d bl=localToWorld(vf2d(0, h));
+		box.fitToEnclose({tl.x, tl.y});
+		box.fitToEnclose({tr.x, tr.y});
+		box.fitToEnclose({br.x, br.y});
+		box.fitToEnclose({bl.x, bl.y});
 		return box;
 	}
 
@@ -274,9 +281,10 @@ public:
 	//https://en.wikipedia.org/wiki/Bresenham's_line_algorithm
 	[[nodiscard]] bool slice(vf2d s1, vf2d s2) {
 		//find bounds of segment
-		cmn::AABB seg_box;
-		seg_box.fitToEnclose(s1);
-		seg_box.fitToEnclose(s2);
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 seg_box{inf, -inf};
+		seg_box.fitToEnclose({s1.x, s1.y});
+		seg_box.fitToEnclose({s2.x, s2.y});
 
 		//make sure they overlap
 		if(!seg_box.overlaps(getAABB())) return false;

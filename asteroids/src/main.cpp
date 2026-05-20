@@ -21,8 +21,7 @@ using olc::vi2d;
 
 #include "cmn/utils.h"
 
-#include "cmn/geom/aabb.h"
-namespace cmn { using AABB=AABB_generic<vf2d>; }
+#include "cmn/geom/aabb2.h"
 
 #include "cmn/stopwatch.h"
 
@@ -43,7 +42,7 @@ class AsteroidsUI : public olc::PixelGameEngine {
 	float particle_timer=0, bullet_timer=0, score_timer=0, warning_timer=0, end_timer=0;
 
 	Ship ship;
-	cmn::AABB screen_bounds;
+	cmn::AABBf2 screen_bounds;
 	std::vector<Asteroid> asteroids;
 	std::vector<Bullet> bullets;
 	std::vector<Particle> particles;
@@ -111,8 +110,9 @@ class AsteroidsUI : public olc::PixelGameEngine {
 		//extend screen bounds past edges
 		{
 			int margin=3;
-			vi2d margin_vec(margin, margin);
-			screen_bounds={-margin_vec, GetScreenSize()+margin_vec};
+			cmn::vf2d offset(margin, margin);
+			cmn::vf2d res(ScreenWidth(), ScreenHeight());
+			screen_bounds={offset, res-offset};
 		}
 
 		//ship in center of screen
@@ -280,7 +280,7 @@ class AsteroidsUI : public olc::PixelGameEngine {
 			b.update(dt);
 
 			//"dynamically" clear those offscreen
-			if(!screen_bounds.contains(b.pos)) {
+			if(!screen_bounds.contains({b.pos.x, b.pos.y})) {
 				it=bullets.erase(it);
 			} else it++;
 		}
@@ -382,7 +382,9 @@ class AsteroidsUI : public olc::PixelGameEngine {
 			DrawLine(a.pos, ship.pos, red_glyph);
 			DrawLine(a.pos, a.pos+a.vel, blue_glyph);
 			auto a_box=a.getAABB();
-			DrawRect(a_box.min, a_box.max-a_box.min, grey_glyph);
+			vf2d tl{a_box.min.x, a_box.min.y};
+			vf2d br{a_box.max.x, a_box.max.y};
+			DrawRect(tl, br-tl, grey_glyph);
 		}
 
 		//show bullet pos and vel
@@ -394,7 +396,9 @@ class AsteroidsUI : public olc::PixelGameEngine {
 		//show ship vel & bounds
 		DrawLine(ship.pos, ship.pos+ship.vel, blue_glyph);
 		auto ship_box=ship.getAABB();
-		DrawRect(ship_box.min, ship_box.max-ship_box.min, grey_glyph);
+		vf2d tl{ship_box.min.x, ship_box.min.y};
+		vf2d br{ship_box.max.x, ship_box.max.y};
+		DrawRect(tl, br-tl, grey_glyph);
 	}
 
 	//show bullets as tiny circles

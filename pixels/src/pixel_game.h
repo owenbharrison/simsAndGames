@@ -63,7 +63,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 			//aabb needs cossin
 			p->updateRot();
-			cmn::AABB box=p->getAABB();
+			cmn::AABBf2 box=p->getAABB();
 
 			//easier to just offset based on where it already is
 			p->pos.x+=cmn::randFloat(-box.min.x, ScreenWidth()-box.max.x);
@@ -462,7 +462,7 @@ struct PixelGame : olc::PixelGameEngine {
 			drag_set=nullptr;
 			for(const auto& p:pixelsets) {
 				//is mouse in bounds?
-				if(!p->getAABB().contains(wld_mouse_pos)) continue;
+				if(!p->getAABB().contains({wld_mouse_pos.x, wld_mouse_pos.y})) continue;
 
 				//are local coords valid?
 				vf2d ij=p->worldToLocal(wld_mouse_pos);
@@ -496,7 +496,7 @@ struct PixelGame : olc::PixelGameEngine {
 			spring_set=nullptr;
 			for(const auto& p:pixelsets) {
 				//is mouse in pixelset bounds?
-				if(!p->getAABB().contains(wld_mouse_pos)) continue;
+				if(!p->getAABB().contains({wld_mouse_pos.x, wld_mouse_pos.y})) continue;
 
 				//is local point in bounds?
 				vf2d ij=p->worldToLocal(wld_mouse_pos);
@@ -588,7 +588,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 				//is mouse in bounds?
 				const auto& p=*it;
-				if(p->getAABB().contains(wld_mouse_pos)) {
+				if(p->getAABB().contains({wld_mouse_pos.x, wld_mouse_pos.y})) {
 
 					//are local coords valid?
 					vf2d ij=p->worldToLocal(wld_mouse_pos);
@@ -759,7 +759,7 @@ struct PixelGame : olc::PixelGameEngine {
 		//draw rectangle bounding box
 		if(show_bounds) {
 			//color if it overlaps
-			cmn::AABB box=p.getAABB();
+			cmn::AABBf2 box=p.getAABB();
 			olc::Pixel col=olc::GREEN;
 			for(const auto& o:pixelsets) {
 				//dont check self
@@ -772,15 +772,17 @@ struct PixelGame : olc::PixelGameEngine {
 			}
 
 			const float rad=.25f*p.scale;
+			vf2d v0(box.min.x, box.min.y);
 			vf2d v1(box.max.x, box.min.y);
 			vf2d v2(box.min.x, box.max.y);
-			tvDrawThickLine(box.min, v1, rad, col);
-			tvFillCircleDecal(box.min, rad, col);
-			tvDrawThickLine(v1, box.max, rad, col);
+			vf2d v3(box.max.x, box.max.y);
+			tvDrawThickLine(v0, v1, rad, col);
+			tvFillCircleDecal(v0, rad, col);
+			tvDrawThickLine(v1, v3, rad, col);
 			tvFillCircleDecal(v1, rad, col);
-			tvDrawThickLine(box.max, v2, rad, col);
-			tvFillCircleDecal(box.max, rad, col);
-			tvDrawThickLine(v2, box.min, rad, col);
+			tvDrawThickLine(v3, v2, rad, col);
+			tvFillCircleDecal(v3, rad, col);
+			tvDrawThickLine(v2, v0, rad, col);
 			tvFillCircleDecal(v2, rad, col);
 		}
 
@@ -862,7 +864,7 @@ struct PixelGame : olc::PixelGameEngine {
 
 			//show hover block
 			//is mouse in bounds?
-			if(p->getAABB().contains(wld_mouse_pos)) {
+			if(p->getAABB().contains({wld_mouse_pos.x, wld_mouse_pos.y})) {
 				//are local coords valid?
 				vf2d ij=p->worldToLocal(wld_mouse_pos);
 				int i=std::floor(ij.x), j=std::floor(ij.y);

@@ -36,8 +36,10 @@ class MagnetsUI : public cmn::SokolEngine {
 	const double time_step=1/360.;
 	double update_timer=0;
 
-	vd2d bounds_min{-.5, -.5};
-	vd2d bounds_max{.5, .5};
+	cmn::AABBd2 bounds{
+		{-.5, -.5},
+		{.5, .5}
+	};
 
 	//user input
 	vd2d mouse_scr;
@@ -101,25 +103,23 @@ public:
 		if(magnets.empty()) return;
 
 		//magnets bounding box
-		vd2d min{1e30, 1e30};
-		vd2d max{-1e30, -1e30};
+		const cmn::vd2d inf(1e300, 1e300);
+		cmn::AABBd2 box{inf, -inf};
 		for(const auto& m:magnets) {
 			auto r=m.getRad();
-			if(m.pos.x-r<min.x) min.x=m.pos.x-r;
-			if(m.pos.y-r<min.y) min.y=m.pos.y-r;
-			if(m.pos.x+r>max.x) max.x=m.pos.x+r;
-			if(m.pos.y+r>max.y) max.y=m.pos.y+r;
+			box.fitToEnclose(m.pos-r);
+			box.fitToEnclose(m.pos+r);
 		}
 
-		cam.zoomToFit(min, max, 30);
+		cam.zoomToFit(box.min, box.max, 30);
 	}
 
 	bool isOverlapping(const Magnet& c) const {
 		auto rad=c.getRad();
-		if(c.pos.x-rad<bounds_min.x) return true;
-		if(c.pos.y-rad<bounds_min.y) return true;
-		if(c.pos.x+rad>bounds_max.x) return true;
-		if(c.pos.y+rad>bounds_max.y) return true;
+		if(c.pos.x-rad<bounds.min.x) return true;
+		if(c.pos.y-rad<bounds.min.y) return true;
+		if(c.pos.x+rad>bounds.max.x) return true;
+		if(c.pos.y+rad>bounds.max.y) return true;
 
 		for(const auto& m:magnets) {
 			double rad_t=rad+m.getRad();
@@ -136,10 +136,10 @@ public:
 		double rad=centimeter*cmn::randDouble(.3, .35);
 
 		//inside bounds?
-		if(pos.x-rad<bounds_min.x) return;
-		if(pos.y-rad<bounds_min.y) return;
-		if(pos.x+rad>bounds_max.x) return;
-		if(pos.y+rad>bounds_max.y) return;
+		if(pos.x-rad<bounds.min.x) return;
+		if(pos.y-rad<bounds.min.y) return;
+		if(pos.x+rad>bounds.max.x) return;
+		if(pos.y+rad>bounds.max.y) return;
 
 		//overlapping others?
 		for(const auto& m:magnets) {
@@ -196,7 +196,7 @@ public:
 			for(auto& m:magnets) {
 				m.update(time_step);
 
-				m.keepInside(bounds_min, bounds_max);
+				m.keepInside(bounds);
 			}
 
 			//check for collisions
@@ -303,8 +303,8 @@ public:
 	}
 
 	void renderBounds(float r, float g, float b) {
-		vf2d min_scr=cam.wld2scr(bounds_min);
-		vf2d max_scr=cam.wld2scr(bounds_max);
+		vf2d min_scr=cam.wld2scr(bounds.min);
+		vf2d max_scr=cam.wld2scr(bounds.max);
 		float x=min_scr.x;
 		float y=min_scr.y;
 		float w=max_scr.x-x;

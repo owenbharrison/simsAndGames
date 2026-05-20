@@ -72,7 +72,7 @@ public:
 		connectSprings();
 	}
 
-	Shape(const cmn::AABB& box, float res) {
+	Shape(const cmn::AABBf2& box, float res) {
 		//determine sizing
 		const int w=1+(box.max.x-box.min.x)/res;
 		const int h=1+(box.max.y-box.min.y)/res;
@@ -86,7 +86,7 @@ public:
 		//fill point grid
 		for(int i=0; i<w; i++) {
 			for(int j=0; j<h; j++) {
-				vf2d pos=box.min+res*vf2d(i, j);
+				vf2d pos(box.min.x+res*i, box.min.y+res*j);
 				points[ix(i, j)]=PointMass(pos);
 			}
 		}
@@ -177,10 +177,11 @@ public:
 		return p_sum/m_sum;
 	}
 
-	cmn::AABB getAABB() const {
-		cmn::AABB a;
+	cmn::AABBf2 getAABB() const {
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 a{inf, -inf};
 		for(int i=0; i<num_pts; i++) {
-			a.fitToEnclose(points[i].pos);
+			a.fitToEnclose({points[i].pos.x, points[i].pos.y});
 		}
 		return a;
 	}
@@ -205,7 +206,7 @@ public:
 	}
 
 	bool contains(const vf2d& p) const {
-		if(!getAABB().contains(p)) return false;
+		if(!getAABB().contains({p.x, p.y})) return false;
 
 		//deterministic, but avoids edge artifacing
 		vf2d dir=cmn::polar<vf2d>(1.f, cmn::randFloat(2*cmn::Pi));
@@ -269,7 +270,7 @@ public:
 		}
 	}
 
-	void keepIn(const cmn::AABB& a) {
+	void keepIn(const cmn::AABBf2& a) {
 		for(int i=0; i<num_pts; i++) {
 			points[i].keepIn(a);
 		}

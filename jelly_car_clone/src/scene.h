@@ -12,7 +12,7 @@ class Scene {
 
 public:
 	std::list<Shape*> shapes;
-	cmn::AABB phys_bounds{{0, 0}, {1, 1}};
+	cmn::AABBf2 phys_bounds{{0, 0}, {1, 1}};
 	vf2d gravity{0, 9.8};
 
 	Scene() {}
@@ -355,9 +355,10 @@ public:
 
 		//if bounds not provided, shrinkwrap.
 		if(!has_bounds) {
-			cmn::AABB box;
+			const cmn::vf2d inf(1e300, 1e300);
+			cmn::AABBf2 box{inf, -inf};
 			for(const auto& s:scn.shapes) {
-				cmn::AABB s_box=s->getAABB();
+				cmn::AABBf2 s_box=s->getAABB();
 				box.fitToEnclose(s_box.min);
 				box.fitToEnclose(s_box.max);
 			}

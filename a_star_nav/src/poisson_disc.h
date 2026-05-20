@@ -4,13 +4,10 @@
 
 #include <vector>
 
-#include "cmn/geom/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<olc::vf2d>;
-}
+#include "cmn/geom/aabb2.h"
 
 //https://www.youtube.com/watch?v=7WcmyxyFO7o
-std::vector<olc::vf2d> poissonDiscSample(const cmn::AABB& box, float rad) {
+std::vector<olc::vf2d> poissonDiscSample(const cmn::AABBf2& box, float rad) {
 	//determine spacing
 	float cell_size=rad/std::sqrt(2);
 	int w=1+(box.max.x-box.min.x)/cell_size;
@@ -19,7 +16,8 @@ std::vector<olc::vf2d> poissonDiscSample(const cmn::AABB& box, float rad) {
 	for(int i=0; i<w*h; i++) grid[i]=nullptr;
 
 	//where can i spawn from?
-	std::vector<olc::vf2d> spawn_pts{box.getCenter()};
+	cmn::vf2d box_ctr=box.getCenter();
+	std::vector<olc::vf2d> spawn_pts{{box_ctr.x, box_ctr.y}};
 
 	//as long as there are spawnable pts,
 	std::vector<olc::vf2d> pts;
@@ -36,7 +34,7 @@ std::vector<olc::vf2d> poissonDiscSample(const cmn::AABB& box, float rad) {
 			float angle=cmn::randFloat(2*cmn::Pi);
 			float dist=cmn::randFloat(rad, 2*rad);
 			olc::vf2d cand=spawn+cmn::polar<olc::vf2d>(dist, angle);
-			if(!box.contains(cand)) continue;
+			if(!box.contains({cand.x, cand.y})) continue;
 
 			//check 3x3 region around candidate
 			bool valid=true;

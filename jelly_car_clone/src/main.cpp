@@ -134,11 +134,11 @@ class JellyCarGame : public olc::PixelGameEngine {
 
 	void zoomToFit(bool fit_shapes=true) {
 		//find scene bounds
-		cmn::AABB bounds;
+		cmn::AABBf2 bounds;
 		if(fit_shapes&&scene.shapes.size()) {
 			//wrap aabb around points
 			for(const auto& s:scene.shapes) {
-				cmn::AABB box=s->getAABB();
+				cmn::AABBf2 box=s->getAABB();
 				bounds.fitToEnclose(box.min);
 				bounds.fitToEnclose(box.max);
 			}
@@ -148,7 +148,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 
 		//zoom into view
 		const auto margin=30;
-		vf2d bounds_size=bounds.max-bounds.min;
+		cmn::vf2d bounds_size=bounds.max-bounds.min;
 		float num_x=ScreenWidth()/bounds_size.x;
 		float num_y=ScreenHeight()/bounds_size.y;
 		float scale;
@@ -162,7 +162,9 @@ class JellyCarGame : public olc::PixelGameEngine {
 		//pan into view
 		vf2d mid_scr=GetScreenSize()/2;
 		vf2d mid_wld=tv.ScreenToWorld(mid_scr);
-		tv.MoveWorldOffset(bounds.getCenter()-mid_wld);
+		cmn::vf2d bounds_ctr=bounds.getCenter();
+		vf2d delta=vf2d(bounds_ctr.x, bounds_ctr.y)-mid_wld;
+		tv.MoveWorldOffset(delta);
 	}
 
 	bool OnUserDestroy() override {
@@ -309,8 +311,8 @@ class JellyCarGame : public olc::PixelGameEngine {
 #pragma region UPDATE HELPERS
 	void handleResizeActionBegin() {
 		//which edge of phys bounds is mouse on?
-		vf2d tl=tv.WorldToScreen(scene.phys_bounds.min);
-		vf2d br=tv.WorldToScreen(scene.phys_bounds.max);
+		vf2d tl=tv.WorldToScreen({scene.phys_bounds.min.x, scene.phys_bounds.min.y});
+		vf2d br=tv.WorldToScreen({scene.phys_bounds.max.x, scene.phys_bounds.max.y});
 		vf2d tr(br.x, tl.y);
 		vf2d bl(tl.x, br.y);
 		for(int i=0; i<4; i++) {
@@ -341,15 +343,15 @@ class JellyCarGame : public olc::PixelGameEngine {
 	}
 
 	void handleResizeActionUpdate() {
-		vf2d& tl=scene.phys_bounds.min;
-		vf2d& br=scene.phys_bounds.max;
+		cmn::vf2d& tl=scene.phys_bounds.min;
+		cmn::vf2d& br=scene.phys_bounds.max;
 		//corner/edge update logic
 		switch(drag_section) {
-			case 0: tl=wld_mouse_pos; break;
+			case 0: tl={wld_mouse_pos.x, wld_mouse_pos.y}; break;
 			case 1: tl.y=wld_mouse_pos.y; break;
 			case 2: tl.y=wld_mouse_pos.y, br.x=wld_mouse_pos.x; break;
 			case 3: br.x=wld_mouse_pos.x; break;
-			case 4: br=wld_mouse_pos; break;
+			case 4: br={wld_mouse_pos.x, wld_mouse_pos.y}; break;
 			case 5: br.y=wld_mouse_pos.y; break;
 			case 6: tl.x=wld_mouse_pos.x, br.y=wld_mouse_pos.y; break;
 			case 7: tl.x=wld_mouse_pos.x; break;
@@ -409,9 +411,10 @@ class JellyCarGame : public olc::PixelGameEngine {
 
 	void handleRectActionEnd() {
 		//get bounds
-		cmn::AABB box;
-		box.fitToEnclose(*rect_start);
-		box.fitToEnclose(wld_mouse_pos);
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box;
+		box.fitToEnclose({rect_start->x, rect_start->y});
+		box.fitToEnclose({wld_mouse_pos.x, wld_mouse_pos.y});
 
 		//add
 		float res=cmn::randFloat(.75f, 2);
@@ -567,12 +570,13 @@ class JellyCarGame : public olc::PixelGameEngine {
 		tv.DrawRotatedDecal(a-rad*tang, prim_rect.Decal(), angle, {0, 0}, {len, 2*rad}, col);
 	}
 
-	void tvDrawAABB(const cmn::AABB& aabb, float rad, const olc::Pixel& col) {
+	void tvDrawAABB(const cmn::AABBf2& aabb, float rad, const olc::Pixel& col) {
+		vf2d tl(aabb.min.x, aabb.min.x), br(aabb.max.x, aabb.max.y);
 		vf2d tr(aabb.max.x, aabb.min.y), bl(aabb.min.x, aabb.max.y);
-		tvDrawThickLine(aabb.min, tr, rad, col), tvFillCircle(aabb.min, rad, col);
-		tvDrawThickLine(tr, aabb.max, rad, col), tvFillCircle(tr, rad, col);
-		tvDrawThickLine(aabb.max, bl, rad, col), tvFillCircle(aabb.max, rad, col);
-		tvDrawThickLine(bl, aabb.min, rad, col), tvFillCircle(bl, rad, col);
+		tvDrawThickLine(tl, tr, rad, col), tvFillCircle(tl, rad, col);
+		tvDrawThickLine(tr, br, rad, col), tvFillCircle(tr, rad, col);
+		tvDrawThickLine(br, bl, rad, col), tvFillCircle(br, rad, col);
+		tvDrawThickLine(bl, tl, rad, col), tvFillCircle(bl, rad, col);
 	}
 
 	void tvFillCircle(const vf2d& pos, float rad, const olc::Pixel& col) {
@@ -610,7 +614,7 @@ class JellyCarGame : public olc::PixelGameEngine {
 
 	//color based on if overlapping
 	void renderShapeBounds(const Shape& shp) {
-		cmn::AABB box=shp.getAABB();
+		cmn::AABBf2 box=shp.getAABB();
 
 		bool overlaps=false;
 		for(const auto& s:scene.shapes) {
@@ -791,9 +795,10 @@ class JellyCarGame : public olc::PixelGameEngine {
 
 		//show add rect
 		if(rect_start) {
-			cmn::AABB box;
-			box.fitToEnclose(*rect_start);
-			box.fitToEnclose(wld_mouse_pos);
+			const cmn::vf2d inf(1e300, 1e300);
+			cmn::AABBf2 box;
+			box.fitToEnclose({rect_start->x, rect_start->y});
+			box.fitToEnclose({wld_mouse_pos.x, wld_mouse_pos.y});
 			tvDrawAABB(box, .05f, olc::DARK_GREY);
 		}
 

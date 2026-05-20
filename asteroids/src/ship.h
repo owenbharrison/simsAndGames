@@ -34,7 +34,7 @@ struct Ship {
 	}
 
 	//toroidal space
-	void checkAABB(const cmn::AABB& a) {
+	void checkAABB(const cmn::AABBf2& a) {
 		if(pos.x<a.min.x) pos.x=a.max.x;
 		if(pos.y<a.min.y) pos.y=a.max.y;
 		if(pos.x>a.max.x) pos.x=a.min.x;
@@ -72,13 +72,13 @@ struct Ship {
 		c=pos-fw-up;
 	}
 
-	cmn::AABB getAABB() const {
+	cmn::AABBf2 getAABB() const {
 		vf2d o[3];
 		getOutline(o[0], o[1], o[2]);
 
-		cmn::AABB a;
+		cmn::AABBf2 a;
 		for(int i=0; i<3; i++) {
-			a.fitToEnclose(o[i]);
+			a.fitToEnclose({o[i].x, o[i].y});
 		}
 		return a;
 	}

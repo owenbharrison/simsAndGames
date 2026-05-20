@@ -2,10 +2,7 @@
 #ifndef POINTMASS_STRUCT_H
 #define POINTMASS_STRUCT_H
 
-#include "cmn/geom/aabb.h"
-namespace cmn{
-	using AABB=AABB_generic<vf2d>;
-}
+#include "cmn/geom/aabb2.h"
 
 struct PointMass {
 	vf2d pos, oldpos, force;
@@ -50,7 +47,7 @@ struct PointMass {
 		force={0, 0};
 	}
 
-	void keepIn(const cmn::AABB& a) {
+	void keepIn(const cmn::AABBf2& a) {
 		vf2d vel=pos-oldpos;
 		if(pos.x<a.min.x) {
 			pos.x=a.min.x;

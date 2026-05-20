@@ -2,10 +2,7 @@
 #ifndef FRUIT_CLASS_H
 #define FRUIT_CLASS_H
 
-#include "cmn/geom/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
-}
+#include "cmn/geom/aabb2.h"
 #include "cmn/utils.h"
 
 class Fruit {
@@ -52,12 +49,16 @@ public:
 	}
 
 	//make a rect
-	Fruit(const cmn::AABB& a, olc::Pixel c) : num_pts(4), pos(a.getCenter()), col(c) {
+	Fruit(const cmn::AABBf2& a, olc::Pixel c) : num_pts(4), col(c) {
 		pts=new vf2d[4];
-		pts[0]=a.min;
+		pts[0]={a.min.x, a.min.y};
 		pts[1]={a.max.x, a.min.y};
-		pts[2]=a.max;
+		pts[2]={a.max.x, a.max.y};
 		pts[3]={a.min.x, a.max.y};
+
+		cmn::vf2d ctr=a.getCenter();
+		pos.x=ctr.x;
+		pos.y=ctr.y;
 
 		init();
 	}
@@ -66,15 +67,18 @@ public:
 		pts=new vf2d[num_pts];
 
 		//find bounds of shape and copy over
-		cmn::AABB box;
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box{inf, -inf};
 		for(int i=0; i<num_pts; i++) {
 			const auto& p=points[i];
 			pts[i]=p;
-			box.fitToEnclose(p);
+			box.fitToEnclose({p.x, p.y});
 		}
 
 		//localize about new ctr
-		pos=box.getCenter();
+		cmn::vf2d ctr=box.getCenter();
+		pos.x=ctr.x;
+		pos.y=ctr.y;
 		for(int i=0; i<num_pts; i++) {
 			pts[i]-=pos;
 		}
@@ -136,10 +140,12 @@ public:
 		return sum;
 	}
 
-	cmn::AABB getAABB() const {
-		cmn::AABB box;
+	cmn::AABBf2 getAABB() const {
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box{inf, -inf};
 		for(int i=0; i<num_pts; i++) {
-			box.fitToEnclose(localToWorld(pts[i]));
+			vf2d l=localToWorld(pts[i]);
+			box.fitToEnclose({l.x, l.y});
 		}
 		return box;
 	}
@@ -147,7 +153,7 @@ public:
 	//polygon raycasting algorithm
 	bool contains(vf2d p) const {
 		//aabb optimization
-		if(!getAABB().contains(p)) return false;
+		if(!getAABB().contains({p.x, p.y})) return false;
 
 		//localize point
 		p=worldToLocal(p);
@@ -193,9 +199,9 @@ public:
 
 	bool slice(const std::vector<vf2d>& slice_ref, Fruit& left, Fruit& right) {
 		//bounding box optimization
-		cmn::AABB slice_box;
+		cmn::AABBf2 slice_box;
 		for(const auto& s:slice_ref) {
-			slice_box.fitToEnclose(s);
+			slice_box.fitToEnclose({s.x, s.y});
 		}
 		if(!slice_box.overlaps(getAABB())) return false;
 

@@ -3,10 +3,7 @@
 #define SHAPE_CLASS_H
 
 #include "cmn/utils.h"
-#include "cmn/geom/aabb.h"
-namespace cmn {
-	using AABB=AABB_generic<vf2d>;
-}
+#include "cmn/geom/aabb2.h"
 
 #include <vector>
 #include <algorithm>
@@ -49,15 +46,15 @@ public:
 		initInertia();
 	}
 
-	Shape(const cmn::AABB& a) {
+	Shape(const cmn::AABBf2& a) {
 		//allocate
 		num_pts=4;
 		points=new vf2d[num_pts];
 
 		//make rect
-		points[0]=a.min;
+		points[0]={a.min.x, a.min.y};
 		points[1]={a.max.x, a.min.y};
-		points[2]=a.max;
+		points[2]={a.max.x, a.max.y};
 		points[3]={a.min.x, a.max.y};
 
 		initMass();
@@ -108,17 +105,19 @@ public:
 	}
 
 	//optimize??
-	cmn::AABB getAABB() const {
-		cmn::AABB box;
+	cmn::AABBf2 getAABB() const {
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box;
 		for(int i=0; i<num_pts; i++) {
-			box.fitToEnclose(localToWorld(points[i]));
+			vf2d l=localToWorld(points[i]);
+			box.fitToEnclose({l.x, l.y});
 		}
 		return box;
 	}
 
 	//polygon raycasting algorithm
 	bool contains(const vf2d& pt) {
-		if(!getAABB().contains(pt)) return false;
+		if(!getAABB().contains({pt.x, pt.y})) return false;
 
 		//deterministic, but no artifacts
 		vf2d pa=worldToLocal(pt);

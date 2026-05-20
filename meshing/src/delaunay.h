@@ -70,20 +70,17 @@ struct CDT {
 
 	void build_super_triangle() {
 		//bounding box
-		cmn::vf2d min(1e30f, 1e30f);
-		cmn::vf2d max(-1e30f, -1e30f);
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box{inf, -inf};
 		for(const auto& p:verts) {
-			if(p.x<min.x) min.x=p.x;
-			if(p.y<min.y) min.y=p.y;
-			if(p.x>max.x) max.x=p.x;
-			if(p.y>max.y) max.y=p.y;
+			box.fitToEnclose(p);
 		}
 
 		//tri containing everything
-		cmn::vf2d sz=max-min;
-		verts.push_back({min.x-2*sz.x, min.y-2*sz.y});
-		verts.push_back({max.x+2*sz.x, min.y-2*sz.y});
-		verts.push_back({min.x+.5f*sz.x, max.y+2*sz.y});
+		cmn::vf2d sz=box.max-box.min;
+		verts.push_back({box.min.x-2*sz.x, box.min.y-2*sz.y});
+		verts.push_back({box.max.x+2*sz.x, box.min.y-2*sz.y});
+		verts.push_back({box.min.x+.5f*sz.x, box.max.y+2*sz.y});
 		int sv=verts.size();
 		tris.push_back({sv-3, sv-2, sv-1});
 	}

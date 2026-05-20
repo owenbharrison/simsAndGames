@@ -8,16 +8,16 @@
 #include "cmn/utils.h"
 
 //https://www.youtube.com/watch?v=7WcmyxyFO7o
-std::vector<cmn::vf2d> poissonDiscSample(const cmn::vf2d& min, const cmn::vf2d& max, float rad) {
+std::vector<cmn::vf2d> poissonDiscSample(const cmn::AABBf2& box, float rad) {
 	//determine spacing
-	float cell_sz=rad/std::sqrtf(2);
-	int width=1+(max.x-min.x)/cell_sz;
-	int height=1+(max.y-min.y)/cell_sz;
+	float cell_sz=rad/std::sqrt(2.f);
+	int width=1+(box.max.x-box.min.x)/cell_sz;
+	int height=1+(box.max.y-box.min.y)/cell_sz;
 	int* grid=new int[width*height];
 	for(int i=0; i<width*height; i++) grid[i]=-1;
 
 	//where can i spawn from?
-	std::list<cmn::vf2d> spawn_pts{(min+max)/2};
+	std::list<cmn::vf2d> spawn_pts{box.getCenter()};
 
 	//as long as there are spawnable pts,
 	std::vector<cmn::vf2d> pts;
@@ -35,13 +35,12 @@ std::vector<cmn::vf2d> poissonDiscSample(const cmn::vf2d& min, const cmn::vf2d& 
 			float angle=cmn::randFloat(2*cmn::Pi);
 			float dist=rad*cmn::randFloat(1, 2);
 			cmn::vf2d cand=spawn+cmn::polar<cmn::vf2d>(dist, angle);
-			if(cand.x<min.x||cand.y<min.y) continue;
-			if(cand.x>max.x||cand.y>max.y) continue;
+			if(!box.contains(cand)) continue;
 
 			//check 5x5 region around candidate
 			bool valid=true;
-			int ci=(cand.x-min.x)/cell_sz;
-			int cj=(cand.y-min.y)/cell_sz;
+			int ci=(cand.x-box.min.x)/cell_sz;
+			int cj=(cand.y-box.min.y)/cell_sz;
 			for(int di=-2; di<=2; di++) {
 				for(int dj=-2; dj<=2; dj++) {
 					int i=ci+di, j=cj+dj;

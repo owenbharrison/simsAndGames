@@ -4,7 +4,7 @@
 
 #include <string>
 
-vf2d randomPtOnEdge(const cmn::AABB& a) {
+vf2d randomPtOnEdge(const cmn::AABBf2& a) {
 	switch(cmn::randInt(0, 3)) {
 		//top
 		default: return vf2d(cmn::randFloat(a.min.x, a.max.x), a.min.y);
@@ -85,10 +85,12 @@ public:
 	}
 
 	//get bounds
-	cmn::AABB getAABB() const {
-		cmn::AABB a;
+	cmn::AABBf2 getAABB() const {
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 a;
 		for(int i=0; i<num_pts; i++) {
-			a.fitToEnclose(localToWorld(model[i]));
+			vf2d l=localToWorld(model[i]);
+			a.fitToEnclose({l.x, l.y});
 		}
 		return a;
 	}
@@ -96,7 +98,7 @@ public:
 	//is pt inside asteroid?
 	bool contains(const vf2d& pt) const {
 		//aabb optimization
-		if(!getAABB().contains(pt)) return false;
+		if(!getAABB().contains({pt.x, pt.y})) return false;
 
 		//localize point
 		vf2d a=worldToLocal(pt);
@@ -128,7 +130,7 @@ public:
 	}
 
 	//when hit edge spawn on other side: toroidal space?
-	void checkAABB(const cmn::AABB& a) {
+	void checkAABB(const cmn::AABBf2& a) {
 		if(pos.x<a.min.x) pos.x=a.max.x;
 		if(pos.y<a.min.y) pos.y=a.max.y;
 		if(pos.x>a.max.x) pos.x=a.min.x;
@@ -157,7 +159,7 @@ public:
 		return true;
 	}
 
-	static Asteroid makeRandom(const cmn::AABB& box) {
+	static Asteroid makeRandom(const cmn::AABBf2& box) {
 		float rad=cmn::randFloat(5, 8);
 		float rot=2*cmn::Pi*cmn::Pi*cmn::randFloat();
 		int num_pts=cmn::randInt(20, 28);

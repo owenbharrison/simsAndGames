@@ -13,7 +13,7 @@
 //for time
 #include <ctime>
 
-#include "cmn/math/v2d.h"
+#include "cmn/geom/aabb2.h"
 
 #include "poisson.h"
 
@@ -135,15 +135,12 @@ public:
 			};
 
 			//add verts inside shell
-			cmn::vf2d min(1e30f, 1e30f);
-			cmn::vf2d max(-1e30f, -1e30f);
+			const cmn::vf2d inf(1e300, 1e300);
+			cmn::AABBf2 box{inf, -inf};
 			for(const auto& p:verts) {
-				if(p.x<min.x) min.x=p.x;
-				if(p.y<min.y) min.y=p.y;
-				if(p.x>max.x) max.x=p.x;
-				if(p.y>max.y) max.y=p.y;
+				box.fitToEnclose(p);
 			}
-			auto poisson=poissonDiscSample(min, max, rad);
+			auto poisson=poissonDiscSample(box, rad);
 			for(const auto& p:poisson) {
 				if(insideShell(p)&&isUnique(p)) verts.push_back(p);
 			}

@@ -4,7 +4,7 @@
 #ifndef MAGNET_CLASS_H
 #define MAGNET_CLASS_H
 
-#include "cmn/math/v2d.h"
+#include "cmn/geom/aabb2.h"
 
 #include "cmn/utils.h"
 
@@ -80,14 +80,14 @@ public:
 	}
 
 	//reflect & damp
-	void keepInside(const cmn::vd2d& min, const cmn::vd2d& max) {
+	void keepInside(const cmn::AABBd2& box) {
 		const double bounce=.6;
 
 		cmn::vd2d vel=pos-old_pos;
-		if(pos.x<min.x+rad) pos.x=min.x+rad, vel.x*=-bounce;
-		if(pos.y<min.y+rad) pos.y=min.y+rad, vel.y*=-bounce;
-		if(pos.x>max.x-rad) pos.x=max.x-rad, vel.x*=-bounce;
-		if(pos.y>max.y-rad) pos.y=max.y-rad, vel.y*=-bounce;
+		if(pos.x<box.min.x+rad) pos.x=box.min.x+rad, vel.x*=-bounce;
+		if(pos.y<box.min.y+rad) pos.y=box.min.y+rad, vel.y*=-bounce;
+		if(pos.x>box.max.x-rad) pos.x=box.max.x-rad, vel.x*=-bounce;
+		if(pos.y>box.max.y-rad) pos.y=box.max.y-rad, vel.y*=-bounce;
 
 		old_pos=pos-vel;
 	}

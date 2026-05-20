@@ -56,7 +56,7 @@ struct FruitNinja : olc::PixelGameEngine {
 	float throw_timer=0;
 
 	vf2d gravity{0, 64};
-	cmn::AABB screen_bounds;
+	cmn::AABBf2 screen_bounds;
 
 	//visual things
 	olc::Sprite* prim_circ_spr=nullptr;
@@ -83,7 +83,7 @@ struct FruitNinja : olc::PixelGameEngine {
 			prim_circ_dec=new olc::Decal(prim_circ_spr);
 		}
 
-		screen_bounds={{0, 0}, GetScreenSize()};
+		screen_bounds={{0, 0}, cmn::vf2d(ScreenWidth(), ScreenHeight())};
 
 		//sounds
 		sound_engine.InitialiseAudio();
@@ -196,18 +196,19 @@ struct FruitNinja : olc::PixelGameEngine {
 				if(f->slice(slice_vec, fa, fb)) {
 					//add splatter near fruit
 					{
-						cmn::AABB box=f->getAABB();
-						vf2d ctr=box.getCenter();
+						cmn::AABBf2 box=f->getAABB();
+						cmn::vf2d ctr=box.getCenter();
 						float rad=(box.max-ctr).mag();
 						int num=cmn::randInt(20, 35);
 						for(int i=0; i<num; i++) {
 							float pos_rad=cmn::randFloat(rad);
 							vf2d offset=cmn::polar<vf2d>(pos_rad, cmn::randFloat(2*cmn::Pi));
+							vf2d pos(ctr.x+offset.x, ctr.y+offset.y);
 							float speed=cmn::randFloat(5, 15);
 							vf2d vel=cmn::polar<vf2d>(speed, cmn::randFloat(2*cmn::Pi));
 							float lifespan=cmn::randFloat(2, 3);
 							float rad=cmn::randFloat(3, 4);
-							particles.emplace_back(new Splatter(ctr+offset, vel, f->col, lifespan, rad));
+							particles.emplace_back(new Splatter(pos, vel, f->col, lifespan, rad));
 						}
 					}
 
@@ -296,7 +297,7 @@ struct FruitNinja : olc::PixelGameEngine {
 			}
 			f.init();
 
-			cmn::AABB box=f.getAABB();
+			cmn::AABBf2 box=f.getAABB();
 			//place on bottom
 			f.pos.y=screen_bounds.max.y-box.max.y;
 			//random along bottom
@@ -427,8 +428,10 @@ struct FruitNinja : olc::PixelGameEngine {
 		for(const auto& f:fruits) {
 			//show bounding box rectangle
 			if(show_bounds) {
-				cmn::AABB box=f->getAABB();
-				DrawRectDecal(box.min, box.max-box.min, olc::RED);
+				cmn::AABBf2 box=f->getAABB();
+				vf2d tl{box.min.x, box.min.y};
+				vf2d br{box.max.x, box.max.y};
+				DrawRectDecal(tl, br-tl, olc::RED);
 			}
 
 			//initialize indexes
@@ -508,7 +511,8 @@ struct FruitNinja : olc::PixelGameEngine {
 
 		//show ultra
 		{
-			cmn::AABB box{{20, 20}, vf2d(screen_bounds.max.x-20, 40)};
+			cmn::AABBf2 box{{20, 20}, cmn::vf2d(screen_bounds.max.x-20, 40)};
+			vf2d tl{box.min.x, box.min.y};
 			//draw usage rect
 			{
 				float t=clamp(ultra/total_ultra, 0, 1);
@@ -519,18 +523,19 @@ struct FruitNinja : olc::PixelGameEngine {
 				else col=olc::GREEN;
 
 				int sz=t*(box.max.x-box.min.x);
-				FillRectDecal(box.min, vf2d(sz, box.max.y-box.min.y), col);
+				FillRectDecal(tl, vf2d(sz, box.max.y-box.min.y), col);
 			}
 			//draw text
-			DrawStringDecal(box.min, "ultra", olc::BLACK);
+			DrawStringDecal(tl, "ultra", olc::BLACK);
 			{
 				//draw outline
 				vf2d tr{box.max.x, box.min.y};
 				vf2d bl{box.min.x, box.max.y};
-				DrawLineDecal(box.min, tr, olc::BLACK);
-				DrawLineDecal(tr, box.max, olc::BLACK);
-				DrawLineDecal(box.max, bl, olc::BLACK);
-				DrawLineDecal(bl, box.min, olc::BLACK);
+				vf2d br{box.max.x, box.max.y};
+				DrawLineDecal(tl, tr, olc::BLACK);
+				DrawLineDecal(tr, br, olc::BLACK);
+				DrawLineDecal(br, bl, olc::BLACK);
+				DrawLineDecal(bl, tl, olc::BLACK);
 			}
 		}
 

@@ -3,7 +3,7 @@
 using cmn::vf3d;
 using cmn::mat4;
 
-#include "cmn/geom/aabb.h"
+#include "cmn/geom/aabb3.h"
 #include "cmn/utils.h"
 
 #include "mesh.h"
@@ -103,7 +103,7 @@ struct AStarNavUI : cmn::Engine3D {
 
 	void setupGraph() {
 		//randomly sample points on xz plane
-		cmn::AABB3 bounds=terrain.getAABB();
+		cmn::AABBf3 bounds=terrain.getAABB();
 		auto xz_pts=poissonDiscSample({{bounds.min.x, bounds.min.z}, {bounds.max.x, bounds.max.z}}, 2);
 
 		//project pts onto terrain
