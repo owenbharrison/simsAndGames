@@ -31,6 +31,8 @@ static cmn::vf3d polarToCartesian(float yaw, float pitch) {
 	};
 }
 
+#include "cmn/geom/aabb3.h"
+
 //x y z => y p
 //0 0 1 => 0 0
 static void cartesianToPolar(const cmn::vf3d& pt, float* yaw, float* pitch) {
@@ -283,17 +285,12 @@ public:
 
 	//get bounds of mesh vertexes
 	void renderBounds(const Mesh& m, float r, float g, float b) {
-		vf3d min{1e30f, 1e30f, 1e30f};
-		vf3d max{-1e30f, -1e30f, -1e30f};
+		const vf3d inf(1e300, 1e300, 1e300);
+		cmn::AABBf3 box{inf, -inf};
 		for(const auto& v:m.verts) {
-			if(v.x<min.x) min.x=v.x;
-			if(v.y<min.y) min.y=v.y;
-			if(v.z<min.z) min.z=v.z;
-			if(v.x>max.x) max.x=v.x;
-			if(v.y>max.y) max.y=v.y;
-			if(v.z>max.z) max.z=v.z;
+			box.fitToEnclose(v);
 		}
-		renderBox(min, max, r, g, b);
+		renderBox(box.min, box.max, r, g, b);
 	}
 
 	//make simple coordinate system w/ up & norm

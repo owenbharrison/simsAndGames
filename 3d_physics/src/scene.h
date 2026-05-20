@@ -16,9 +16,9 @@ public:
 	//list so they can be removed w/o realloc?
 	std::list<Shape> shapes;
 	std::list<Joint> joints;
-	cmn::AABB3 bounds{
-		{-INFINITY, -INFINITY, -INFINITY},
-		{INFINITY, INFINITY, INFINITY}
+	cmn::AABBf3 bounds{
+		vf3d(-1e300, -1e300, -1e300),
+		vf3d(1e300, 1e300, 1e300)
 	};
 	vf3d gravity{0, -9.8f, 0};
 
@@ -52,9 +52,10 @@ public:
 
 	//set scene bounds such that they fit all shapes
 	void shrinkWrap(float margin) {
-		cmn::AABB3 box;
+		const vf3d inf(1e300, 1e300, 1e300);
+		cmn::AABBf3 box{inf, -inf};
 		for(const auto& s:shapes) {
-			cmn::AABB3 s_box=s.getAABB();
+			cmn::AABBf3 s_box=s.getAABB();
 			box.fitToEnclose(s_box.min);
 			box.fitToEnclose(s_box.max);
 		}
@@ -232,9 +233,9 @@ public:
 		for(auto ait=shapes.begin(); ait!=shapes.end(); ait++) {
 			for(auto bit=std::next(ait); bit!=shapes.end(); bit++) {
 				//predicated by bounding box
-				cmn::AABB3 a_box=ait->getAABB();
+				cmn::AABBf3 a_box=ait->getAABB();
 				a_box.min-=Particle::rad, a_box.max+=Particle::rad;
-				cmn::AABB3 b_box=bit->getAABB();
+				cmn::AABBf3 b_box=bit->getAABB();
 				b_box.min-=Particle::rad, b_box.max+=Particle::rad;
 				if(a_box.overlaps(b_box)) {
 					triCollide(*ait, *bit);

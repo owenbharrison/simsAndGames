@@ -34,6 +34,8 @@
 //for time
 #include <ctime>
 
+#include "cmn/geom/aabb3.h"
+
 struct IndexTriangle {
 	Particle* a=0, * b=0, * c=0;
 };
@@ -574,33 +576,28 @@ public:
 	}
 
 	void renderBounds(float r, float g, float b) {
-		vf3d min{1e30f, 1e30f, 1e30f};
-		vf3d max{-1e30f, -1e30f, -1e30f};
+		const vf3d inf(1e300,1e300,1e300);
+		cmn::AABBf3 box{inf, -inf};
 		for(const auto& p:particles) {
-			if(p.pos.x<min.x) min.x=p.pos.x;
-			if(p.pos.y<min.y) min.y=p.pos.y;
-			if(p.pos.z<min.z) min.z=p.pos.z;
-			if(p.pos.x>max.x) max.x=p.pos.x;
-			if(p.pos.y>max.y) max.y=p.pos.y;
-			if(p.pos.z>max.z) max.z=p.pos.z;
+			box.fitToEnclose(p.pos);
 		}
 		sgl_begin_lines();
 		sgl_c3f(r, g, b);
 		//xy-
-		sgl_v3f(min.x, min.y, min.z), sgl_v3f(max.x, min.y, min.z);
-		sgl_v3f(max.x, min.y, min.z), sgl_v3f(max.x, max.y, min.z);
-		sgl_v3f(max.x, max.y, min.z), sgl_v3f(min.x, max.y, min.z);
-		sgl_v3f(min.x, max.y, min.z), sgl_v3f(min.x, min.y, min.z);
+		sgl_v3f(box.min.x, box.min.y, box.min.z), sgl_v3f(box.max.x, box.min.y, box.min.z);
+		sgl_v3f(box.max.x, box.min.y, box.min.z), sgl_v3f(box.max.x, box.max.y, box.min.z);
+		sgl_v3f(box.max.x, box.max.y, box.min.z), sgl_v3f(box.min.x, box.max.y, box.min.z);
+		sgl_v3f(box.min.x, box.max.y, box.min.z), sgl_v3f(box.min.x, box.min.y, box.min.z);
 		//thru z
-		sgl_v3f(min.x, min.y, min.z), sgl_v3f(min.x, min.y, max.z);
-		sgl_v3f(max.x, min.y, min.z), sgl_v3f(max.x, min.y, max.z);
-		sgl_v3f(min.x, max.y, min.z), sgl_v3f(min.x, max.y, max.z);
-		sgl_v3f(max.x, max.y, min.z), sgl_v3f(max.x, max.y, max.z);
+		sgl_v3f(box.min.x, box.min.y, box.min.z), sgl_v3f(box.min.x, box.min.y, box.max.z);
+		sgl_v3f(box.max.x, box.min.y, box.min.z), sgl_v3f(box.max.x, box.min.y, box.max.z);
+		sgl_v3f(box.min.x, box.max.y, box.min.z), sgl_v3f(box.min.x, box.max.y, box.max.z);
+		sgl_v3f(box.max.x, box.max.y, box.min.z), sgl_v3f(box.max.x, box.max.y, box.max.z);
 		//xy+
-		sgl_v3f(min.x, min.y, max.z), sgl_v3f(max.x, min.y, max.z);
-		sgl_v3f(max.x, min.y, max.z), sgl_v3f(max.x, max.y, max.z);
-		sgl_v3f(max.x, max.y, max.z), sgl_v3f(min.x, max.y, max.z);
-		sgl_v3f(min.x, max.y, max.z), sgl_v3f(min.x, min.y, max.z);
+		sgl_v3f(box.min.x, box.min.y, box.max.z), sgl_v3f(box.max.x, box.min.y, box.max.z);
+		sgl_v3f(box.max.x, box.min.y, box.max.z), sgl_v3f(box.max.x, box.max.y, box.max.z);
+		sgl_v3f(box.max.x, box.max.y, box.max.z), sgl_v3f(box.min.x, box.max.y, box.max.z);
+		sgl_v3f(box.min.x, box.max.y, box.max.z), sgl_v3f(box.min.x, box.min.y, box.max.z);
 		sgl_end();
 	}
 

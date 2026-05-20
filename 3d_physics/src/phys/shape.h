@@ -59,7 +59,7 @@ public:
 	}
 
 	//pretty hard coded, but whatever
-	Shape(const cmn::AABB3& a) : Shape(8) {
+	Shape(const cmn::AABBf3& a) : Shape(8) {
 		//corners of box
 		particles[0]=Particle(a.min);
 		particles[1]=Particle(vf3d(a.max.x, a.min.y, a.min.z));
@@ -91,7 +91,7 @@ public:
 		initMass();
 	}
 
-	Shape(const cmn::AABB3& a, float res, float dt) {
+	Shape(const cmn::AABBf3& a, float res, float dt) {
 		//spacing
 		vf3d sz=a.max-a.min;
 		int w=std::ceil(sz.x/res);
@@ -335,8 +335,9 @@ public:
 		return num_ptc;
 	}
 
-	cmn::AABB3 getAABB() const {
-		cmn::AABB3 box;
+	cmn::AABBf3 getAABB() const {
+		const vf3d inf(1e300, 1e300, 1e300);
+		cmn::AABBf3 box{inf, -inf};
 		for(int i=0; i<num_ptc; i++) {
 			box.fitToEnclose(particles[i].pos);
 		}
@@ -380,7 +381,7 @@ public:
 		}
 	}
 
-	void keepIn(const cmn::AABB3& box) {
+	void keepIn(const cmn::AABBf3& box) {
 		for(int i=0; i<num_ptc; i++) {
 			particles[i].keepIn(box);
 		}

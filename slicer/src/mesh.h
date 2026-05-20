@@ -57,8 +57,9 @@ struct Mesh {
 		}
 	}
 
-	cmn::AABB3 getLocalAABB() const {
-		cmn::AABB3 box;
+	cmn::AABBf3 getLocalAABB() const {
+		const vf3d inf(1e300, 1e300, 1e300);
+		cmn::AABBf3 box{inf, -inf};
 		for(const auto& v:verts) {
 			box.fitToEnclose(v);
 		}

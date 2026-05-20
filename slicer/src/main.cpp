@@ -67,7 +67,7 @@ class SlicerUI : public cmn::Engine3D {
 	float temp_yaw=0, temp_pitch=0;
 
 	//scene stuff
-	cmn::AABB3 build_volume;
+	cmn::AABBf3 build_volume;
 	Mesh model;
 
 	//default to lego stud width
@@ -101,7 +101,7 @@ public:
 		//scale model into build volume
 		{
 			vf3d build_dims=build_volume.max-build_volume.min;
-			cmn::AABB3 model_box=model.getLocalAABB();
+			cmn::AABBf3 model_box=model.getLocalAABB();
 			vf3d box_dims=model_box.max-model_box.min;
 
 			//which dimension is the weak link?
@@ -332,7 +332,7 @@ public:
 		lines_to_project.push_back(l4);
 	}
 
-	void realizeFilledAABB(const cmn::AABB3& box, const olc::Pixel& col) {
+	void realizeFilledAABB(const cmn::AABBf3& box, const olc::Pixel& col) {
 		vf3d v0=box.min, v7=box.max;
 		vf3d v1(v7.x, v0.y, v0.z);
 		vf3d v2(v0.x, v7.y, v0.z);

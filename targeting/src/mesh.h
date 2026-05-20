@@ -60,8 +60,9 @@ struct Mesh {
 	}
 
 	//world space aabb
-	cmn::AABB3 getAABB() const {
-		cmn::AABB3 box;
+	cmn::AABBf3 getAABB() const {
+		const vf3d inf(1e300, 1e300, 1e300);
+		cmn::AABBf3 box;
 		for(const auto& v:vertexes) {
 			float w=1;
 			box.fitToEnclose(matMulVec(model, v, w));

@@ -81,8 +81,8 @@ namespace cmn {
 			return e1.cross(e2).norm();
 		}
 
-		AABB3 getAABB() const {
-			AABB3 box;
+		AABBf3 getAABB() const {
+			AABBf3 box;
 			box.fitToEnclose(p[0]);
 			box.fitToEnclose(p[1]);
 			box.fitToEnclose(p[2]);

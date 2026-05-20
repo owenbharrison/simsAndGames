@@ -37,7 +37,7 @@ struct Particle {
 		forces*=0;
 	}
 
-	void keepIn(const cmn::AABB3& box) {
+	void keepIn(const cmn::AABBf3& box) {
 		vf3d vel=pos-old_pos;
 		if(pos.x<box.min.x) {
 			pos.x=box.min.x;

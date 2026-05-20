@@ -10,7 +10,8 @@
 
 VoxelSet meshToVoxels(const Mesh& m, vf3d res) {
 	//get global mesh dimensions
-	cmn::AABB3 m_box;
+	const vf3d inf(1e300, 1e300, 1e300);
+	cmn::AABBf3 m_box{inf, -inf};
 	for(const auto& v:m.verts) {
 		float w=1;
 		m_box.fitToEnclose(matMulVec(m.model, v, w));

@@ -537,7 +537,7 @@ public:
 		vf3d ctr=game_size/2;
 		vf3d st=ctr-st_dist*cam.dir;
 		//snap to box
-		cmn::AABB3 box{{0, 0, 0}, game_size};
+		cmn::AABBf3 box{{0, 0, 0}, game_size};
 		float dist=st_dist-box.intersectRay(st, cam.dir);
 		//push cam back + margin
 		cam.pos=ctr-(4+dist)*cam.dir;
@@ -563,7 +563,7 @@ public:
 
 		//intersect ray with cells
 		float record=-1;
-		cmn::AABB3 unit_box{{0, 0, 0}, {1, 1, 1}};
+		cmn::AABBf3 unit_box{{0, 0, 0}, {1, 1, 1}};
 		for(int i=0; i<game.getWidth(); i++) {
 			for(int j=0; j<game.getHeight(); j++) {
 				for(int k=0; k<game.getDepth(); k++) {

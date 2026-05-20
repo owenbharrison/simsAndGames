@@ -73,7 +73,7 @@ namespace cmn {
 
 		virtual bool user_render()=0;
 
-		void addAABB(const AABB3& box, const olc::Pixel& col) {
+		void addAABB(const AABBf3& box, const olc::Pixel& col) {
 			//corner vertexes
 			vf3d v0=box.min, v7=box.max;
 			vf3d v1(v7.x, v0.y, v0.z);
