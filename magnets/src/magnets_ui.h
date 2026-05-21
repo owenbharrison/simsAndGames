@@ -21,6 +21,9 @@
 
 #include "camera.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/include/stb_image.h"
+
 using cmn::vd2d;
 using cmn::vf2d;
 
@@ -46,17 +49,35 @@ class MagnetsUI : public cmn::SokolEngine {
 	vd2d mouse_wld;
 	Camera cam;
 
+	Magnet* grab_magnet=nullptr;
+	vd2d grab_offset;
+
 	//graphics
 	sgl_pipeline pip{};
 
+	bool render_poles=true;
+
 public:
+#pragma region SETUP_HELPERS
 	void setupMagnets() {
-		double rad=.3*centimeter;
-		double spacing=5*centimeter;
-		magnets.push_back(Magnet(spacing*vd2d(-.5, -.5), rad));
-		magnets.push_back(Magnet(spacing*vd2d(.5, -.5), rad));
-		magnets.push_back(Magnet(spacing*vd2d(-.5, .5), rad));
-		magnets.push_back(Magnet(spacing*vd2d(.5, .5), rad));
+		int num=cmn::randInt(10, 16);
+		double max_dist=centimeter*cmn::randDouble(5, 7);
+		for(int i=0; i<num; i++) {
+			double dist=cmn::randDouble(max_dist);
+			double theta=cmn::randDouble(2*Pi);
+			vd2d pos=vd2d::polar({dist, theta});
+			double rot=cmn::randDouble(2*Pi);
+			double rad=centimeter*cmn::randDouble(.25, .35);
+			Magnet cand(pos, rad, rot);
+			if(isOverlapping(cand)) continue;
+
+			magnets.push_back(cand);
+		}
+	}
+
+	void setupSGL() {
+		sgl_desc_t sgl_desc{};
+		sgl_setup(sgl_desc);
 	}
 
 	void setupPipeline() {
@@ -70,21 +91,45 @@ public:
 		pip=sgl_make_pipeline(pip_desc);
 	}
 
+	bool setupIcon() {
+		int width, height, comp;
+		stbi_uc* pixels=stbi_load("assets/icon.png", &width, &height, &comp, 4);
+		if(!pixels) return false;
+
+		sg_image_desc img_desc{};
+		img_desc.width=width;
+		img_desc.height=height;
+		img_desc.data.mip_levels[0].ptr=pixels;
+		img_desc.data.mip_levels[0].size=sizeof(stbi_uc)*4*width*height;
+		sg_image img=sg_make_image(img_desc);
+
+		sapp_icon_desc icon_desc{};
+		icon_desc.images[0].width=width;
+		icon_desc.images[0].height=height;
+		icon_desc.images[0].pixels.ptr=pixels;
+		icon_desc.images[0].pixels.size=sizeof(stbi_uc)*4*width*height;
+		sapp_set_icon(&icon_desc);
+
+		return true;
+	}
+#pragma endregion
+
 	bool user_create() override {
 		app_title="Magnets";
 
 		std::srand(std::time(0));
 
-		sgl_desc_t sgl_desc{};
-		sgl_setup(sgl_desc);
-
 		setupMagnets();
 
-		cam=Camera({sapp_widthf(), sapp_heightf()});
+		cam.scr_sz={sapp_widthf(), sapp_heightf()};
+
+		setupSGL();
 
 		zoomToFit();
 
 		setupPipeline();
+
+		if(!setupIcon()) return false;
 
 		return true;
 	}
@@ -115,6 +160,7 @@ public:
 	}
 
 	bool isOverlapping(const Magnet& c) const {
+		//not quite a bounds check
 		auto rad=c.getRad();
 		if(c.pos.x-rad<bounds.min.x) return true;
 		if(c.pos.y-rad<bounds.min.y) return true;
@@ -123,42 +169,55 @@ public:
 
 		for(const auto& m:magnets) {
 			double rad_t=rad+m.getRad();
-			if((m.pos-c.pos).mag_sq()<rad_t*rad_t) return true;
+			if(length(m.pos-c.pos)<rad_t) return true;
 		}
+
 		return false;
 	}
 
 	void handleAdditionAction() {
 		if(!GetKey(SAPP_KEYCODE_A).held) return;
 
-		//candidate
-		vd2d pos=mouse_wld;
-		double rad=centimeter*cmn::randDouble(.3, .35);
-
-		//inside bounds?
-		if(pos.x-rad<bounds.min.x) return;
-		if(pos.y-rad<bounds.min.y) return;
-		if(pos.x+rad>bounds.max.x) return;
-		if(pos.y+rad>bounds.max.y) return;
-
-		//overlapping others?
-		for(const auto& m:magnets) {
-			double rad_t=rad+m.getRad();
-			if((m.pos-pos).mag_sq()<rad_t*rad_t) return;
-		}
-
-		//valid
+		//is candidate valid?
 		double rot=cmn::randDouble(2*Pi);
-		magnets.push_back(Magnet(pos, rad, rot));
+		Magnet cand(mouse_wld, .3*centimeter, rot);
+		if(isOverlapping(cand)) return;
+
+		magnets.push_back(cand);
 	}
 
 	void handleRemovalAction() {
 		if(!GetKey(SAPP_KEYCODE_X).held) return;
 
+		grab_magnet=nullptr;
+
 		for(auto it=magnets.begin(); it!=magnets.end(); ) {
-			if((it->pos-mouse_wld).mag()<it->getRad()) {
+			if(length(it->pos-mouse_wld)<it->getRad()) {
 				it=magnets.erase(it);
 			} else it++;
+		}
+	}
+
+	void handleGrabbingAction() {
+		const auto action=GetMouse(SAPP_MOUSEBUTTON_LEFT);
+
+		if(action.pressed) {
+			grab_magnet=nullptr;
+
+			for(auto& m:magnets) {
+				if(length(m.pos-mouse_wld)<m.getRad()) {
+					grab_magnet=&m;
+					break;
+				}
+			}
+
+			if(grab_magnet) {
+				grab_offset=grab_magnet->wld2loc(mouse_wld);
+			}
+		}
+
+		if(action.released) {
+			grab_magnet=nullptr;
 		}
 	}
 
@@ -167,15 +226,19 @@ public:
 
 		handleRemovalAction();
 
+		handleGrabbingAction();
+
 		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).pressed) cam.begin_pan(mouse_scr);
 		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.update_pan(mouse_scr);
 
-		if(GetKey(SAPP_KEYCODE_W).held) cam.update_zoom(mouse_scr, 1+dt);
-		if(GetKey(SAPP_KEYCODE_Q).held) cam.update_zoom(mouse_scr, 1-dt);
+		if(GetKey(SAPP_KEYCODE_W).held) cam.update_zoom(mouse_scr, 1+2*dt);
+		if(GetKey(SAPP_KEYCODE_Q).held) cam.update_zoom(mouse_scr, 1-2*dt);
 
 		if(GetKey(SAPP_KEYCODE_Z).held) zoomToFit();
 
+		//toggles
 		if(GetKey(SAPP_KEYCODE_SPACE).pressed) update_phys^=true;
+		if(GetKey(SAPP_KEYCODE_P).pressed) render_poles^=true;
 	}
 
 	void handlePhysics(double dt) {
@@ -190,6 +253,14 @@ public:
 
 					Magnet::applyMonopoleForces(a, b);
 				}
+			}
+
+			if(grab_magnet) {
+				//spring force
+				vd2d grab_wld=grab_magnet->loc2wld(grab_offset);
+				vd2d x=mouse_wld-grab_wld;
+				double k=.5;
+				grab_magnet->applyForce(k*x, grab_wld);
 			}
 
 			//integrate magnets
@@ -241,7 +312,7 @@ public:
 		vf2d ctr(x, y), prev;
 		for(int i=0; i<=num; i++) {
 			float angle=st+len*i/num;
-			vf2d curr=ctr+cmn::polar<vf2d>(rad, angle);
+			vf2d curr=ctr+vf2d::polar({rad, angle});
 			if(i!=0) {
 				sgl_v2f(x, y);
 				sgl_v2f(prev.x, prev.y);
@@ -322,9 +393,13 @@ public:
 			vf2d pos_scr=cam.wld2scr(m.pos);
 			float rad_scr=cam.wld2scr(m.getRad());
 
-			float st=m.rot-Pi/2;
-			fill_arc(pos_scr.x, pos_scr.y, rad_scr, st, Pi, 1, 0, 0);
-			fill_arc(pos_scr.x, pos_scr.y, rad_scr, st, -Pi, 0, 0, 1);
+			cmn::fill_circle(pos_scr.x, pos_scr.y, rad_scr, .5f, .5f, .5f);
+			
+			if(render_poles) {
+				float st=m.rot-Pi/2;
+				fill_arc(pos_scr.x, pos_scr.y, rad_scr, st, Pi, 1, 0, 0);
+				fill_arc(pos_scr.x, pos_scr.y, rad_scr, st, -Pi, 0, 0, 1);
+			}
 
 			cmn::fill_torus(
 				pos_scr.x, pos_scr.y,
@@ -360,13 +435,24 @@ public:
 		renderBounds(1, 0, 0);
 
 		renderMagnets(1, 1, 1);
-		
+
 		//blue
 		if(!update_phys) cmn::draw_thick_rect(
 			0, 0, sapp_widthf(), sapp_heightf(),
 			5,
 			0, 0, 1
 		);
+
+		//green
+		if(grab_magnet) {
+			vd2d grab_wld=grab_magnet->loc2wld(grab_offset);
+			vd2d grab_scr=cam.wld2scr(grab_wld);
+			cmn::draw_thick_line(
+				grab_scr.x, grab_scr.y, mouse_scr.x, mouse_scr.y,
+				2,
+				0, .7f, 0
+			);
+		}
 
 		sgl_draw();
 

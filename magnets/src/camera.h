@@ -12,14 +12,10 @@ class Camera {
 
 	cmn::vf2d prev_pan;
 
+	void scaleBy(float f);
+
 public:
 	cmn::vf2d scr_sz;
-
-	Camera() {}
-
-	Camera(const cmn::vf2d& s) {
-		scr_sz=s;
-	}
 
 	cmn::vf2d wld2scr(const cmn::vf2d& w) const {
 		return scr_sz/2+scale*(w-offset);
@@ -50,10 +46,9 @@ public:
 		//find aspect ratio
 		float asp_x=w_scr/w_box;
 		float asp_y=h_scr/h_box;
-
-		//combine it with current scale
-		//based on limiting dimension
-		scale*=asp_x<asp_y?asp_x:asp_y;
+		
+		//scale based on limiting dimension
+		scaleBy(asp_x<asp_y?asp_x:asp_y);
 
 		//world space box center
 		cmn::vf2d box_ctr=(min+max)/2;
@@ -81,7 +76,7 @@ public:
 		cmn::vf2d before=scr2wld(z);
 
 		//apply zoom
-		scale*=f;
+		scaleBy(f);
 
 		//wld mouse after zoom
 		cmn::vf2d after=scr2wld(z);
@@ -91,4 +86,14 @@ public:
 		offset-=delta;
 	}
 };
+
+void Camera::scaleBy(float f) {
+	const float min_scl=1e-6f;
+	const float max_scl=1e6f;
+
+	scale*=f;
+
+	if(scale<min_scl) scale=min_scl;
+	if(scale>max_scl) scale=max_scl;
+}
 #endif

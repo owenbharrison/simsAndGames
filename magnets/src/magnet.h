@@ -18,6 +18,12 @@ class Magnet {
 	cmn::vd2d old_pos, forces;
 	double old_rot=0, torques=0;
 
+	cmn::vd2d sincos{0, 1};
+
+	static const double rel_pole_rad;
+
+	void updateRot();
+
 public:
 	cmn::vd2d pos;
 	double rot=0;
@@ -34,6 +40,8 @@ public:
 		//density of iron
 		mass=7874*volume;
 		inertia=.5*mass*rad*rad;
+
+		updateRot();
 	}
 
 	double getRad() const { return rad; }
@@ -43,9 +51,35 @@ public:
 	cmn::vd2d getVel(double dt=1) const { return (pos-old_pos)/dt; }
 	double getRotVel(double dt=1) const { return (rot-old_rot)/dt; }
 
+	cmn::vd2d rotVec(const cmn::vd2d& p) const {
+		return {p.x*sincos.y-p.y*sincos.x, p.x*sincos.x+p.y*sincos.y};
+	}
+
+	cmn::vd2d unrotVec(const cmn::vd2d& p) const {
+		return {p.x*sincos.y+p.y*sincos.x, -p.x*sincos.x+p.y*sincos.y};
+	}
+
+	cmn::vd2d loc2wld(const cmn::vd2d& l) const {
+		return pos+rotVec(l);
+	}
+
+	cmn::vd2d wld2loc(const cmn::vd2d& w) const {
+		return unrotVec(w-pos);
+	}
+
+	cmn::vd2d getNorth() const {
+		return loc2wld({rel_pole_rad*rad, 0});
+	}
+
+	cmn::vd2d getSouth() const {
+		return loc2wld({-rel_pole_rad*rad, 0});
+	}
+
+#pragma region PHYSICS
 	void applyPureForce(const cmn::vd2d& f) { forces+=f; }
 	void applyPureTorque(double t) { torques+=t; }
 
+	//world space position
 	void applyForce(const cmn::vd2d& f, const cmn::vd2d& p) {
 		applyPureForce(f);
 
@@ -65,7 +99,7 @@ public:
 		//get acceleration
 		cmn::vd2d acc=forces/mass;
 		double rot_acc=torques/inertia;
-		
+
 		//timestep-independent damping
 		double k=1.81;
 		double damp=std::exp(-k*dt);
@@ -77,6 +111,8 @@ public:
 		//reset
 		forces={0, 0};
 		torques=0;
+
+		updateRot();
 	}
 
 	//reflect & damp
@@ -91,40 +127,36 @@ public:
 
 		old_pos=pos-vel;
 	}
+#pragma endregion
 
+#pragma region BEHAVIORS
 	static void applyMonopoleForces(Magnet& a, Magnet& b) {
-		//get directions
-		cmn::vd2d a_sn=cmn::polar<cmn::vd2d>(1., a.rot);
-		cmn::vd2d b_sn=cmn::polar<cmn::vd2d>(1., b.rot);
+		//get pole locations
+		cmn::vd2d a_n=a.getNorth();
+		cmn::vd2d a_s=a.getSouth();
+		cmn::vd2d b_n=b.getNorth();
+		cmn::vd2d b_s=b.getSouth();
 
-		//get pole locations(inside magnet?)
-		double a_rad=a.getRad();
-		double b_rad=b.getRad();
-		cmn::vd2d a_n=a.pos+.5*a_rad*a_sn;
-		cmn::vd2d a_s=a.pos-.5*a_rad*a_sn;
-		cmn::vd2d b_n=b.pos+.5*b_rad*b_sn;
-		cmn::vd2d b_s=b.pos-.5*b_rad*b_sn;
-
-		//get vectors
+		//get vectors between
 		cmn::vd2d anbn=b_n-a_n;
 		cmn::vd2d anbs=b_s-a_n;
 		cmn::vd2d asbn=b_n-a_s;
 		cmn::vd2d asbs=b_s-a_s;
 
 		//separation distances
-		double anbn_r=anbn.mag();
-		double anbs_r=anbs.mag();
-		double asbn_r=asbn.mag();
-		double asbs_r=asbs.mag();
+		double anbn_l=length(anbn);
+		double anbs_l=length(anbs);
+		double asbn_l=length(asbn);
+		double asbs_l=length(asbs);
 
 		//safe norm(ignore) + inverse square law
 		const double u=4*Pi*1e-7;//permeability
 		const double q1=1, q2=1;
 		const double coeff=u*q1*q2/4/Pi;
-		cmn::vd2d f_anbn=(anbn_r<1e-6?0:coeff/(anbn_r*(1e-4+anbn_r*anbn_r)))*anbn;
-		cmn::vd2d f_anbs=(anbs_r<1e-6?0:coeff/(anbs_r*(1e-4+anbs_r*anbs_r)))*anbs;
-		cmn::vd2d f_asbn=(asbn_r<1e-6?0:coeff/(asbn_r*(1e-4+asbn_r*asbn_r)))*asbn;
-		cmn::vd2d f_asbs=(asbs_r<1e-6?0:coeff/(asbs_r*(1e-4+asbs_r*asbs_r)))*asbs;
+		cmn::vd2d f_anbn=(anbn_l<1e-6?0:coeff/anbn_l/(1e-4+anbn_l*anbn_l))*anbn;
+		cmn::vd2d f_anbs=(anbs_l<1e-6?0:coeff/anbs_l/(1e-4+anbs_l*anbs_l))*anbs;
+		cmn::vd2d f_asbn=(asbn_l<1e-6?0:coeff/asbn_l/(1e-4+asbn_l*asbn_l))*asbn;
+		cmn::vd2d f_asbs=(asbs_l<1e-6?0:coeff/asbs_l/(1e-4+asbs_l*asbs_l))*asbs;
 
 		//final force applications
 		a.applyForce(f_anbs-f_anbn, a_n);
@@ -136,7 +168,7 @@ public:
 	static void checkCollide(Magnet& a, Magnet& b) {
 		//are the circles overlapping?
 		cmn::vd2d ab=b.pos-a.pos;
-		double dist_sq=ab.mag_sq();
+		double dist_sq=dot(ab, ab);
 		double t_rad=a.rad+b.rad;
 		if(dist_sq>t_rad*t_rad) return;
 
@@ -163,7 +195,7 @@ public:
 
 		//fix if moving towards eachother
 		cmn::vd2d rel_vel=vb-va;
-		double vn=norm.dot(rel_vel);
+		double vn=dot(norm, rel_vel);
 		if(vn<0) {
 			const double restitution=.1;
 
@@ -176,5 +208,15 @@ public:
 			b.old_pos=b.pos-vb;
 		}
 	}
+#pragma endregion
 };
+
+//pole inside magnet
+const double Magnet::rel_pole_rad=.75;
+
+//precompute rotation matrix
+void Magnet::updateRot() {
+	sincos.x=std::sin(rot);
+	sincos.y=std::cos(rot);
+}
 #endif
