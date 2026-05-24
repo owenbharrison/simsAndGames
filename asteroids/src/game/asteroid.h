@@ -92,7 +92,7 @@ public:
 	//get bounds
 	cmn::AABBf2 getAABB() const {
 		const cmn::vf2d inf(1e300, 1e300);
-		cmn::AABBf2 a;
+		cmn::AABBf2 a{inf, -inf};
 		for(int i=0; i<num_pts; i++) {
 			a.fitToEnclose(loc2wld(model[i]));
 		}

@@ -230,7 +230,7 @@ class Asteroids : public cmn::SokolEngine {
 
 				//spawn particles
 				for(int k=0; k<num_ptc; k++) {
-					particles.push_back(Particle::makeRandom(pos, 1, 1, 1));
+					particles.push_back(Particle::makeRandom(pos, .7f, .7f, .7f));
 				}
 
 				//finally, remove it
@@ -429,7 +429,7 @@ class Asteroids : public cmn::SokolEngine {
 		const Glyph red{1, 0, 0, '.'};
 		const Glyph blue{0, 0, 1, '.'};
 		const Glyph green{0, 1, 0, '.'};
-		const Glyph grey{.5f, .5f, .5f, '.'};
+		const Glyph yellow{.8f, .8f, 0, '.'};
 
 		//show asteroid pos, vel, & bounds
 		for(const auto& a:asteroids) {
@@ -438,12 +438,12 @@ class Asteroids : public cmn::SokolEngine {
 			auto a_box=a.getAABB();
 			vf2d tl{a_box.min.x, a_box.min.y};
 			vf2d br{a_box.max.x, a_box.max.y};
-			draw_rect(tl, br-tl, grey);
+			draw_rect(tl, br-tl, green);
 		}
 
 		//show bullet pos and vel
 		for(const auto& b:bullets) {
-			draw_line(b.pos, ship.pos, green);
+			draw_line(b.pos, ship.pos, yellow);
 			draw_line(b.pos, b.pos+b.vel, blue);
 		}
 
@@ -452,13 +452,13 @@ class Asteroids : public cmn::SokolEngine {
 		auto ship_box=ship.getAABB();
 		vf2d tl{ship_box.min.x, ship_box.min.y};
 		vf2d br{ship_box.max.x, ship_box.max.y};
-		draw_rect(tl, br-tl, grey);
+		draw_rect(tl, br-tl, green);
 	}
 
 	//show bullets as tiny circles
 	void renderBullets(const Glyph& g) {
 		for(const auto& b:bullets) {
-			fill_rect(b.pos-1, {3, 3}, g);
+			fill_rect(b.pos-1, {2, 2}, g);
 		}
 	}
 
@@ -531,9 +531,10 @@ class Asteroids : public cmn::SokolEngine {
 
 	//show at bottom right
 	void renderAsteroidStats() {
-		draw_rect({0, 0}, vi2d(width-1, height-1), {1, 0, 0, '#'});
-		draw_string(vi2d(width-14, height-2), "Asteroid Data", 1, 1, 0);
+		//yellow
+		draw_string(vi2d(width-14, height-2), "Asteroid Data", .9f, .9f, 0);
 
+		//dark yellow
 		for(int i=0; i<asteroids.size(); i++) {
 			const auto& a=asteroids.at(i);
 
@@ -544,7 +545,7 @@ class Asteroids : public cmn::SokolEngine {
 			auto num_str=std::to_string(a.num_pts);
 			auto rad_str=std::to_string(int(a.base_rad));
 			auto str=ix_str+": [p: "+pos_str+", n: "+num_str+", r: "+rad_str+"]";
-			draw_string(vi2d(width-str.length()-1, height-i-3), str, .75f, .75f, 0);
+			draw_string(vi2d(width-str.length()-1, height-i-3), str, .7f, .7f, 0);
 		}
 	}
 
@@ -570,9 +571,11 @@ class Asteroids : public cmn::SokolEngine {
 
 		renderParticles();
 
-		renderBullets({1, 1, 1, 'B'});
+		//light blue
+		renderBullets({.1f, .67f, 1, 'B'});
 
-		renderAsteroids({1, 1, 1, 'A'});
+		//grey
+		renderAsteroids({.5f, .5f, .5f, 'A'});
 
 		if(state!=Lost) renderShip({1, 1, 1, 'S'});
 

@@ -51,14 +51,15 @@ struct Ship {
 	}
 
 	cmn::AABBf2 getAABB() const {
-		cmn::vf2d o[3];
-		getOutline(o[0], o[1], o[2]);
+		cmn::vf2d a, b, c;
+		getOutline(a, b, c);
 
-		cmn::AABBf2 a;
-		for(int i=0; i<3; i++) {
-			a.fitToEnclose({o[i].x, o[i].y});
-		}
-		return a;
+		const cmn::vf2d inf(1e300, 1e300);
+		cmn::AABBf2 box{inf, -inf};
+		box.fitToEnclose(a);
+		box.fitToEnclose(b);
+		box.fitToEnclose(c);
+		return box;
 	}
 
 	void accelerate(const cmn::vf2d& a) {

@@ -27,13 +27,13 @@ struct Particle {
 		Particle p;
 		p.pos=pos;
 		float speed=cmn::randFloat(1, 6);
-		float angle=2*cmn::Pi*cmn::randFloat();
+		float angle=cmn::randFloat(2*cmn::Pi);
 		p.vel=cmn::vf2d::polar({speed, angle});
 		p.lifespan=cmn::randFloat(1.6f, 3.8f);
 		//randomize color
-		p.r=cmn::clamp(r+.2f*cmn::randFloat(-1, 1), 0.f, 1.f);
-		p.g=cmn::clamp(g+.2f*cmn::randFloat(-1, 1), 0.f, 1.f);
-		p.b=cmn::clamp(b+.2f*cmn::randFloat(-1, 1), 0.f, 1.f);
+		p.r=cmn::clamp(r+.15f*cmn::randFloat(-1, 1), 0.f, 1.f);
+		p.g=cmn::clamp(g+.15f*cmn::randFloat(-1, 1), 0.f, 1.f);
+		p.b=cmn::clamp(b+.15f*cmn::randFloat(-1, 1), 0.f, 1.f);
 		return p;
 	}
 };
