@@ -115,7 +115,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
@@ -135,7 +135,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -148,14 +148,16 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\asteroid.h" />
-    <ClInclude Include="src\bullet.h" />
-    <ClInclude Include="src\particle.h" />
-    <ClInclude Include="src\ship.h" />
+    <ClInclude Include="src\game\asteroid.h" />
+    <ClInclude Include="src\asteroids.h" />
+    <ClInclude Include="src\game\bullet.h" />
+    <ClInclude Include="src\canvas.h" />
+    <ClInclude Include="src\game\particle.h" />
+    <ClInclude Include="src\post_process.glsl.h" />
+    <ClInclude Include="src\game\ship.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\fx\crt.glsl" />
-    <None Include="assets\fx\identity.glsl" />
+    <None Include="src\post_process.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

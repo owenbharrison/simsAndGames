@@ -2,46 +2,53 @@
 #ifndef ASTEROID_STRUCT_H
 #define ASTEROID_STRUCT_H
 
+#include "cmn/geom/aabb2.h"
+#include "cmn/utils.h"
+
 #include <string>
 
-vf2d randomPtOnEdge(const cmn::AABBf2& a) {
+cmn::vf2d randomPtOnEdge(const cmn::AABBf2& a) {
 	switch(cmn::randInt(0, 3)) {
 		//top
-		default: return vf2d(cmn::randFloat(a.min.x, a.max.x), a.min.y);
-		//bottom
-		case 1: return vf2d(cmn::randFloat(a.min.x, a.max.x), a.max.y);
-		//left
-		case 2: return vf2d(a.min.x, cmn::randFloat(a.min.y, a.max.y));
-		//right
-		case 3: return vf2d(a.max.x, cmn::randFloat(a.min.y, a.max.y));
+		default: return cmn::vf2d(cmn::randFloat(a.min.x, a.max.x), a.min.y);
+			//bottom
+		case 1: return cmn::vf2d(cmn::randFloat(a.min.x, a.max.x), a.max.y);
+			//left
+		case 2: return cmn::vf2d(a.min.x, cmn::randFloat(a.min.y, a.max.y));
+			//right
+		case 3: return cmn::vf2d(a.max.x, cmn::randFloat(a.min.y, a.max.y));
 	}
 }
 
 class Asteroid {
+	cmn::vf2d sincos{0, 1};
+
 	void copyFrom(const Asteroid&), clear();
 
+	void updateRot();
+
 public:
-	vf2d pos, vel;
+	cmn::vf2d pos, vel;
 	float base_rad=0;
 	int num_pts=0;
-	vf2d* model=nullptr;
+	cmn::vf2d* model=nullptr;
 
 	float rot=0, rot_vel=0;
-	vf2d cossin{1, 0};
 
 	Asteroid() {}
 
-	Asteroid(const vf2d& p, float ra, float ro, int n) {
+	Asteroid(const cmn::vf2d& p, float ra, float ro, int n) {
 		pos=p;
 		base_rad=ra;
 		rot=ro;
 		num_pts=n;
-		model=new vf2d[num_pts];
+		model=new cmn::vf2d[num_pts];
 		for(int i=0; i<num_pts; i++) {
 			float rad=base_rad*cmn::randFloat(.67f, 1);
 			float angle=2*cmn::Pi*i/num_pts;
-			model[i]=cmn::polar<vf2d>(rad, angle);
+			model[i]=cmn::vf2d::polar({rad, angle});
 		}
+		updateRot();
 	}
 
 	//ro3 1
@@ -66,22 +73,20 @@ public:
 		return *this;
 	}
 
-	//rotation matrix + translation
-	vf2d localToWorld(const vf2d& v) const {
-		vf2d rotated(
-			cossin.x*v.x-cossin.y*v.y,
-			cossin.y*v.x+cossin.x*v.y
-		);
-		return pos+rotated;
+	cmn::vd2d rotVec(const cmn::vd2d& p) const {
+		return {p.x*sincos.y-p.y*sincos.x, p.x*sincos.x+p.y*sincos.y};
 	}
 
-	//inverse of rotation matrix = transpose
-	vf2d worldToLocal(const vf2d& v) const {
-		vf2d rotated=v-pos;
-		return {
-			cossin.x*rotated.x+cossin.y*rotated.y,
-			-cossin.y*rotated.x+cossin.x*rotated.y
-		};
+	cmn::vd2d unrotVec(const cmn::vd2d& p) const {
+		return {p.x*sincos.y+p.y*sincos.x, -p.x*sincos.x+p.y*sincos.y};
+	}
+
+	cmn::vd2d loc2wld(const cmn::vd2d& l) const {
+		return pos+rotVec(l);
+	}
+
+	cmn::vd2d wld2loc(const cmn::vd2d& w) const {
+		return unrotVec(w-pos);
 	}
 
 	//get bounds
@@ -89,30 +94,26 @@ public:
 		const cmn::vf2d inf(1e300, 1e300);
 		cmn::AABBf2 a;
 		for(int i=0; i<num_pts; i++) {
-			vf2d l=localToWorld(model[i]);
-			a.fitToEnclose({l.x, l.y});
+			a.fitToEnclose(loc2wld(model[i]));
 		}
 		return a;
 	}
 
 	//is pt inside asteroid?
-	bool contains(const vf2d& pt) const {
-		//aabb optimization
-		if(!getAABB().contains({pt.x, pt.y})) return false;
-
+	bool contains(const cmn::vf2d& pt) const {
 		//localize point
-		vf2d a=worldToLocal(pt);
+		cmn::vf2d a=wld2loc(pt);
 
 		//random direction
-		float angle=2*cmn::Pi*cmn::randFloat();
-		vf2d b=a+cmn::polar<vf2d>(1.f, angle);
+		float angle=cmn::randFloat(2*cmn::Pi);
+		cmn::vf2d b=a+cmn::vf2d::polar({1.f, angle});
 
 		//count ray-segment intersections
 		int num=0;
 		for(int i=0; i<num_pts; i++) {
-			vf2d c=model[i];
-			vf2d d=model[(i+1)%num_pts];
-			vf2d tu=cmn::lineLineIntersection(a, b, c, d);
+			cmn::vf2d c=model[i];
+			cmn::vf2d d=model[(i+1)%num_pts];
+			cmn::vf2d tu=cmn::lineLineIntersection(a, b, c, d);
 			if(tu.x>0&&tu.y>0&&tu.y<1) num++;
 		}
 
@@ -120,29 +121,12 @@ public:
 		return num%2;
 	}
 
-	void update(float dt) {
-		pos+=vel*dt;
-
-		rot+=rot_vel*dt;
-
-		//precompute rotation matrix
-		cossin=cmn::polar<vf2d>(1.f, rot);
-	}
-
-	//when hit edge spawn on other side: toroidal space?
-	void checkAABB(const cmn::AABBf2& a) {
-		if(pos.x<a.min.x) pos.x=a.max.x;
-		if(pos.y<a.min.y) pos.y=a.max.y;
-		if(pos.x>a.max.x) pos.x=a.min.x;
-		if(pos.y>a.max.y) pos.y=a.min.y;
-	}
-
 	//can or should this be split more?
 	bool split(Asteroid& a0, Asteroid& a1) const {
 		//if asteroid is too small or not enough pts, dont bother splitting it
 		if(base_rad<4||num_pts<7) return false;
 
-		vf2d perp_vel(-vel.y, vel.x);
+		cmn::vf2d perp_vel(-vel.y, vel.x);
 
 		//make 2 smaller, faster asteroids
 		Asteroid* ast[2]{&a0, &a1};
@@ -156,17 +140,34 @@ public:
 			a.vel=sign*vel_scl*perp_vel;
 			a.rot_vel=sign*rot_scl*rot_vel;
 		}
+
 		return true;
+	}
+
+	void update(float dt) {
+		pos+=vel*dt;
+
+		rot+=rot_vel*dt;
+
+		updateRot();
+	}
+
+	//when hit edge spawn on other side: toroidal space?
+	void checkAABB(const cmn::AABBf2& a) {
+		if(pos.x<a.min.x) pos.x=a.max.x;
+		if(pos.y<a.min.y) pos.y=a.max.y;
+		if(pos.x>a.max.x) pos.x=a.min.x;
+		if(pos.y>a.max.y) pos.y=a.min.y;
 	}
 
 	static Asteroid makeRandom(const cmn::AABBf2& box) {
 		float rad=cmn::randFloat(5, 8);
-		float rot=2*cmn::Pi*cmn::Pi*cmn::randFloat();
+		float rot=cmn::randFloat(2*cmn::Pi);
 		int num_pts=cmn::randInt(20, 28);
 		Asteroid a(randomPtOnEdge(box), rad, rot, num_pts);
 		float speed=cmn::randFloat(9, 23);
-		float angle=2*cmn::Pi*cmn::randFloat();
-		a.vel=cmn::polar<vf2d>(speed, angle);
+		float angle=cmn::randFloat(2*cmn::Pi);
+		a.vel=cmn::vf2d::polar({speed, angle});
 		a.rot_vel=cmn::randFloat(-1, 1);
 		return a;
 	}
@@ -177,14 +178,22 @@ void Asteroid::copyFrom(const Asteroid& a) {
 	vel=a.vel;
 	base_rad=a.base_rad;
 	num_pts=a.num_pts;
-	model=new vf2d[num_pts];
-	std::memcpy(model, a.model, sizeof(vf2d)*num_pts);
+	model=new cmn::vf2d[num_pts];
+	for(int i=0; i<num_pts; i++) {
+		model[i]=a.model[i];
+	}
 	rot=a.rot;
-	cossin=a.cossin;
+	sincos=a.sincos;
 	rot_vel=a.rot_vel;
 }
 
 void Asteroid::clear() {
 	delete[] model;
+}
+
+//precompute rotation matrix
+void Asteroid::updateRot() {
+	sincos.x=std::sin(rot);
+	sincos.y=std::cos(rot);
 }
 #endif

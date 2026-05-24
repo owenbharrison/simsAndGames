@@ -20,21 +20,29 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\asteroid.h">
+    <ClInclude Include="src\game\asteroid.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\bullet.h">
+    <ClInclude Include="src\game\bullet.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\ship.h">
+    <ClInclude Include="src\game\ship.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\particle.h">
+    <ClInclude Include="src\game\particle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\asteroids.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\post_process.glsl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\canvas.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\fx\crt.glsl" />
-    <None Include="assets\fx\identity.glsl" />
+    <None Include="src\post_process.glsl" />
   </ItemGroup>
 </Project>
