@@ -29,11 +29,17 @@
     <ClInclude Include="src\conversions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\thread_pool.h">
+    <ClInclude Include="src\slicer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\return_code.h">
+    <ClInclude Include="src\prism.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\imgui.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\benchy.txt" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,7 @@
 #ifndef VOXEL_SET_CLASS_H
 #define VOXEL_SET_CLASS_H
 
-#include <string>
+#include "cmn/math/v3d.h"
 
 class VoxelSet {
 	int width=0, height=0, depth=0;
@@ -12,8 +12,8 @@ class VoxelSet {
 public:
 	bool* grid=nullptr;
 
-	vf3d scale{1, 1, 1};
-	vf3d translation;
+	cmn::vf3d trans;
+	cmn::vf3d scale{1, 1, 1};
 
 	VoxelSet() {}
 
@@ -22,7 +22,7 @@ public:
 		height=h;
 		depth=d;
 		grid=new bool[width*height*depth];
-		std::memset(grid, false, sizeof(bool)*width*height*depth);
+		for(int i=0; i<width*height*depth; i++) grid[i]=false;
 	}
 
 	//ro3 1
@@ -60,10 +60,11 @@ void VoxelSet::copyFrom(const VoxelSet& v) {
 	height=v.height;
 	depth=v.depth;
 	grid=new bool[width*height*depth];
-	std::memcpy(grid, v.grid, sizeof(bool)*width*height*depth);
-	
+	for(int i=0; i<width*height*depth; i++) {
+		grid[i]=v.grid[i];
+	}
+	trans=v.trans;
 	scale=v.scale;
-	translation=v.translation;
 }
 
 void VoxelSet::clear() {
