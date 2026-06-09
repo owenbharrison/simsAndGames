@@ -12,7 +12,7 @@ using cmn::mat4;
 #include "following_camera.h"
 
 static float perpDistToRay(const vf3d& pt, const vf3d& orig, const vf3d& dir) {
-	return dir.cross(pt-orig).mag();
+	return length(cross(dir, pt-orig));
 }
 
 class TrackingUI : public cmn::Engine3D {
@@ -70,7 +70,7 @@ class TrackingUI : public cmn::Engine3D {
 		const vf3d up(0, 1, 0);
 		for(auto& t:terrain.tris) {
 			//get steepness
-			float s=std::abs(up.dot(t.getNorm()));
+			float s=std::abs(dot(up, t.getNorm()));
 			t.col=gradient_spr->Sample(s, 0);
 		}
 		delete gradient_spr;
@@ -112,26 +112,30 @@ class TrackingUI : public cmn::Engine3D {
 	void placeCameras() {
 		cams.push_back(new FollowingCamera(
 			320, 240,
-			{.77f, 4.85f, 2.86f}, {0, 1, 0}, vf3d(-2, -1, 2).norm(),
+			{.77f, 4.85f, 2.86f}, {0, 1, 0},
+			normalize(vf3d(-2, -1, 2)),
 			-cmn::Pi/4, cmn::Pi/4, -cmn::Pi/6, cmn::Pi/6
 		));
 
 		cams.push_back(new Camera(
 			320, 240,
 			{3.77f, 3.16f, 8.97f},
-			{0, 1, 0}, vf3d(-2, 0, -1).norm()
+			{0, 1, 0},
+			normalize(vf3d(-2, 0, -1))
 		));
 
 		cams.push_back(new Camera(
 			320, 240,
 			{-5.38f, 3.29f, 2.88f},
-			{0, 1, 0}, vf3d(1, 0, 1).norm()
+			{0, 1, 0},
+			normalize(vf3d(1, 0, 1))
 		));
 
 		cams.push_back(new Camera(
 			320, 240,
 			{-5.21f, 2.92f, 9.98f},
-			{0, 1, 0}, vf3d(1, 0, -2).norm()
+			{0, 1, 0},
+			normalize(vf3d(1, 0, -2))
 		));
 	}
 
@@ -321,7 +325,7 @@ class TrackingUI : public cmn::Engine3D {
 		vf3d world=matMulVec(inv_vp, clip, w);
 		world/=w;
 
-		mouse_dir=(world-cam_pos).norm();
+		mouse_dir=normalize(world-cam_pos);
 	}
 
 	void handleGizmoDragBegin() {
@@ -373,7 +377,7 @@ class TrackingUI : public cmn::Engine3D {
 		//move by delta
 		vf3d delta=curr_pt-prev_pt;
 
-		if(constrain) g+=axis.dot(delta)*axis;
+		if(constrain) g+=dot(axis, delta)*axis;
 		else g+=delta;
 	}
 
@@ -480,7 +484,7 @@ class TrackingUI : public cmn::Engine3D {
 			auto cost=[&] (vf3d pos) {
 				float sum=0;
 				for(const auto& r:track_rays) {
-					sum+=r.dir.cross(pos-r.orig).mag();
+					sum+=length(cross(r.dir, pos-r.orig));
 				}
 				return sum;
 			};
@@ -551,10 +555,10 @@ class TrackingUI : public cmn::Engine3D {
 	//this looks nice :D
 	void realizeArrow(const vf3d& a, const vf3d& b, float sz, const olc::Pixel& col) {
 		vf3d ba=b-a;
-		float mag=ba.mag();
+		float mag=length(ba);
 		vf3d ca=cam_pos-a;
 		//make tip of arrow "point" towards cam_pos
-		vf3d perp=.5f*sz*mag*ba.cross(ca).norm();
+		vf3d perp=.5f*sz*mag*normalize(cross(ba, ca));
 		vf3d c=b-sz*ba;
 		vf3d l=c-perp, r=c+perp;
 		cmn::Line l1{a, c}; l1.col=col;
@@ -683,10 +687,10 @@ class TrackingUI : public cmn::Engine3D {
 			vf3d ctr=c->pos-d*c->fwd;
 
 			//get basis vectors
-			vf3d norm=(ctr-cam_pos).norm();
+			vf3d norm=normalize(ctr-cam_pos);
 			vf3d up(0, 1, 0);
-			vf3d rgt=norm.cross(up).norm();
-			up=rgt.cross(norm);
+			vf3d rgt=normalize(cross(norm, up));
+			up=cross(rgt, norm);
 
 			//vertex positioning
 			vf3d tl=ctr+w/2*rgt+h/2*up;

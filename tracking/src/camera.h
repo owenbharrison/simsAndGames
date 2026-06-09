@@ -68,11 +68,11 @@ public:
 		//get direction
 		float cx=.5f*width;
 		float cy=.5f*height;
-		vf3d n=vf3d(
+		vf3d n=normalize(vf3d(
 			(x-cx)/focal_length_x,
 			(cy-y)/focal_length_y,//flip y
 			1
-		).norm();
+		));
 
 		//apply basis vectors
 		return n.x*rgt+n.y*up+n.z*fwd;
@@ -90,12 +90,12 @@ public:
 
 	//update coordinate system (from RHR)
 	virtual void updateBasisVectors() {
-		rgt=fwd.cross(pseudo_up).norm();
-		up=rgt.cross(fwd);
+		rgt=normalize(cross(fwd, pseudo_up));
+		up=cross(rgt, fwd);
 	}
 
 	void updateGuess() {
-		const vf3d rgb_weights(.299f, .587f, .114f);
+		const vf3d rgb_wgt(.299f, .587f, .114f);
 
 		guess_valid=false;
 
@@ -105,14 +105,10 @@ public:
 		for(int x=0; x<width; x++) {
 			for(int y=0; y<height; y++) {
 				olc::Pixel curr=curr_spr->GetPixel(x, y);
-				float curr_lum=rgb_weights.dot(vf3d(
-					curr.r, curr.g, curr.b
-				))/255;
-
+				float curr_lum=dot(rgb_wgt, {curr.r, curr.g, curr.b});
+				
 				olc::Pixel prev=prev_spr->GetPixel(x, y);
-				float prev_lum=rgb_weights.dot(vf3d(
-					prev.r, prev.g, prev.b
-				))/255;
+				float prev_lum=dot(rgb_wgt, {curr.r, curr.g, curr.b});
 
 				float lum_diff=std::abs(curr_lum-prev_lum);
 				x_sum+=lum_diff*x;
@@ -124,8 +120,8 @@ public:
 
 		//find position of movement
 		guess_valid=true;
-		guess_x=x_sum/w_sum;
-		guess_y=y_sum/w_sum;
+		guess_x=x_sum/w_sum/255;
+		guess_y=y_sum/w_sum/255;
 	}
 };
 

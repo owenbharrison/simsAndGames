@@ -77,8 +77,8 @@ public:
 
 	void updateBasisVectors() override {
 		//update coordinate system (from RHR)
-		mount_rgt=mount_fwd.cross(pseudo_up).norm();
-		mount_up=mount_rgt.cross(mount_fwd);
+		mount_rgt=normalize(cross(mount_fwd, pseudo_up));
+		mount_up=cross(mount_rgt, mount_fwd);
 
 		//get dir given yaw & pitch
 		vf3d yp=polar3D(yaw, pitch);
