@@ -15,21 +15,21 @@ struct Spring {
 
 	Spring(Particle* _a, Particle* _b, float k, float d) {
 		a=_a, b=_b;
-		rest_len=(a->pos-b->pos).mag();
+		rest_len=length(a->pos-b->pos);
 		stiffness=k;
 		damping=d;
 	}
 
 	cmn::vf3d getForce() const {
 		cmn::vf3d sub=b->pos-a->pos;
-		float curr_len=sub.mag();
+		float curr_len=length(sub);
 		float spring=stiffness*(curr_len-rest_len);
 
 		//thanks gonkee
 		cmn::vf3d a_vel=a->pos-a->old_pos;
 		cmn::vf3d b_vel=b->pos-b->old_pos;
 		cmn::vf3d norm=sub/curr_len;
-		float damp=damping*norm.dot(b_vel-a_vel);
+		float damp=damping*dot(norm, b_vel-a_vel);
 
 		return (spring+damp)*norm;
 	}
@@ -40,7 +40,7 @@ struct Spring {
 		if(!b->locked) b->applyForce(-force);
 
 		//update strain
-		float curr=(a->pos-b->pos).mag();
+		float curr=length(a->pos-b->pos);
 		strain=(curr-rest_len)/rest_len;
 	}
 };

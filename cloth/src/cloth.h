@@ -40,25 +40,6 @@ struct IndexTriangle {
 	Particle* a=0, * b=0, * c=0;
 };
 
-//y p => x y z
-//0 0 => 0 0 1
-static cmn::vf3d polarToCartesian(float yaw, float pitch) {
-	return {
-		std::sin(yaw)*std::cos(pitch),
-		std::sin(pitch),
-		std::cos(yaw)*std::cos(pitch)
-	};
-}
-
-//x y z => y p
-//0 0 1 => 0 0
-static void cartesianToPolar(const cmn::vf3d& pt, float& yaw, float& pitch) {
-	//flatten onto xz
-	yaw=std::atan2(pt.x, pt.z);
-	//vertical triangle
-	pitch=std::atan2(pt.y, std::sqrt(pt.x*pt.x+pt.z*pt.z));
-}
-
 void compressiveGradient(float t, float* r, float* g, float* b) {
 	static const float cols[][3]{
 		{1, 1, 1},//white
@@ -89,7 +70,7 @@ cmn::vf3d rayIntersectPlane(
 	const cmn::vf3d& orig, const cmn::vf3d& dir,
 	const cmn::vf3d& ctr, const cmn::vf3d& norm
 ) {
-	float dist=norm.dot(ctr-orig)/norm.dot(dir);
+	float dist=dot(norm, ctr-orig)/dot(norm, dir);
 	return orig+dist*dir;
 }
 
@@ -282,8 +263,13 @@ public:
 		setupCloth();
 
 		noise_gen=PerlinNoise(now);
-
-		cartesianToPolar(cam.dir, cam.yaw, cam.pitch);
+		
+		//look at origin
+		{
+			vf3d ryp=vf3d::cartesian(cam.dir);
+			cam.yaw=ryp.y;
+			cam.pitch=ryp.z;
+		}
 
 		setupSGL();
 
@@ -347,8 +333,8 @@ public:
 			for(auto& p:particles) {
 				//parallel & perp dist
 				vf3d cp=p.pos-cam.pos;
-				float l=std::abs(mouse_dir.dot(cp));
-				float r=mouse_dir.cross(cp).mag();
+				float l=std::abs(dot(mouse_dir, cp));
+				float r=length(cross(mouse_dir, cp));
 
 				float max_r=l*pix2wld;
 				if(r<max_r) {
@@ -396,15 +382,15 @@ public:
 		if(GetKey(SAPP_KEYCODE_B).pressed) render_bounds^=true;
 	}
 
-	void updateCameraMatrixes() {
+	void updateCamera() {
+		cam.dir=vf3d::polar({1, cam.yaw, cam.pitch});
+		
 		mat4 look_at=mat4::makeLookAt(cam.pos, cam.pos+cam.dir, {0, 1, 0});
 		cam.view=mat4::inverse(look_at);
 
 		//cam proj can change with window resize
 		float asp=sapp_widthf()/sapp_heightf();
 		cam.proj=mat4::makePerspective(cam.fov_deg, asp, cam.near_plane, cam.far_plane);
-
-		cam.view_proj=mat4::mul(cam.proj, cam.view);
 	}
 
 	void updateMouseRay() {
@@ -420,7 +406,7 @@ public:
 		world/=w;
 
 		//normalize direction
-		mouse_dir=(world-cam.pos).norm();
+		mouse_dir=normalize(world-cam.pos);
 	}
 
 	//just a lot of fiddling.
@@ -460,8 +446,8 @@ public:
 				vf3d ab=b.pos-a.pos;
 				vf3d ac=c.pos-a.pos;
 
-				vf3d norm=ab.cross(ac);
-				float mag=norm.mag();
+				vf3d norm=cross(ab, ac);
+				float mag=length(norm);
 				if(mag<1e-6f) continue;
 
 				float area=.5f*mag;
@@ -479,12 +465,12 @@ public:
 				vf3d vel=(vel_a+vel_b+vel_c)/3;
 				vf3d rel_vel=wind-vel;
 
-				float rel_spd=rel_vel.mag();
+				float rel_spd=length(rel_vel);
 				if(rel_spd<1e-6f) continue;
 
 				vf3d rel_dir=rel_vel/rel_spd;
 
-				float exposure=std::abs(norm.dot(rel_dir));
+				float exposure=std::abs(dot(norm, rel_dir));
 
 				//aerodynamic pressure
 				const float air_dens=1.225f;
@@ -525,9 +511,7 @@ public:
 	bool user_update(float dt) override {
 		handleUserInput(dt);
 
-		cam.dir=polarToCartesian(cam.yaw, cam.pitch);
-
-		updateCameraMatrixes();
+		updateCamera();
 
 		updateMouseRay();
 
@@ -548,14 +532,14 @@ public:
 		for(const auto& t:triangles) {
 			vf3d ab=t.b->pos-t.a->pos;
 			vf3d ac=t.c->pos-t.a->pos;
-			vf3d norm=ab.cross(ac).norm();
+			vf3d norm=normalize(cross(ab, ac));
 			vf3d ctr=(t.a->pos+t.b->pos+t.c->pos)/3;
 
 			//if pointing away from cam, use flipped normal
-			if(norm.dot(cam.pos-ctr)<0) norm*=-1;
+			if(dot(norm, cam.pos-ctr)<0) norm*=-1;
 
-			vf3d light_dir=(light_pos-ctr).norm();
-			float dp=cmn::clamp(norm.dot(light_dir), .5f, 1.f);
+			vf3d light_dir=normalize(light_pos-ctr);
+			float dp=cmn::clamp(dot(norm, light_dir), .5f, 1.f);
 			sgl_v3f_t2f_c3f(t.a->pos.x, t.a->pos.y, t.a->pos.z, t.a->tex_u, t.a->tex_v, dp, dp, dp);
 			sgl_v3f_t2f_c3f(t.b->pos.x, t.b->pos.y, t.b->pos.z, t.b->tex_u, t.b->tex_v, dp, dp, dp);
 			sgl_v3f_t2f_c3f(t.c->pos.x, t.c->pos.y, t.c->pos.z, t.c->tex_u, t.c->tex_v, dp, dp, dp);
