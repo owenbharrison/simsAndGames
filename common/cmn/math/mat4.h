@@ -187,9 +187,9 @@ namespace cmn {
 		//invert this for view matrix.
 		static mat4 makeLookAt(const vf3d& eye, const vf3d& target, vf3d up) {
 			//coordinate axes from RHR
-			vf3d fwd=(target-eye).norm();
-			vf3d rgt=fwd.cross(up).norm();
-			up=rgt.cross(fwd);
+			vf3d fwd=normalize(target-eye);
+			vf3d rgt=normalize(cross(fwd, up));
+			up=cross(rgt, fwd);
 
 			//column vectors + translation
 			mat4 a;
