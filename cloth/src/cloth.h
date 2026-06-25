@@ -281,6 +281,9 @@ public:
 
 #pragma region UPDATE_HELPERS
 	void handleCameraMovement(float dt) {
+		//dont move while grabbing
+		if(grab_ptc) return;
+		
 		//forward/backward
 		vf3d fwd=normalize(vf3d(1, 0, 1)*cam.dir);
 		if(GetKey(SAPP_KEYCODE_W).held) cam.pos+=5.f*dt*fwd;
@@ -297,6 +300,9 @@ public:
 	}
 
 	void handleCameraLooking(float dt) {
+		//dont look while grabbing
+		if(grab_ptc) return;
+
 		//up/down
 		if(GetKey(SAPP_KEYCODE_UP).held) cam.pitch+=dt;
 		if(GetKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
