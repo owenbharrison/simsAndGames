@@ -100,13 +100,10 @@ class Cloth : public cmn::SokolEngine {
 		vf3d dir{0, 0, -1};
 
 		float fov_deg=75;
-
 		const float near_plane=.001f, far_plane=1000;
+
 		mat4 proj;
-
 		mat4 view;
-
-		mat4 view_proj;
 	} cam;
 
 	vf3d mouse_dir;
@@ -283,40 +280,31 @@ public:
 	}
 
 #pragma region UPDATE_HELPERS
-	void handleCameraLooking(float dt) {
-		//don't look while grabbing
-		if(grab_ptc) return;
+	void handleCameraMovement(float dt) {
+		//forward/backward
+		vf3d fwd=normalize(vf3d(1, 0, 1)*cam.dir);
+		if(GetKey(SAPP_KEYCODE_W).held) cam.pos+=5.f*dt*fwd;
+		if(GetKey(SAPP_KEYCODE_S).held) cam.pos-=3.f*dt*fwd;
 
 		//left/right
-		if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
-		if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
+		vf3d rgt=normalize(cross(fwd, vf3d(0, 1, 0)));
+		if(GetKey(SAPP_KEYCODE_A).held) cam.pos-=4.f*dt*rgt;
+		if(GetKey(SAPP_KEYCODE_D).held) cam.pos+=4.f*dt*rgt;
 
+		//up/down
+		if(GetKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4.f*dt;
+		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4.f*dt;
+	}
+
+	void handleCameraLooking(float dt) {
 		//up/down
 		if(GetKey(SAPP_KEYCODE_UP).held) cam.pitch+=dt;
 		if(GetKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
+		cam.pitch=cmn::clamp(cam.pitch, .001f-cmn::Pi/2, cmn::Pi/2-.001f);
 
-		//clamp camera pitch
-		if(cam.pitch>cmn::Pi/2) cam.pitch=cmn::Pi/2-.001f;
-		if(cam.pitch<-cmn::Pi/2) cam.pitch=.001f-cmn::Pi/2;
-	}
-
-	void handleCameraMovement(float dt) {
-		//don't move while grabbing
-		if(grab_ptc) return;
-
-		//move up, down
-		if(GetKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4.f*dt;
-		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4.f*dt;
-
-		//move forward, backward
-		vf3d fb_dir(std::sin(cam.yaw), 0, std::cos(cam.yaw));
-		if(GetKey(SAPP_KEYCODE_W).held) cam.pos+=5.f*dt*fb_dir;
-		if(GetKey(SAPP_KEYCODE_S).held) cam.pos-=3.f*dt*fb_dir;
-
-		//move left, right
-		vf3d lr_dir(fb_dir.z, 0, -fb_dir.x);
-		if(GetKey(SAPP_KEYCODE_A).held) cam.pos+=4.f*dt*lr_dir;
-		if(GetKey(SAPP_KEYCODE_D).held) cam.pos-=4.f*dt*lr_dir;
+		//left/right
+		if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=dt;
+		if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=dt;
 	}
 
 	void handleGrabAction() {
@@ -361,9 +349,9 @@ public:
 	}
 
 	void handleUserInput(float dt) {
-		handleCameraLooking(dt);
-
 		handleCameraMovement(dt);
+
+		handleCameraLooking(dt);
 
 		handleGrabAction();
 
@@ -395,7 +383,8 @@ public:
 
 	void updateMouseRay() {
 		//unprojection matrix
-		mat4 inv_view_proj=mat4::inverse(cam.view_proj);
+		mat4 view_proj=mat4::mul(cam.proj, cam.view);
+		mat4 inv_view_proj=mat4::inverse(view_proj);
 
 		//mouse coords from clip -> world
 		float ndc_x=2*GetMouseX()/sapp_widthf()-1;
