@@ -100,17 +100,18 @@ public:
 		guess_valid=false;
 
 		//luminance weighted average
+		const float pix_recip=1.f/255;
 		float x_sum=0, y_sum=0;
 		float w_sum=0;
 		for(int x=0; x<width; x++) {
 			for(int y=0; y<height; y++) {
 				olc::Pixel curr=curr_spr->GetPixel(x, y);
-				float curr_lum=dot(rgb_wgt, {curr.r, curr.g, curr.b});
+				float curr_lum=dot(rgb_wgt, vf3d(curr.r, curr.g, curr.b));
 				
 				olc::Pixel prev=prev_spr->GetPixel(x, y);
-				float prev_lum=dot(rgb_wgt, {curr.r, curr.g, curr.b});
+				float prev_lum=dot(rgb_wgt, vf3d(prev.r, prev.g, prev.b));
 
-				float lum_diff=std::abs(curr_lum-prev_lum);
+				float lum_diff=pix_recip*std::abs(curr_lum-prev_lum);
 				x_sum+=lum_diff*x;
 				y_sum+=lum_diff*y;
 				w_sum+=lum_diff;
@@ -120,8 +121,8 @@ public:
 
 		//find position of movement
 		guess_valid=true;
-		guess_x=x_sum/w_sum/255;
-		guess_y=y_sum/w_sum/255;
+		guess_x=x_sum/w_sum;
+		guess_y=y_sum/w_sum;
 	}
 };
 
