@@ -53,7 +53,7 @@ bool segIntersectTri(
 
 	if(tptr) *tptr=t;
 	if(uptr) *uptr=u;
-	if(tptr) *vptr=v;
+	if(vptr) *vptr=v;
 
 	//within unit segment
 	if(t<0||t>1) return false;
