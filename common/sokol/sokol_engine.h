@@ -33,6 +33,7 @@ namespace cmn {
 		std::string app_title="[untitled]";
 
 		void init() {
+			//should this be here...
 			sg_desc desc{};
 			desc.environment=sglue_environment();
 			sg_setup(desc);
@@ -62,11 +63,10 @@ namespace cmn {
 				case SAPP_EVENTTYPE_MOUSE_UP:
 					_mouse_buttons_next[e->mouse_button]=false;
 					break;
-				case SAPP_EVENTTYPE_MOUSE_MOVE: {
+				case SAPP_EVENTTYPE_MOUSE_MOVE:
 					_mouse_x_next=e->mouse_x;
 					_mouse_y_next=e->mouse_y;
 					break;
-				}
 				default: break;
 			}
 
