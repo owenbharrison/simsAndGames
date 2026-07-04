@@ -79,6 +79,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "terrain", "terrain\terrain.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "robot", "robot\robot.vcxproj", "{CCB91022-1C17-4F2D-B1B9-99BA1C5450F0}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "phys3d", "phys3d\phys3d.vcxproj", "{D072272D-A546-4E76-A250-1FE8DDE5E9D5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -391,6 +393,14 @@ Global
 		{CCB91022-1C17-4F2D-B1B9-99BA1C5450F0}.Release|x64.Build.0 = Release|x64
 		{CCB91022-1C17-4F2D-B1B9-99BA1C5450F0}.Release|x86.ActiveCfg = Release|Win32
 		{CCB91022-1C17-4F2D-B1B9-99BA1C5450F0}.Release|x86.Build.0 = Release|Win32
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Debug|x64.ActiveCfg = Debug|x64
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Debug|x64.Build.0 = Debug|x64
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Debug|x86.ActiveCfg = Debug|Win32
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Debug|x86.Build.0 = Debug|Win32
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Release|x64.ActiveCfg = Release|x64
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Release|x64.Build.0 = Release|x64
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Release|x86.ActiveCfg = Release|Win32
+		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
