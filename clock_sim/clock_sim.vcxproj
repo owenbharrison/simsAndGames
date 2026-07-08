@@ -135,11 +135,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="src\shd.glsl" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="src\clock_sim.h" />
-    <ClInclude Include="src\shd.glsl.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />

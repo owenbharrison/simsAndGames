@@ -10,17 +10,16 @@
 
 #include "sokol/sokol_engine.h"
 
-#include "shd.glsl.h"
+#include "sokol/include/sokol_gl.h"
 
 #include <cstdint>
+//for time
 #include <ctime>
 
 #include "sokol/font.h"
 
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio/include/miniaudio.h"
-
-#include <vector>
 
 //iterable queue
 #include <deque>
@@ -39,42 +38,39 @@ struct Module {
 	bool seg[7]{0, 0, 0, 0, 0, 0, 0};
 };
 
-void getTime(int& hour, int& min) {
+void getTime(int* hour, int* min) {
 	auto now=std::time(0);
 	auto local=std::localtime(&now);
 
-	hour=local->tm_hour;
-	min=local->tm_min;
+	*hour=local->tm_hour;
+	*min=local->tm_min;
 }
 
 //low level formatting
-void formatTime(int hour, int minute, int& hh, int& hl, int& mh, int& ml) {
+void formatTime(int hour, int minute, int* hh, int* hl, int* mh, int* ml) {
 	//24 hour time -> 12 hour time
 	if(hour>12) hour-=12;
 
-	//tens and ones places
-	hh=hour/10;
-	hl=hour%10;
-	mh=minute/10;
-	ml=minute%10;
+	//extract place values
+	*hh=hour/10;
+	*hl=hour%10;
+	*mh=minute/10;
+	*ml=minute%10;
 }
 
 class ClockSim : public cmn::SokolEngine {
+	//graphics
+	sgl_pipeline pip{};
+
 	sg_sampler sampler{};
 
-	struct {
-		sg_view blank{};
-		sg_view seg[7];
-	} textures;
-
-	struct {
-		sg_pipeline pip{};
-
-		sg_buffer vbuf{};
-	} colorview_render;
+	sg_view segments[7];
 
 	cmn::Font font;
 
+	bool render_tasks=false;
+
+	//sound
 	struct {
 		ma_engine engine;
 
@@ -82,6 +78,7 @@ class ClockSim : public cmn::SokolEngine {
 		int num_clicks=sizeof(clicks)/sizeof(clicks[0]);
 	} sound;
 
+	//simulation
 	struct {
 		int w_mod_img;
 		int h_mod_img;
@@ -109,52 +106,38 @@ class ClockSim : public cmn::SokolEngine {
 	std::deque<Job> tasks;
 	float job_timer_ms=0;
 
-	bool render_tasks=false;
-
 public:
 #pragma region SETUP HELPERS
-	void setupSampler() {
-		sg_sampler_desc sampler_desc{};
-		sampler=sg_make_sampler(sampler_desc);
+	void setupSGL() {
+		sgl_desc_t desc{};
+		sgl_setup(desc);
 	}
 
-	void setupTextures() {
-		textures.blank=cmn::makeBlankTexture();
-
-		for(int i=0; i<7; i++) {
-			auto& t=textures.seg[i];
-			auto name="assets/img/seg"+std::to_string(i)+".png";
-			if(!cmn::makeTextureFromFile(t, name)) t=textures.blank;
-		}
-	}
-
-	void setupColorviewRendering() {
-		//2d tristrip pipeline
+	//alpha blending
+	void setupPipeline() {
 		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_colorview_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.layout.attrs[ATTR_colorview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(colorview_shader_desc(sg_query_backend()));
-		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-		//with alpha blending
 		pip_desc.colors[0].blend.enabled=true;
 		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
 		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
 		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
 		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		colorview_render.pip=sg_make_pipeline(pip_desc);
+		pip=sgl_make_pipeline(pip_desc);
+	}
 
-		//xyuv
-		//flip y
-		float vertexes[4][2][2]{
-			{{-1, -1}, {0, 1}},
-			{{1, -1}, {1, 1}},
-			{{-1, 1}, {0, 0}},
-			{{1, 1}, {1, 0}}
-		};
-		sg_buffer_desc buffer_desc{};
-		buffer_desc.data.ptr=vertexes;
-		buffer_desc.data.size=sizeof(vertexes);
-		colorview_render.vbuf=sg_make_buffer(buffer_desc);
+	void setupSampler() {
+		sg_sampler_desc desc{};
+		sampler=sg_make_sampler(desc);
+	}
+
+	bool setupTextures() {
+		for(int i=0; i<7; i++) {
+			auto& t=segments[i];
+			auto name="assets/img/seg"+std::to_string(i)+".png";
+			bool status=cmn::makeTextureFromFile(t, name);
+			if(!status) return false;
+		}
+
+		return true;
 	}
 
 	void setupFont() {
@@ -204,12 +187,12 @@ public:
 				tasks.push_back({m, gpio_t(f?seg_on:~seg_on), 20});
 				tasks.push_back({m, 0b00000000, spd});
 
-				//segment helt & module increment logic
+				//module change & segment halt logic
 				switch(s) {
-					case 0: if(mi!=ei) s--, mi++; break;//top
-					case 2: if(mj!=ej) s-=2, mj++; break;//right
-					case 3: if(mi!=si) s--, mi--; break;//bottom
-					case 5: if(mj!=sj) s-=2, mj--; break;//left
+					case 0: if(mi!=ei) mi++, s--; break;//top
+					case 2: if(mj!=ej) mj++, s-=2; break;//right
+					case 3: if(mi!=si) mi--, s--; break;//bottom
+					case 5: if(mj!=sj)mj--, s-=2;  break;//left
 				}
 			}
 		}
@@ -228,10 +211,10 @@ public:
 			{00, 05, 04, 03, 02, 06, -1},//6
 			{00, 01, 02, -1, -1, -1, -1},//7
 			{00, 05, 06, 01, 04, 03, 02},//8?
-			{06, 05, 00, 01, 02, -1, -1},//9
-			{04, 05, 00, 01, 02, 06, -1},//a
+			{06, 05, 00, 01, 02, 03, -1},//9
+			{04, 05, 00, 01, 02, 06, -1},//A
 			{05, 04, 03, 02, 06, -1, -1},//b
-			{06, 04, 03, -1, -1, -1, -1},//c
+			{06, 04, 03, -1, -1, -1, -1},//C
 			{06, 04, 03, 02, 01, -1, -1},//d
 			{06, 05, 00, 01, 02, -1, -1},//E
 			{06, 05, 00, 01, 02, -1, -1}//F
@@ -247,7 +230,7 @@ public:
 	}
 
 	void setupClock() {
-		auto img=sg_query_view_image(textures.seg[0]);
+		auto img=sg_query_view_image(segments[0]);
 		clock.w_mod_img=sg_query_image_width(img);
 		clock.h_mod_img=sg_query_image_height(img);
 
@@ -266,11 +249,11 @@ public:
 
 		//"setup time"
 		int hour, minute;
-		getTime(hour, minute);
+		getTime(&hour, &minute);
 		formatTime(
 			hour, minute,
-			clock.hour_high, clock.hour_low,
-			clock.minute_high, clock.minute_low
+			&clock.hour_high, &clock.hour_low,
+			&clock.minute_high, &clock.minute_low
 		);
 		if(clock.hour_high) queueDigit(0, clock.hour_high, true);
 		queueDigit(1, clock.hour_low, true);
@@ -282,11 +265,13 @@ public:
 	bool user_create() override {
 		std::srand(std::time(0));
 
+		setupSGL();
+
+		setupPipeline();
+
 		setupSampler();
 
-		setupTextures();
-
-		setupColorviewRendering();
+		if(!setupTextures()) return false;
 
 		setupFont();
 
@@ -303,16 +288,18 @@ public:
 		}
 
 		ma_engine_uninit(&sound.engine);
+
+		sgl_shutdown();
 	}
 
 	void handleClock() {
 		//get time
 		int hour, minute;
-		getTime(hour, minute);
+		getTime(&hour, &minute);
 
 		//format time
-		int hh, hl, mh, ml;
-		formatTime(hour, minute, hh, hl, mh, ml);
+		int hh=0, hl=0, mh=0, ml=0;
+		formatTime(hour, minute, &hh, &hl, &mh, &ml);
 
 		//set if changed
 		bool set_hh=hh!=clock.hour_high;
@@ -400,51 +387,37 @@ public:
 	}
 
 #pragma region RENDER HELPERS
-	//rect, texregion, tint
 	void renderTex(
 		float x, float y, float w, float h,
-		const sg_view& tex, float l, float t, float r, float b,
-		const sg_color& tint
+		const sg_view& tex,
+		sg_color col={1, 1, 1, 1},
+		float l=0, float t=0, float r=1, float b=1
 	) {
-		sg_apply_pipeline(colorview_render.pip);
+		sgl_enable_texture();
+		sgl_texture(tex, sampler);
 
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=colorview_render.vbuf;
-		bind.samplers[SMP_u_colorview_smp]=sampler;
-		bind.views[VIEW_u_colorview_tex]=tex;
-		sg_apply_bindings(bind);
+		sgl_begin_quads();
 
-		vs_colorview_params_t vs_colorview_params{};
-		vs_colorview_params.u_tl[0]=l;
-		vs_colorview_params.u_tl[1]=t;
-		vs_colorview_params.u_br[0]=r;
-		vs_colorview_params.u_br[1]=b;
-		sg_apply_uniforms(UB_vs_colorview_params, SG_RANGE(vs_colorview_params));
+		sgl_c4f(col.r, col.g, col.b, col.a);
 
-		fs_colorview_params_t fs_colorview_params{};
-		fs_colorview_params.u_tint[0]=tint.r;
-		fs_colorview_params.u_tint[1]=tint.g;
-		fs_colorview_params.u_tint[2]=tint.b;
-		fs_colorview_params.u_tint[3]=tint.a;
-		sg_apply_uniforms(UB_fs_colorview_params, SG_RANGE(fs_colorview_params));
+		sgl_v2f_t2f(x, y, l, t);
+		sgl_v2f_t2f(x+w, y, r, t);
+		sgl_v2f_t2f(x+w, y+h, r, b);
+		sgl_v2f_t2f(x, y+h, l, b);
 
-		sg_apply_viewportf(x, y, w, h, true);
+		sgl_end();
 
-		sg_draw(0, 4, 1);
+		sgl_disable_texture();
 	}
 
-	void renderChar(float x, float y, char c, float scl=1, sg_color tint={1, 1, 1, 1}) {
-		float l, t, r, b;
-		font.getRegion(c, l, t, r, b);
+	void renderString(
+		float sx, float sy,
+		const std::string& str, float scl,
+		sg_color col={1, 1, 1, 1}
+	) {
+		float w=scl*font.char_w;
+		float h=scl*font.char_h;
 
-		renderTex(
-			x, y, scl*font.char_w, scl*font.char_h,
-			font.tex, l, t, r, b,
-			tint
-		);
-	}
-
-	void renderString(float x, float y, const std::string& str, float scl=1, sg_color tint={1, 1, 1, 1}) {
 		int ox=0, oy=0;
 		for(const auto& c:str) {
 			if(c==' ') ox++;
@@ -452,7 +425,18 @@ public:
 			else if(c=='\t') ox+=2;
 			else if(c=='\n') ox=0, oy++;
 			else if(c>='!'&&c<='~') {
-				renderChar(x+scl*font.char_w*ox, y+scl*font.char_h*oy, c, scl, tint);
+				float l, t, r, b;
+				font.getRegion(c, l, t, r, b);
+
+				float x=sx+w*ox;
+				float y=sy+h*oy;
+				renderTex(
+					x, y, w, h,
+					font.tex,
+					col,
+					l, t, r, b
+				);
+
 				ox++;
 			}
 		}
@@ -463,11 +447,13 @@ public:
 		float h_mod=scl*clock.h_mod_img;
 
 		//black background
-		renderTex(
-			x, y, w_mod, h_mod,
-			textures.blank, 0, 0, 1, 1,
-			{0, 0, 0, 1}
-		);
+		sgl_begin_quads();
+		sgl_c3f(0, 0, 0);
+		sgl_v2f(x, y);
+		sgl_v2f(x+w_mod, y);
+		sgl_v2f(x+w_mod, y+h_mod);
+		sgl_v2f(x, y+h_mod);
+		sgl_end();
 
 		//segments
 		for(int i=0; i<7; i++) {
@@ -476,8 +462,9 @@ public:
 
 			renderTex(
 				x, y, w_mod, h_mod,
-				textures.seg[i], 0, 0, 1, 1,
-				{1, 1, 1, 1}
+				segments[i],
+				{1, 1, 1, 1},
+				0, 0, 1, 1
 			);
 		}
 
@@ -493,8 +480,9 @@ public:
 				//right to left
 				float x_char=sx_char-i*w_char;
 				char c=i==7?'M':('0'+i);
+				std::string str(1, c);
 				auto col=(1&(m.gpio>>i))?green:red;
-				renderChar(x_char, y_char, c, scl_char, col);
+				renderString(x_char, y_char, str, scl_char, col);
 			}
 		}
 	}
@@ -556,9 +544,16 @@ public:
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
+		sgl_defaults();
+		sgl_load_pipeline(pip);
+		sgl_matrix_mode_projection();
+		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
+
 		renderClock();
 
 		if(render_tasks) renderTasks();
+
+		sgl_draw();
 
 		sg_end_pass();
 
