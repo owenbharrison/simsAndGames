@@ -25,8 +25,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "smoke", "smoke\smoke.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "slicer", "slicer\slicer.vcxproj", "{B984500B-9EE2-42EB-99FE-E03803F72825}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "block_craft", "block_craft\block_craft.vcxproj", "{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cloth", "cloth\cloth.vcxproj", "{73BF86FB-41DB-405C-927E-B2F6737A9BF1}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fracture", "fracture\fracture.vcxproj", "{134F8EC1-508E-4C94-9674-D6B9541D387A}"
@@ -177,14 +175,6 @@ Global
 		{B984500B-9EE2-42EB-99FE-E03803F72825}.Release|x64.Build.0 = Release|x64
 		{B984500B-9EE2-42EB-99FE-E03803F72825}.Release|x86.ActiveCfg = Release|Win32
 		{B984500B-9EE2-42EB-99FE-E03803F72825}.Release|x86.Build.0 = Release|Win32
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Debug|x64.ActiveCfg = Debug|x64
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Debug|x64.Build.0 = Debug|x64
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Debug|x86.ActiveCfg = Debug|Win32
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Debug|x86.Build.0 = Debug|Win32
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Release|x64.ActiveCfg = Release|x64
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Release|x64.Build.0 = Release|x64
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Release|x86.ActiveCfg = Release|Win32
-		{D56B8357-428D-4789-ACBB-6E42FAE5BEC1}.Release|x86.Build.0 = Release|Win32
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Debug|x64.ActiveCfg = Debug|x64
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Debug|x64.Build.0 = Debug|x64
 		{73BF86FB-41DB-405C-927E-B2F6737A9BF1}.Debug|x86.ActiveCfg = Debug|Win32
