@@ -29,20 +29,6 @@ namespace cmn {
 		v_3d(T x_, T y_, T z_) { x=x_, y=y_, z=z_; }
 		v_3d(const v_3d& v) { x=v.x, y=v.y, z=v.z; }
 
-		T& operator[](int i) {
-			if(i==1) return y;
-			if(i==2) return z;
-			return x;
-		}
-
-		const T& operator[](int i) const {
-			if(i==1) return y;
-			if(i==2) return z;
-			return x;
-		}
-
-		v_3d& operator=(const v_3d& v)=default;
-
 		//member wrappers...
 		T dot(const v_3d& v) const { return cmn::dot(*this, v); }
 		T mag_sq() const { return cmn::dot(*this, *this); }
@@ -113,9 +99,11 @@ namespace cmn {
 		return std::sqrt(dot(a, a));
 	}
 
+	//safe norm
 	template<typename T>
 	v_3d<T> normalize(const v_3d<T>& a) {
-		return a/length(a);
+		auto l=length(a);
+		return l==0?a:a/l;
 	}
 
 	template<typename T>
