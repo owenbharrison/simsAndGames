@@ -112,7 +112,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
@@ -132,7 +132,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
@@ -140,34 +140,28 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="src\demo.h" />
     <ClInclude Include="src\linemesh.h" />
-    <ClInclude Include="src\mesh.h" />
-    <ClInclude Include="src\shape.h" />
     <ClInclude Include="src\terrain_demo.h" />
-    <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\texture_utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="compile_shaders.bat" />
-    <None Include="src\shd.glsl" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="assets\img\font\fancy_8x16.png" />
+    <Image Include="assets\background.png" />
+    <Image Include="assets\bass.png" />
+    <Image Include="assets\brookie.png" />
+    <Image Include="assets\carp.png" />
+    <Image Include="assets\cod.png" />
     <Image Include="assets\grass_falloff.png" />
-    <Image Include="assets\img\grass_gradient.png" />
-    <Image Include="assets\img\skybox\nx.png" />
-    <Image Include="assets\img\skybox\ny.png" />
-    <Image Include="assets\img\skybox\nz.png" />
-    <Image Include="assets\img\skybox\px.png" />
-    <Image Include="assets\img\skybox\py.png" />
-    <Image Include="assets\img\skybox\pz.png" />
+    <Image Include="assets\roach.png" />
+    <Image Include="assets\salmon.png" />
+    <Image Include="assets\tuna.png" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\models\terrain.txt" />
+    <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\boids.imgui" />
+    <None Include="assets\fish.imgui" />
+    <None Include="assets\imgui.ini" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
