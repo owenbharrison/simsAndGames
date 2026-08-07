@@ -79,6 +79,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "robot", "robot\robot.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "phys3d", "phys3d\phys3d.vcxproj", "{D072272D-A546-4E76-A250-1FE8DDE5E9D5}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "audio_viz", "audio_viz\audio_viz.vcxproj", "{EC9FA525-8573-4483-A10F-E6F6E671CD10}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -391,6 +393,14 @@ Global
 		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Release|x64.Build.0 = Release|x64
 		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Release|x86.ActiveCfg = Release|Win32
 		{D072272D-A546-4E76-A250-1FE8DDE5E9D5}.Release|x86.Build.0 = Release|Win32
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Debug|x64.ActiveCfg = Debug|x64
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Debug|x64.Build.0 = Debug|x64
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Debug|x86.ActiveCfg = Debug|Win32
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Debug|x86.Build.0 = Debug|Win32
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Release|x64.ActiveCfg = Release|x64
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Release|x64.Build.0 = Release|x64
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Release|x86.ActiveCfg = Release|Win32
+		{EC9FA525-8573-4483-A10F-E6F6E671CD10}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
