@@ -9,12 +9,12 @@ include_directories(${CMAKE_SOURCE_DIR}/common)
 
 #list of all projects
 set(PROJECTS
-    3d_fx
     3d_physics
     a_star_nav
     asteroids
-    block_craft
-    clock
+    audio_viz
+    boids
+    clock_sim
     cloth
     eulerian_fluid
     flip_fluid
@@ -24,19 +24,27 @@ set(PROJECTS
     geometrize
     glitch
     jelly_car_clone
+    magnets
+    marching_squares
     marching_cubes
-    minesweeper
+    meshing
+    minesweeper3d
     particles
+    phys3d
     pixels
     planet_game
     raycasting
     rigid_bodies
+    robot
+    rubiks_cube
+    sketcher
     slicer
     smoke
     sokol_testing
     spiders
     steering_behaviors
     targeting
+    terrain
     terraria_clone
     testing
     tracking
