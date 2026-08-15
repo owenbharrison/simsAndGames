@@ -63,6 +63,8 @@ class Boids : public cmn::SokolEngine {
 
 	bool show_wireframe=false;
 
+	bool show_gui=true;
+
 public:
 	//HUGE overestimate
 	void setupSGL() {
@@ -71,7 +73,7 @@ public:
 		sgl_desc.max_vertices=500000;
 		sgl_setup(sgl_desc);
 	}
-	
+
 	void setupImGui() {
 		simgui_desc_t simgui_desc{};
 		simgui_desc.ini_filename="assets/imgui.ini";
@@ -120,7 +122,7 @@ public:
 		int num=cmn::randInt(250, 750);
 		for(int i=0; i<num; i++) {
 			Fish f;
-			
+
 			//random position
 			vf3d pos01(
 				cmn::randFloat(),
@@ -128,7 +130,7 @@ public:
 				cmn::randFloat()
 			);
 			f.pos=bounds.min+(bounds.max-bounds.min)*pos01;
-			
+
 			//random speed
 			float speed=cmn::randFloat(Fish::min_speed, Fish::max_speed);
 			vf3d dir=normalize(vf3d(
@@ -142,7 +144,7 @@ public:
 			f.length=.01f*cmn::randFloat(10, 30);
 			f.height=cmn::randFloat(.4f, .6f)*f.length;
 			f.breadth=cmn::randFloat(.1f, .2f)*f.length;
-			
+
 			//init avoidance radius
 			f.avoid_rad=length(vf3d(.5f*f.length, .5f*f.height, f.breadth));
 
@@ -190,7 +192,7 @@ public:
 	}
 
 	bool user_create() override {
-		app_title="[boids]";
+		app_title="Boids";
 
 		std::srand(std::time(0));
 
@@ -203,7 +205,7 @@ public:
 		if(!setupFish()) return false;
 
 		setupDepthPipeline();
-		
+
 		setupFishPipeline();
 
 		setupSampler();
@@ -252,6 +254,8 @@ public:
 		handleCameraMovement(dt);
 
 		handleCameraLooking(dt);
+
+		if(GetKey(SAPP_KEYCODE_ESCAPE).pressed) show_gui^=true;
 	}
 #pragma endregion
 
@@ -393,69 +397,83 @@ public:
 		simgui_frame_desc.dpi_scale=sapp_dpi_scale();
 		simgui_new_frame(simgui_frame_desc);
 
-		ImGui::Begin("weights");
+		ImGui::Begin("Controls");
 		{
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("alignment", &Fish::alignment_wgt, 0, 1);
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("cohesion", &Fish::cohesion_wgt, 0, 1);
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("separation", &Fish::separation_wgt, 0, 1);
+			ImGui::Text("W/A/S/D to move camera around");
+			ImGui::Text("Space/LShift to move camera up/down");
+			ImGui::Text("ARROWS to look around");
+			ImGui::Text("ESC to toggle GUI");
 		}
 		ImGui::End();
 
-		ImGui::Begin("limits");
+		ImGui::Begin("Options");
 		{
-			float min_speed_cm=100*Fish::min_speed;
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("min speed[cm/s]", &min_speed_cm, 0, 20);
-			Fish::min_speed=min_speed_cm/100;
-			float max_speed_cm=100*Fish::max_speed;
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("max speed[cm/s]", &max_speed_cm, 0, 250);
-			Fish::max_speed=max_speed_cm/100;
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("max force[N?]", &Fish::max_force, 0, 200);
-		}
-		ImGui::End();
+			if(ImGui::TreeNode("Weights")) {
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("alignment", &Fish::alignment_wgt, 0, 1);
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("cohesion", &Fish::cohesion_wgt, 0, 1);
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("separation", &Fish::separation_wgt, 0, 1);
+				
+				ImGui::TreePop();
+			}
 
-		ImGui::Begin("sensing");
-		{
-			float flock_rad_cm=100*Fish::flock_rad;
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("flock rad[cm]", &flock_rad_cm, 0, 100);
-			Fish::flock_rad=flock_rad_cm/100;
-		}
-		ImGui::End();
+			if(ImGui::TreeNode("Limits")) {
+				float min_speed_cm=100*Fish::min_speed;
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("min speed[cm/s]", &min_speed_cm, 0, 20);
+				Fish::min_speed=min_speed_cm/100;
+				float max_speed_cm=100*Fish::max_speed;
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("max speed[cm/s]", &max_speed_cm, 0, 250);
+				Fish::max_speed=max_speed_cm/100;
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("max force[N?]", &Fish::max_force, 0, 200);
 
-		ImGui::Begin("bounds");
-		{
-			float bounds_min[3]{bounds.min.x, bounds.min.y, bounds.min.z};
-			ImGui::DragFloat3("min[m]", bounds_min, .01f, -10, 10, "%.2f");
-			bounds.min.x=bounds_min[0];
-			bounds.min.y=bounds_min[1];
-			bounds.min.z=bounds_min[2];
+				ImGui::TreePop();
+			}
 
-			float bounds_max[3]{bounds.max.x, bounds.max.y, bounds.max.z};
-			ImGui::DragFloat3("max[m]", bounds_max, .01f, -10, 10, "%.2f");
-			bounds.max.x=bounds_max[0];
-			bounds.max.y=bounds_max[1];
-			bounds.max.z=bounds_max[2];
+			if(ImGui::TreeNode("Sensing")) {
+				float flock_rad_cm=100*Fish::flock_rad;
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("flock rad[cm]", &flock_rad_cm, 0, 100);
+				Fish::flock_rad=flock_rad_cm/100;
 
-			if(bounds.min.x>bounds.max.x) std::swap(bounds.min.x, bounds.max.x);
-			if(bounds.min.y>bounds.max.y) std::swap(bounds.min.y, bounds.max.y);
-			if(bounds.min.z>bounds.max.z) std::swap(bounds.min.z, bounds.max.z);
-		}
-		ImGui::End();
+				ImGui::TreePop();
+			}
 
-		ImGui::Begin("fish");
-		{
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderInt(
-				"segments", &Fish::num_seg, 2, Fish::max_seg, "%d",
-				ImGuiSliderFlags_AlwaysClamp
-			);
-			ImGui::Checkbox("wireframe", &show_wireframe);
+
+			if(ImGui::TreeNode("Fish")) {
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderInt(
+					"segments", &Fish::num_seg, 2, Fish::max_seg, "%d",
+					ImGuiSliderFlags_AlwaysClamp
+				);
+				ImGui::Checkbox("wireframe", &show_wireframe);
+
+				ImGui::TreePop();
+			}
+
+			if(ImGui::TreeNode("Bounds")) {
+				float bounds_min[3]{bounds.min.x, bounds.min.y, bounds.min.z};
+				ImGui::DragFloat3("min[m]", bounds_min, .01f, -10, 10, "%.2f");
+				bounds.min.x=bounds_min[0];
+				bounds.min.y=bounds_min[1];
+				bounds.min.z=bounds_min[2];
+
+				float bounds_max[3]{bounds.max.x, bounds.max.y, bounds.max.z};
+				ImGui::DragFloat3("max[m]", bounds_max, .01f, -10, 10, "%.2f");
+				bounds.max.x=bounds_max[0];
+				bounds.max.y=bounds_max[1];
+				bounds.max.z=bounds_max[2];
+
+				if(bounds.min.x>bounds.max.x) std::swap(bounds.min.x, bounds.max.x);
+				if(bounds.min.y>bounds.max.y) std::swap(bounds.min.y, bounds.max.y);
+				if(bounds.min.z>bounds.max.z) std::swap(bounds.min.z, bounds.max.z);
+
+				ImGui::TreePop();
+			}
 		}
 		ImGui::End();
 
@@ -493,14 +511,14 @@ public:
 		{
 			std::vector<const Fish*> draw_order;
 			for(const auto& f:fish) draw_order.push_back(&f);
-			
+
 			//farthest first
 			std::sort(draw_order.begin(), draw_order.end(),
 				[&] (const Fish* a, const Fish* b) {
 				vf3d da=a->pos-cam.pos, db=b->pos-cam.pos;
 				return dot(da, da)>dot(db, db);
 			});
-			
+
 			sgl_load_pipeline(fish_pip);
 			for(const auto& f:draw_order) {
 				renderFish(*f, show_wireframe);
@@ -509,7 +527,7 @@ public:
 
 		sgl_draw();
 
-		renderImGui();
+		if(show_gui) renderImGui();
 
 		sg_end_pass();
 
