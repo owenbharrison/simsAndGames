@@ -146,9 +146,19 @@
   <ItemGroup>
     <ClInclude Include="src\boid.h" />
     <ClInclude Include="src\boids.h" />
+    <ClInclude Include="src\fish.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\imgui.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\bass.png" />
+    <Image Include="assets\brookie.png" />
+    <Image Include="assets\carp.png" />
+    <Image Include="assets\cod.png" />
+    <Image Include="assets\roach.png" />
+    <Image Include="assets\salmon.png" />
+    <Image Include="assets\tuna.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

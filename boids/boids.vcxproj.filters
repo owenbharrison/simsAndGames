@@ -26,8 +26,34 @@
     <ClInclude Include="src\boid.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\fish.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\imgui.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\tuna.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\roach.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\salmon.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\bass.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\cod.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\brookie.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\carp.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

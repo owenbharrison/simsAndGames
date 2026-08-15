@@ -7,13 +7,13 @@
 
 #include "cmn/math/v3d.h"
 
-struct boid {
+struct Boid {
 	static float min_speed;
 	static float max_speed;
 	static float max_force;
 
 	static float flock_rad;
-	static float avoid_rad;
+	float avoid_rad=.13f;
 
 	static float alignment_wgt;
 	static float cohesion_wgt;
@@ -61,14 +61,13 @@ struct boid {
 	}
 };
 
-float boid::min_speed=0;
-float boid::max_speed=1.7f;
-float boid::max_force=100;
+float Boid::min_speed=0;
+float Boid::max_speed=1.7f;
+float Boid::max_force=100;
 
-float boid::flock_rad=.5f;
-float boid::avoid_rad=.15f;
+float Boid::flock_rad=.5f;
 
-float boid::alignment_wgt=.3f;
-float boid::cohesion_wgt=.5f;
-float boid::separation_wgt=1;
+float Boid::alignment_wgt=.3f;
+float Boid::cohesion_wgt=.5f;
+float Boid::separation_wgt=1;
 #endif

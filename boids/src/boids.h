@@ -13,9 +13,12 @@
 
 #include "sokol/include/sokol_gl.h"
 
-#include <list>
+#include <vector>
 
-#include "boid.h"
+#include "fish.h"
+
+//for sort
+#include <algorithm>
 
 //for time
 #include <ctime>
@@ -25,6 +28,9 @@
 
 #include "imgui/include/imgui_singleheader.h"
 #include "sokol/include/sokol_imgui.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/include/stb_image.h"
 
 //makes some perpendicular vector
 cmn::vf3d getPerp(const cmn::vf3d& x) {
@@ -39,22 +45,33 @@ using cmn::vf3d;
 class Boids : public cmn::SokolEngine {
 	//user input
 	struct {
-		vf3d pos{3, 2.5f, 3.5f};
+		vf3d pos{2.4f, 2.3f, 3.7f};
 		float yaw=0, pitch=0;
 		vf3d dir;
 
 		float fov_deg=90;
 	} cam;
 
-	cmn::AABBf3 bounds{{-2.5f, -2, -2}, {2.5f, 2, 2}};
-	std::list<boid> boids;
+	cmn::AABBf3 bounds{{-3, -2.5f, -2.5f}, {3, 2.5f, 2.5f}};
+	std::vector<Fish> fish;
 
 	//graphics
-	sgl_pipeline pip{};
+	sgl_pipeline depth_pip{};
+	sgl_pipeline fish_pip{};
 
 	sg_sampler smp{};
 
+	bool show_wireframe=false;
+
 public:
+	//HUGE overestimate
+	void setupSGL() {
+		sgl_desc_t sgl_desc{};
+		sgl_desc.max_commands=500000;
+		sgl_desc.max_vertices=500000;
+		sgl_setup(sgl_desc);
+	}
+	
 	void setupImGui() {
 		simgui_desc_t simgui_desc{};
 		simgui_desc.ini_filename="assets/imgui.ini";
@@ -67,38 +84,96 @@ public:
 		cam.pitch=ryp.z;
 	}
 
-	void setupBoids() {
-		int num=cmn::randInt(500, 1000);
+	bool setupFish() {
+		//load fish images
+		const std::vector<std::string> filenames{
+			"assets/bass.png",
+			"assets/brookie.png",
+			"assets/carp.png",
+			"assets/cod.png",
+			"assets/roach.png",
+			"assets/salmon.png",
+			"assets/tuna.png"
+		};
+		std::vector<sg_view> textures;
+		for(const auto& f:filenames) {
+			int width, height, comp;
+			stbi_uc* pixels=stbi_load(f.c_str(), &width, &height, &comp, 4);
+			if(!pixels) return false;
+
+			sg_image_desc img_desc{};
+			img_desc.width=width;
+			img_desc.height=height;
+			img_desc.data.mip_levels[0].ptr=pixels;
+			img_desc.data.mip_levels[0].size=sizeof(stbi_uc)*4*width*height;
+			sg_image img=sg_make_image(img_desc);
+
+			delete[] pixels;
+
+			sg_view_desc view_desc{};
+			view_desc.texture.image=img;
+			sg_view tex=sg_make_view(view_desc);
+
+			textures.push_back(tex);
+		}
+
+		int num=cmn::randInt(250, 750);
 		for(int i=0; i<num; i++) {
+			Fish f;
+			
+			//random position
 			vf3d pos01(
 				cmn::randFloat(),
 				cmn::randFloat(),
 				cmn::randFloat()
 			);
-			vf3d pos=bounds.min+(bounds.max-bounds.min)*pos01;
-			float speed=cmn::randFloat(boid::min_speed, boid::max_speed);
+			f.pos=bounds.min+(bounds.max-bounds.min)*pos01;
+			
+			//random speed
+			float speed=cmn::randFloat(Fish::min_speed, Fish::max_speed);
 			vf3d dir=normalize(vf3d(
 				.5f-cmn::randFloat(),
 				.5f-cmn::randFloat(),
 				.5f-cmn::randFloat()
 			));
-			boids.push_back({pos, speed*dir});
+			f.vel=speed*dir;
+
+			//random size
+			f.length=.01f*cmn::randFloat(10, 30);
+			f.height=cmn::randFloat(.4f, .6f)*f.length;
+			f.breadth=cmn::randFloat(.1f, .2f)*f.length;
+			
+			//init avoidance radius
+			f.avoid_rad=length(vf3d(.5f*f.length, .5f*f.height, f.breadth));
+
+			//random animation properties
+			f.anim_speed=cmn::randFloat(4, 10);
+			f.arg_scl=cmn::randFloat(3, 4);
+
+			//random fish texture
+			int ix=cmn::randInt(0, textures.size()-1);
+			f.tex=textures[ix];
+
+			fish.push_back(f);
 		}
+
+		return true;
 	}
 
-	//HUGE overestimate
-	void setupSGL() {
-		sgl_desc_t sgl_desc{};
-		sgl_desc.max_commands=500000;
-		sgl_desc.max_vertices=500000;
-		sgl_setup(sgl_desc);
-	}
-
-	void setupPipeline() {
+	void setupDepthPipeline() {
 		sg_pipeline_desc pip_desc{};
 		pip_desc.face_winding=SG_FACEWINDING_CCW;
 		pip_desc.cull_mode=SG_CULLMODE_BACK;
 		pip_desc.depth.write_enabled=true;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		depth_pip=sgl_make_pipeline(pip_desc);
+	}
+
+	void setupFishPipeline() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.face_winding=SG_FACEWINDING_CCW;
+		pip_desc.cull_mode=SG_CULLMODE_BACK;
+		pip_desc.depth.write_enabled=false;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		//with alpha blending
 		pip_desc.colors[0].blend.enabled=true;
@@ -106,7 +181,7 @@ public:
 		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
 		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
 		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		pip=sgl_make_pipeline(pip_desc);
+		fish_pip=sgl_make_pipeline(pip_desc);
 	}
 
 	void setupSampler() {
@@ -119,15 +194,17 @@ public:
 
 		std::srand(std::time(0));
 
+		setupSGL();
+
 		setupImGui();
 
 		setupCamera();
 
-		setupBoids();
+		if(!setupFish()) return false;
 
-		setupSGL();
-
-		setupPipeline();
+		setupDepthPipeline();
+		
+		setupFishPipeline();
 
 		setupSampler();
 
@@ -184,19 +261,20 @@ public:
 		cam.dir=vf3d::polar({1, cam.yaw, cam.pitch});
 
 		//update flocks
-		for(auto& a:boids) {
+		for(auto& a:fish) {
 			int num=0;
 			vf3d pos, dir, sep;
-			for(auto& b:boids) {
+			for(auto& b:fish) {
 				if(&b==&a) continue;
 
 				vf3d sub=b.pos-a.pos;
 				float d_sq=dot(sub, sub);
-				if(d_sq<boid::flock_rad*boid::flock_rad) {
+				if(d_sq<Fish::flock_rad*Fish::flock_rad) {
 					num++;
 					pos+=b.pos;
 					dir+=b.dir;
-					if(d_sq<boid::avoid_rad*boid::avoid_rad) {
+					float r_tot=a.avoid_rad+b.avoid_rad;
+					if(d_sq<r_tot*r_tot) {
 						sep-=sub/std::sqrt(d_sq);
 					}
 				}
@@ -204,27 +282,107 @@ public:
 			a.flock_valid=num;
 			if(a.flock_valid) {
 				a.flock_pos=pos/num;
-				a.flock_dir=dir/num;
+				a.flock_dir=normalize(dir);
 				a.flock_sep=sep/num;
 			}
 		}
 
 		//update individuals
-		for(auto& b:boids) {
-			b.update(dt);
+		for(auto& f:fish) {
+			f.update(dt);
 		}
 
 		//wrap coords?
-		for(auto& b:boids) {
-			if(b.pos.x<bounds.min.x) b.pos.x=bounds.max.x;
-			if(b.pos.y<bounds.min.y) b.pos.y=bounds.max.y;
-			if(b.pos.z<bounds.min.z) b.pos.z=bounds.max.z;
-			if(b.pos.x>bounds.max.x) b.pos.x=bounds.min.x;
-			if(b.pos.y>bounds.max.y) b.pos.y=bounds.min.y;
-			if(b.pos.z>bounds.max.z) b.pos.z=bounds.min.z;
+		for(auto& f:fish) {
+			if(f.pos.x<bounds.min.x) f.pos.x=bounds.max.x;
+			if(f.pos.y<bounds.min.y) f.pos.y=bounds.max.y;
+			if(f.pos.z<bounds.min.z) f.pos.z=bounds.max.z;
+			if(f.pos.x>bounds.max.x) f.pos.x=bounds.min.x;
+			if(f.pos.y>bounds.max.y) f.pos.y=bounds.min.y;
+			if(f.pos.z>bounds.max.z) f.pos.z=bounds.min.z;
 		}
 
 		return true;
+	}
+
+	void renderBox(const vf3d& a, const vf3d& b) {
+		static const int edges[][2]{
+			{0, 1}, {2, 3}, {4, 5}, {6, 7},//thru x
+			{0, 2}, {1, 3}, {4, 6}, {5, 7},//thru y
+			{0, 4}, {1, 5}, {2, 6}, {3, 7}//thru z
+		};
+
+		vf3d v[8];//interpolators: 000, 001, 010...
+		for(int i=0; i<8; i++) {
+			v[i]=a+vf3d(1&(i>>2), 1&(i>>1), 1&i)*(b-a);
+		}
+
+		sgl_begin_lines();
+		for(const auto& e:edges) {
+			sgl_v3f(v[e[0]].x, v[e[0]].y, v[e[0]].z);
+			sgl_v3f(v[e[1]].x, v[e[1]].y, v[e[1]].z);
+		}
+		sgl_end();
+	}
+
+	void renderFish(const Fish& f, bool wireframe) {
+		static float u_arr[Fish::max_seg];
+		static vf3d v_arr[2*Fish::max_seg];
+
+		//get basis vectors
+		vf3d fwd=f.dir_smooth;
+		vf3d rgt=normalize(cross(fwd, {0, 1, 0}));
+		vf3d up=cross(rgt, fwd);
+
+		//scan thru fish, fill up arrays
+		for(int i=0; i<Fish::num_seg; i++) {
+			float u=i/(Fish::num_seg-1.f);
+			float arg=f.anim+f.arg_scl*u;
+			float dr=f.breadth*std::sin(arg);
+			vf3d m=f.pos+f.length*(u-.5f)*fwd+dr*rgt;
+			vf3d du=.5f*f.height*up;
+			u_arr[i]=u;
+			v_arr[2*i]=m+du;//top
+			v_arr[1+2*i]=m-du;//btm
+		}
+
+		//render twofaced quads
+		sgl_enable_texture();
+		sgl_texture(f.tex, smp);
+		sgl_begin_quads();
+		sgl_c3f(1, 1, 1);
+		for(int i=1; i<Fish::num_seg; i++) {
+			const auto& u_p=u_arr[i-1], & u=u_arr[i];
+			const auto& t_p=v_arr[2*(i-1)], & t=v_arr[2*i];
+			const auto& b_p=v_arr[1+2*(i-1)], & b=v_arr[1+2*i];
+			sgl_v3f_t2f(t_p.x, t_p.y, t_p.z, u_p, 0);
+			sgl_v3f_t2f(t.x, t.y, t.z, u, 0);
+			sgl_v3f_t2f(b.x, b.y, b.z, u, 1);
+			sgl_v3f_t2f(b_p.x, b_p.y, b_p.z, u_p, 1);
+			sgl_v3f_t2f(t_p.x, t_p.y, t_p.z, u_p, 0);
+			sgl_v3f_t2f(b_p.x, b_p.y, b_p.z, u_p, 1);
+			sgl_v3f_t2f(b.x, b.y, b.z, u, 1);
+			sgl_v3f_t2f(t.x, t.y, t.z, u, 0);
+		}
+		sgl_end();
+		sgl_disable_texture();
+
+		//render quad lines
+		if(wireframe) {
+			sgl_begin_lines();
+			sgl_c3f(0, 0, 0);
+			for(int i=0; i<Fish::num_seg; i++) {
+				const auto& t=v_arr[2*i], & b=v_arr[1+2*i];
+				sgl_v3f(t.x, t.y, t.z), sgl_v3f(b.x, b.y, b.z);
+				if(i>0) {
+					const auto& t_p=v_arr[2*(i-1)], & b_p=v_arr[1+2*(i-1)];
+					sgl_v3f(t.x, t.y, t.z), sgl_v3f(t_p.x, t_p.y, t_p.z);
+					sgl_v3f(b.x, b.y, b.z), sgl_v3f(b_p.x, b_p.y, b_p.z);
+					sgl_v3f(t.x, t.y, t.z), sgl_v3f(b_p.x, b_p.y, b_p.z);
+				}
+			}
+			sgl_end();
+		}
 	}
 
 	void renderImGui() {
@@ -238,39 +396,35 @@ public:
 		ImGui::Begin("weights");
 		{
 			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("alignment", &boid::alignment_wgt, 0, 1);
+			ImGui::SliderFloat("alignment", &Fish::alignment_wgt, 0, 1);
 			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("cohesion", &boid::cohesion_wgt, 0, 1);
+			ImGui::SliderFloat("cohesion", &Fish::cohesion_wgt, 0, 1);
 			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("separation", &boid::separation_wgt, 0, 1);
+			ImGui::SliderFloat("separation", &Fish::separation_wgt, 0, 1);
 		}
 		ImGui::End();
 
 		ImGui::Begin("limits");
 		{
-			float min_speed_cm=100*boid::min_speed;
+			float min_speed_cm=100*Fish::min_speed;
 			ImGui::SetNextItemWidth(100);
 			ImGui::SliderFloat("min speed[cm/s]", &min_speed_cm, 0, 20);
-			boid::min_speed=min_speed_cm/100;
-			float max_speed_cm=100*boid::max_speed;
+			Fish::min_speed=min_speed_cm/100;
+			float max_speed_cm=100*Fish::max_speed;
 			ImGui::SetNextItemWidth(100);
 			ImGui::SliderFloat("max speed[cm/s]", &max_speed_cm, 0, 250);
-			boid::max_speed=max_speed_cm/100;
+			Fish::max_speed=max_speed_cm/100;
 			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("max force[N?]", &boid::max_force, 0, 200);
+			ImGui::SliderFloat("max force[N?]", &Fish::max_force, 0, 200);
 		}
 		ImGui::End();
 
 		ImGui::Begin("sensing");
 		{
-			float flock_rad_cm=100*boid::flock_rad;
+			float flock_rad_cm=100*Fish::flock_rad;
 			ImGui::SetNextItemWidth(100);
 			ImGui::SliderFloat("flock rad[cm]", &flock_rad_cm, 0, 100);
-			boid::flock_rad=flock_rad_cm/100;
-			float avoid_rad_cm=100*boid::avoid_rad;
-			ImGui::SetNextItemWidth(100);
-			ImGui::SliderFloat("avoid rad[cm]", &avoid_rad_cm, 0, 100);
-			boid::avoid_rad=avoid_rad_cm/100;
+			Fish::flock_rad=flock_rad_cm/100;
 		}
 		ImGui::End();
 
@@ -294,69 +448,29 @@ public:
 		}
 		ImGui::End();
 
+		ImGui::Begin("fish");
+		{
+			ImGui::SetNextItemWidth(100);
+			ImGui::SliderInt(
+				"segments", &Fish::num_seg, 2, Fish::max_seg, "%d",
+				ImGuiSliderFlags_AlwaysClamp
+			);
+			ImGui::Checkbox("wireframe", &show_wireframe);
+		}
+		ImGui::End();
+
 		simgui_render();
-	}
-
-	void renderBox(const vf3d& a, const vf3d& b) {
-		static const int edges[][2]{
-			{0, 1}, {2, 3}, {4, 5}, {6, 7},//thru x
-			{0, 2}, {1, 3}, {4, 6}, {5, 7},//thru y
-			{0, 4}, {1, 5}, {2, 6}, {3, 7}//thru z
-		};
-
-		vf3d v[8];//interpolators: 000, 001, 010...
-		for(int i=0; i<8; i++) {
-			v[i]=a+vf3d(1&(i>>2), 1&(i>>1), 1&i)*(b-a);
-		}
-
-		sgl_begin_lines();
-		for(const auto& e:edges) {
-			sgl_v3f(v[e[0]].x, v[e[0]].y, v[e[0]].z);
-			sgl_v3f(v[e[1]].x, v[e[1]].y, v[e[1]].z);
-		}
-		sgl_end();
-	}
-
-	void renderCone(const vf3d& a, const vf3d& b, float rad) {
-		static const int num=8;
-		static vf3d ring[num];
-
-		vf3d y=normalize(b-a);
-		vf3d x=normalize(getPerp(y));
-		vf3d z=cross(x, y);
-
-		for(int i=0; i<num; i++) {
-			float angle=2*cmn::Pi*i/num;
-			ring[i]=a+
-				rad*std::cos(angle)*x+
-				rad*std::sin(angle)*z;
-		}
-
-		sgl_begin_triangles();
-		for(int i=0; i<num; i++) {
-			const auto& c=ring[i];
-			const auto& n=ring[(1+i)%num];
-			//base
-			sgl_v3f_c3f(a.x, a.y, a.z, 1, 1, 1);
-			sgl_v3f_c3f(c.x, c.y, c.z, 1, 1, 1);
-			sgl_v3f_c3f(n.x, n.y, n.z, 1, 1, 1);
-			//slant
-			sgl_v3f_c3f(b.x, b.y, b.z, 1, 0, 0);
-			sgl_v3f_c3f(n.x, n.y, n.z, 1, 1, 1);
-			sgl_v3f_c3f(c.x, c.y, c.z, 1, 1, 1);
-		}
-		sgl_end();
 	}
 
 	bool user_render() override {
 		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		pass.action.colors[0].clear_value={.12f, .12f, .12f, .12f};
+		pass.action.colors[0].clear_value={0, .514f, .812f, 1};
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
 		sgl_defaults();
-		sgl_load_pipeline(pip);
+		sgl_load_pipeline(depth_pip);
 		sgl_matrix_mode_projection();
 		sgl_perspective(//fov, aspect, range
 			sgl_rad(cam.fov_deg),
@@ -372,11 +486,25 @@ public:
 			0, 1, 0
 		);
 
-		sgl_c3f(0, 0, 0);
+		sgl_c3f(1, 1, 1);
 		renderBox(bounds.min, bounds.max);
 
-		for(const auto& b:boids) {
-			renderCone(b.pos, b.pos+.1f*b.dir, .03f);
+		//render sorted fish
+		{
+			std::vector<const Fish*> draw_order;
+			for(const auto& f:fish) draw_order.push_back(&f);
+			
+			//farthest first
+			std::sort(draw_order.begin(), draw_order.end(),
+				[&] (const Fish* a, const Fish* b) {
+				vf3d da=a->pos-cam.pos, db=b->pos-cam.pos;
+				return dot(da, da)>dot(db, db);
+			});
+			
+			sgl_load_pipeline(fish_pip);
+			for(const auto& f:draw_order) {
+				renderFish(*f, show_wireframe);
+			}
 		}
 
 		sgl_draw();
