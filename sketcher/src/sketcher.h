@@ -32,24 +32,28 @@
 
 #include "sokol/texture_utils.h"
 
+#include "render_target.h"
+
 using cmn::vf2d;
 
 //hue=color wheel, saturation=whitewash, value=blackwash
 //https://www.rapidtables.com/convert/color/hsv-to-rgb.html
-static sg_color hsv2rgb(int h, float s, float v) {
+static void hsv2rgb(
+	int h, float s, float v,
+	float& r, float& g, float& b
+) {
 	float c=v*s;
 	float x=c*(1-std::abs(1-std::fmod(h/60.f, 2)));
 	float m=v-c;
-	float r=0, g=0, b=0;
 	switch(h/60) {
-		case 0: r=c, g=x, b=0; break;
-		case 1: r=x, g=c, b=0; break;
-		case 2: r=0, g=c, b=x; break;
-		case 3: r=0, g=x, b=c; break;
-		case 4: r=x, g=0, b=c; break;
-		case 5: r=c, g=0, b=x; break;
+		default: r=0, g=0, b=0; break;
+		case 0: r=m+c, g=m+x, b=m+0; break;
+		case 1: r=m+x, g=m+c, b=m+0; break;
+		case 2: r=m+0, g=m+c, b=m+x; break;
+		case 3: r=m+0, g=m+x, b=m+c; break;
+		case 4: r=m+x, g=m+0, b=m+c; break;
+		case 5: r=m+c, g=m+0, b=m+x; break;
 	}
-	return {m+r, m+g, m+b, 1};
 }
 
 //fisher-yates shuffle
@@ -66,14 +70,8 @@ class Sketcher : public cmn::SokolEngine {
 
 	sgl_pipeline sgl_pip{};
 
-	struct {
-		sg_image color_img{SG_INVALID_ID};
-		sg_view color_attach{SG_INVALID_ID};
-		sg_view color_tex{SG_INVALID_ID};
-		sg_image depth_img{SG_INVALID_ID};
-		sg_view depth_attach{SG_INVALID_ID};
-	} render_target;
-
+	RenderTarget rt;
+	
 	struct {
 		sg_pipeline pip{};
 
@@ -86,19 +84,8 @@ class Sketcher : public cmn::SokolEngine {
 	float point_rad=7.5f;
 	bool push_pts_apart=true;
 
-	struct DistConstraint {
-		vf2d* a, * b;
-		float len;
-		sg_color col;
-	};
 	std::list<DistConstraint> dist_constraints;
-	struct AngleConstraint {
-		vf2d* a, * b, * c, * d;
-		float angle;
-	};
 	std::list<AngleConstraint> angle_constraints;
-
-	int hoberman_num=0;
 
 	//graphics stuff
 	bool render_grid=true;
@@ -128,49 +115,6 @@ public:
 		sgl_pip=sgl_make_pipeline(pip_desc);
 	}
 
-	void updateRenderTarget() {
-		{
-			sg_destroy_image(render_target.color_img);
-			sg_image_desc image_desc{};
-			image_desc.usage.color_attachment=true;
-			image_desc.width=sapp_width();
-			image_desc.height=sapp_height();
-			render_target.color_img=sg_make_image(image_desc);
-
-			//make attach
-			{
-				sg_destroy_view(render_target.color_attach);
-				sg_view_desc view_desc{};
-				view_desc.color_attachment.image=render_target.color_img;
-				render_target.color_attach=sg_make_view(view_desc);
-			}
-
-			//make tex
-			{
-				sg_destroy_view(render_target.color_tex);
-				sg_view_desc view_desc{};
-				view_desc.texture.image=render_target.color_img;
-				render_target.color_tex=sg_make_view(view_desc);
-			}
-		}
-
-		{
-			sg_destroy_image(render_target.depth_img);
-			sg_image_desc image_desc{};
-			image_desc.usage.depth_stencil_attachment=true;
-			image_desc.width=sapp_width();
-			image_desc.height=sapp_height();
-			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH_STENCIL;//??
-			render_target.depth_img=sg_make_image(image_desc);
-
-			//make attach
-			sg_destroy_view(render_target.depth_attach);
-			sg_view_desc view_desc{};
-			view_desc.depth_stencil_attachment.image=render_target.depth_img;
-			render_target.depth_attach=sg_make_view(view_desc);
-		}
-	}
-
 	void setupOutlineRender() {
 		sg_pipeline_desc pip_desc{};
 		pip_desc.layout.attrs[ATTR_outline_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
@@ -185,82 +129,80 @@ public:
 	}
 
 	//generalized hoberman linkage construction
-	void makeHobermanLinkage(int num) {
+	void makeHobermanLinkage(int num, float len) {
 		held_pt=nullptr;
 
 		if(num<3) return;
 
 		const vf2d ctr=vf2d(sapp_width(), sapp_height())/2;
 
-		//depth=3?
-		auto ix=[] (int i, int j) { return 3*i+j; };
+		//geometric angles
+		const float alpha=cmn::Pi*(1-2.f/num);
+		const float beta=2*cmn::Pi/num;
+		const float gamma=alpha/4+beta/2;
+		const float delta=cmn::Pi-alpha;
 
-		//asymptotically decrease len w/ increasing num 
-		//starting from minimum num of 3
-		float min_len=40, max_len=150;
-		float t=std::exp(-.1f*(num-3));
-		float len=min_len+t*(max_len-min_len);
-
-		float inc_angle=2*cmn::Pi/num;
+		//starting dist from ctr
+		const float rad=len*std::sin(alpha/4)/std::sin(beta/2);
 
 		//allocate and insert into lookup
 		points.clear();
 		vf2d** grid=new vf2d*[3*num];
+		auto ix=[] (int i, int j) { return 3*i+j; };
 		for(int i=0; i<num; i++) {
-			float base_angle=i*inc_angle;
-			vf2d pos=ctr;
+			float angle1=2*cmn::Pi*i/num;
+			float angle2=angle1+gamma;
+			float angle3=angle2+delta;
+			vf2d p[3];
+			p[0]=ctr+vf2d::polar({rad, angle1});
+			p[1]=p[0]+vf2d::polar({len, angle2});
+			p[2]=p[1]+vf2d::polar({len, angle3});
 			for(int j=0; j<3; j++) {
-				float angle=base_angle+j*inc_angle;
-				pos+=cmn::polar<vf2d>(len, angle);
-				points.push_back(pos);
+				points.push_back(p[j]);
 				grid[ix(i, j)]=&points.back();
 			}
 		}
 
-		dist_constraints.clear();
-		std::list<DistConstraint> dist_other;
-		angle_constraints.clear();
-
-		auto randCol=[&] () {
+		auto randCol=[&] (float& r, float& g, float& b) {
 			int h=std::rand()%360;
 			float s=cmn::randFloat(.5f, 1);
 			float v=1;
-			return hsv2rgb(h, s, v);
+			hsv2rgb(h, s, v, r, g, b);
 		};
 
 		//branch out
+		std::list<DistConstraint> dist_top, dist_btm;
+		angle_constraints.clear();
+		float r, g, b;
 		for(int i=0; i<num; i++) {
 			auto& c=grid[ix(i, 0)];
 			//next 2
 			auto& n1=grid[ix(i, 1)];
 			auto& n2=grid[ix(i, 2)];
-			sg_color col1=randCol();
-			dist_constraints.push_back({c, n1, len, col1});
-			dist_constraints.push_back({n1, n2, len, col1});
-			angle_constraints.push_back({c, n1, n1, n2, inc_angle});
+			randCol(r, g, b);
+			dist_top.push_back({c, n1, len, {r, g, b}});
+			dist_top.push_back({n1, n2, len, {r, g, b}});
+			angle_constraints.push_back({c, n1, n1, n2, delta});
 
 			//previous 2
 			auto& p1=grid[ix((i+num-1)%num, 1)];
 			auto& p2=grid[ix((i+num-2)%num, 2)];
-			sg_color col2=randCol();
-			dist_other.push_back({c, p1, len, col2});
-			dist_other.push_back({p1, p2, len, col2});
-			angle_constraints.push_back({c, p1, p1, p2, -inc_angle});
+			randCol(r, g, b);
+			dist_btm.push_back({c, p1, len, {r, g, b}});
+			dist_btm.push_back({p1, p2, len, {r, g, b}});
+			angle_constraints.push_back({c, p1, p1, p2, -delta});
 		}
 
 		//render as "two layers"
-		dist_constraints.insert(dist_constraints.end(),
-			dist_other.begin(), dist_other.end()
-		);
+		dist_constraints.clear();
+		for(const auto& t:dist_top) dist_constraints.push_back(t);
+		for(const auto& b:dist_btm) dist_constraints.push_back(b);
 
 		delete[] grid;
 	}
 
 	void setupScene() {
-		//dont choose 6.
-		do hoberman_num=cmn::randInt(4, 10);
-		while(hoberman_num==6);
-		makeHobermanLinkage(hoberman_num);
+		makeHobermanLinkage(7, 100.f);
 	}
 
 	void setupImGui() {
@@ -299,7 +241,7 @@ public:
 
 		setupSGL();
 
-		updateRenderTarget();
+		rt.resize(sapp_width(), sapp_height());
 
 		setupOutlineRender();
 
@@ -398,7 +340,7 @@ public:
 	void user_input(const sapp_event* e) override {
 		switch(e->type) {
 			case SAPP_EVENTTYPE_RESIZED:
-				updateRenderTarget();
+				rt.resize(sapp_width(), sapp_height());
 				break;
 		}
 
@@ -442,8 +384,8 @@ public:
 		sg_pass pass{};
 		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
 		pass.action.colors[0].clear_value={0, 0, 0, 0};
-		pass.attachments.colors[0]=render_target.color_attach;
-		pass.attachments.depth_stencil=render_target.depth_attach;
+		pass.attachments.colors[0]=rt.color_attach;
+		pass.attachments.depth_stencil=rt.depth_attach;
 		sg_begin_pass(pass);
 
 		sgl_defaults();
@@ -468,7 +410,7 @@ public:
 			cmn::draw_thick_line(
 				d.a->x, d.a->y, d.b->x, d.b->y,
 				2*point_rad,
-				d.col.r, d.col.g, d.col.b, 1
+				d.rgb[0], d.rgb[1], d.rgb[2], 1
 			);
 		}
 
@@ -491,7 +433,7 @@ public:
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=outline_render.vbuf;
 		bind.samplers[SMP_b_outline_smp]=sampler;
-		bind.views[VIEW_b_outline_tex]=render_target.color_tex;
+		bind.views[VIEW_b_outline_tex]=rt.color_tex;
 		sg_apply_bindings(bind);
 
 		p_fs_outline_t p_fs_outline{};
@@ -517,21 +459,37 @@ public:
 		imguiing=false;
 
 		ImGui::Begin("Display Options");
-		imguiing|=ImGui::IsWindowHovered();
-		ImGui::Checkbox("Render Grid", &render_grid);
-		ImGui::SliderFloat("Outline Radius", &outline_rad, 0, 6);
-		ImGui::ColorEdit3("Background", bkgd_rgb);
-		ImGui::ColorEdit3("Grid Lines", grid_rgb);
-		ImGui::ColorEdit3("Points", point_rgb);
-		ImGui::ColorEdit3("Outlines", outline_rgb);
+		{
+			ImGui::Checkbox("Render Grid", &render_grid);
+			ImGui::SetNextItemWidth(100);
+			ImGui::SliderFloat("Outline Radius", &outline_rad, 0, 6);
+			ImGui::ColorEdit3("Background", bkgd_rgb);
+			ImGui::ColorEdit3("Grid Lines", grid_rgb);
+			ImGui::ColorEdit3("Points", point_rgb);
+			ImGui::ColorEdit3("Outlines", outline_rgb);
+			imguiing|=ImGui::GetIO().WantCaptureMouse;
+		}
 		ImGui::End();
 
 		ImGui::Begin("Physics Options");
-		imguiing|=ImGui::IsWindowHovered();
-		ImGui::Checkbox("Push Points Apart", &push_pts_apart);
-		ImGui::SliderFloat("Point Radius", &point_rad, 5, 15);
-		if(ImGui::SliderInt("Make Hoberman Linkage", &hoberman_num, 3, 48)) {
-			makeHobermanLinkage(hoberman_num);
+		{
+			const int num_min=3;
+			const int num_max=32;
+			static int num=5;
+			
+			ImGui::Checkbox("Push Points Apart", &push_pts_apart);
+			ImGui::SetNextItemWidth(100);
+			ImGui::SliderFloat("Point Radius", &point_rad, 5, 15);
+			ImGui::SetNextItemWidth(100);
+			if(ImGui::SliderInt("Make Hoberman Linkage", &num, num_min, num_max)) {
+				//asymptotically decrease len w/ increasing num 
+				//starting from minimum num of 3
+				float min_len=40, max_len=150;
+				float t=std::exp(-.1f*(num-num_min));
+				float len=min_len+t*(max_len-min_len);
+				makeHobermanLinkage(num, len);
+			}
+			imguiing|=ImGui::GetIO().WantCaptureMouse;
 		}
 		ImGui::End();
 

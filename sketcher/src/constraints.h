@@ -2,6 +2,8 @@
 #ifndef CONSTRAINTS_UTIL_H
 #define CONSTRAINTS_UTIL_H
 
+#include "cmn/math/v2d.h"
+
 static cmn::vf2d rotVec(const cmn::vf2d& v, float f) {
 	//rotation matrix
 	float c=std::cos(f), s=std::sin(f);
@@ -32,7 +34,8 @@ namespace constrain {
 		float mag=ab.mag();
 
 		//safe norm
-		cmn::vf2d norm=mag>1e-6f?ab/mag:cmn::vf2d(1, 0);
+		cmn::vf2d norm{1, 0};
+		if(mag>1e-6f) norm=ab/mag;
 
 		//push apart
 		float diff=(mag-len)/2;
@@ -59,5 +62,16 @@ namespace constrain {
 		a.x=m;
 		b.x=m;
 	}
+};
+
+struct DistConstraint {
+	cmn::vf2d* a, * b;
+	float len;
+	float rgb[3];
+};
+
+struct AngleConstraint {
+	cmn::vf2d* a, * b, * c, * d;
+	float angle;
 };
 #endif

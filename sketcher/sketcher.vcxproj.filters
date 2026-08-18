@@ -29,6 +29,9 @@
     <ClInclude Include="src\shd.glsl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\render_target.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\imgui.ini" />

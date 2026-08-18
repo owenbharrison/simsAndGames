@@ -143,6 +143,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\constraints.h" />
+    <ClInclude Include="src\render_target.h" />
     <ClInclude Include="src\shd.glsl.h" />
     <ClInclude Include="src\sketcher.h" />
   </ItemGroup>
