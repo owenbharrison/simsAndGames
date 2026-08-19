@@ -20,11 +20,11 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\mesh.h">
+    <ClInclude Include="src\icosphere.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\sphere.txt" />
+    <None Include="assets\imgui.ini" />
   </ItemGroup>
 </Project>

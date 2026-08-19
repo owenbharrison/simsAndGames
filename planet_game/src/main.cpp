@@ -1,56 +1,107 @@
-#define OLC_PGE_APPLICATION
-#include "olc/engine_3d.h"
-namespace olc {
-	static const Pixel PURPLE(144, 0, 255);
-}
+#define SOKOL_IMPL
+#ifdef __EMSCRIPTEN__
+#define SOKOL_GLES3
+#else
+#define SOKOL_GLCORE
+#endif
+#include "sokol/include/sokol_app.h"
+#include "sokol/include/sokol_gfx.h"
+#include "sokol/include/sokol_glue.h"
+
+#include "sokol/include/sokol_gl.h"
+
+#include "sokol/sokol_engine.h"
+
+#include "cmn/math/v3d.h"
+
+#include "icosphere.h"
+
+#include "cmn/utils.h"
+
+#include "imgui/include/imgui_singleheader.h"
+#include "sokol/include/sokol_imgui.h"
+
 using cmn::vf3d;
-using cmn::mat4;
 
-#include "mesh.h"
-
-constexpr float Pi=3.1415927f;
-
-struct PlanetGame : cmn::Engine3D {
-	PlanetGame() {
-		sAppName="Planet Game";
-	}
-
+class PlanetGame : public cmn::SokolEngine {
 	vf3d light_pos;
 
-	//ambiguous
-	vf3d camera_pos;
-	vf3d camera_dir;
+	struct {
+		vf3d pos;
+		vf3d dir;
+		vf3d up{0, 1, 0};
+	} cam;
 
-	vf3d planet_pos;
-	const float planet_rad=2;
+	struct {
+		float yaw=0;
+		float pitch=0;
+		vf3d pos;
 
-	vf3d player_pos;
-	vf3d player_fwd;
-	vf3d player_up, player_rgt;
-	float player_pitch=0;
-	vf3d player_look;
-	const float player_sz=.1f;
+		float dist;
+	} third_person;
 
-	Mesh planet, player;
+	struct {
+		vf3d pos;
+		const float rad=2;
+	} planet;
+	
+	struct {
+		vf3d pos;
+		vf3d fwd, rgt, up;
+		float pitch=0;
 
-	bool show_info=false;
-	bool player_perspective=false;
+		vf3d look;
+		const float sz=.1f;
 
+		bool use_perspective=false;
+		
+		bool show_axes=false;
+	} player;
+
+	sgl_pipeline pip{};
+
+#pragma region SETUP HELPERS
+	void setupSGL() {
+		sgl_desc_t sgl_desc{};
+		sgl_setup(sgl_desc);
+	}
+
+	void setupImGui() {
+		simgui_desc_t simgui_desc{};
+		simgui_desc.ini_filename="assets/imgui.ini";
+		simgui_setup(simgui_desc);
+	}
+
+	void setupPipeline() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.depth.write_enabled=true;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		pip=sgl_make_pipeline(pip_desc);
+	}
+#pragma endregion
+
+public:
 	bool user_create() override {
-		light_pos=(1+planet_rad)*vf3d(0, 1, 1);
-		camera_pos=(1+planet_rad)*vf3d(1, 1, 1);
+		app_title="Planet Game";
+		
+		setupSGL();
+		
+		light_pos=(3+planet.rad)*vf3d(0, 1, 1);
 
-		player_pos={0, planet_rad, 0};
-		player_fwd={1, 0, 0};
-
-		//try load meshes
-		try {
-			planet=Mesh::loadFromOBJ("assets/sphere.txt");
-			player=Mesh::loadFromOBJ("assets/sphere.txt");
-		} catch(const std::exception& e) {
-			std::cerr<<"  "<<e.what();
-			return false;
+		{
+			third_person.dist=3+planet.rad;
+			third_person.pos=third_person.dist*normalize(vf3d(1, 1, 1));
+			vf3d ryp=vf3d::cartesian(third_person.pos);
+			third_person.yaw=ryp.y;
+			third_person.pitch=ryp.z;
 		}
+
+		player.pos={0, planet.rad, 0};
+		player.fwd={1, 0, 0};
+
+		setupImGui();
+
+		setupPipeline();
 
 		return true;
 	}
@@ -58,104 +109,114 @@ struct PlanetGame : cmn::Engine3D {
 #pragma region UPDATE HELPERS
 	//unintuitive
 	void handleCameraMovement(float dt) {
-		float speed=3*dt;
-		if(GetKey(olc::Key::F).bHeld) camera_pos.x-=speed;
-		if(GetKey(olc::Key::H).bHeld) camera_pos.x+=speed;
-		if(GetKey(olc::Key::R).bHeld) camera_pos.y-=speed;
-		if(GetKey(olc::Key::Y).bHeld) camera_pos.y+=speed;
-		if(GetKey(olc::Key::T).bHeld) camera_pos.z-=speed;
-		if(GetKey(olc::Key::G).bHeld) camera_pos.z+=speed;
+		static float pmousex=0, pmousey=0;
+		float mousex=GetMouseX(), mousey=GetMouseY();
+		float dx=mousex-pmousex, dy=mousey-pmousey;
+		pmousex=mousex, pmousey=mousey;
 
-		//point towards origin
-		camera_dir=-camera_pos.norm();
+		if(!GetMouse(SAPP_MOUSEBUTTON_LEFT).held) return;
+
+		third_person.yaw+=dx*dt;
+		third_person.pitch+=dy*dt;
+		third_person.pitch=cmn::clamp(
+			third_person.pitch,
+			.001f-cmn::Pi/2,
+			cmn::Pi/2-.001f
+		);
+
+		third_person.pos=vf3d::polar({
+			third_person.dist,
+			third_person.yaw,
+			third_person.pitch
+			});
 	}
 
 	void handlePlayerMovement(float dt) {
-		player_up=(player_pos-planet_pos).norm();
-		player_rgt=player_fwd.cross(player_up).norm();
+		player.up=normalize(player.pos-planet.pos);
+		player.rgt=normalize(cross(player.fwd, player.up));
 
 		//walking forward & back
 		const float walk_speed=1;
 		{
-			bool walk_fwd=GetKey(olc::Key::W).bHeld;
-			bool walk_back=GetKey(olc::Key::S).bHeld;
+			bool walk_fwd=GetKey(SAPP_KEYCODE_W).held;
+			bool walk_back=GetKey(SAPP_KEYCODE_S).held;
 			if(walk_fwd^walk_back) {
 				//slow backwards
-				float fb_modifier=walk_fwd?1:-.5f;
+				float fb_modifier=walk_fwd?1:-.75f;
 				float walk_amt=walk_speed*fb_modifier*dt;
 
 				//move by forward dir
-				player_pos+=player_fwd*walk_amt;
+				player.pos+=player.fwd*walk_amt;
 
 				//get new up dir
-				player_up=(player_pos-planet_pos).norm();
+				player.up=normalize(player.pos-planet.pos);
 
 				//reproject pos onto sphere...
-				player_pos=planet_pos+planet_rad*player_up;
+				player.pos=planet.pos+planet.rad*player.up;
 
 				//get new fwd dir (since rgt didnt change)
-				player_fwd=player_up.cross(player_rgt);
+				player.fwd=cross(player.up, player.rgt);
 			}
 		}
 
 		//strafing left & right
 		{
 			const float strafe_speed=.6f*walk_speed;
-			bool strafe_left=GetKey(olc::Key::A).bHeld;
-			bool strafe_right=GetKey(olc::Key::D).bHeld;
+			bool strafe_left=GetKey(SAPP_KEYCODE_A).held;
+			bool strafe_right=GetKey(SAPP_KEYCODE_D).held;
 			if(strafe_left^strafe_right) {
 				int lr_modifier=strafe_right?1:-1;
 				float strafe_amt=strafe_speed*lr_modifier*dt;
 
 				//move by rgt dir
-				player_pos+=player_rgt*strafe_amt;
+				player.pos+=player.rgt*strafe_amt;
 
 				//get new up dir
-				player_up=(player_pos-planet_pos).norm();
+				player.up=normalize(player.pos-planet.pos);
 
 				//reproject pos onto sphere...
-				player_pos=planet_pos+planet_rad*player_up;
+				player.pos=planet.pos+planet.rad*player.up;
 
 				//get new rgt dir (since fwd didnt change)
-				player_rgt=player_fwd.cross(player_up);
+				player.rgt=cross(player.fwd, player.up);
 			}
 		}
 
 		//turning left & right
 		{
 			const float turn_speed=2;
-			bool turn_left=GetKey(olc::Key::LEFT).bHeld;
-			bool turn_right=GetKey(olc::Key::RIGHT).bHeld;
+			bool turn_left=GetKey(SAPP_KEYCODE_LEFT).held;
+			bool turn_right=GetKey(SAPP_KEYCODE_RIGHT).held;
 			if(turn_right^turn_left) {
 				int lr_modifier=turn_right?1:-1;
 				float turn_amt=turn_speed*lr_modifier*dt;
 
 				//get new fwd/rgt dirs (since up doesnt change)
-				vf3d fwd_new=std::cos(turn_amt)*player_fwd+std::sin(turn_amt)*player_rgt;
-				vf3d rgt_new=-std::sin(turn_amt)*player_fwd+std::cos(turn_amt)*player_rgt;
-				player_fwd=fwd_new;
-				player_rgt=rgt_new;
+				vf3d fwd_new=std::cos(turn_amt)*player.fwd+std::sin(turn_amt)*player.rgt;
+				vf3d rgt_new=-std::sin(turn_amt)*player.fwd+std::cos(turn_amt)*player.rgt;
+				player.fwd=fwd_new;
+				player.rgt=rgt_new;
 			}
 		}
 
 		//looking up & down
 		{
 			const float look_speed=2;
-			bool look_up=GetKey(olc::Key::UP).bHeld;
-			bool look_down=GetKey(olc::Key::DOWN).bHeld;
+			bool look_up=GetKey(SAPP_KEYCODE_UP).held;
+			bool look_down=GetKey(SAPP_KEYCODE_DOWN).held;
 			if(look_up^look_down) {
 				int ud_modifier=look_up?1:-1;
 				float look_amt=look_speed*ud_modifier*dt;
 
 				//get new pitch
-				player_pitch+=look_amt;
-				if(player_pitch<-Pi/2) player_pitch=.001f-Pi/2;
-				if(player_pitch>Pi/2) player_pitch=Pi/2-.001f;
+				player.pitch+=look_amt;
+				if(player.pitch<-cmn::Pi/2) player.pitch=.001f-cmn::Pi/2;
+				if(player.pitch>cmn::Pi/2) player.pitch=cmn::Pi/2-.001f;
 			}
 		}
 
 		//get new look dir
-		player_look=std::cos(player_pitch)*player_fwd+std::sin(player_pitch)*player_up;
+		player.look=std::cos(player.pitch)*player.fwd+std::sin(player.pitch)*player.up;
 	}
 #pragma endregion
 
@@ -164,171 +225,179 @@ struct PlanetGame : cmn::Engine3D {
 
 		handlePlayerMovement(dt);
 
-		//graphics toggles
-		if(GetKey(olc::Key::I).bPressed) show_info^=true;
-		if(GetKey(olc::Key::P).bPressed) player_perspective^=true;
-		if(GetKey(olc::Key::L).bPressed) light_pos=camera_pos;
-
-		if(player_perspective) {
-			cam_pos=player_pos+player_sz*player_up;
-			cam_dir=player_look;
-			cam_up=player_up;
+		if(player.use_perspective) {
+			cam.pos=player.pos+player.sz*player.up;
+			cam.dir=player.look;
+			cam.up=player.up;
 		} else {
-			cam_pos=camera_pos;
-			cam_dir=camera_dir;
-			cam_up={0, 1, 0};
+			cam.pos=third_person.pos;
+			cam.dir=normalize(planet.pos-third_person.pos);
+			cam.up={0, 1, 0};
 		}
 
 		return true;
 	}
 
-#pragma region GEOMETRY HELPERS
+#pragma region RENDER HELPERS
 	//this looks nice :D
-	void realizeArrow(const vf3d& a, const vf3d& b, float sz, const olc::Pixel& col) {
+	void renderArrow(const vf3d& a, const vf3d& b, float sz) {
 		vf3d ba=b-a;
 		float mag=ba.mag();
-		vf3d ca=cam_pos-a;
-		vf3d perp=.5f*sz*mag*ba.cross(ca).norm();
+		vf3d ca=cam.pos-a;
+		vf3d norm=normalize(cross(ba, ca));
+		vf3d perp=.5f*sz*mag*norm;
 		vf3d c=b-sz*ba;
 		vf3d l=c-perp, r=c+perp;
-		cmn::Line l1{a, c}; l1.col=col;
-		lines_to_project.push_back(l1);
-		cmn::Line l2{l, r}; l2.col=col;
-		lines_to_project.push_back(l2);
-		cmn::Line l3{l, b}; l3.col=col;
-		lines_to_project.push_back(l3);
-		cmn::Line l4{r, b}; l4.col=col;
-		lines_to_project.push_back(l4);
-	}
-	
-	//add unit coordinate system
-	void realizeAxes(const vf3d& pos, float sz) {
-		realizeArrow(pos, pos+vf3d(sz, 0, 0), .1f, olc::RED);
-		realizeArrow(pos, pos+vf3d(0, sz, 0), .1f, olc::BLUE);
-		realizeArrow(pos, pos+vf3d(0, 0, sz), .1f, olc::GREEN);
+		sgl_begin_lines();
+		sgl_v3f(a.x, a.y, a.z), sgl_v3f(c.x, c.y, c.z);
+		sgl_v3f(l.x, l.y, l.z), sgl_v3f(r.x, r.y, r.z);
+		sgl_v3f(l.x, l.y, l.z), sgl_v3f(b.x, b.y, b.z);
+		sgl_v3f(r.x, r.y, r.z), sgl_v3f(b.x, b.y, b.z);
+		sgl_end();
 	}
 
-	//add planet mesh
-	void realizePlanet(const olc::Pixel& col) {
-		planet.translation=planet_pos;
-		planet.scale=planet_rad*vf3d(1, 1, 1);
-		planet.updateTransforms();
-		planet.updateTriangles(col);
-		tris_to_project.insert(tris_to_project.end(),
-			planet.tris.begin(), planet.tris.end()
-		);
+	void renderSphere(const vf3d& pos, float rad, float r, float g, float b) {
+		sgl_begin_triangles();
+		for(const auto& t:icosphere::tris) {
+			const auto& pa=icosphere::vertexes[t[0]-1];
+			const auto& pb=icosphere::vertexes[t[1]-1];
+			const auto& pc=icosphere::vertexes[t[2]-1];
+			vf3d va=pos+rad*vf3d(pa[0], pa[1], pa[2]);
+			vf3d vb=pos+rad*vf3d(pb[0], pb[1], pb[2]);
+			vf3d vc=pos+rad*vf3d(pc[0], pc[1], pc[2]);
+			vf3d norm=normalize(cross(vb-va, vc-va));
+			vf3d ctr=(va+vb+vc)/3;
+			vf3d sun_dir=normalize(light_pos-ctr);
+			float dp=std::max(.2f, dot(sun_dir, norm));
+			sgl_c3f(dp*r, dp*g, dp*b);
+			sgl_v3f(va.x, va.y, va.z);
+			sgl_v3f(vb.x, vb.y, vb.z);
+			sgl_v3f(vc.x, vc.y, vc.z);
+		}
+		sgl_end();
 	}
 
-	//add player mesh
-	void realizePlayer(float sz, const olc::Pixel& col) {
-		planet.translation=player_pos;
-		planet.scale=sz*vf3d(1, 1, 1);
-		planet.updateTransforms();
-		planet.updateTriangles(col);
-		tris_to_project.insert(tris_to_project.end(),
-			planet.tris.begin(), planet.tris.end()
-		);
+	void renderAxes(const vf3d& pos, float len, float sz) {
+		sgl_c3f(1, 0, 0);
+		renderArrow(pos, pos+len*vf3d(1, 0, 0), sz);
+		sgl_c3f(0, 1, 0);
+		renderArrow(pos, pos+len*vf3d(0, 1, 0), sz);
+		sgl_c3f(0, 0, 1);
+		renderArrow(pos, pos+len*vf3d(0, 0, 1), sz);
 	}
 
 	//show player directions with arrows
-	void realizePlayerCoordinateSystem(float sz) {
-		realizeArrow(player_pos, player_pos+sz*player_look, .2f, olc::BLACK);
-		realizeArrow(player_pos, player_pos+sz*player_rgt, .2f, olc::MAGENTA);//~x
-		realizeArrow(player_pos, player_pos+sz*player_up, .2f, olc::CYAN);//~y
-		realizeArrow(player_pos, player_pos+sz*player_fwd, .2f, olc::YELLOW);//~z
+	void renderPlayerAxes(float sz) {
+		sgl_c3f(0, 0, 0);
+		renderArrow(player.pos, player.pos+sz*player.look, .2f);
+		sgl_c3f(1, 0, 1);
+		renderArrow(player.pos, player.pos+sz*player.rgt, .2f);//~x
+		sgl_c3f(0, 1, 1);
+		renderArrow(player.pos, player.pos+sz*player.up, .2f);//~y
+		sgl_c3f(1, 1, 0);
+		renderArrow(player.pos, player.pos+sz*player.fwd, .2f);//~z
+	}
+
+	void renderImGui() {
+		simgui_frame_desc_t simgui_frame_desc{};
+		simgui_frame_desc.width=sapp_width();
+		simgui_frame_desc.height=sapp_height();
+		simgui_frame_desc.delta_time=sapp_frame_duration();
+		simgui_frame_desc.dpi_scale=sapp_dpi_scale();
+		simgui_new_frame(simgui_frame_desc);
+
+		ImGui::Begin("Controls");
+		ImGui::Text("W/A/S/D to move around");
+		ImGui::Text("ARROWS to look around");
+		ImGui::Text("Drag LMB to orbit planet");
+		ImGui::End();
+
+		ImGui::Begin("Info");
+		ImGui::SeparatorText("World Axes");
+		ImGui::TextColored(ImVec4(1, 0, 0, 1), "rgt(x)");
+		ImGui::TextColored(ImVec4(0, 1, 0, 1), "up(y)");
+		ImGui::TextColored(ImVec4(0, 0, 1, 1), "fwd(z)");
+		ImGui::SeparatorText("Player axes");
+		ImGui::TextColored(ImVec4(1, 0, 1, 1), "rgt(~x)");
+		ImGui::TextColored(ImVec4(0, 1, 1, 1), "up(~y)");
+		ImGui::TextColored(ImVec4(1, 1, 0, 1), "fwd(~z)");
+		ImGui::End();
+
+		ImGui::Begin("Options");
+		ImGui::Checkbox("Player view", &player.use_perspective);
+		if(player.use_perspective) {
+			ImGui::SameLine();
+			ImGui::Checkbox("Mini axes", &player.show_axes);
+		}
+		if(ImGui::Button("Set light position")) {
+			light_pos=third_person.pos;
+		}
+		ImGui::End();
+
+		simgui_render();
 	}
 #pragma endregion
 
-	bool user_geometry() override {
-		//add main light
-		lights.push_back({light_pos, olc::WHITE});
+	bool user_render() override {
+		sg_pass pass{};
+		pass.swapchain=sglue_swapchain();
+		sg_begin_pass(pass);
 
-		realizeAxes({0, 0, 0}, 1+planet_rad);
+		sgl_defaults();
+		sgl_load_pipeline(pip);
+		sgl_matrix_mode_modelview();
+		sgl_lookat(
+			cam.pos.x,
+			cam.pos.y,
+			cam.pos.z,
+			cam.pos.x+cam.dir.x,
+			cam.pos.y+cam.dir.y,
+			cam.pos.z+cam.dir.z,
+			cam.up.x, cam.up.y, cam.up.z
+		);
+		sgl_matrix_mode_projection();
+		sgl_perspective(
+			sgl_rad(90),
+			sapp_widthf()/sapp_heightf(),
+			.01f,
+			100
+		);
 
-		realizePlanet(olc::WHITE);
+		renderAxes({0, 0, 0}, 1.5f+planet.rad, .1f);
 
-		if(!player_perspective) {
-			realizePlayer(.075f, olc::PURPLE);
-			realizePlayerCoordinateSystem(.33f);
+		//planet as sphere
+		renderSphere(planet.pos, planet.rad, 1, 1, 1);
+
+		if(!player.use_perspective) {
+			//player as sphere
+			renderSphere(player.pos, .075f, .5f, 0, 1);
+			renderPlayerAxes(.33f);
 		} else {
 			//show axes right in front of player
-			if(show_info) realizeAxes(cam_pos+player_sz*player_look, .25f*player_sz);
+			if(player.show_axes) {
+				renderAxes(cam.pos+player.sz*player.look, .25f*player.sz, .2f);
+			}
 		}
+
+		sgl_draw();
+
+		renderImGui();
+
+		sg_end_pass();
+
+		sg_commit();
 
 		return true;
 	}
 
-	//helpful strings in corners of screen
-	void renderInfo() {
-
-		DrawString(0, 0, "player controls");
-		DrawString(0, 8, "W/S: walk");
-		DrawString(0, 16, "A/D: strafe");
-		DrawString(0, 24, "LEFT/RIGHT: turn");
-		DrawString(0, 32, "UP/DOWN: look");
-
-		DrawString(ScreenWidth()-8*15, 0, "camera controls");
-		DrawString(ScreenWidth()-8*14, 8, "F/H: move in x");
-		DrawString(ScreenWidth()-8*14, 16, "R/Y: move in y");
-		DrawString(ScreenWidth()-8*14, 24, "T/G: move in z");
-
-		DrawString(0, ScreenHeight()-32, "player axes");
-		DrawString(0, ScreenHeight()-24, "rgt(~x)", olc::MAGENTA);
-		DrawString(0, ScreenHeight()-16, "up(~y)", olc::CYAN);
-		DrawString(0, ScreenHeight()-8, "fwd(~z)", olc::YELLOW);
-
-		DrawString(ScreenWidth()-8*10, ScreenHeight()-32, "world axes");
-		DrawString(ScreenWidth()-8*6, ScreenHeight()-24, "rgt(x)", olc::RED);
-		DrawString(ScreenWidth()-8*5, ScreenHeight()-16, "up(y)", olc::BLUE);
-		DrawString(ScreenWidth()-8*6, ScreenHeight()-8, "fwd(z)", olc::GREEN);
+	void user_input(const sapp_event* e) override {
+		simgui_handle_event(e);
 	}
 
-	//"which keys can i press?"
-	void renderHints() {
-		int y=ScreenHeight();
-		if(!player_perspective) {
-			y-=8;
-			DrawString(ScreenWidth()/2-4*33, y, "[press P for player perspective]");
-		}
-
-		if(show_info) renderInfo();
-		else {
-			y-=8;
-			DrawString(ScreenWidth()/2-4*18, y, "[press I for info]");
-		}
-	}
-
-	bool user_render() override {
-		Clear(olc::Pixel(90, 90, 90));
-
-		resetBuffers();
-
-		for(const auto& t:tris_to_draw) {
-			FillDepthTriangle(
-				t.p[0].x, t.p[0].y, t.t[0].z,
-				t.p[1].x, t.p[1].y, t.t[1].z,
-				t.p[2].x, t.p[2].y, t.t[2].z,
-				t.col, t.id
-			);
-		}
-
-		for(const auto& l:lines_to_draw) {
-			DrawDepthLine(
-				l.p[0].x, l.p[0].y, l.t[0].z,
-				l.p[1].x, l.p[1].y, l.t[1].z,
-				l.col, l.id
-			);
-		}
-
-		renderHints();
-
-		return true;
+	void user_destroy() override {
+		simgui_shutdown();
+		sgl_shutdown();
 	}
 };
 
-int main() {
-	PlanetGame pg;
-	if(pg.Construct(640, 480, 1, 1, false, true)) pg.Start();
-
-	return 0;
-}
+CMN_SOKOL_ENGINE_LAUNCH(PlanetGame, 640, 480)
