@@ -26,15 +26,6 @@
     <ClInclude Include="src\minesweeper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\shd.glsl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mesh.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\return_code.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\particle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -47,24 +38,30 @@
     <ClInclude Include="src\texture_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\render_target.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\crt.glsl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cursor_mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\shd.glsl" />
+    <None Include="src\crt.glsl" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="assets\model\cursor_obj.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="assets\img\flag.png">
+    <Image Include="assets\flag.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\img\tile.png">
+    <Image Include="assets\tile.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\img\intrepid_8x8.png">
+    <Image Include="assets\intrepid_8x8.png">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="assets\img\bomb.png">
+    <Image Include="assets\bomb.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

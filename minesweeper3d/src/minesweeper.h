@@ -1,13 +1,16 @@
-//a model matrix per-face MIGHT be overkill, but who cares?
 #pragma once
 #ifndef MINESWEEPER_CLASS_H
 #define MINESWEEPER_CLASS_H
 
 //for memcpy
-#include <string>
-#include <vector>
+#include <cstring>
 
 #include <stack>
+
+//for rand
+#include <cstdlib>
+
+#include "cmn/math/v3d.h"
 
 struct Cell {
 	int num_bombs=-1;
@@ -34,7 +37,7 @@ class Minesweeper {
 
 	bool floodsweep(int i, int j, int k);
 
-	void updatePrev(), checkState(), unflagSwept(), updateFaces();
+	void updatePrev(), checkState(), unflagSwept();
 
 public:
 	Cell* cells=nullptr;
@@ -47,10 +50,6 @@ public:
 		LOST,
 		WON
 	} state=START;
-
-	//base and flagged face instances(in local space)
-	//this assumes xz vertex buffer
-	std::vector<cmn::mat4> tile_faces, flag_faces;
 
 	float timer=0;
 
@@ -198,20 +197,11 @@ public:
 		}
 	}
 
-	void update(float dt){
+	void update(float dt) {
 		unflagSwept();
 
 		checkState();
 
-		bool changed=false;
-		for(int i=0; i<num_cells; i++) {
-			if(cells[i]!=prev_cells[i]) {
-				changed=true;
-				break;
-			}
-		}
-		if(changed) updateFaces();
-		
 		updatePrev();
 
 		if(state==PLAYING) timer+=dt;
@@ -229,8 +219,6 @@ void Minesweeper::copyFrom(const Minesweeper& m) {
 	std::memcpy(prev_cells, m.prev_cells, sizeof(Cell)*num_cells);
 	num_bombs=m.num_bombs;
 	state=m.state;
-	tile_faces=m.tile_faces;
-	flag_faces=m.flag_faces;
 	timer=m.timer;
 }
 
@@ -302,51 +290,6 @@ void Minesweeper::unflagSwept() {
 	for(int i=0; i<num_cells; i++) {
 		auto& c=cells[i];
 		if(c.flagged&&c.swept) c.flagged=false;
-	}
-}
-
-void Minesweeper::updateFaces() {
-	tile_faces.clear();
-	flag_faces.clear();
-
-	//add matrix with new coordinate system and translation(to flag or not to flag)
-	auto addFace=[&] (const cmn::vf3d& x, const cmn::vf3d& y, const cmn::vf3d& z, const cmn::vf3d& t, bool f) {
-		cmn::mat4 m;
-		m(0, 0)=x.x, m(0, 1)=y.x, m(0, 2)=z.x, m(0, 3)=t.x;
-		m(1, 0)=x.y, m(1, 1)=y.y, m(1, 2)=z.y, m(1, 3)=t.y;
-		m(2, 0)=x.z, m(2, 1)=y.z, m(2, 2)=z.z, m(2, 3)=t.z;
-		m(3, 3)=1;
-		if(f) flag_faces.push_back(m);
-		else tile_faces.push_back(m);
-	};
-
-	const cmn::vf3d x(1, 0, 0);
-	const cmn::vf3d y(0, 1, 0);
-	const cmn::vf3d z(0, 0, 1);
-
-	//for each cell
-	for(int i=0; i<width; i++) {
-		for(int j=0; j<height; j++) {
-			for(int k=0; k<depth; k++) {
-				//skip if swept
-				const auto& c=cells[ix(i, j, k)];
-				if(c.swept) continue;
-
-				//if on edge or neighbor swept: orient faces
-				if(!inRange(i-1, j, k)||cells[ix(i-1, j, k)].swept)
-					addFace(z, -x, -y, cmn::vf3d(i, j+1, k), c.flagged);
-				if(!inRange(i+1, j, k)||cells[ix(i+1, j, k)].swept)
-					addFace(-z, x, -y, cmn::vf3d(i+1, j+1, k+1), c.flagged);
-				if(!inRange(i, j-1, k)||cells[ix(i, j-1, k)].swept)
-					addFace(x, -y, -z, cmn::vf3d(i, j, k+1), c.flagged);
-				if(!inRange(i, j+1, k)||cells[ix(i, j+1, k)].swept)
-					addFace(x, y, z, cmn::vf3d(i, j+1, k), c.flagged);
-				if(!inRange(i, j, k-1)||cells[ix(i, j, k-1)].swept)
-					addFace(-x, -z, -y, cmn::vf3d(i+1, j+1, k), c.flagged);
-				if(!inRange(i, j, k+1)||cells[ix(i, j, k+1)].swept)
-					addFace(x, z, -y, cmn::vf3d(i, j+1, k+1), c.flagged);
-			}
-		}
 	}
 }
 #endif

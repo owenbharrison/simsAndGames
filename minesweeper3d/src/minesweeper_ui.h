@@ -2,6 +2,7 @@
 win/lose particles?
 difficulty modes
 sound
+fix font
 */
 #define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
@@ -13,23 +14,24 @@ sound
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
 
+#include "sokol/include/sokol_gl.h"
+
 #include "sokol/sokol_engine.h"
 
-#include "shd.glsl.h"
+#include "crt.glsl.h"
 
 //for time
-#include <ctime>
+#include <ctime> 
 
-#include "cmn/math/v3d.h"
 #include "cmn/math/mat4.h"
 
 #include "minesweeper.h"
 
 #include "cmn/utils.h"
 
-#include <algorithm>
+#include <vector>
 
-#include "mesh.h"
+#include <algorithm>
 
 #include "cmn/geom/aabb3.h"
 
@@ -39,15 +41,9 @@ sound
 
 #include "sokol/font.h"
 
-//y p => x y z
-//0 0 => 0 0 1
-static cmn::vf3d polarToCartesian(float yaw, float pitch) {
-	return {
-		std::sin(yaw)*std::cos(pitch),
-		std::sin(pitch),
-		std::cos(yaw)*std::cos(pitch)
-	};
-}
+#include "render_target.h"
+
+#include "cursor_mesh.h"
 
 sg_color mixCol(const sg_color& a, const sg_color& b, float t) {
 	return {
@@ -59,30 +55,39 @@ sg_color mixCol(const sg_color& a, const sg_color& b, float t) {
 }
 
 cmn::vf3d randDir() {
-	return cmn::vf3d(
+	return normalize(cmn::vf3d(
 		.5f-cmn::randFloat(),
 		.5f-cmn::randFloat(),
 		.5f-cmn::randFloat()
-	).norm();
+	));
+}
+
+//run f for each char of formatted string
+template<typename Func>
+void formattedStringDo(const std::string& str, Func f) {
+	int ox=0, oy=0;
+	for(const auto& c:str) {
+		//special formatting
+		if(c==' ') ox++;//padding
+		else if(c=='\t') ox+=2;//tabsize=2
+		else if(c=='\n') ox=0, oy++;//return
+		else if(c>='!'&&c<='~') {//printable
+			f(c, ox, oy);
+
+			ox++;
+		}
+	}
 }
 
 //2d string sizing based on visible characters
 void getStringSize(const std::string& str, int& w, int& h) {
 	w=0, h=0;
 
-	int ox=0, oy=0;
-	for(const auto& c:str) {
-		if(c==' ') ox++;
-		//tabsize=2
-		else if(c=='\t') ox+=2;
-		else if(c=='\n') ox=0, oy++;
-		else if(c>='!'&&c<='~') {
-			ox++;
-			if(ox>w) w=ox;
-			int nh=1+oy;
-			if(nh>h) h=nh;
-		}
-	}
+	formattedStringDo(str, [&] (char c, int ox, int oy) {
+		//vacuform to char
+		w=std::max(w, ox+1);
+		h=std::max(h, oy+1);
+	});
 };
 
 void explosionGradient(float t, float* r, float* g, float* b) {
@@ -102,71 +107,14 @@ using cmn::vf3d;
 using cmn::mat4;
 
 class MinesweeperUI : public cmn::SokolEngine {
-	sg_sampler sampler{};
-
-	struct {
-		sg_view blank{};
-		sg_view tile{};
-		sg_view flag{};
-		sg_view bomb{};
-		sg_view circle{};
-	} textures;
-
-	struct {
-		sg_pass_action pass_action{};
-
-		sg_image color_img{SG_INVALID_ID};
-		sg_view color_attach{SG_INVALID_ID};
-		sg_view color_tex{SG_INVALID_ID};
-
-		sg_image depth_img{SG_INVALID_ID};
-		sg_view depth_attach{SG_INVALID_ID};
-	} render;
-
-	struct {
-		sg_pipeline pip{};
-
-		sg_buffer vbuf{};
-		sg_buffer ibuf{};
-	} line_render;
-
-	sg_pipeline mesh_pip{};
-
-	Mesh face_mesh;
-
-	struct {
-		Mesh mesh;
-
-		int i=0, j=0, k=0;
-	} cursor;
-
-	struct {
-		sg_pipeline pip{};
-
-		sg_buffer vbuf{};
-
-		std::vector<Billboard> instances;
-	} billboard_render;
-
-	struct {
-		sg_pipeline pip{};
-
-		sg_buffer vbuf{};
-	} colorview_render;
-
-	cmn::Font font;
-
-	struct {
-		sg_pass_action pass_action{};
-
-		sg_pipeline crt_pip{};
-		sg_pipeline ht_pip{};
-		sg_pipeline dither_pip{};
-
-		sg_buffer vbuf{};
-	} post_process;
-
+	//scene
 	Minesweeper game;
+
+	int cursor_i=0;
+	int cursor_j=0;
+	int cursor_k=0;
+
+	std::vector<Billboard> billboards;
 
 	struct {
 		std::vector<Particle> debris;
@@ -174,6 +122,7 @@ class MinesweeperUI : public cmn::SokolEngine {
 		const vf3d gravity{0, -9.8f, 0};
 	} particles;
 
+	//user input
 	float mouse_x=0, mouse_y=0;
 	float prev_mouse_x=0, prev_mouse_y=0;
 
@@ -186,10 +135,67 @@ class MinesweeperUI : public cmn::SokolEngine {
 		mat4 view_proj;
 	} cam;
 
-	vf3d light_pos;
+	//graphics
+	sgl_pipeline pip3d{};
+	sgl_pipeline pip2d{};
+
+	sg_sampler sampler{};
+
+	struct {
+		sg_view blank{};
+		sg_view tile{};
+		sg_view flag{};
+		sg_view bomb{};
+		sg_view circle{};
+	} textures;
+
+	cmn::Font font;
+
+	struct {
+		RenderTarget rt;
+
+		sg_pipeline crt_pip{};
+
+		sg_buffer vbuf{};
+	} post_process;
 
 public:
 #pragma region CREATE HELPERS
+	void setupSGL() {
+		sgl_desc_t sgl_desc{};
+		sgl_setup(sgl_desc);
+	}
+
+	void setupGame() {
+		game=Minesweeper(7, 5, 8, 20);
+	}
+
+	void setupPipeline3D() {
+		sg_pipeline_desc pip_desc{};
+		pip_desc.face_winding=SG_FACEWINDING_CCW;
+		pip_desc.cull_mode=SG_CULLMODE_BACK;
+		pip_desc.depth.write_enabled=true;
+		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
+		//with alpha blending
+		pip_desc.colors[0].blend.enabled=true;
+		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
+		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
+		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip3d=sgl_make_pipeline(pip_desc);
+	}
+
+	void setupPipeline2D() {
+		sg_pipeline_desc pip_desc{};
+		//with alpha blending
+		pip_desc.colors[0].blend.enabled=true;
+		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
+		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
+		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+		pip2d=sgl_make_pipeline(pip_desc);
+	}
+
 	void setupSampler() {
 		sg_sampler_desc sampler_desc{};
 		sampler=sg_make_sampler(sampler_desc);
@@ -199,31 +205,28 @@ public:
 	bool setupTextures() {
 		textures.blank=cmn::makeBlankTexture();
 
-		if(!cmn::makeTextureFromFile(textures.tile, "assets/img/tile.png")) return false;
+		if(!cmn::makeTextureFromFile(textures.tile, "assets/tile.png")) return false;
 
 		{//load flag img
 			int width, height, comp;
-			unsigned char* pixels8=stbi_load("assets/img/flag.png", &width, &height, &comp, 4);
-			if(!pixels8) return false;
-			
-			std::uint32_t* pixels32=new std::uint32_t[width*height];
-			std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
-			stbi_image_free(pixels8);
+			auto pixels=stbi_load("assets/flag.png", &width, &height, &comp, 4);
+			if(!pixels) return false;
 
 			//setup flag tex
-			textures.flag=cmn::makeTextureFromPixels(pixels32, width, height);
+			textures.flag=cmn::makeTextureFromPixels(pixels, width, height);
 
 			//set icon to flag tex
 			sapp_icon_desc icon_desc{};
 			icon_desc.images[0].width=width;
 			icon_desc.images[0].height=height;
-			icon_desc.images[0].pixels.ptr=pixels32;
-			icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
+			icon_desc.images[0].pixels.ptr=pixels;
+			icon_desc.images[0].pixels.size=4*width*height;
 			sapp_set_icon(&icon_desc);
-			delete[] pixels32;
+
+			stbi_image_free(pixels);
 		}
 
-		if(!cmn::makeTextureFromFile(textures.bomb, "assets/img/bomb.png")) return false;
+		if(!cmn::makeTextureFromFile(textures.bomb, "assets/bomb.png")) return false;
 
 		int sz=1024;
 		std::uint32_t* pixels=new std::uint32_t[sz*sz];
@@ -240,209 +243,11 @@ public:
 		return true;
 	}
 
-	//since will be called on resize,
-	//  this needs to free & remake resources
-	void setupRenderTarget() {
-		//make color img
-		{
-			sg_destroy_image(render.color_img);
-			sg_image_desc image_desc{};
-			image_desc.usage.color_attachment=true;
-			image_desc.width=sapp_width();
-			image_desc.height=sapp_height();
-			render.color_img=sg_make_image(image_desc);
-
-			//make color attach
-			{
-				sg_destroy_view(render.color_attach);
-				sg_view_desc view_desc{};
-				view_desc.color_attachment.image=render.color_img;
-				render.color_attach=sg_make_view(view_desc);
-			}
-
-			//make color tex
-			{
-				sg_destroy_view(render.color_tex);
-				sg_view_desc view_desc{};
-				view_desc.texture.image=render.color_img;
-				render.color_tex=sg_make_view(view_desc);
-			}
-		}
-
-		{
-			//make depth img
-			sg_destroy_image(render.depth_img);
-			sg_image_desc image_desc{};
-			image_desc.usage.depth_stencil_attachment=true;
-			image_desc.width=sapp_width();
-			image_desc.height=sapp_height();
-			image_desc.pixel_format=SG_PIXELFORMAT_DEPTH;
-			render.depth_img=sg_make_image(image_desc);
-
-			//make depth attach
-			sg_destroy_view(render.depth_attach);
-			sg_view_desc view_desc{};
-			view_desc.depth_stencil_attachment.image=render.depth_img;
-			render.depth_attach=sg_make_view(view_desc);
-		}
-	}
-
-	void setupRender() {
-		setupRenderTarget();
-
-		//clear to grey
-		render.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		render.pass_action.colors[0].clear_value={.5f, .5f, .5f, 1};
-	}
-
-	void setupLineRendering() {
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_line_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.shader=sg_make_shader(line_shader_desc(sg_query_backend()));
-		pip_desc.primitive_type=SG_PRIMITIVETYPE_LINES;
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-		line_render.pip=sg_make_pipeline(pip_desc);
-
-		//vertex buffer
-		{
-			//xyz
-			float vertexes[8][3]{
-				{0, 0, 0},
-				{1, 0, 0},
-				{0, 1, 0},
-				{1, 1, 0},
-				{0, 0, 1},
-				{1, 0, 1},
-				{0, 1, 1},
-				{1, 1, 1}
-			};
-			sg_buffer_desc buffer_desc{};
-			buffer_desc.data=SG_RANGE(vertexes);
-			line_render.vbuf=sg_make_buffer(buffer_desc);
-		}
-
-		//index buffer
-		{
-			//ab
-			std::uint32_t indexes[12][2]{
-				{0, 1}, {0, 2}, {0, 4},
-				{1, 3}, {1, 5}, {2, 3},
-				{2, 6}, {3, 7}, {4, 5},
-				{4, 6}, {5, 7}, {6, 7}
-			};
-			sg_buffer_desc buffer_desc{};
-			buffer_desc.usage.index_buffer=true;
-			buffer_desc.data=SG_RANGE(indexes);
-			line_render.ibuf=sg_make_buffer(buffer_desc);
-		}
-	}
-
-	void setupMeshPipeline() {
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_mesh_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_mesh_i_norm].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_mesh_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(mesh_shader_desc(sg_query_backend()));
-		pip_desc.index_type=SG_INDEXTYPE_UINT32;
-		pip_desc.cull_mode=SG_CULLMODE_FRONT;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-		mesh_pip=sg_make_pipeline(pip_desc);
-	}
-
-	void setupFaceMesh() {
-		Mesh& m=face_mesh;
-		m.verts={
-			{{0, 0, 0}, {0, 1, 0}, {0, 0}},
-			{{1, 0, 0}, {0, 1, 0}, {1, 0}},
-			{{0, 0, 1}, {0, 1, 0}, {0, 1}},
-			{{1, 0, 1}, {0, 1, 0}, {1, 1}}
-		};
-		m.updateVertexBuffer();
-		m.tris={
-			{0, 2, 1},
-			{1, 2, 3}
-		};
-		m.updateIndexBuffer();
-	}
-
-	bool setupCursor() {
-		Mesh& m=cursor.mesh;
-		return Mesh::loadFromOBJ(m, "assets/model/cursor_obj.txt").valid;
-	}
-
-	void setupBillboardRendering() {
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_billboard_i_pos].format=SG_VERTEXFORMAT_FLOAT3;
-		pip_desc.layout.attrs[ATTR_billboard_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(billboard_shader_desc(sg_query_backend()));
-		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-		//pip_desc.cull_mode=SG_CULLMODE_FRONT;
-		pip_desc.depth.write_enabled=true;
-		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-		//with alpha blending
-		pip_desc.colors[0].blend.enabled=true;
-		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
-		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
-		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		billboard_render.pip=sg_make_pipeline(pip_desc);
-
-		//xyzuv
-		float vertexes[4][5]{
-			{0, 0, 0, 0, 0},//tl
-			{0, 0, 1, 0, 1},//bl
-			{1, 0, 0, 1, 0},//tr
-			{1, 0, 1, 1, 1}//br
-		};
-		sg_buffer_desc buffer_desc{};
-		buffer_desc.data=SG_RANGE(vertexes);
-		billboard_render.vbuf=sg_make_buffer(buffer_desc);
-	}
-
-	void setupColorviewRendering() {
-		//2d tristrip pipeline
-		sg_pipeline_desc pip_desc{};
-		pip_desc.layout.attrs[ATTR_colorview_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.layout.attrs[ATTR_colorview_i_uv].format=SG_VERTEXFORMAT_FLOAT2;
-		pip_desc.shader=sg_make_shader(colorview_shader_desc(sg_query_backend()));
-		pip_desc.primitive_type=SG_PRIMITIVETYPE_TRIANGLE_STRIP;
-		//with alpha blending
-		pip_desc.colors[0].blend.enabled=true;
-		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
-		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
-		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		pip_desc.depth.pixel_format=SG_PIXELFORMAT_DEPTH;
-		colorview_render.pip=sg_make_pipeline(pip_desc);
-
-		//xyuv
-		//flip y
-		float vertexes[4][2][2]{
-			{{-1, -1}, {0, 1}},
-			{{1, -1}, {1, 1}},
-			{{-1, 1}, {0, 0}},
-			{{1, 1}, {1, 0}}
-		};
-		sg_buffer_desc buffer_desc{};
-		buffer_desc.data.ptr=vertexes;
-		buffer_desc.data.size=sizeof(vertexes);
-		colorview_render.vbuf=sg_make_buffer(buffer_desc);
-	}
-
 	void setupFont() {
-		font=cmn::Font("assets/img/intrepid_8x8.png", 8, 8);
+		font=cmn::Font("assets/intrepid_8x8.png", 8, 8);
 	}
 
 	void setupPostProcess() {
-		post_process.pass_action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		post_process.pass_action.colors[0].clear_value={0, 0, 0, 1};
-
 		sg_pipeline_desc pip_desc{};
 		pip_desc.layout.attrs[ATTR_crt_i_pos].format=SG_VERTEXFORMAT_FLOAT2;
 		pip_desc.shader=sg_make_shader(crt_shader_desc(sg_query_backend()));
@@ -452,7 +257,7 @@ public:
 		//xy
 		float vertexes[4][2]{
 			{-1, -1},
-			{1, -1}, 
+			{1, -1},
 			{-1, 1},
 			{1, 1}
 		};
@@ -460,50 +265,30 @@ public:
 		buffer_desc.data=SG_RANGE(vertexes);
 		post_process.vbuf=sg_make_buffer(buffer_desc);
 	}
-
-	void setupGame() {
-		game=Minesweeper(7, 5, 8, 20);
-	}
 #pragma endregion
 
 	bool user_create() override {
 		app_title="Minesweeper 3D";
-		
+
 		std::srand(std::time(0));
+
+		setupSGL();
+
+		setupGame();
+
+		setupPipeline3D();
+
+		setupPipeline2D();
 
 		setupSampler();
 
 		if(!setupTextures()) return false;
 
-		setupRender();
-
-		setupLineRendering();
-
-		setupMeshPipeline();
-
-		setupFaceMesh();
-
-		if(!setupCursor()) return false;
-
-		setupBillboardRendering();
-
-		setupColorviewRendering();
-
 		setupFont();
 
 		setupPostProcess();
 
-		setupGame();
-
 		return true;
-	}
-
-	void user_input(const sapp_event* e) override {
-		switch(e->type) {
-			case SAPP_EVENTTYPE_RESIZED:
-				setupRenderTarget();
-				break;
-		}
 	}
 
 #pragma region UPDATE HELPERS
@@ -512,15 +297,16 @@ public:
 		prev_mouse_y=mouse_y;
 		mouse_x=GetMouseX();
 		mouse_y=GetMouseY();
-		
+
+		//mouse orbit
 		if(GetMouse(SAPP_MOUSEBUTTON_LEFT).held) {
-			cam.yaw-=(mouse_x-prev_mouse_x)*dt;
+			cam.yaw+=(mouse_x-prev_mouse_x)*dt;
 			cam.pitch-=(mouse_y-prev_mouse_y)*dt;
 		}
 
 		//left/right/up/down
-		if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=dt;
-		if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=dt;
+		if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw+=dt;
+		if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw-=dt;
 		if(GetKey(SAPP_KEYCODE_UP).held) cam.pitch-=dt;
 		if(GetKey(SAPP_KEYCODE_DOWN).held) cam.pitch+=dt;
 
@@ -531,6 +317,8 @@ public:
 
 	//dynamic camera system :D
 	void handleCameraPlacement() {
+		cam.dir=vf3d::polar({1, cam.yaw, cam.pitch});
+
 		const vf3d game_size(game.getWidth(), game.getHeight(), game.getDepth());
 		//pt outside box + margin
 		float st_dist=1+game_size.mag()/2;
@@ -541,8 +329,6 @@ public:
 		float dist=st_dist-box.intersectRay(st, cam.dir);
 		//push cam back + margin
 		cam.pos=ctr-(4+dist)*cam.dir;
-		//light always at cam
-		light_pos=cam.pos;
 	}
 
 	//make this use dda instead.
@@ -559,7 +345,7 @@ public:
 		world/=w;
 
 		//normalize direction
-		vf3d mouse_dir=(world-cam.pos).norm();
+		vf3d mouse_dir=normalize(world-cam.pos);
 
 		//intersect ray with cells
 		float record=-1;
@@ -575,9 +361,9 @@ public:
 					if(t>0) {
 						if(record<0||t<record) {
 							record=t;
-							cursor.i=i;
-							cursor.j=j;
-							cursor.k=k;
+							cursor_i=i;
+							cursor_j=j;
+							cursor_k=k;
 						}
 					}
 				}
@@ -628,9 +414,9 @@ public:
 
 		if(GetKey(SAPP_KEYCODE_P).pressed) game.pause();
 
-		if(GetKey(SAPP_KEYCODE_SPACE).pressed) game.sweep(cursor.i, cursor.j, cursor.k);
+		if(GetKey(SAPP_KEYCODE_SPACE).pressed) game.sweep(cursor_i, cursor_j, cursor_k);
 
-		if(GetKey(SAPP_KEYCODE_F).pressed) game.flag(cursor.i, cursor.j, cursor.k);
+		if(GetKey(SAPP_KEYCODE_F).pressed) game.flag(cursor_i, cursor_j, cursor_k);
 
 		//find changes from prev->curr
 		for(int i=0; i<game.getWidth(); i++) {
@@ -676,7 +462,7 @@ public:
 
 		//cam proj can change with window resize
 		float asp=sapp_widthf()/sapp_heightf();
-		cam.proj=mat4::makePerspective(70, asp, .001f, 1000.f);
+		cam.proj=mat4::makePerspective(80, asp, .001f, 1000.f);
 
 		cam.view_proj=mat4::mul(cam.proj, cam.view);
 	}
@@ -686,7 +472,7 @@ public:
 
 	bool user_update(float dt) override {
 		handleCameraLooking(dt);
-		cam.dir=polarToCartesian(cam.yaw, cam.pitch);
+
 		handleCameraPlacement();
 
 		handleCursor();
@@ -703,70 +489,88 @@ public:
 	}
 
 #pragma region RENDER HELPERS
-	void renderAABB(const vf3d& a, const vf3d& b, sg_color col) {
-		sg_apply_pipeline(line_render.pip);
-
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=line_render.vbuf;
-		bind.index_buffer=line_render.ibuf;
-		sg_apply_bindings(bind);
-
-		mat4 model=mat4::mul(mat4::makeTranslation(a), mat4::makeScale(b-a));
-		mat4 mvp=mat4::mul(cam.view_proj, model);
-
-		vs_line_params_t vs_line_params{};
-		std::memcpy(vs_line_params.u_mvp, mvp.m, sizeof(mvp.m));
-		sg_apply_uniforms(UB_vs_line_params, SG_RANGE(vs_line_params));
-
-		fs_line_params_t fs_line_params{};
-		fs_line_params.u_col[0]=col.r;
-		fs_line_params.u_col[1]=col.g;
-		fs_line_params.u_col[2]=col.b;
-		fs_line_params.u_col[3]=col.a;
-		sg_apply_uniforms(UB_fs_line_params, SG_RANGE(fs_line_params));
-
-		sg_draw(0, 2*12, 1);
-	}
-
-	void renderFaces() {
-		auto renderFace=[&] (const mat4& m, const sg_view& t) {
-			sg_apply_pipeline(mesh_pip);
-
-			sg_bindings bind{};
-			bind.vertex_buffers[0]=face_mesh.vbuf;
-			bind.index_buffer=face_mesh.ibuf;
-			bind.samplers[SMP_u_mesh_smp]=sampler;
-			bind.views[VIEW_u_mesh_tex]=t;
-			sg_apply_bindings(bind);
-
-			mat4 mvp=mat4::mul(cam.view_proj, m);
-
-			vs_mesh_params_t vs_mesh_params{};
-			std::memcpy(vs_mesh_params.u_model, m.m, sizeof(m.m));
-			std::memcpy(vs_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
-			vs_mesh_params.u_tl[0]=0;
-			vs_mesh_params.u_tl[1]=0;
-			vs_mesh_params.u_br[0]=1;
-			vs_mesh_params.u_br[1]=1;
-			sg_apply_uniforms(UB_vs_mesh_params, SG_RANGE(vs_mesh_params));
-
-			fs_mesh_params_t fs_mesh_params{};
-			fs_mesh_params.u_eye_pos[0]=cam.pos.x;
-			fs_mesh_params.u_eye_pos[1]=cam.pos.y;
-			fs_mesh_params.u_eye_pos[2]=cam.pos.z;
-			fs_mesh_params.u_light_pos[0]=light_pos.x;
-			fs_mesh_params.u_light_pos[1]=light_pos.y;
-			fs_mesh_params.u_light_pos[2]=light_pos.z;
-			fs_mesh_params.u_tint[0]=1;
-			fs_mesh_params.u_tint[1]=1;
-			fs_mesh_params.u_tint[2]=1;
-			sg_apply_uniforms(UB_fs_mesh_params, SG_RANGE(fs_mesh_params));
-
-			sg_draw(0, 3*face_mesh.tris.size(), 1);
+	void renderBox(const vf3d& a, const vf3d& b) {
+		static const int edges[][2]{
+			{0, 1}, {2, 3}, {4, 5}, {6, 7},//thru x
+			{0, 2}, {1, 3}, {4, 6}, {5, 7},//thru y
+			{0, 4}, {1, 5}, {2, 6}, {3, 7}//thru z
 		};
 
-		for(const auto& t:game.tile_faces) renderFace(t, textures.tile);
-		for(const auto& f:game.flag_faces) renderFace(f, textures.flag);
+		vf3d v[8];//interpolators: 000, 001, 010...
+		for(int i=0; i<8; i++) {
+			v[i]=a+vf3d(1&(i>>2), 1&(i>>1), 1&i)*(b-a);
+		}
+
+		sgl_begin_lines();
+		for(const auto& e:edges) {
+			sgl_v3f(v[e[0]].x, v[e[0]].y, v[e[0]].z);
+			sgl_v3f(v[e[1]].x, v[e[1]].y, v[e[1]].z);
+		}
+		sgl_end();
+	}
+
+	//show quads on boundaries
+	void renderFaces() {
+		//"binary"
+		static const vf3d vertexes[8]{
+			{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {1, 1, 0},
+			{0, 0, 1}, {1, 0, 1}, {0, 1, 1}, {1, 1, 1}
+		};
+		static const int faces[][4]{
+			{2, 0, 4, 6},//-x
+			{7, 5, 1, 3},//+x
+			{1, 5, 4, 0},//-y
+			{2, 6, 7, 3},//+y
+			{3, 1, 0, 2},//-z
+			{6, 4, 5, 7}//+z
+		};
+		static const int di[6]{-1, 1, 0, 0, 0, 0};
+		static const int dj[6]{0, 0, -1, 1, 0, 0};
+		static const int dk[6]{0, 0, 0, 0, -1, 1};
+		sgl_enable_texture();
+		for(int i=0; i<game.getWidth(); i++) {
+			for(int j=0; j<game.getHeight(); j++) {
+				for(int k=0; k<game.getDepth(); k++) {
+					int ix=game.ix(i, j, k);
+					//skip if swept
+					const auto& c=game.cells[ix];
+					if(c.swept) continue;
+
+					const vf3d ijk(i, j, k);
+
+					sgl_texture(c.flagged?textures.flag:textures.tile, sampler);
+
+					//check neighbors
+					sgl_begin_quads();
+					sgl_c3f(1, 1, 1);
+					for(int d=0; d<6; d++) {
+						//skip if in range and not swept
+						int ni=i+di[d];
+						int nj=j+dj[d];
+						int nk=k+dk[d];
+						if(game.inRange(ni, nj, nk)) {
+							int nix=game.ix(ni, nj, nk);
+							if(!game.cells[nix].swept) continue;
+						}
+
+						const auto& v0=ijk+vertexes[faces[d][0]];
+						const auto& v1=ijk+vertexes[faces[d][1]];
+						const auto& v2=ijk+vertexes[faces[d][2]];
+						const auto& v3=ijk+vertexes[faces[d][3]];
+						vf3d norm=normalize(cross(v1-v0, v2-v0));
+						vf3d ctr=(v0+v1+v2+v3)/4;
+						vf3d cam_dir=normalize(cam.pos-ctr);
+						float s=std::max(.4f, dot(cam_dir, norm));
+						sgl_v3f_t2f_c3f(v0.x, v0.y, v0.z, 0, 0, s, s, s);
+						sgl_v3f_t2f_c3f(v1.x, v1.y, v1.z, 0, 1, s, s, s);
+						sgl_v3f_t2f_c3f(v2.x, v2.y, v2.z, 1, 1, s, s, s);
+						sgl_v3f_t2f_c3f(v3.x, v3.y, v3.z, 1, 0, s, s, s);
+					}
+					sgl_end();
+				}
+			}
+		}
+		sgl_disable_texture();
 	}
 
 	sg_color getCellColor(int num_bombs) {
@@ -791,10 +595,10 @@ public:
 		auto addNumber=[&] (const vf3d& ctr, float size, float ax, float ay, int n, sg_color col) {
 			float l, t, r, b;
 			font.getRegion('0'+n, l, t, r, b);
-			billboard_render.instances.push_back(Billboard(
+			billboards.push_back(Billboard(
 				ctr, size, ax, ay,
 				font.tex, l, t, r, b,
-				col
+				col.r, col.g, col.b, col.a
 			));
 		};
 
@@ -809,10 +613,10 @@ public:
 					vf3d ctr=.5f+vf3d(i, j, k);
 
 					if(cell.bomb) {
-						billboard_render.instances.push_back(Billboard(
+						billboards.push_back(Billboard(
 							ctr, .6f, .5f, .5f,
 							textures.bomb, 0, 0, 1, 1,
-							{1, 1, 1, 1}
+							1, 1, 1, 1
 						));
 						continue;
 					}
@@ -823,7 +627,7 @@ public:
 					//display 2or1 digit number
 					int tens=cell.num_bombs/10;
 					int ones=cell.num_bombs%10;
-					
+
 					//center anchoring if 2 digit
 					sg_color col=getCellColor(cell.num_bombs);
 					if(tens) {
@@ -846,10 +650,10 @@ public:
 				float t=p.age/p.lifespan;
 				float r=1, g=1, b=1;
 				if(i==1) explosionGradient(t, &r, &g, &b);
-				billboard_render.instances.push_back(Billboard(
+				billboards.push_back(Billboard(
 					p.pos, p.size, .5f, .5f,
 					textures.circle, 0, 0, 1, 1,
-					{r, g, b, 1-t}
+					r, g, b, 1-t
 				));
 			}
 		}
@@ -857,153 +661,90 @@ public:
 
 	void renderBillboards() {
 		//sort billboards w.r.t decreasing dist to camera 
-		std::sort(billboard_render.instances.begin(), billboard_render.instances.end(),
+		std::sort(billboards.begin(), billboards.end(),
 			[&] (const Billboard& a, const Billboard& b) {
 			return (a.pos-cam.pos).mag_sq()>(b.pos-cam.pos).mag_sq();
 		});
 
-		for(const auto& b:billboard_render.instances) {
-			sg_apply_pipeline(billboard_render.pip);
-
-			sg_bindings bind{};
-			bind.vertex_buffers[0]=billboard_render.vbuf;
-			bind.samplers[SMP_u_billboard_smp]=sampler;
-			bind.views[VIEW_u_billboard_tex]=b.tex;
-			sg_apply_bindings(bind);
-
+		sgl_enable_texture();
+		for(const auto& b:billboards) {
 			//unit axes to point at camera
-			vf3d uy=(cam.pos-b.pos).norm();
-			vf3d ux=vf3d(0, 1, 0).cross(uy).norm();
-			vf3d uz=ux.cross(uy);
-			//scale axes
-			vf3d x=b.size*ux, y=b.size*uy, z=b.size*uz;
+			vf3d f=normalize(cam.pos-b.pos);
+			vf3d r=normalize(cross(f, vf3d(0, 1, 0)));
+			vf3d u=cross(r, f);
+			//step vectors
+			vf3d rgt=b.size*r, up=b.size*u;
 			//translate with anchoring offset
-			vf3d trans=b.pos-b.anchor_x*x-b.anchor_y*z;
-			mat4 model;
-			model(0, 0)=x.x, model(0, 1)=y.x, model(0, 2)=z.x, model(0, 3)=trans.x;
-			model(1, 0)=x.y, model(1, 1)=y.y, model(1, 2)=z.y, model(1, 3)=trans.y;
-			model(2, 0)=x.z, model(2, 1)=y.z, model(2, 2)=z.z, model(2, 3)=trans.z;
-			model(3, 3)=1;
-			mat4 mvp=mat4::mul(cam.view_proj, model);
+			vf3d bl=b.pos-b.anchor_x*rgt-b.anchor_y*up;
+			vf3d br=bl+rgt, tl=bl+up, tr=br+up;
 
-			vs_billboard_params_t vs_billboard_params{};
-			std::memcpy(vs_billboard_params.u_mvp, mvp.m, sizeof(mvp.m));
-			vs_billboard_params.u_tl[0]=b.left;
-			vs_billboard_params.u_tl[1]=b.top;
-			vs_billboard_params.u_br[0]=b.right;
-			vs_billboard_params.u_br[1]=b.bottom;
-			sg_apply_uniforms(UB_vs_billboard_params, SG_RANGE(vs_billboard_params));
-
-			fs_billboard_params_t fs_billboard_params{};
-			fs_billboard_params.u_tint[0]=b.col.r;
-			fs_billboard_params.u_tint[1]=b.col.g;
-			fs_billboard_params.u_tint[2]=b.col.b;
-			fs_billboard_params.u_tint[3]=b.col.a;
-			sg_apply_uniforms(UB_fs_billboard_params, SG_RANGE(fs_billboard_params));
-
-			sg_draw(0, 4, 1);
+			sgl_texture(b.tex, sampler);
+			sgl_begin_quads();
+			sgl_c4f(b.rgba[0], b.rgba[1], b.rgba[2], b.rgba[3]);
+			sgl_v3f_t2f(tl.x, tl.y, tl.z, b.ltrb[2], b.ltrb[1]);
+			sgl_v3f_t2f(tr.x, tr.y, tr.z, b.ltrb[0], b.ltrb[1]);
+			sgl_v3f_t2f(br.x, br.y, br.z, b.ltrb[0], b.ltrb[3]);
+			sgl_v3f_t2f(bl.x, bl.y, bl.z, b.ltrb[2], b.ltrb[3]);
+			sgl_end();
 		}
+		sgl_disable_texture();
 
-		billboard_render.instances.clear();
+		billboards.clear();
 	}
 
 	void renderCursor() {
-		sg_apply_pipeline(mesh_pip);
-
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=cursor.mesh.vbuf;
-		bind.index_buffer=cursor.mesh.ibuf;
-		bind.samplers[SMP_u_mesh_smp]=sampler;
-		bind.views[VIEW_u_mesh_tex]=textures.blank;
-		sg_apply_bindings(bind);
-
-		mat4 model=mat4::makeTranslation(.5f+vf3d(cursor.i, cursor.j, cursor.k));
-		mat4 mvp=mat4::mul(cam.view_proj, model);
-
-		vs_mesh_params_t vs_mesh_params{};
-		std::memcpy(vs_mesh_params.u_model, model.m, sizeof(model.m));
-		std::memcpy(vs_mesh_params.u_mvp, mvp.m, sizeof(mvp.m));
-		vs_mesh_params.u_tl[0]=0;
-		vs_mesh_params.u_tl[1]=0;
-		vs_mesh_params.u_br[0]=1;
-		vs_mesh_params.u_br[1]=1;
-		sg_apply_uniforms(UB_vs_mesh_params, SG_RANGE(vs_mesh_params));
-
-		//only show cell color if its swept
-		const auto& cell=game.cells[game.ix(cursor.i, cursor.j, cursor.k)];
-		sg_color col=cell.swept?getCellColor(cell.num_bombs):sg_color{1, 0, 0, 1};
-
-		fs_mesh_params_t fs_mesh_params{};
-		fs_mesh_params.u_eye_pos[0]=cam.pos.x;
-		fs_mesh_params.u_eye_pos[1]=cam.pos.y;
-		fs_mesh_params.u_eye_pos[2]=cam.pos.z;
-		fs_mesh_params.u_light_pos[0]=light_pos.x;
-		fs_mesh_params.u_light_pos[1]=light_pos.y;
-		fs_mesh_params.u_light_pos[2]=light_pos.z;
-		fs_mesh_params.u_tint[0]=col.r;
-		fs_mesh_params.u_tint[1]=col.g;
-		fs_mesh_params.u_tint[2]=col.b;
-		sg_apply_uniforms(UB_fs_mesh_params, SG_RANGE(fs_mesh_params));
-
-		sg_draw(0, 3*cursor.mesh.tris.size(), 1);
-	}
-
-	//rect, texregion, tint
-	void renderTex(
-		float x, float y, float w, float h,
-		const sg_view& tex, float l, float t, float r, float b,
-		const sg_color& tint
-	) {
-		sg_apply_pipeline(colorview_render.pip);
-
-		sg_bindings bind{};
-		bind.vertex_buffers[0]=colorview_render.vbuf;
-		bind.samplers[SMP_u_colorview_smp]=sampler;
-		bind.views[VIEW_u_colorview_tex]=tex;
-		sg_apply_bindings(bind);
-
-		vs_colorview_params_t vs_colorview_params{};
-		vs_colorview_params.u_tl[0]=l;
-		vs_colorview_params.u_tl[1]=t;
-		vs_colorview_params.u_br[0]=r;
-		vs_colorview_params.u_br[1]=b;
-		sg_apply_uniforms(UB_vs_colorview_params, SG_RANGE(vs_colorview_params));
-
-		fs_colorview_params_t fs_colorview_params{};
-		fs_colorview_params.u_tint[0]=tint.r;
-		fs_colorview_params.u_tint[1]=tint.g;
-		fs_colorview_params.u_tint[2]=tint.b;
-		fs_colorview_params.u_tint[3]=tint.a;
-		sg_apply_uniforms(UB_fs_colorview_params, SG_RANGE(fs_colorview_params));
-
-		sg_apply_viewportf(x, y, w, h, true);
-
-		sg_draw(0, 4, 1);
-	}
-
-	void renderChar(float x, float y, char c, float scl=1, sg_color tint={1, 1, 1, 1}) {
-		float l, t, r, b;
-		font.getRegion(c, l, t, r, b);
-
-		renderTex(
-			x, y, scl*font.char_w, scl*font.char_h,
-			font.tex, l, t, r, b,
-			tint
+		vf3d xyz(
+			.5f+cursor_i,
+			.5f+cursor_j,
+			.5f+cursor_k
 		);
+		sgl_begin_triangles();
+		for(const auto& t:cursor_mesh::triangles) {
+			const auto& va=cursor_mesh::vertexes[t[0]-1];
+			const auto& vb=cursor_mesh::vertexes[t[1]-1];
+			const auto& vc=cursor_mesh::vertexes[t[2]-1];
+			vf3d pa=xyz+vf3d(va[0], va[1], va[2]);
+			vf3d pb=xyz+vf3d(vb[0], vb[1], vb[2]);
+			vf3d pc=xyz+vf3d(vc[0], vc[1], vc[2]);
+			vf3d ctr=(pa+pb+pc)/3;
+			vf3d cam_dir=normalize(cam.pos-ctr);
+			vf3d norm=normalize(cross(pb-pa, pc-pa));
+			float s=std::max(.4f, dot(cam_dir, norm));
+			sgl_c3f(s, 0, 0);
+			sgl_v3f(pa.x, pa.y, pa.z);
+			sgl_v3f(pb.x, pb.y, pb.z);
+			sgl_v3f(pc.x, pc.y, pc.z);
+		}
+		sgl_end();
 	}
 
-	void renderString(float x, float y, const std::string& str, float scl=1, sg_color tint={1, 1, 1, 1}) {
+	void renderString(
+		float x, float y,
+		const std::string& str, float scl=1,
+		const sg_color& col={1, 1, 1, 1}
+	) {
+		const float w=scl*font.char_w;
+		const float h=scl*font.char_w;
 		int ox=0, oy=0;
-		for(const auto& c:str) {
-			if(c==' ') ox++;
-			//tabsize=2
-			else if(c=='\t') ox+=2;
-			else if(c=='\n') ox=0, oy++;
-			else if(c>='!'&&c<='~') {
-				renderChar(x+scl*font.char_w*ox, y+scl*font.char_h*oy, c, scl, tint);
-				ox++;
-			}
-		}
+		sgl_enable_texture();
+		sgl_texture(font.tex, sampler);
+		sgl_begin_quads();
+		sgl_c4f(col.r, col.g, col.b, col.a);
+		formattedStringDo(str, [&] (char c, int ox, int oy) {
+			//texture coords
+			float tl, tt, tr, tb;
+			font.getRegion(c, tl, tt, tr, tb);
+
+			//vertexes
+			float vl=x+w*ox, vt=y+h*oy;
+			float vr=vl+w, vb=vt+h;
+			sgl_v2f_t2f(vl, vt, tl, tt);
+			sgl_v2f_t2f(vr, vt, tr, tt);
+			sgl_v2f_t2f(vr, vb, tr, tb);
+			sgl_v2f_t2f(vl, vb, tl, tb);
+		});
+		sgl_end();
+		sgl_disable_texture();
 	}
 
 	void renderStats() {
@@ -1053,7 +794,7 @@ public:
 	void renderStateOverlay() {
 		float alpha=0;
 		std::string str;
-		sg_color col;
+		float r, g, b;
 		switch(game.state) {
 			default: return;
 			case Minesweeper::PLAYING:
@@ -1062,30 +803,31 @@ public:
 			case Minesweeper::PAUSED:
 				alpha=.8f;
 				str="PAUSED\nPAUSED\nPAUSED";
-				col={.318f, .655f, .909f, 1};
+				r=.318f, g=.655f, b=.909f;
 				break;
 			case Minesweeper::LOST:
 				alpha=.3f;
 				str="YOU LOSE!";
-				col={.761f, .055f, .055f, 1};
+				r=.761f, g=.055f, b=.055f;
 				break;
 			case Minesweeper::WON:
 				alpha=.5f;
 				str="YOU WIN!";
-				col={.133f, .839f, .322f, 1};
+				r=.133f, g=.839f, b=.322f;
 				break;
 		}
 
-		//darken screen
-		renderTex(
-			0, 0, sapp_widthf(), sapp_heightf(),
-			textures.blank, 0, 0, 1, 1,
-			{0, 0, 0, alpha}
-		);
+		const float w_scr=sapp_widthf();
+		const float h_scr=sapp_heightf();
 
-		//screen box to fit into
-		float w_scr=.8f*sapp_widthf();
-		float h_scr=.8f*sapp_heightf();
+		//darken screen
+		sgl_begin_quads();
+		sgl_c4f(0, 0, 0, alpha);
+		sgl_v2f(0, 0);
+		sgl_v2f(w_scr, 0);
+		sgl_v2f(w_scr, h_scr);
+		sgl_v2f(0, h_scr);
+		sgl_end();
 
 		//determine string sizing
 		int w_c, h_c;
@@ -1093,28 +835,45 @@ public:
 		float w_str=font.char_w*w_c;
 		float h_str=font.char_h*h_c;
 
+		//fit into box 80% of screen
 		//which dimension is limiting?
-		float nx=w_scr/w_str;
-		float ny=h_scr/h_str;
+		float nx=.8f*w_scr/w_str;
+		float ny=.8f*h_scr/h_str;
 		float scl=nx<ny?nx:ny;
 
 		float cx=.5f*sapp_widthf();
 		float cy=.5f*sapp_heightf();
-		renderString(cx-.5f*scl*w_str, cy-.5f*scl*h_str, str, scl, col);
+		renderString(
+			cx-.5f*scl*w_str, cy-.5f*scl*h_str,
+			str, scl,
+			{r, g, b, 1}
+		);
 	}
 #pragma endregion
 
 	bool user_render() override {
+		post_process.rt.resize(sapp_widthf(), sapp_heightf());
+
 		//render
 		{
 			sg_pass pass{};
-			pass.action=render.pass_action;
-			pass.attachments.colors[0]=render.color_attach;
-			pass.attachments.depth_stencil=render.depth_attach;
+			pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
+			pass.action.colors[0].clear_value={.5f, .5f, .5f, 1};
+			pass.attachments.colors[0]=post_process.rt.color_attach;
+			pass.attachments.depth_stencil=post_process.rt.depth_attach;
 			sg_begin_pass(pass);
 
+			//3d rendering
+			sgl_defaults();
+			sgl_load_pipeline(pip3d);
+			sgl_matrix_mode_projection();
+			sgl_load_matrix(cam.proj.m);
+			sgl_matrix_mode_modelview();
+			sgl_load_matrix(cam.view.m);
+
 			//black box for game "bounds"
-			renderAABB(vf3d(0, 0, 0), vf3d(game.getWidth(), game.getHeight(), game.getDepth()), {0, 0, 0, 1});
+			sgl_c3f(0, 0, 0);
+			renderBox(vf3d(0, 0, 0), vf3d(game.getWidth(), game.getHeight(), game.getDepth()));
 
 			renderFaces();
 
@@ -1124,7 +883,17 @@ public:
 			realizeParticleBillboards();
 			renderBillboards();
 
+			//2d rendering
+			sgl_defaults();
+			sgl_load_pipeline(pip2d);
+			sgl_matrix_mode_projection();
+			sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
+			sgl_matrix_mode_modelview();
+			sgl_load_identity();
+
 			renderStateOverlay();
+
+			sgl_draw();
 
 			sg_end_pass();
 		}
@@ -1132,7 +901,6 @@ public:
 		//post process
 		{
 			sg_pass pass{};
-			pass.action=post_process.pass_action;
 			pass.swapchain=sglue_swapchain();
 			sg_begin_pass(pass);
 
@@ -1141,7 +909,7 @@ public:
 			sg_bindings bind{};
 			bind.vertex_buffers[0]=post_process.vbuf;
 			bind.samplers[SMP_u_crt_smp]=sampler;
-			bind.views[VIEW_u_crt_tex]=render.color_tex;
+			bind.views[VIEW_u_crt_tex]=post_process.rt.color_tex;
 			sg_apply_bindings(bind);
 
 			fs_crt_params_t fs_crt_params{};

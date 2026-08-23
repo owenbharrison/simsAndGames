@@ -2,6 +2,8 @@
 #ifndef PARTICLE_STRUCT_H
 #define PARTICLE_STRUCT_H
 
+#include "cmn/math/v3d.h"
+
 struct Particle {
 	cmn::vf3d pos, vel, acc;
 	float size=0;
