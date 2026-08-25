@@ -2,83 +2,62 @@
 #ifndef VEHICLE_STRUCT_H
 #define VEHICLE_STRUCT_H
 
-#include <cmath>
+#include "cmn/math/v2d.h"
 
 struct Vehicle {
-	static float max_speed, max_force;
-	
-	vf2d pos, vel, acc;
-	vf2d target;
+	static float max_accel;
+	static float max_speed;
 
-	olc::Pixel col=olc::WHITE;
+	cmn::vf2d pos, vel, acc;
 
-	Vehicle() {}
+	cmn::vf2d target;
 
-	Vehicle(const vf2d& p, const vf2d& t, const olc::Pixel& c) {
-		pos=p;
-		target=t;
-		col=c;
-	}
+	float rgb[3]{1, 1, 1};
 
-	void accelerate(const vf2d& a) {
+	void accelerate(const cmn::vf2d& a) {
 		acc+=a;
 	}
 
 	void update(float dt) {
+		float accel=length(acc);
+		if(accel>max_accel) acc*=max_accel/accel;
+		
 		vel+=acc*dt;
-		pos+=vel*dt;
 
-		//clear "forces"
+		float speed=length(vel);
+		if(speed>max_speed) vel*=max_speed/speed;
+
+		pos+=vel*dt;
+		
 		acc*=0;
 	}
 
-	//behavior forces
-	vf2d getArrive(const vf2d& t) const {
-		//where do i want to be?
-		vf2d des=t-pos;
-		float des_mag=des.mag();
-
-		//if im there, forget it.
-		if(des_mag==0) return {0, 0};
-		
-		//go as fast as possible
-		float speed=max_speed;
-
-		//unless close enough
-		const float slow_rad=750;
-		if(des_mag<slow_rad) speed=max_speed*des_mag/slow_rad;
-		
-		//set desired mag to speed
-		des*=speed/des_mag;
-		
-		//limit force applied
-		vf2d steer=des-vel;
-		float steer_mag=steer.mag();
-		if(steer_mag>max_force) steer*=max_force/steer_mag;
-
-		return steer;
+	cmn::vf2d getSeek(const cmn::vf2d& tgt) const {
+		cmn::vf2d to_tgt=tgt-pos;
+		float dist=length(to_tgt);
+		cmn::vf2d des;
+		if(dist>1e-6f) des=max_speed/dist*to_tgt;
+		return des-vel;
 	}
 
-	vf2d getFlee(const vf2d& t) const {
-		//where DONT i want to be?
-		vf2d des=pos-t;
-		float des_mag=des.mag();
+	cmn::vf2d getFlee(const cmn::vf2d& tgt) const {
+		return -getSeek(tgt);
+	}
 
-		//if im there, uhh...
-		if(des_mag==0) return {0, 0};
-
-		//opposite
-		des*=max_speed/des_mag;
-
-		//limit force applied
-		vf2d steer=des-vel;
-		float steer_mag=steer.mag();
-		if(steer_mag>max_force) steer*=max_force/steer_mag;
-
-		return steer;
+	cmn::vf2d getArrive(const cmn::vf2d& tgt) const {
+		cmn::vf2d to_tgt=tgt-pos;
+		float dist=length(to_tgt);
+		cmn::vf2d des;
+		if(dist>1e-6f) {
+			//slowing radius: v^2=2as -> s=v^2/2/a
+			float rad=max_speed*max_speed/2/max_accel;
+			float des_speed=max_speed*(dist<rad?dist/rad:1);
+			des=des_speed/dist*to_tgt;
+		}
+		return des-vel;
 	}
 };
 
-float Vehicle::max_speed=3500;
-float Vehicle::max_force=230;
+float Vehicle::max_accel=50;
+float Vehicle::max_speed=15;
 #endif

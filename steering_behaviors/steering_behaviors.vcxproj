@@ -140,12 +140,6 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="src\vehicle.h" />
-  </ItemGroup>
-  <ItemGroup>
     <Image Include="assets\ascii\100.png" />
     <Image Include="assets\ascii\101.png" />
     <Image Include="assets\ascii\102.png" />
@@ -250,7 +244,6 @@
     <Image Include="assets\digit\7.png" />
     <Image Include="assets\digit\8.png" />
     <Image Include="assets\digit\9.png" />
-    <Image Include="assets\rainbow.png" />
     <Image Include="assets\lower\a.png" />
     <Image Include="assets\lower\b.png" />
     <Image Include="assets\lower\c.png" />
@@ -303,6 +296,15 @@
     <Image Include="assets\upper\x.png" />
     <Image Include="assets\upper\y.png" />
     <Image Include="assets\upper\z.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\camera.h" />
+    <ClInclude Include="src\font.h" />
+    <ClInclude Include="src\steering_behaviors.h" />
+    <ClInclude Include="src\vehicle.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
