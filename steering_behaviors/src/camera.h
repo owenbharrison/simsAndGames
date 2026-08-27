@@ -103,8 +103,8 @@ public:
 		offset-=delta;
 	}
 
-	//screen boxes: fit a into b
-	void zoomToFit(
+	//fit a into b
+	void zoomToFitScreen(
 		const cmn::vf2d& min_a, const cmn::vf2d& max_a,
 		const cmn::vf2d& min_b, const cmn::vf2d& max_b
 	) {
@@ -113,17 +113,16 @@ public:
 		float fac=scl.x<scl.y?scl.x:scl.y;
 
 		//box centers
-		cmn::vf2d ctr_a=(min_a+max_a)/2;
-		cmn::vf2d ctr_b=(min_b+max_b)/2;
+		cmn::vf2d ctr_a_scr=(min_a+max_a)/2;
+		cmn::vf2d ctr_b_scr=(min_b+max_b)/2;
 
-		cmn::vf2d anchor=scr2wld_p(ctr_a);
+		//wld pos of a ctr BEFORE scaling
+		cmn::vf2d ctr_a_wld=scr2wld_p(ctr_a_scr);
 
 		zoom*=fac;
 
-		cmn::vf2d after=wld2scr_p(anchor);
-
-		//make anchor(ctr_a) land on ctr_b
-		offset+=ctr_b-after;
+		//update offset so ctr_a & ctr_b align
+		offset=ctr_b_scr-wld2scr_v(ctr_a_wld);
 	}
 };
 #endif

@@ -141,7 +141,7 @@ public:
 		const float margin=30;
 		vf2d scr_min{margin, margin};
 		vf2d scr_max{sapp_widthf()-margin, sapp_heightf()-margin};
-		cam.zoomToFit(
+		cam.zoomToFitScreen(
 			box.min, box.max,
 			scr_min, scr_max
 		);
