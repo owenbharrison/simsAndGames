@@ -30,9 +30,10 @@
 #include "imgui/include/imgui_singleheader.h"
 #include "sokol/include/sokol_imgui.h"
 
-#include "sokol/texture_utils.h"
-
 #include "render_target.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/include/stb_image.h"
 
 using cmn::vf2d;
 
@@ -213,20 +214,17 @@ public:
 
 	bool setupIcon() {
 		int width, height, comp;
-		std::uint8_t* pixels8=stbi_load("assets/icon.png", &width, &height, &comp, 4);
-		if(!pixels8) return false;
-
-		std::uint32_t* pixels32=new std::uint32_t[width*height];
-		std::memcpy(pixels32, pixels8, sizeof(std::uint8_t)*4*width*height);
-		stbi_image_free(pixels8);
+		stbi_uc* pixels=stbi_load("assets/icon.png", &width, &height, &comp, 4);
+		if(!pixels) return false;
 
 		sapp_icon_desc icon_desc{};
 		icon_desc.images[0].width=width;
 		icon_desc.images[0].height=height;
-		icon_desc.images[0].pixels.ptr=pixels32;
-		icon_desc.images[0].pixels.size=sizeof(std::uint32_t)*width*height;
+		icon_desc.images[0].pixels.ptr=pixels;
+		icon_desc.images[0].pixels.size=sizeof(stbi_uc)*4*width*height;
 		sapp_set_icon(&icon_desc);
-		delete[] pixels32;
+
+		stbi_image_free(pixels);
 
 		return true;
 	}
@@ -389,8 +387,6 @@ public:
 		sg_begin_pass(pass);
 
 		sgl_defaults();
-
-		//pixel space
 		sgl_matrix_mode_projection();
 		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
 

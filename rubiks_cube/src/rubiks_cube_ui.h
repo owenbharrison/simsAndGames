@@ -27,8 +27,6 @@ selectable sizes
 
 #include "cmn/utils.h"
 
-#include "sokol/texture_utils.h"
-
 #include "rubiks_cube.h"
 
 #include "cmn/math/v3d.h"
