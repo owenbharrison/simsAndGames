@@ -229,12 +229,18 @@ public:
 		if(!cmn::makeTextureFromFile(textures.bomb, "assets/bomb.png")) return false;
 
 		int sz=1024;
-		std::uint32_t* pixels=new std::uint32_t[sz*sz];
+		std::uint8_t* pixels=new std::uint8_t[4*sz*sz];
 		for(int x=0; x<sz; x++) {
 			for(int y=0; y<sz; y++) {
 				int dx=x-sz/2, dy=y-sz/2;
 				bool in=dx*dx+dy*dy<sz*sz/4;//r=sz/2
-				pixels[x+sz*y]=in?0xFFFFFFFF:0x00000000;
+				int z=x+sz*y;
+				auto& r=pixels[0+4*z];
+				auto& g=pixels[1+4*z];
+				auto& b=pixels[2+4*z];
+				auto& a=pixels[3+4*z];
+				if(in) r=255, g=255, b=255, a=255;
+				else r=0, g=0, b=0, a=0;
 			}
 		}
 		textures.circle=cmn::makeTextureFromPixels(pixels, sz, sz);
