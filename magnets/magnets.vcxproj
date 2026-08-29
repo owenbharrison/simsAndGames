@@ -148,6 +148,12 @@
     <ClInclude Include="src\magnets_ui.h" />
     <ClInclude Include="src\camera.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\imgui.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\icon.png" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

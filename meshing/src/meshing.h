@@ -7,6 +7,7 @@
 #include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+#include "sokol/include/sokol_gl.h"
 
 #include "sokol/sokol_engine.h"
 
@@ -18,8 +19,6 @@
 #include "poisson.h"
 
 #include "delaunay.h"
-
-#include "sokol/render_utils.h"
 
 using cmn::vf2d;
 
@@ -176,40 +175,41 @@ public:
 		return true;
 	}
 
-	void renderGrid(float r, float g, float b) {
-		const float width=sapp_widthf();
-		const float height=sapp_heightf();
+	void renderGrid() {
+		const float w_scr=sapp_widthf();
+		const float h_scr=sapp_heightf();
 		
+		sgl_begin_lines();
 		//vertical lines
-		int num_x=1+width/grid_sz;
+		int num_x=1+w_scr/grid_sz;
 		for(int i=0; i<=num_x; i++) {
 			float x=grid_sz*i;
-			cmn::draw_line(
-				x, 0, x, height,
-				r, g, b
-			);
+			sgl_v2f(x, 0);
+			sgl_v2f(x, h_scr);
 		}
 
 		//horizontal lines
-		float num_y=1+height/grid_sz;
+		float num_y=1+h_scr/grid_sz;
 		for(int j=0; j<=num_y; j++) {
 			float y=grid_sz*j;
-			cmn::draw_line(
-				0, y, width, y,
-				r, g, b
-			);
+			sgl_v2f(0, y);
+			sgl_v2f(w_scr, y);
 		}
+		sgl_end();
 	}
 
 	void renderShell() {
+		sgl_begin_lines();
 		for(int i=0; i<shell.size(); i++) {
 			int j=(i+1)%shell.size();
 			const auto& a=shell[i], b=shell[j];
-			cmn::draw_line(a.x, a.y, b.x, b.y, 1, 0, 0);
+			sgl_v2f(a.x, a.y), sgl_v2f(b.x, b.y);
 		}
+		sgl_end();
 	}
 
-	void renderTris() {
+	void renderFilledTris() {
+		sgl_begin_triangles();
 		for(const auto& t:tris) {
 			const auto& v1=verts[t[0]];
 			const auto& v2=verts[t[1]];
@@ -230,58 +230,74 @@ public:
 				stressGradient(t, r, g, b);
 			}
 
-			cmn::fill_triangle(
-				v1.x, v1.y,
-				v2.x, v2.y,
-				v3.x, v3.y,
-				r, g, b
-			);
+			sgl_c3f(r, g, b);
+			sgl_v2f(v1.x, v1.y);
+			sgl_v2f(v2.x, v2.y);
+			sgl_v2f(v3.x, v3.y);
 		}
+		sgl_end();
+	}
 
+	void renderOutlinedTris() {
+		sgl_begin_lines();
 		for(const auto& t:tris) {
 			const auto& a=verts[t[0]];
 			const auto& b=verts[t[1]];
 			const auto& c=verts[t[2]];
-			cmn::draw_triangle(
-				a.x, a.y,
-				b.x, b.y,
-				c.x, c.y,
-				0, 0, 0
-			);
+			sgl_v2f(a.x, a.y), sgl_v2f(b.x, b.y);
+			sgl_v2f(b.x, b.y), sgl_v2f(c.x, c.y);
+			sgl_v2f(c.x, c.y), sgl_v2f(a.x, a.y);
 		}
+		sgl_end();
 	}
 
 	void renderConstraints() {
+		sgl_begin_lines();
 		for(const auto& c:constraints) {
 			const auto& a=verts[c[0]];
 			const auto& b=verts[c[1]];
-			cmn::draw_line(a.x, a.y, b.x, b.y, 1, 1, 1);
+			sgl_v2f(a.x, a.y), sgl_v2f(b.x, b.y);
 		}
+		sgl_end();
 	}
 
 	bool user_render() override {
-		//display pass
 		sg_pass pass{};
-		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
-		pass.action.colors[0].clear_value={0, 0, 0, 1};
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
+		const float w_scr=sapp_widthf();
+		const float h_scr=sapp_heightf();
+
 		sgl_defaults();
-
-		//pixel space
 		sgl_matrix_mode_projection();
-		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
+		sgl_ortho(0, w_scr, h_scr, 0, -1, 1);
 
-		cmn::fill_rect(0, 0, sapp_widthf(), sapp_heightf(), .34f, .34f, .34f);
+		sgl_c3f(.34f, .34f, .34f);
+		sgl_begin_quads();
+		sgl_v2f(0, 0);
+		sgl_v2f(w_scr, 0);
+		sgl_v2f(w_scr, h_scr);
+		sgl_v2f(0, h_scr);
+		sgl_end();
 
-		if(show_grid) renderGrid(.61f, .61f, .61f);
+		if(show_grid) {
+			sgl_c3f(.61f, .61f, .61f);
+			renderGrid();
+		}
 
+		sgl_c3f(1, 0, 0);
 		renderShell();
 
-		renderTris();
+		renderFilledTris();
 
-		if(show_constraints) renderConstraints();
+		sgl_c3f(0, 0, 0);
+		renderOutlinedTris();
+
+		if(show_constraints) {
+			sgl_c3f(1, 1, 1);
+			renderConstraints();
+		}
 
 		sgl_draw();
 

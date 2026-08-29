@@ -7,10 +7,9 @@
 #include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+#include "sokol/include/sokol_gl.h"
 
 #include "sokol/sokol_engine.h"
-
-#include "sokol/render_utils.h"
 
 #include "smoke.h"
 
@@ -290,18 +289,26 @@ public:
 #pragma endregion
 
 	bool user_render() override {
-		//display pass
 		sg_pass pass{};
 		pass.swapchain=sglue_swapchain();
 		sg_begin_pass(pass);
 
+		const float w_scr=sapp_widthf();
+		const float h_scr=sapp_heightf();
+
 		sgl_defaults();
 		sgl_load_pipeline(pip);
 		sgl_matrix_mode_projection();
-		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
+		sgl_ortho(0, w_scr, h_scr, 0, -1, 1);
 
 		//grey background
-		cmn::fill_rect(0, 0, sapp_widthf(), sapp_heightf(), .5f, .5f, .5f);
+		sgl_c3f(.5f, .5f, .5f);
+		sgl_begin_quads();
+		sgl_v2f(0, 0);
+		sgl_v2f(w_scr, 0);
+		sgl_v2f(w_scr, h_scr);
+		sgl_v2f(0, h_scr);
+		sgl_end();
 
 		if(!update_emitter) renderEmitter();
 

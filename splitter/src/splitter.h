@@ -7,12 +7,11 @@
 #include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+#include "sokol/include/sokol_gl.h"
 
 #include "sokol/sokol_engine.h"
 
 #include "mesh.h"
-
-#include "sokol/render_utils.h"
 
 #include <list>
 
@@ -22,7 +21,7 @@ using cmn::vf2d;
 
 class Splitter : public cmn::SokolEngine {
 	vf2d mouse_pos;
-	
+
 	std::list<Mesh> meshes;
 
 	bool render_wireframes=true;
@@ -39,7 +38,7 @@ public:
 
 	bool user_create() override {
 		app_title="Splitter";
-		
+
 		setupSGL();
 
 		meshes.push_back(Mesh::makeTorus(100, 60, 24, {140, 180}, 1, 0, 0));
@@ -66,7 +65,7 @@ public:
 	bool user_update(float dt) override {
 		mouse_pos.x=GetMouseX();
 		mouse_pos.y=GetMouseY();
-		
+
 		std::srand(std::time(0));
 
 		const auto split_action=GetMouse(SAPP_MOUSEBUTTON_LEFT);
@@ -89,17 +88,17 @@ public:
 		}
 
 		//connect em up
+		sgl_c3f(m.r, m.g, m.b);
+		sgl_begin_triangles();
 		for(const auto& t:m.tris) {
-			const auto& a=verts[t.ix[0]];
-			const auto& b=verts[t.ix[1]];
-			const auto& c=verts[t.ix[2]];
-			cmn::fill_triangle(
-				a.x, a.y,
-				b.x, b.y,
-				c.x, c.y,
-				m.r, m.g, m.b
-			);
+			const auto& p1=verts[t.ix[0]];
+			const auto& p2=verts[t.ix[1]];
+			const auto& p3=verts[t.ix[2]];
+			sgl_v2f(p1.x, p1.y);
+			sgl_v2f(p2.x, p2.y);
+			sgl_v2f(p3.x, p3.y);
 		}
+		sgl_end();
 	}
 
 	void drawMesh(const Mesh& m, const sg_color& col) {
@@ -110,17 +109,17 @@ public:
 		}
 
 		//connect em up
+		sgl_c3f(col.r, col.g, col.b);
+		sgl_begin_lines();
 		for(const auto& t:m.tris) {
 			const auto& p1=verts[t.ix[0]];
 			const auto& p2=verts[t.ix[1]];
 			const auto& p3=verts[t.ix[2]];
-			cmn::draw_triangle(
-				p1.x, p1.y,
-				p2.x, p2.y,
-				p3.x, p3.y,
-				col.r, col.g, col.b
-			);
+			sgl_v2f(p1.x, p1.y), sgl_v2f(p2.x, p2.y);
+			sgl_v2f(p2.x, p2.y), sgl_v2f(p3.x, p3.y);
+			sgl_v2f(p3.x, p3.y), sgl_v2f(p1.x, p1.y);
 		}
+		sgl_end();
 	}
 
 	bool user_render() override {
@@ -132,11 +131,9 @@ public:
 		sg_begin_pass(pass);
 
 		sgl_defaults();
-
-		//pixel space
 		sgl_matrix_mode_projection();
 		sgl_ortho(0, sapp_widthf(), sapp_heightf(), 0, -1, 1);
-		
+
 		const sg_color black{0, 0, 0, 1};
 
 		for(const auto& m:meshes) {
@@ -157,12 +154,15 @@ public:
 			}
 
 			//draw red plane
+			sgl_c3f(1, 0, 0);
+			sgl_begin_lines();
 			float rad=10;
 			vf2d top=*split_st+rad*norm, btm=*split_st-rad*norm;
-			cmn::draw_line(top.x, top.y, btm.x, btm.y, 1, 0, 0);
+			sgl_v2f(top.x, top.y), sgl_v2f(btm.x, btm.y);
 			float len=50;
 			vf2d lft=*split_st-len*tang, rgt=*split_st+len*tang;
-			cmn::draw_line(lft.x, lft.y, rgt.x, rgt.y, 1, 0, 0);
+			sgl_v2f(lft.x, lft.y), sgl_v2f(rgt.x, rgt.y);
+			sgl_end();
 		}
 
 		sgl_draw();

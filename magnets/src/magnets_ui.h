@@ -24,6 +24,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/include/stb_image.h"
 
+#include "imgui/include/imgui_singleheader.h"
+#include "sokol/include/sokol_imgui.h"
+
 using cmn::vd2d;
 using cmn::vf2d;
 
@@ -112,6 +115,12 @@ public:
 
 		return true;
 	}
+
+	void setupImGui() {
+		simgui_desc_t simgui_desc{};
+		simgui_desc.ini_filename="assets/imgui.ini";
+		simgui_setup(simgui_desc);
+	}
 #pragma endregion
 
 	bool user_create() override {
@@ -131,6 +140,8 @@ public:
 
 		if(!setupIcon()) return false;
 
+		setupImGui();
+
 		return true;
 	}
 
@@ -141,6 +152,8 @@ public:
 				cam.scr_sz.y=sapp_heightf();
 				break;
 		}
+
+		simgui_handle_event(e);
 	}
 
 #pragma region UPDATE_HELPERS
@@ -408,6 +421,26 @@ public:
 			);
 		}
 	}
+
+	void renderImGui() {
+		simgui_frame_desc_t simgui_frame_desc{};
+		simgui_frame_desc.width=sapp_width();
+		simgui_frame_desc.height=sapp_height();
+		simgui_frame_desc.delta_time=sapp_frame_duration();
+		simgui_frame_desc.dpi_scale=sapp_dpi_scale();
+		simgui_new_frame(simgui_frame_desc);
+
+		ImGui::Begin("controls");
+		ImGui::Text("Use W/Q to zoom in/out");
+		ImGui::Text("Hold SHIFT to pan around");
+		ImGui::Text("Use Z to fit content");
+		ImGui::Text("Use SPACE to play/pause");
+		ImGui::Text("Use P to toggle pole view");
+		ImGui::Text("Use LMB to grab particles");
+		ImGui::End();
+
+		simgui_render();
+	}
 #pragma endregion
 
 	bool user_render() override {
@@ -456,10 +489,17 @@ public:
 
 		sgl_draw();
 
+		renderImGui();
+
 		sg_end_pass();
 
 		sg_commit();
 
 		return true;
+	}
+
+	void user_destroy() override {
+		simgui_shutdown();
+		sgl_shutdown();
 	}
 };

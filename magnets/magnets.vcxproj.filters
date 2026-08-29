@@ -30,4 +30,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\imgui.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\icon.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
 </Project>
