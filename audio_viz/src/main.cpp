@@ -1,38 +1,39 @@
-//@lalaoopybee m8d1y2026
-#define MINIAUDIO_IMPLEMENTATION
-#include "miniaudio/include/miniaudio.h"
-
 #define SOKOL_IMPL
+#ifdef __EMSCRIPTEN__
+#define SOKOL_GLES3
+#else
 #define SOKOL_GLCORE
+#endif
 #include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
 #include "sokol/include/sokol_gl.h"
 
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio/include/miniaudio.h"
+
 #include <cmath>
 
-struct {
-	ma_device audio_device;
+static ma_device audio_device;
 
-	static const int ring_bfr_sz=4096;
-	ma_pcm_rb ring_bfr;
+static const int ring_bfr_sz=4096;
+static ma_pcm_rb ring_bfr;
 
-	static const int disp_bfr_sz=50000;
-	float disp_bfr[disp_bfr_sz];
+static const int disp_bfr_sz=50000;
+static float disp_bfr[disp_bfr_sz];
 
-	static const int disp_bfr_ext_sz=1024;
-	float disp_bfr_ext[disp_bfr_ext_sz];
-} static state;
+static const int disp_bfr_ext_sz=1024;
+static float disp_bfr_ext[disp_bfr_ext_sz];
 
 void audio_callback(ma_device* device, void* out, const void* in, ma_uint32 frame_ct) {
 	if(in==nullptr) return;
 
 	void* p_buffer_out;
 	ma_uint32 frames_to_write=frame_ct;
-	if(ma_pcm_rb_acquire_write(&state.ring_bfr, &frames_to_write, &p_buffer_out)==MA_SUCCESS) {
+	if(ma_pcm_rb_acquire_write(&ring_bfr, &frames_to_write, &p_buffer_out)==MA_SUCCESS) {
 		ma_copy_pcm_frames(p_buffer_out, in, frames_to_write, ma_format_f32, 1);
 
-		ma_pcm_rb_commit_write(&state.ring_bfr, frames_to_write);
+		ma_pcm_rb_commit_write(&ring_bfr, frames_to_write);
 	}
 }
 
@@ -46,7 +47,7 @@ void init() {
 	sgl_desc.max_commands=1000000;
 	sgl_setup(sgl_desc);
 
-	ma_pcm_rb_init(ma_format_f32, 1, state.ring_bfr_sz, NULL, NULL, &state.ring_bfr);
+	ma_pcm_rb_init(ma_format_f32, 1, ring_bfr_sz, NULL, NULL, &ring_bfr);
 
 	ma_device_config dev_config=ma_device_config_init(ma_device_type_loopback);
 	dev_config.capture.format=ma_format_f32;
@@ -54,8 +55,8 @@ void init() {
 	dev_config.sampleRate=44100;
 	dev_config.dataCallback=audio_callback;
 
-	if(ma_device_init(NULL, &dev_config, &state.audio_device)==MA_SUCCESS) {
-		ma_device_start(&state.audio_device);
+	if(ma_device_init(NULL, &dev_config, &audio_device)==MA_SUCCESS) {
+		ma_device_start(&audio_device);
 	}
 }
 
@@ -65,7 +66,7 @@ void queue_line(float ax, float ay, float bx, float by) {
 	sgl_v2f(bx, by);
 }
 
-//sgl_begin_quads
+//use w/ sgl_begin_quads
 void queue_thick_line(float ax, float ay, float bx, float by, float t) {
 	//axis
 	float abx=bx-ax, aby=by-ay;
@@ -87,22 +88,22 @@ void queue_thick_line(float ax, float ay, float bx, float by, float t) {
 void frame() {
 	//get audio
 	void* p_buffer_in;
-	ma_uint32 ext_frames=state.disp_bfr_ext_sz;
-	if(ma_pcm_rb_acquire_read(&state.ring_bfr, &ext_frames, &p_buffer_in)==MA_SUCCESS) {
+	ma_uint32 ext_frames=disp_bfr_ext_sz;
+	if(ma_pcm_rb_acquire_read(&ring_bfr, &ext_frames, &p_buffer_in)==MA_SUCCESS) {
 		if(ext_frames>0) {
 			//fill ring buffer
-			ma_copy_pcm_frames(state.disp_bfr_ext, p_buffer_in, ext_frames, ma_format_f32, 1);
-			ma_pcm_rb_commit_read(&state.ring_bfr, ext_frames);
+			ma_copy_pcm_frames(disp_bfr_ext, p_buffer_in, ext_frames, ma_format_f32, 1);
+			ma_pcm_rb_commit_read(&ring_bfr, ext_frames);
 
 			//fill display buffer
 			//shift left
-			int diff=state.disp_bfr_sz-ext_frames;
+			int diff=disp_bfr_sz-ext_frames;
 			for(int i=0; i<diff; i++) {
-				state.disp_bfr[i]=state.disp_bfr[ext_frames+i];
+				disp_bfr[i]=disp_bfr[ext_frames+i];
 			}
 			//append right
 			for(int i=0; i<ext_frames; i++) {
-				state.disp_bfr[diff+i]=state.disp_bfr_ext[i];
+				disp_bfr[diff+i]=disp_bfr_ext[i];
 			}
 		}
 	}
@@ -115,6 +116,7 @@ void frame() {
 	const float h_scr=sapp_heightf();
 
 	sgl_defaults();
+	sgl_matrix_mode_projection();
 	sgl_ortho(0, w_scr, h_scr, 0, -1, 1);
 
 	//draw background and vertical grid
@@ -144,15 +146,15 @@ void frame() {
 
 	//draw waveform
 	{
-		const float recip=1/(state.disp_bfr_sz-1.f);
+		const float recip=1/(disp_bfr_sz-1.f);
 
 		float px, py;
 		for(int t=0; t<2; t++) {
 			if(t==0) sgl_begin_quads();
 			else sgl_begin_lines();
-			for(int i=0; i<state.disp_bfr_sz; i++) {
+			for(int i=0; i<disp_bfr_sz; i++) {
 				float x=w_scr*i*recip;
-				float y=h_scr*(.5f-.5f*state.disp_bfr[i]);
+				float y=h_scr*(.5f-.5f*disp_bfr[i]);
 				if(i>0) {
 					if(t==0) {
 						sgl_c3f(0, 1, 1);
@@ -190,8 +192,8 @@ void frame() {
 }
 
 void cleanup() {
-	ma_device_uninit(&state.audio_device);
-	ma_pcm_rb_uninit(&state.ring_bfr);
+	ma_device_uninit(&audio_device);
+	ma_pcm_rb_uninit(&ring_bfr);
 	sgl_shutdown();
 	sg_shutdown();
 }
