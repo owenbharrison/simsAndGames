@@ -1,34 +1,31 @@
 # simsAndGames
-This repository is a compilation of my most recent Physics simulations and game clones using olc::PixelGameEngine.
+This repository is a compilation of my most recent c/c++ physics simulations and game prototypes!\
+Most projects use either
+[sokol](https://github.com/floooh/sokol)
+or
+[olcPixelGameEngine](https://github.com/onelonecoder/olcpixelgameengine)
+for rendering and input.
 
-## Getting them on your computer
+### Getting them on your computer
 Clone the repo
 ```
 git clone https://github.com/owenbharrison/simsAndGames.git
 ```
 
-### Running the projects
+### Running the projects with CMake
 
-#### Visual Studio
-1. Open the simsAndGames.sln file.
-3. Open the Solution Explorer.
-4. In Visual Studio, **right click** the solution and select `Properties`.
-5. Under `Configure Startup Projects`, select `Current selection` and press `OK`.
-6. Select the `Release` option under the Solution Configurations dropdown.
-7. Select your desired project and press `Start Without Debugging` or `Ctrl+F5` to run!
-
-#### CMake
-1. Generate build system for Visual Studio
+1. Configure and generate build files into a folder named build
 ```
-cmake -B build -G "Visual Studio 18 2026"
+cmake -S . -B build
 ```
-2. Build individual projects
+2. Compile all projects
 ```
-cmake --build build --config Release --target raycasting
+cmake --build build
 ```
-3. Run the project
+3. Navigate to executable and run project!
 ```
-"build/Release/raycasting/raycasting.exe"
+cd build/raycasting/Debug
+./raycasting
 ```
 
 ## Gallery
