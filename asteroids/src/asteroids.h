@@ -7,12 +7,11 @@
 #include "sokol/include/sokol_app.h"
 #include "sokol/include/sokol_gfx.h"
 #include "sokol/include/sokol_glue.h"
+#include "sokol/include/sokol_gl.h"
 
 #include "sokol/sokol_engine.h"
 
-#include "sokol/render_utils.h"
-
-#include "canvas.h"
+#include "render_target.h"
 
 #include "post_process.glsl.h"
 
@@ -41,7 +40,7 @@ class Asteroids : public cmn::SokolEngine {
 	sg_sampler smp{};
 
 	int width, height;
-	Canvas canvas[2];
+	RenderTarget render_target[2];
 
 	sg_pipeline ascii_pip{};
 	sg_pipeline crt_pip{};
@@ -142,8 +141,8 @@ class Asteroids : public cmn::SokolEngine {
 
 		width=sapp_width()/8;
 		height=sapp_height()/8;
-		canvas[0].resize(width, height);
-		canvas[1].resize(8*width, 8*height);
+		render_target[0].resize(width, height);
+		render_target[1].resize(8*width, 8*height);
 
 		setupASCIIPipeline();
 
@@ -383,32 +382,43 @@ class Asteroids : public cmn::SokolEngine {
 #pragma region RENDER_HELPERS
 	//offset these by .5 b/c frag is in ctr?
 	void draw_pixel(const vf2d& pos, const Glyph& g) {
+		sgl_c4f(g.r, g.g, g.b, g.c/255.f);
 		sgl_begin_points();
-
-		sgl_v2f_c4f(.5f+pos.x, .5f+pos.y, g.r, g.g, g.b, g.c/255.f);
-
+		sgl_v2f(.5f+pos.x, .5f+pos.y);
 		sgl_end();
 	}
 
 	void draw_line(const vf2d& a, const vf2d& b, const Glyph& g) {
-		cmn::draw_line(
-			.5f+a.x, .5f+a.y, .5f+b.x, .5f+b.y,
-			g.r, g.g, g.b, g.c/255.f
-		);
+		sgl_c4f(g.r, g.g, g.b, g.c/255.f);
+		sgl_begin_lines();
+		sgl_v2f(.5f+a.x, .5f+a.y);
+		sgl_v2f(.5f+b.x, .5f+b.y);
+		sgl_end();
 	}
 
 	void draw_rect(const vf2d& pos, const vf2d& sz, const Glyph& g) {
-		cmn::draw_rect(
-			.5f+pos.x, .5f+pos.y, sz.x, sz.y,
-			g.r, g.g, g.b, g.c/255.f
-		);
+		float sx=.5f+pos.x, sy=.5f+pos.y;
+		float ex=sx+sz.x, ey=sy+sz.y;
+		sgl_c4f(g.r, g.g, g.b, g.c/255.f);
+		sgl_begin_line_strip();
+		sgl_v2f(sx, sy);
+		sgl_v2f(ex, sy);
+		sgl_v2f(ex, ey);
+		sgl_v2f(sx, ey);
+		sgl_v2f(sx, sy);
+		sgl_end();
 	}
 
 	void fill_rect(const vf2d& pos, const vf2d& sz, const Glyph& g) {
-		cmn::fill_rect(
-			.5f+pos.x, .5f+pos.y, sz.x, sz.y,
-			g.r, g.g, g.b, g.c/255.f
-		);
+		float sx=.5f+pos.x, sy=.5f+pos.y;
+		float ex=sx+sz.x, ey=sy+sz.y;
+		sgl_c4f(g.r, g.g, g.b, g.c/255.f);
+		sgl_begin_quads();
+		sgl_v2f(sx, sy);
+		sgl_v2f(ex, sy);
+		sgl_v2f(ex, ey);
+		sgl_v2f(sx, ey);
+		sgl_end();
 	}
 
 	void draw_string(const vf2d& pos, const std::string& str, float r, float g, float b) {
@@ -549,11 +559,11 @@ class Asteroids : public cmn::SokolEngine {
 		}
 	}
 
-	//render basic shapes into canvas[0]
+	//render basic shapes into render_target[0]
 	void renderGame() {
 		sg_pass pass{};
-		pass.attachments.colors[0]=canvas[0].color_attach;
-		pass.attachments.depth_stencil=canvas[0].depth_attach;
+		pass.attachments.colors[0]=render_target[0].color_attach;
+		pass.attachments.depth_stencil=render_target[0].depth_attach;
 		sg_begin_pass(pass);
 
 		sgl_defaults();
@@ -593,11 +603,11 @@ class Asteroids : public cmn::SokolEngine {
 		sg_end_pass();
 	}
 
-	//render canvas[0] into canvas[1] w/ upscaling & ascii effect
+	//render render_target[0] into render_target[1] w/ upscaling & ascii effect
 	void renderAscii() {
 		sg_pass pass{};
-		pass.attachments.colors[0]=canvas[1].color_attach;
-		pass.attachments.depth_stencil=canvas[1].depth_attach;
+		pass.attachments.colors[0]=render_target[1].color_attach;
+		pass.attachments.depth_stencil=render_target[1].depth_attach;
 		sg_begin_pass(pass);
 
 		sg_apply_pipeline(ascii_pip);
@@ -605,7 +615,7 @@ class Asteroids : public cmn::SokolEngine {
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=quad_vbuf;
 		bind.samplers[SMP_b_ascii_smp]=smp;
-		bind.views[VIEW_b_ascii_tex]=canvas[0].color_tex;
+		bind.views[VIEW_b_ascii_tex]=render_target[0].color_tex;
 		sg_apply_bindings(bind);
 
 		sg_apply_viewport(0, 0, 8*width, 8*height, true);
@@ -626,7 +636,7 @@ class Asteroids : public cmn::SokolEngine {
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=quad_vbuf;
 		bind.samplers[SMP_b_crt_smp]=smp;
-		bind.views[VIEW_b_crt_tex]=canvas[1].color_tex;
+		bind.views[VIEW_b_crt_tex]=render_target[1].color_tex;
 		sg_apply_bindings(bind);
 
 		p_fs_crt_t p_fs_crt{};

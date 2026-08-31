@@ -38,7 +38,7 @@
     <ClInclude Include="src\post_process.glsl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\canvas.h">
+    <ClInclude Include="src\render_target.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

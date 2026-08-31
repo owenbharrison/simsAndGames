@@ -151,7 +151,7 @@
     <ClInclude Include="src\game\asteroid.h" />
     <ClInclude Include="src\asteroids.h" />
     <ClInclude Include="src\game\bullet.h" />
-    <ClInclude Include="src\canvas.h" />
+    <ClInclude Include="src\render_target.h" />
     <ClInclude Include="src\game\particle.h" />
     <ClInclude Include="src\post_process.glsl.h" />
     <ClInclude Include="src\game\ship.h" />

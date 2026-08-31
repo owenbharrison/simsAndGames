@@ -1,10 +1,8 @@
-//compiler gets mad when i include sokol_gfx...
 #pragma once
-#ifndef CANVAS_STRUCT_H
-#define CANVAS_STRUCT_H
+#ifndef RENDER_TARGET_H
+#define RENDER_TARGET_H
 
-//render target
-struct Canvas {
+struct RenderTarget {
 	int width=0, height=0;
 
 	sg_image color_img{SG_INVALID_ID};
