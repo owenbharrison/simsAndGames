@@ -1,0 +1,1 @@
+add_project(rubiks_cube)

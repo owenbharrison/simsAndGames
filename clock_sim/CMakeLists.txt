@@ -1,0 +1,1 @@
+add_project(clock_sim)

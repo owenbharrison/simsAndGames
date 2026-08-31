@@ -1,0 +1,1 @@
+add_project(a_star_nav)
