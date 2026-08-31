@@ -1,4 +1,3 @@
-//@lalaoopybee m8d14y2026
 #pragma once
 #ifndef FISH_STRUCT_H
 #define FISH_STRUCT_H

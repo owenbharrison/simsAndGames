@@ -1,4 +1,3 @@
-//@lalaoopybee m8d3y2026
 //thanks sebastian lague for inspo!
 //https://www.youtube.com/watch?v=bqtqltqcQhw
 #pragma once

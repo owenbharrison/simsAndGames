@@ -1,4 +1,3 @@
-//@lalaoopybee m8d3y2026
 #define SOKOL_IMPL
 #ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
