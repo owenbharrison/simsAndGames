@@ -6,9 +6,9 @@
 
 #include "linemesh.h"
 
-#include "cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
-#include "cmn/math/mat4.h"
+#include "common/math/mat4.h"
 
 //come on you guys!
 //there it is right there in front of you the whole time.

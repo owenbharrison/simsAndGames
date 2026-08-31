@@ -4,7 +4,7 @@
 #ifndef LEG_STRUCT_H
 #define LEG_STRUCT_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 template<int N>
 struct Leg {

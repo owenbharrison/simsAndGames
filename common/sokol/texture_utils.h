@@ -1,3 +1,4 @@
+//todo: fix sokol/imgui includes
 #pragma once
 #ifndef CMN_TEXTURE_UTIL_H
 #define CMN_TEXTURE_UTIL_H
@@ -6,7 +7,7 @@
 #include <cstring>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "../stb/include/stb_image.h"
+#include "vendor/stb/stb_image.h"
 
 #include <cstdint>
 

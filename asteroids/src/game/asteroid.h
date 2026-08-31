@@ -2,8 +2,8 @@
 #ifndef ASTEROID_STRUCT_H
 #define ASTEROID_STRUCT_H
 
-#include "cmn/geom/aabb2.h"
-#include "cmn/utils.h"
+#include "common/geom/aabb2.h"
+#include "common/utils.h"
 
 #include <string>
 

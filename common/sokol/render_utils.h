@@ -1,8 +1,7 @@
+//todo: fix sokol include
 #pragma once
 #ifndef CMN_RENDER_UTILS_H
 #define CMN_RENDER_UTILS_H
-
-#include "sokol/include/sokol_gl.h"
 
 //for sqrt
 #include <cmath>

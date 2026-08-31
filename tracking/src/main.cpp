@@ -1,9 +1,9 @@
 #define OLC_PGE_APPLICATION
-#include "olc/engine_3d.h"
+#include "common/olc/engine_3d.h"
 using cmn::vf3d;
 using cmn::mat4;
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 #include "mesh.h"
 

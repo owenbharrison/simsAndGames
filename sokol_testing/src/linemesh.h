@@ -5,7 +5,7 @@
 #include "mesh.h"
 
 //for randFloat
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 #include <set>
 

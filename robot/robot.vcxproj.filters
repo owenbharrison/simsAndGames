@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\imgui.ini" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="src\robot.h">
       <Filter>Header Files</Filter>
     </ClInclude>

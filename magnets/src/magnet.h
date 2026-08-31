@@ -4,9 +4,9 @@
 #ifndef MAGNET_CLASS_H
 #define MAGNET_CLASS_H
 
-#include "cmn/geom/aabb2.h"
+#include "common/geom/aabb2.h"
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 constexpr double Pi=3.141592653589793;
 

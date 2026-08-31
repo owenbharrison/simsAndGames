@@ -1,11 +1,11 @@
 #define OLC_PGE_APPLICATION
-#include "olc/include/olcPixelGameEngine.h"
+#include "vendor/olc/olcPixelGameEngine.h"
 using olc::vf2d;
 using olc::vi2d;
 
 #include <stack>
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 class RaycastingUI : public olc::PixelGameEngine {
 	float cell_size=0;

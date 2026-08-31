@@ -4,13 +4,13 @@
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
 
-#include "sokol/sokol_engine.h"
+#include "common/sokol/sokol_engine.h"
 
-#include "sokol/include/sokol_gl.h"
+#include "vendor/sokol/sokol_gl.h"
 
 #include <vector>
 
@@ -22,14 +22,14 @@
 //for time
 #include <ctime>
 
-#include "cmn/utils.h"
-#include "cmn/geom/aabb3.h"
+#include "common/utils.h"
+#include "common/geom/aabb3.h"
 
-#include "imgui/include/imgui_singleheader.h"
-#include "sokol/include/sokol_imgui.h"
+#include "common/imgui/imgui_singleheader.h"
+#include "vendor/sokol/sokol_imgui.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb/include/stb_image.h"
+#include "vendor/stb/stb_image.h"
 
 //makes some perpendicular vector
 cmn::vf3d getPerp(const cmn::vf3d& x) {

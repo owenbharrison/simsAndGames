@@ -2,7 +2,7 @@
 #ifndef POINTMASS_STRUCT_H
 #define POINTMASS_STRUCT_H
 
-#include "cmn/geom/aabb2.h"
+#include "common/geom/aabb2.h"
 
 struct PointMass {
 	vf2d pos, oldpos, force;

@@ -3,7 +3,7 @@
 #define GIZMO_STRUCT_H
 
 //for clamp
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 //find dist between closest points
 float segSkewSeg(

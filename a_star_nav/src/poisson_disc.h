@@ -4,7 +4,7 @@
 
 #include <vector>
 
-#include "cmn/geom/aabb2.h"
+#include "common/geom/aabb2.h"
 
 //https://www.youtube.com/watch?v=7WcmyxyFO7o
 std::vector<olc::vf2d> poissonDiscSample(const cmn::AABBf2& box, float rad) {

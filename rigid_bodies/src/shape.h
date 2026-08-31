@@ -2,8 +2,8 @@
 #ifndef SHAPE_CLASS_H
 #define SHAPE_CLASS_H
 
-#include "cmn/utils.h"
-#include "cmn/geom/aabb2.h"
+#include "common/utils.h"
+#include "common/geom/aabb2.h"
 
 #include <vector>
 #include <algorithm>

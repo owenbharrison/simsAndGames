@@ -13,7 +13,7 @@
 //for memcpy
 #include <string>
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 static vf2d reflect(const vf2d& in, const vf2d& norm) {
 	return in-2*norm.dot(in)*norm;

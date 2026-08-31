@@ -2,10 +2,10 @@
 #ifndef PARTICLE_CLASS_H
 #define PARTICLE_CLASS_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 //for pi
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 class Particle {
 	float rad=0;

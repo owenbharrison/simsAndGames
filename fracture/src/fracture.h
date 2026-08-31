@@ -4,16 +4,16 @@
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
-#include "sokol/include/sokol_gl.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
+#include "vendor/sokol/sokol_gl.h"
 
-#include "sokol/sokol_engine.h"
+#include "common/sokol/sokol_engine.h"
 
 #include "mesh.h"
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 //for time
 #include <ctime>
@@ -31,7 +31,7 @@ static cmn::vf3d polarToCartesian(float yaw, float pitch) {
 	};
 }
 
-#include "cmn/geom/aabb3.h"
+#include "common/geom/aabb3.h"
 
 //x y z => y p
 //0 0 1 => 0 0

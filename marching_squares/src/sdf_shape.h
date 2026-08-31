@@ -2,7 +2,7 @@
 #ifndef SHAPE_STRUCT_H
 #define SHAPE_STRUCT_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 #include <list>
 

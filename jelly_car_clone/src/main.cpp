@@ -1,16 +1,16 @@
 //dont use exceptions? std::string& msg
 #define OLC_PGE_APPLICATION
-#include "olc/include/olcPixelGameEngine.h"
+#include "vendor/olc/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_PGEX_TRANSFORMEDVIEW
-#include "olc/include/olcPGEX_TransformedView.h"
+#include "vendor/olc/olcPGEX_TransformedView.h"
 
 #include "phys/shape.h"
 
 #include "scene.h"
 
-#include "cmn/stopwatch.h"
+#include "common/stopwatch.h"
 
 #include <deque>
 

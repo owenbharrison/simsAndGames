@@ -2,9 +2,9 @@
 #ifndef PARTICLE_STRUCT_H
 #define PARTICLE_STRUCT_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 struct Particle {
 	cmn::vf2d pos, vel;

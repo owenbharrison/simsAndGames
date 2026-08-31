@@ -2,12 +2,12 @@
 #ifndef MESH_STRUCT_H
 #define MESH_STRUCT_H
 
-#include "cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
 #include <vector>
 
 //for pi
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 #include <cmath>
 

@@ -2,7 +2,7 @@
 #ifndef VEHICLE_STRUCT_H
 #define VEHICLE_STRUCT_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 struct Vehicle {
 	static float max_accel;

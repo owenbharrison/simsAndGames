@@ -2,7 +2,7 @@
 #ifndef BILLBOARD_STRUCT_H
 #define BILLBOARD_STRUCT_H
 
-#include "cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
 //anchors: 0,0 = bl, 1,1 = tr
 struct Billboard {

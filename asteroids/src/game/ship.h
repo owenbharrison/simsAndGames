@@ -6,9 +6,9 @@
 
 #include "particle.h"
 
-#include "cmn/geom/aabb2.h"
+#include "common/geom/aabb2.h"
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 struct Ship {
 	cmn::vf2d pos, vel, acc;

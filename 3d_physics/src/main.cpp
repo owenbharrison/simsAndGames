@@ -1,6 +1,6 @@
 #define OLC_PGE_APPLICATION
 #define OLC_GFX_OPENGL33
-#include "olc/engine_3d.h"
+#include "common/olc/engine_3d.h"
 namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
 	static const Pixel ORANGE(255, 115, 0);
@@ -12,7 +12,7 @@ using olc::vf2d;
 using cmn::vf3d;
 using cmn::mat4;
 
-#include "cmn/stopwatch.h"
+#include "common/stopwatch.h"
 
 constexpr float Pi=3.1415927f;
 
@@ -25,7 +25,7 @@ vf3d projectOntoPlane(const vf3d& v, const vf3d& norm) {
 #include "mesh.h"
 
 #define OLC_PGEX_SHADERS
-#include "olc/include/olcPGEX_Shaders.h"
+#include "vendor/olc/olcPGEX_Shaders.h"
 
 #include "shader.h"
 

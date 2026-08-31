@@ -2,13 +2,13 @@
 #ifndef MESH_CLASS_H
 #define MESH_CLASS_H
 
-#include "cmn/geom/aabb3.h"
+#include "common/geom/aabb3.h"
 
-#include "cmn/math/mat4.h"
+#include "common/math/mat4.h"
 
 #include <vector>
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 #include <string>
 

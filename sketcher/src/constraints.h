@@ -2,7 +2,7 @@
 #ifndef CONSTRAINTS_UTIL_H
 #define CONSTRAINTS_UTIL_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 static cmn::vf2d rotVec(const cmn::vf2d& v, float f) {
 	//rotation matrix

@@ -4,7 +4,7 @@
 #ifndef BOID_STRUCT_H
 #define BOID_STRUCT_H
 
-#include "cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
 struct Boid {
 	static float min_speed;

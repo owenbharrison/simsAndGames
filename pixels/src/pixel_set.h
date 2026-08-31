@@ -11,8 +11,8 @@ impl polygon to PixelSet
 
 typedef unsigned char byte;
 
-#include "cmn/geom/aabb2.h"
-#include "cmn/utils.h"
+#include "common/geom/aabb2.h"
+#include "common/utils.h"
 
 #include <stack>
 

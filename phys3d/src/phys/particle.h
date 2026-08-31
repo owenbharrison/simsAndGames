@@ -2,7 +2,7 @@
 #ifndef PARTICLE_STRUCT_H
 #define PARTICLE_STRUCT_H
 
-#include "cmn/geom/aabb3.h"
+#include "common/geom/aabb3.h"
 
 struct Particle {
 	static float restitution, friction;

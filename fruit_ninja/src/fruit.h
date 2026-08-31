@@ -2,8 +2,8 @@
 #ifndef FRUIT_CLASS_H
 #define FRUIT_CLASS_H
 
-#include "cmn/geom/aabb2.h"
-#include "cmn/utils.h"
+#include "common/geom/aabb2.h"
+#include "common/utils.h"
 
 class Fruit {
 	int num_pts=0;

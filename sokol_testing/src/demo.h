@@ -4,11 +4,11 @@
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
 
-#include "sokol/sokol_engine.h"
+#include "common/sokol/sokol_engine.h"
 
 #include "shd/shadow_map.glsl.h"
 #include "shd/skybox.glsl.h"
@@ -27,7 +27,7 @@
 //  b/c vector reallocates
 #include <list>
 
-#include "sokol/font.h"
+#include "common/sokol/font.h"
 
 #include "gizmo.h"
 

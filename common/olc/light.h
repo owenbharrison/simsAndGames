@@ -2,7 +2,7 @@
 #ifndef LIGHT_STRUCT_H
 #define LIGHT_STRUCT_H
 
-#include "../cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
 namespace cmn {
 	struct Light {

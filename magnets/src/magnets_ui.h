@@ -4,13 +4,14 @@
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
+#include "vendor/sokol/sokol_gl.h"
 
-#include "sokol/sokol_engine.h"
+#include "common/sokol/sokol_engine.h"
 
-#include "sokol/render_utils.h"
+#include "common/sokol/render_utils.h"
 
 //for time
 #include <ctime>
@@ -22,10 +23,10 @@
 #include "camera.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb/include/stb_image.h"
+#include "vendor/stb/stb_image.h"
 
-#include "imgui/include/imgui_singleheader.h"
-#include "sokol/include/sokol_imgui.h"
+#include "common/imgui/imgui_singleheader.h"
+#include "vendor/sokol/sokol_imgui.h"
 
 using cmn::vd2d;
 using cmn::vf2d;

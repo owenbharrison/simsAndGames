@@ -10,7 +10,7 @@
 //for rand
 #include <cstdlib>
 
-#include "cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
 struct Cell {
 	int num_bombs=-1;

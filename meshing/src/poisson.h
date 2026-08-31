@@ -5,7 +5,7 @@
 #include <vector>
 #include <list>
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 //https://www.youtube.com/watch?v=7WcmyxyFO7o
 std::vector<cmn::vf2d> poissonDiscSample(const cmn::AABBf2& box, float rad) {

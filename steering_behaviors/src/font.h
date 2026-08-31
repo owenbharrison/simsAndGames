@@ -4,14 +4,14 @@
 #ifndef FONT_STRUCT_H
 #define FONT_STRUCT_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 #include <vector>
 
 #include <unordered_map>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb/include/stb_image.h"
+#include "vendor/stb/stb_image.h"
 
 struct Letter {
 	float asp=1;

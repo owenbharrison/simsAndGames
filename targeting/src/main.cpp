@@ -1,5 +1,5 @@
 #define OLC_PGE_APPLICATION
-#include "olc/engine_3d.h"
+#include "common/olc/engine_3d.h"
 using olc::vf2d;
 namespace olc {
 	static const Pixel PURPLE(144, 0, 255);
@@ -10,7 +10,7 @@ using cmn::mat4;
 
 #include "mesh.h"
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 struct Example : cmn::Engine3D {
 	Example() {

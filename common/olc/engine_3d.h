@@ -10,10 +10,10 @@
 #ifndef ENGINE_3D_CLASS_H
 #define ENGINE_3D_CLASS_H
 
-#include "../olc/include/olcPixelGameEngine.h"
+#include "vendor/olc/olcPixelGameEngine.h"
 
-#include "../cmn/math/v3d.h"
-#include "../cmn/math/mat4.h"
+#include "common/math/v3d.h"
+#include "common/math/mat4.h"
 
 #include "triangle.h"
 #include "line.h"

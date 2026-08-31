@@ -14,27 +14,27 @@ selectable sizes
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
 
-#include "sokol/sokol_engine.h"
+#include "common/sokol/sokol_engine.h"
 
 #include "shd.glsl.h"
 
 //for srand
 #include <ctime>
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 #include "rubiks_cube.h"
 
-#include "cmn/math/v3d.h"
-#include "cmn/math/mat4.h"
+#include "common/math/v3d.h"
+#include "common/math/mat4.h"
 
-#include "sokol/font.h"
+#include "common/sokol/font.h"
 
-#include "cmn/easing.h"
+#include "common/easing.h"
 
 #include <deque>
 

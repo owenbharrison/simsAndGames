@@ -2,7 +2,7 @@
 #ifndef MESH_CLASS_H
 #define MESH_CLASS_H
 
-#include "cmn/math/mat4.h"
+#include "common/math/mat4.h"
 
 #include <vector>
 #include <string>

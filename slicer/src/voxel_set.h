@@ -2,7 +2,7 @@
 #ifndef VOXEL_SET_CLASS_H
 #define VOXEL_SET_CLASS_H
 
-#include "cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
 class VoxelSet {
 	int width=0, height=0, depth=0;

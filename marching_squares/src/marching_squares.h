@@ -4,20 +4,21 @@
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
+#include "vendor/sokol/sokol_gl.h"
 
-#include "sokol/sokol_engine.h"
+#include "common/sokol/sokol_engine.h"
 
-#include "sokol/render_utils.h"
+#include "common/sokol/render_utils.h"
 
 //for time
 #include <ctime>
 
 #include "sdf_shape.h"
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 void insideGradient(float t, float* r, float* g, float* b) {
 	static const float cols[][3]{

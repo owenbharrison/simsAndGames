@@ -5,7 +5,7 @@
 #ifndef CAMERA_CLASS_H
 #define CAMERA_CLASS_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 class Camera {
 	//camera position in screen space

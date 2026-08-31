@@ -16,11 +16,11 @@ scoring
 */
 
 #define OLC_PGE_APPLICATION
-#include "olc/include/olcPixelGameEngine.h"
+#include "vendor/olc/olcPixelGameEngine.h"
 using olc::vf2d;
 
 #define OLC_SOUNDWAVE
-#include "olc/include/olcSoundWaveEngine.h"
+#include "vendor/olc/olcSoundWaveEngine.h"
 
 #include "fruit.h"
 

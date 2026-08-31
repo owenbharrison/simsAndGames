@@ -4,15 +4,15 @@
 #else
 #define SOKOL_GLCORE
 #endif
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
-#include "sokol/include/sokol_gl.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
+#include "vendor/sokol/sokol_gl.h"
 
-#include "sokol/sokol_engine.h"
+#include "common/sokol/sokol_engine.h"
 
-#include "cmn/math/v3d.h"
-#include "cmn/math/mat4.h"
+#include "common/math/v3d.h"
+#include "common/math/mat4.h"
 
 #include "phys/particle.h"
 #include "phys/spring.h"
@@ -20,21 +20,21 @@
 #include <string>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb/include/stb_image.h"
+#include "vendor/stb/stb_image.h"
 
 #include <list>
 
 #include <vector>
 
 //for pi
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 #include "perlin_noise.h"
 
 //for time
 #include <ctime>
 
-#include "cmn/geom/aabb3.h"
+#include "common/geom/aabb3.h"
 
 struct IndexTriangle {
 	Particle* a=0, * b=0, * c=0;

@@ -2,9 +2,9 @@
 #ifndef TRIANGLE_STRUCT_H
 #define TRIANGLE_STRUCT_H
 
-#include "../cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
-#include "../cmn/geom/aabb3.h"
+#include "common/geom/aabb3.h"
 
 namespace cmn {
 	//i only want to expose the t value some of the time

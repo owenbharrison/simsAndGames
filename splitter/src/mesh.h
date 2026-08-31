@@ -2,12 +2,12 @@
 #ifndef MESH_CLASS_H
 #define MESH_CLASS_H
 
-#include "cmn/math/v2d.h"
+#include "common/math/v2d.h"
 
 #include <vector>
 
 //for polar
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 //for memcpy
 #include <string>

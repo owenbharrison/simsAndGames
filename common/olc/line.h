@@ -2,7 +2,7 @@
 #ifndef LINE_STRUCT_H
 #define LINE_STRUCT_H
 
-#include "../cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
 namespace cmn {
 	struct Line {

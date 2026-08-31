@@ -1,14 +1,14 @@
 #define SOKOL_IMPL
 #define SOKOL_GLCORE
-#include "sokol/include/sokol_app.h"
-#include "sokol/include/sokol_gfx.h"
-#include "sokol/include/sokol_glue.h"
+#include "vendor/sokol/sokol_app.h"
+#include "vendor/sokol/sokol_gfx.h"
+#include "vendor/sokol/sokol_glue.h"
 
-#include "sokol/include/sokol_gl.h"
+#include "vendor/sokol/sokol_gl.h"
 
-#include "cmn/math/v3d.h"
+#include "common/math/v3d.h"
 
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 static float in2m(float i) {
 	float cm=2.54f*i;
@@ -20,11 +20,11 @@ static float m2in(float m) {
 	return cm/2.54f;
 }
 
-#include "imgui/include/imgui_singleheader.h"
-#include "sokol/include/sokol_imgui.h"
+#include "common/imgui/imgui_singleheader.h"
+#include "vendor/sokol/sokol_imgui.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb/include/stb_image.h"
+#include "vendor/stb/stb_image.h"
 
 using cmn::vf3d;
 

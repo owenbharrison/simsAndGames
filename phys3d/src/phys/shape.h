@@ -17,10 +17,10 @@ return cylinder axes?
 
 #include <vector>
 
-#include "cmn/geom/aabb3.h"
+#include "common/geom/aabb3.h"
 
 //for pi
-#include "cmn/utils.h"
+#include "common/utils.h"
 
 #include <unordered_map>
 
