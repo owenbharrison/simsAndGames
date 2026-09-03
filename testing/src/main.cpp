@@ -6,321 +6,362 @@
 
 #include "vendor/sokol/sokol_gl.h"
 
+#include "common/sokol/sokol_engine.h"
+
 #include "common/math/v3d.h"
 
 #include "common/utils.h"
 
-static float in2m(float i) {
-	float cm=2.54f*i;
-	return cm/100;
+cmn::vf3d segIntersectPlane(
+	const cmn::vf3d& a, const cmn::vf3d& b,
+	const cmn::vf3d& ctr, const cmn::vf3d& norm
+) {
+	float t=norm.dot(ctr-a)/norm.dot(b-a);
+	return a+t*(b-a);
 }
 
-static float m2in(float m) {
-	float cm=100*m;
-	return cm/2.54f;
+//rotate point about origin along 3 axes
+cmn::vf3d rotateXYZ(
+	const cmn::vf3d& p,
+	float rx, float ry, float rz
+) {
+	//precompute
+	float cx=std::cos(rx);
+	float sx=std::sin(rx);
+	float cy=std::cos(ry);
+	float sy=std::sin(ry);
+	float cz=std::cos(rz);
+	float sz=std::sin(rz);
+	//x rot
+	float x=p.x;
+	float y=p.y*cx-p.z*sx;
+	float z=p.y*sx+p.z*cx;
+	//y rot
+	float x2=x*cy+z*sy;
+	float z2=-x*sy+z*cy;
+	//z rot
+	float x3=x2*cz-y*sz;
+	float y3=x2*sz+y*cz;
+	return {x3, y3, z2};
 }
-
-#include "common/imgui/imgui_singleheader.h"
-#include "vendor/sokol/sokol_imgui.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "vendor/stb/stb_image.h"
 
 using cmn::vf3d;
 
-#include <vector>
-#include <algorithm>
-
-struct {
-	vf3d cam_pos{in2m(13), in2m(7), in2m(-4)};
-
-	sg_view bg_tex{};
-
+struct Demo : cmn::SokolEngine {
 	struct {
-		vf3d pos;
-		vf3d dir{0, 0, -1};
-
-		float anim=0;
-		float anim_spd=5;
-		float arg_scl=3.6f;
-		int num=6;
-
-		float w=in2m(24);
-		float h=in2m(13);
-		float breadth=in2m(1.3f);
-
-		sg_view tex{};
-	} fish;
-
-	bool debug_viz=false;
+		vf3d pos{1, 2, 3}, dir;
+		float pitch=0, yaw=0;
+	} cam;
+	
+	vf3d vtx[4]{
+		{1, 1, 1},
+		{-1, 1, -1},
+		{1, -1, -1},
+		{-1, -1, 1}
+	};
 
 	sgl_pipeline pip{};
-	sg_sampler smp{};
-} static state;
 
-static void init() {
-	//sokol environment
-	{
-		sg_desc desc{};
-		desc.environment=sglue_environment();
-		sg_setup(desc);
-	}
+	bool show_outlines=false;
 
-	//imgui
-	{
-		simgui_desc_t simgui_desc{};
-		simgui_desc.ini_filename="assets/fish.imgui";
-		simgui_setup(simgui_desc);
-	}
+	struct {
+		vf3d ctr, norm{1, 0, 0};
+		bool to_spin=true;
+		float spin=0;
+	} plane;
 
-	//background texture
-	{
-		int width, height, comp;
-		stbi_uc* pixels=stbi_load("assets/background.png", &width, &height, &comp, 4);
-		if(pixels) {
-			sg_image_desc img_desc{};
-			img_desc.width=width;
-			img_desc.height=height;
-			img_desc.data.mip_levels[0].ptr=pixels;
-			img_desc.data.mip_levels[0].size=sizeof(stbi_uc)*4*width*height;
-			sg_image img=sg_make_image(img_desc);
+	bool user_create() override {
+		app_title="[tetra]";
 
-			sg_view_desc view_desc{};
-			view_desc.texture.image=img;
-			state.bg_tex=sg_make_view(view_desc);
-		}
-	}
-
-	//fish texture
-	{
-		int width, height, comp;
-		stbi_uc* pixels=stbi_load("assets/brookie.png", &width, &height, &comp, 4);
-		if(pixels) {
-			sg_image_desc img_desc{};
-			img_desc.width=width;
-			img_desc.height=height;
-			img_desc.data.mip_levels[0].ptr=pixels;
-			img_desc.data.mip_levels[0].size=sizeof(stbi_uc)*4*width*height;
-			sg_image img=sg_make_image(img_desc);
-
-			sg_view_desc view_desc{};
-			view_desc.texture.image=img;
-			state.fish.tex=sg_make_view(view_desc);
-		}
-	}
-
-	//sokol gl
-	{
 		sgl_desc_t sgl_desc{};
 		sgl_setup(sgl_desc);
-	}
 
-	//pipeline
-	{
+		vf3d ryp=vf3d::cartesian(-cam.pos);
+		cam.yaw=ryp.y;
+		cam.pitch=ryp.z;
+
 		sg_pipeline_desc pip_desc{};
-		pip_desc.face_winding=SG_FACEWINDING_CCW;
-		pip_desc.cull_mode=SG_CULLMODE_BACK;
-		pip_desc.depth.write_enabled=false;
+		pip_desc.depth.write_enabled=true;
 		pip_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
-		//with alpha blending
-		pip_desc.colors[0].blend.enabled=true;
-		pip_desc.colors[0].blend.src_factor_rgb=SG_BLENDFACTOR_SRC_ALPHA;
-		pip_desc.colors[0].blend.dst_factor_rgb=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		pip_desc.colors[0].blend.src_factor_alpha=SG_BLENDFACTOR_ONE;
-		pip_desc.colors[0].blend.dst_factor_alpha=SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		state.pip=sgl_make_pipeline(pip_desc);
+		pip=sgl_make_pipeline(pip_desc);
+
+		return true;
 	}
+	
+	bool user_update(float dt) override {
+		vf3d fwd=normalize(vf3d(1, 0, 1)*cam.dir);
+		if(GetKey(SAPP_KEYCODE_W).held) cam.pos+=5*dt*fwd;
+		if(GetKey(SAPP_KEYCODE_S).held) cam.pos-=3*dt*fwd;
 
-	//sampler
-	{
-		sg_sampler_desc smp_desc{};
-		state.smp=sg_make_sampler(smp_desc);
-	}
-}
+		vf3d rgt=cross(fwd, vf3d(0, 1, 0));
+		if(GetKey(SAPP_KEYCODE_A).held) cam.pos-=4*dt*rgt;
+		if(GetKey(SAPP_KEYCODE_D).held) cam.pos+=4*dt*rgt;
 
-static void event(const sapp_event* e) {
-	simgui_handle_event(e);
-}
+		if(GetKey(SAPP_KEYCODE_SPACE).held) cam.pos.y+=4*dt;
+		if(GetKey(SAPP_KEYCODE_LEFT_SHIFT).held) cam.pos.y-=4*dt;
 
-void renderBackground() {
-	sgl_defaults();
-	sgl_matrix_mode_projection();
-	sgl_ortho(-1, 1, -1, 1, -1, 1);
+		if(GetKey(SAPP_KEYCODE_UP).held) cam.pitch+=dt;
+		if(GetKey(SAPP_KEYCODE_DOWN).held) cam.pitch-=dt;
+		cam.pitch=cmn::clamp(cam.pitch, .01f-.5f*cmn::Pi, .5f*cmn::Pi-.01f);
 
-	sgl_enable_texture();
-	sgl_texture(state.bg_tex, state.smp);
-	sgl_begin_quads();
-	sgl_v2f_t2f(-1, 1, 0, 1);
-	sgl_v2f_t2f(1, 1, 1, 1);
-	sgl_v2f_t2f(1, -1, 1, 0);
-	sgl_v2f_t2f(-1, -1, 0, 0);
-	sgl_end();
-	sgl_disable_texture();
-}
+		if(GetKey(SAPP_KEYCODE_LEFT).held) cam.yaw-=dt;
+		if(GetKey(SAPP_KEYCODE_RIGHT).held) cam.yaw+=dt;
 
-static void renderFish() {
-	vf3d up(0, 1, 0);//pseudo
-	vf3d fwd=state.fish.dir;
-	vf3d rgt=normalize(cross(fwd, up));
-	up=cross(rgt, fwd);
+		cam.dir=vf3d::polar({1, cam.yaw, cam.pitch});
 
-	sgl_texture(state.fish.tex, state.smp);
+		if(GetKey(SAPP_KEYCODE_1).held) vtx[0]=cam.pos;
+		if(GetKey(SAPP_KEYCODE_2).held) vtx[1]=cam.pos;
+		if(GetKey(SAPP_KEYCODE_3).held) vtx[2]=cam.pos;
+		if(GetKey(SAPP_KEYCODE_4).held) vtx[3]=cam.pos;
 
-	vf3d t_p, b_p;
-	float u_p;
-	for(int i=0; i<state.fish.num; i++) {
-		float u=i/(state.fish.num-1.f);
-		float arg=state.fish.anim+state.fish.arg_scl*u;
-		float dr=state.fish.breadth*std::sin(arg);
-		vf3d m=state.fish.pos+state.fish.w*(u-.5f)*fwd+dr*rgt;
-		vf3d t=m+.5f*state.fish.h*up, b=m-.5f*state.fish.h*up;
-		if(i>0) {
-			sgl_enable_texture();
-			sgl_begin_quads();
-			sgl_c3f(1, 1, 1);
-			sgl_v3f_t2f(t_p.x, t_p.y, t_p.z, u_p, 0);
-			sgl_v3f_t2f(t.x, t.y, t.z, u, 0);
-			sgl_v3f_t2f(b.x, b.y, b.z, u, 1);
-			sgl_v3f_t2f(b_p.x, b_p.y, b_p.z, u_p, 1);
-			sgl_v3f_t2f(t_p.x, t_p.y, t_p.z, u_p, 0);
-			sgl_v3f_t2f(b_p.x, b_p.y, b_p.z, u_p, 1);
-			sgl_v3f_t2f(b.x, b.y, b.z, u, 1);
-			sgl_v3f_t2f(t.x, t.y, t.z, u, 0);
-			sgl_end();
-			sgl_disable_texture();
+		if(GetKey(SAPP_KEYCODE_O).pressed) show_outlines^=true;
 
-			if(state.debug_viz) {
-				sgl_begin_lines();
-				sgl_c3f(0, 0, 0);
-				sgl_v3f(t_p.x, t_p.y, t_p.z), sgl_v3f(t.x, t.y, t.z);
-				sgl_v3f(t.x, t.y, t.z), sgl_v3f(b.x, b.y, b.z);
-				sgl_v3f(b.x, b.y, b.z), sgl_v3f(b_p.x, b_p.y, b_p.z);
-				sgl_v3f(b_p.x, b_p.y, b_p.z), sgl_v3f(t_p.x, t_p.y, t_p.z);
-				sgl_v3f(t_p.x, t_p.y, t_p.z), sgl_v3f(b.x, b.y, b.z);
-				sgl_end();
-			}
+		if(GetKey(SAPP_KEYCODE_ENTER).pressed) plane.to_spin^=true;
+
+		if(plane.to_spin) {
+			plane.spin+=dt;
+			
+			//irrational speeds
+			plane.norm=rotateXYZ(
+				normalize(vf3d(1, 1, 1)),
+				plane.spin/std::sqrt(3),
+				plane.spin/std::sqrt(5),
+				plane.spin/std::sqrt(6)
+			);
+
+			float amt=std::sin(plane.spin/std::sqrt(7));
+			plane.ctr=amt*plane.norm;
 		}
-		t_p=t, b_p=b, u_p=u;
+
+		return true;
 	}
-}
 
-void renderAxes(float d, float s) {
-	vf3d dir=-normalize(state.cam_pos);
-	const auto& c=state.cam_pos+d*dir;
-	sgl_begin_lines();
-	sgl_c3f(1, 0, 0);
-	sgl_v3f(c.x, c.y, c.z);
-	sgl_v3f(c.x+s, c.y, c.z);
-	sgl_c3f(0, 1, 0);
-	sgl_v3f(c.x, c.y, c.z);
-	sgl_v3f(c.x, c.y+s, c.z);
-	sgl_c3f(0, 0, 1);
-	sgl_v3f(c.x, c.y, c.z);
-	sgl_v3f(c.x, c.y, c.z+s);
-	sgl_end();
-}
+#pragma region RENDER HELPERS
+	void sgl_vec(const vf3d& v) {
+		sgl_v3f(v.x, v.y, v.z);
+	}
 
-void renderImGui() {
-	simgui_frame_desc_t simgui_frame_desc{};
-	simgui_frame_desc.width=sapp_width();
-	simgui_frame_desc.height=sapp_height();
-	simgui_frame_desc.delta_time=sapp_frame_duration();
-	simgui_frame_desc.dpi_scale=sapp_dpi_scale();
-	simgui_new_frame(simgui_frame_desc);
+	void sgl_tri(const vf3d& a, const vf3d& b, const vf3d& c) {
+		sgl_vec(a), sgl_vec(b), sgl_vec(c);
+	}
 
-	ImGui::Begin("camera pos(in)");
-	float x_in=m2in(state.cam_pos.x);
-	float y_in=m2in(state.cam_pos.y);
-	float z_in=m2in(state.cam_pos.z);
-	ImGui::DragFloat("x", &x_in, .5f, -30, 30);
-	ImGui::DragFloat("y", &y_in, .5f, -30, 30);
-	ImGui::DragFloat("z", &z_in, .5f, -30, 30);
-	state.cam_pos.x=in2m(x_in);
-	state.cam_pos.y=in2m(y_in);
-	state.cam_pos.z=in2m(z_in);
-	ImGui::End();
+	void renderBox(const vf3d& a, const vf3d& b) {
+		static const int edges[][2]{
+			{0, 1}, {2, 3}, {4, 5}, {6, 7},//thru x
+			{0, 2}, {1, 3}, {4, 6}, {5, 7},//thru y
+			{0, 4}, {1, 5}, {2, 6}, {3, 7}//thru z
+		};
 
-	ImGui::Begin("animation");
-	ImGui::SliderFloat("speed", &state.fish.anim_spd, 0, 10);
-	ImGui::SliderFloat("argument", &state.fish.arg_scl, 0, 5);
-	ImGui::SliderInt("segments", &state.fish.num, 2, 12);
-	ImGui::Checkbox("debug visuals", &state.debug_viz);
-	ImGui::End();
+		vf3d v[8];//interpolators: 000, 001, 010...
+		for(int i=0; i<8; i++) {
+			v[i]=a+vf3d(1&(i>>2), 1&(i>>1), 1&i)*(b-a);
+		}
 
-	ImGui::Begin("size(in)");
-	float w_in=m2in(state.fish.w);
-	float h_in=m2in(state.fish.h);
-	float breadth_in=m2in(state.fish.breadth);
-	ImGui::SliderFloat("width", &w_in, 1, 48);
-	ImGui::SliderFloat("height", &h_in, 1, 24);
-	ImGui::SliderFloat("breadth", &breadth_in, 0, 8);
-	state.fish.w=in2m(w_in);
-	state.fish.h=in2m(h_in);
-	state.fish.breadth=in2m(breadth_in);
-	ImGui::End();
+		sgl_begin_lines();
+		for(const auto& e:edges) {
+			sgl_vec(v[e[0]]), sgl_vec(v[e[1]]);
+		}
+		sgl_end();
+	}
 
-	ImGui::Begin("heading");
-	ImGui::SliderFloat("x", &state.fish.dir.x, -1, 1);
-	ImGui::SliderFloat("y", &state.fish.dir.y, -1, 1);
-	ImGui::SliderFloat("z", &state.fish.dir.z, -1, 1);
-	state.fish.dir=normalize(state.fish.dir);
-	ImGui::End();
+	void renderAxes(const vf3d& o, float sz) {		
+		sgl_begin_lines();
+		sgl_c3f(1, 0, 0);
+		sgl_vec(o), sgl_vec(o+vf3d(sz, 0, 0));
+		sgl_c3f(0, 1, 0);
+		sgl_vec(o), sgl_vec(o+vf3d(0, sz, 0));
+		sgl_c3f(0, 0, 1);
+		sgl_vec(o), sgl_vec(o+vf3d(0, 0, sz));
+		sgl_end();
+	}
 
-	simgui_render();
-}
+	void renderPlane(float sz) {
+		vf3d fwd=plane.norm;
+		vf3d rgt=normalize(cross(fwd, vf3d(0, 1, 0)));
+		vf3d up=cross(rgt, fwd);
 
-static void frame() {
-	state.fish.anim+=state.fish.anim_spd*sapp_frame_duration();
+		vf3d tl=plane.ctr+.5f*sz*(up-rgt);
+		vf3d tr=plane.ctr+.5f*sz*(up+rgt);
+		vf3d bl=plane.ctr+.5f*sz*(-up-rgt);
+		vf3d br=plane.ctr+.5f*sz*(-up+rgt);
 
-	sg_pass pass{};
-	pass.swapchain=sglue_swapchain();
-	sg_begin_pass(pass);
+		sgl_begin_line_strip();
+		sgl_vec(tl);
+		sgl_vec(tr);
+		sgl_vec(br);
+		sgl_vec(bl);
+		sgl_vec(tl);
+		sgl_vec(br);
+		sgl_end();
+	}
 
-	renderBackground();
+	void renderFilledTetra(
+		const vf3d& a,
+		const vf3d& b,
+		const vf3d& c,
+		const vf3d& d
+	) {
+		sgl_begin_triangles();
+		sgl_tri(a, b, c);
+		sgl_tri(a, b, d);
+		sgl_tri(a, c, d);
+		sgl_tri(b, c, d);
+		sgl_end();
+	}
 
-	sgl_load_pipeline(state.pip);
-	sgl_matrix_mode_projection();
-	sgl_perspective(//fov, aspect, range
-		sgl_rad(90),
-		sapp_widthf()/sapp_heightf(),
-		.01f, 100
-	);
-	sgl_matrix_mode_modelview();
-	sgl_lookat(//eye, target, up	
-		state.cam_pos.x, state.cam_pos.y, state.cam_pos.z,
-		0, 0, 0,
-		0, 1, 0
-	);
+	//ab, ac, ad, bc, bd, cd
+	void renderOutlinedTetra(
+		const vf3d& a,
+		const vf3d& b,
+		const vf3d& c,
+		const vf3d& d
+	) {
+		sgl_begin_lines();
+		sgl_vec(a), sgl_vec(b);
+		sgl_vec(a), sgl_vec(c);
+		sgl_vec(a), sgl_vec(d);
+		sgl_vec(b), sgl_vec(c);
+		sgl_vec(b), sgl_vec(d);
+		sgl_vec(c), sgl_vec(d);
+		sgl_end();
+	}
 
-	renderFish();
+	void renderTetra(
+		const vf3d& a,
+		const vf3d& b,
+		const vf3d& c,
+		const vf3d& d
+	) {
+		if(show_outlines) renderOutlinedTetra(a, b, c, d);
+		else renderFilledTetra(a, b, c, d);
+	}
 
-	if(state.debug_viz) renderAxes(in2m(5), in2m(1));
+	void splitBy(vf3d ctr, vf3d norm) {
+		vf3d v[4]{vtx[0], vtx[1], vtx[2], vtx[3]};
 
-	sgl_draw();
+		//categorize vertexes
+		int pos_ct=0, neg_ct=0;
+		int pos_ix[4], neg_ix[4];
+		for(int i=0; i<4; i++) {
+			bool s=dot(v[i]-ctr, norm)>0;
+			if(s) pos_ix[pos_ct++]=i;
+			else neg_ix[neg_ct++]=i;
+		}
 
-	renderImGui();
+		//construct new tetras
+		switch(pos_ct) {
+			case 0://red
+				sgl_c3f(1, 0, 0);
+				renderTetra(v[0], v[1], v[2], v[3]);
+				break;
+			case 1: {//yellow & light grey
+				const auto& p0=v[pos_ix[0]];
+				const auto& n0=v[neg_ix[0]];
+				const auto& n1=v[neg_ix[1]];
+				const auto& n2=v[neg_ix[2]];
+				vf3d i00=segIntersectPlane(p0, n0, ctr, norm);
+				vf3d i01=segIntersectPlane(p0, n1, ctr, norm);
+				vf3d i02=segIntersectPlane(p0, n2, ctr, norm);
+				
+				sgl_c3f(1, 1, 0);
+				renderTetra(p0, i00, i01, i02);
 
-	sg_end_pass();
+				sgl_c3f(.75f, .75f, .75f);
+				renderTetra(n0, i00, i01, i02);
+				renderTetra(n0, n1, i01, i02);
+				renderTetra(n0, n1, n2, i02);
 
-	sg_commit();
-}
+				break;
+			}
+			case 2: {//green & grey
+				const auto& p0=v[pos_ix[0]];
+				const auto& p1=v[pos_ix[1]];
+				const auto& n0=v[neg_ix[0]];
+				const auto& n1=v[neg_ix[1]];
+				vf3d i00=segIntersectPlane(p0, n0, ctr, norm);
+				vf3d i01=segIntersectPlane(p0, n1, ctr, norm);
+				vf3d i10=segIntersectPlane(p1, n0, ctr, norm);
+				vf3d i11=segIntersectPlane(p1, n1, ctr, norm);
 
-static void cleanup() {
-	simgui_shutdown();
-	sgl_shutdown();
-	sg_shutdown();
-}
+				sgl_c3f(0, 1, 0);
+				renderTetra(p0, p1, i00, i01);
+				renderTetra(p1, i00, i11, i01);
+				renderTetra(p1, i11, i10, i00);
 
-sapp_desc sokol_main(int argc, char* argv[]) {
-	sapp_desc app_desc{};
-	app_desc.init_cb=init;
-	app_desc.frame_cb=frame;
-	app_desc.event_cb=event;
-	app_desc.cleanup_cb=cleanup;
-	app_desc.width=720;
-	app_desc.height=540;
-	app_desc.window_title="[fish]";
-	app_desc.icon.sokol_default=true;
+				sgl_c3f(.5f, .5f, .5f);
+				renderTetra(n0, n1, i00, i10);
+				renderTetra(n1, i11, i00, i10);
+				renderTetra(n1, i11, i01, i00);
 
-	return app_desc;
-}
+				break;
+			}
+			case 3: {//cyan & dark grey
+				const auto& p0=v[pos_ix[0]];
+				const auto& p1=v[pos_ix[1]];
+				const auto& p2=v[pos_ix[2]];
+				const auto& n0=v[neg_ix[0]];
+				vf3d i00=segIntersectPlane(p0, n0, ctr, norm);
+				vf3d i10=segIntersectPlane(p1, n0, ctr, norm);
+				vf3d i20=segIntersectPlane(p2, n0, ctr, norm);
+
+				sgl_c3f(0, 1, 1);
+				renderTetra(p0, i00, i10, i20);
+				renderTetra(p0, p1, i10, i20);
+				renderTetra(p0, p1, p2, i20);
+
+				sgl_c3f(.25f, .25f, .25f);
+				renderTetra(n0, i00, i10, i20);
+
+				break;
+			}
+			case 4://blue
+				sgl_c3f(0, 0, 1);
+				renderTetra(v[0], v[1], v[2], v[3]);
+				break;
+		}
+	}
+#pragma endregion
+
+	bool user_render() override {
+		//white bg
+		sg_pass pass{};
+		pass.action.colors[0].load_action=SG_LOADACTION_CLEAR;
+		pass.action.colors[0].clear_value={1, 1, 1, 1};
+		pass.swapchain=sglue_swapchain();
+		sg_begin_pass(pass);
+
+		sgl_defaults();
+		sgl_load_pipeline(pip);
+		sgl_matrix_mode_modelview();
+		vf3d e=cam.pos, t=e+cam.dir, u(0, 1, 0);
+		sgl_lookat(e.x, e.y, e.z, t.x, t.y, t.z, u.x, u.y, u.z);
+		sgl_matrix_mode_projection();
+		sgl_perspective(sgl_rad(90), sapp_widthf()/sapp_heightf(), .01f, 100);
+
+		{
+			static bool show=true;
+			if(GetKey(SAPP_KEYCODE_TAB).pressed) show^=true;
+			if(show) renderAxes(cam.pos+cam.dir, .1f);
+		}
+
+		//black
+		sgl_c3f(0, 0, 0);
+		renderBox({-1, -1, -1}, {1, 1, 1});
+		
+		//purple
+		sgl_c3f(.5f, 0, 1);
+		renderPlane(3);
+
+		splitBy(plane.ctr, plane.norm);
+
+		sgl_draw();
+
+		sg_end_pass();
+
+		sg_commit();
+
+		return true;
+	}
+};
+
+CMN_SOKOL_ENGINE_LAUNCH(Demo, 640, 480)
